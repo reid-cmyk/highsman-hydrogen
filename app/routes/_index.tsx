@@ -10,7 +10,7 @@ export default function Homepage() {
   return (
     <>
       {/* ===== HERO SECTION ===== */}
-      <section className="relative h-[90vh] flex items-end px-12 pb-24 overflow-hidden">
+      <section className="relative h-[90vh] flex items-end px-4 pb-12 md:px-12 md:pb-24 overflow-hidden">
         <div className="absolute inset-0 z-0">
           <img
             alt="NFL running back in action - Highsman"
@@ -20,17 +20,17 @@ export default function Homepage() {
           <div className="absolute inset-0 bg-gradient-to-t from-[#131313] via-transparent to-transparent" />
         </div>
         <div className="relative z-10 max-w-5xl">
-          <h1 className="font-headline text-[10rem] md:text-[14rem] leading-[0.8] font-bold uppercase italic tracking-tighter">
+          <h1 className="font-headline text-5xl md:text-[14rem] leading-[0.8] font-bold uppercase italic tracking-tighter">
             spark greatness
           </h1>
-          <p className="font-body text-xl mt-8 max-w-xl text-on-surface-variant uppercase tracking-[0.2em] leading-tight">
+          <p className="font-body text-sm md:text-xl mt-8 max-w-xl text-on-surface-variant uppercase tracking-[0.2em] leading-tight">
             Premium cannabis for the high-performance lifestyle, founded by NFL
             Legend Ricky Williams.
           </p>
           <div className="mt-12 flex gap-4">
             <Link
               to="/our-strains"
-              className="bg-primary text-on-primary px-16 py-5 font-headline text-3xl font-bold uppercase hover:bg-primary-container transition-colors"
+              className="bg-primary text-on-primary px-8 py-3 md:px-16 md:py-5 font-headline text-xl md:text-3xl font-bold uppercase hover:bg-primary-container transition-colors"
             >
               SHOP NOW
             </Link>
@@ -39,11 +39,11 @@ export default function Homepage() {
       </section>
 
       {/* ===== TRIPLE INFUSION HALLMARK ===== */}
-      <section className="bg-white text-black py-20 px-12 overflow-hidden relative">
+      <section className="bg-white text-black py-12 px-4 md:py-20 md:px-12 overflow-hidden relative">
         <div className="container mx-auto">
           <div className="flex flex-col md:flex-row items-center gap-12">
             <div className="w-full md:w-1/2">
-              <h2 className="font-headline text-8xl font-black uppercase leading-[0.85] mb-6">
+              <h2 className="font-headline text-4xl md:text-8xl font-black uppercase leading-[0.85] mb-6">
                 TRIPLE <br />
                 INFUSED <br />
                 FLAVOR &amp; <br />
@@ -69,7 +69,7 @@ export default function Homepage() {
                     className="flex items-start gap-4 border-l-4 border-black pl-6"
                   >
                     <div>
-                      <h4 className="font-headline text-3xl font-bold uppercase">
+                      <h4 className="font-headline text-xl md:text-3xl font-bold uppercase">
                         {item.title}
                       </h4>
                       <p className="font-body text-sm uppercase tracking-wider">
@@ -92,10 +92,10 @@ export default function Homepage() {
       </section>
 
       {/* ===== PRODUCT GRID (ASYMMETRIC) ===== */}
-      <section className="bg-surface-container-low py-32 px-12">
+      <section className="bg-surface-container-low py-16 px-4 md:py-32 md:px-12">
         <div className="grid grid-cols-12 gap-6">
           {/* Hit Stick */}
-          <div className="col-span-12 md:col-span-7 bg-surface-container h-[600px] relative group overflow-hidden">
+          <div className="col-span-12 md:col-span-7 bg-surface-container h-[350px] md:h-[600px] relative group overflow-hidden">
             <img
               className="absolute inset-0 w-full h-full transition-transform duration-700 group-hover:scale-105 object-contain"
               src={IMAGES.hitStickProduct}
@@ -106,7 +106,7 @@ export default function Homepage() {
               <span className="bg-white text-black px-3 py-1 font-headline text-xl font-bold uppercase mb-4 inline-block">
                 Engineered Airflow
               </span>
-              <h2 className="font-headline text-8xl font-bold uppercase leading-none">
+              <h2 className="font-headline text-4xl md:text-8xl font-bold uppercase leading-none">
                 HIT STICK
               </h2>
               <p className="font-body text-sm tracking-widest uppercase mt-4 text-primary max-w-sm">
@@ -115,7 +115,7 @@ export default function Homepage() {
               </p>
               <Link
                 to="/hit-sticks"
-                className="mt-8 bg-white text-black px-12 py-4 font-headline text-2xl font-bold uppercase inline-block"
+                className="mt-8 bg-white text-black px-6 py-3 md:px-12 md:py-4 font-headline text-lg md:text-2xl font-bold uppercase inline-block"
               >
                 EXPLORE GEAR
               </Link>
@@ -123,7 +123,7 @@ export default function Homepage() {
           </div>
 
           {/* 1.2G Pre-Rolls */}
-          <div className="col-span-12 md:col-span-5 bg-surface-container-high h-[600px] flex flex-col justify-end p-12 relative overflow-hidden group">
+          <div className="col-span-12 md:col-span-5 bg-surface-container-high h-[350px] md:h-[600px] flex flex-col justify-end p-12 relative overflow-hidden group">
             <img
               alt="1.2g Pre-Rolls"
               className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
@@ -134,7 +134,7 @@ export default function Homepage() {
               <span className="font-headline text-4xl border-b-2 border-primary pb-2 uppercase text-primary italic font-bold">
                 20% Larger Free
               </span>
-              <h2 className="font-headline text-7xl font-bold uppercase leading-tight mt-6 mb-4">
+              <h2 className="font-headline text-4xl md:text-7xl font-bold uppercase leading-tight mt-6 mb-4">
                 1.2G PRE ROLLS
               </h2>
               <p className="font-body text-white text-sm uppercase tracking-widest mb-8 leading-relaxed">
@@ -151,7 +151,7 @@ export default function Homepage() {
           </div>
 
           {/* Ground Game */}
-          <div className="col-span-12 mt-6 relative h-[500px] overflow-hidden group">
+          <div className="col-span-12 mt-6 relative h-[350px] md:h-[500px] overflow-hidden group">
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <img
                 alt="7g Ground Game Flower"
@@ -160,12 +160,12 @@ export default function Homepage() {
               />
             </div>
             <div className="absolute inset-0 bg-black/40" />
-            <div className="relative z-10 flex h-full items-center justify-between px-16">
+            <div className="relative z-10 flex h-full items-center justify-between px-4 md:px-16">
               <div className="max-w-xl">
-                <span className="font-headline text-4xl text-primary font-bold uppercase mb-2 block">
+                <span className="font-headline text-xl md:text-4xl text-primary font-bold uppercase mb-2 block">
                   7G Ready To Roll
                 </span>
-                <h2 className="font-headline text-[9rem] font-bold uppercase leading-[0.8] mb-4">
+                <h2 className="font-headline text-5xl md:text-[9rem] font-bold uppercase leading-[0.8] mb-4">
                   GROUND <br />
                   GAME
                 </h2>
@@ -175,12 +175,12 @@ export default function Homepage() {
                 </p>
               </div>
               <div className="flex flex-col items-end gap-6">
-                <div className="font-headline text-[12rem] font-extrabold text-stroke absolute right-10 top-1/2 -translate-y-1/2 select-none pointer-events-none uppercase">
+                <div className="font-headline text-[6rem] md:text-[12rem] font-extrabold text-stroke absolute hidden md:block right-10 top-1/2 -translate-y-1/2 select-none pointer-events-none uppercase">
                   FLOWER
                 </div>
                 <Link
                   to="/ground-game"
-                  className="bg-primary text-on-primary px-20 py-8 font-headline text-4xl font-bold uppercase hover:bg-white hover:text-black transition-all relative z-10"
+                  className="bg-primary text-on-primary px-8 py-4 md:px-20 md:py-8 font-headline text-xl md:text-4xl font-bold uppercase hover:bg-white hover:text-black transition-all relative z-10"
                 >
                   7G BAG
                 </Link>
