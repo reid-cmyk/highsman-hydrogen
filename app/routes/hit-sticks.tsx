@@ -9,7 +9,7 @@ export default function HitSticks() {
   return (
     <>
       {/* ===== HERO SECTION ===== */}
-      <section className="relative min-h-[921px] flex flex-col md:flex-row items-center overflow-hidden px-8 md:px-16 py-12 gap-12">
+      <section className="relative min-h-screen md:min-h-[921px] flex flex-col md:flex-row items-center overflow-hidden px-8 md:px-16 py-12 gap-12">
         {/* Background Text Aesthetic */}
         <div className="absolute top-20 -left-10 opacity-5 select-none pointer-events-none hidden lg:block">
           <h2 className="font-headline text-[25rem] leading-none font-bold uppercase">
@@ -33,7 +33,7 @@ export default function HitSticks() {
           <span className="uppercase tracking-[0.3em] text-on-surface-variant font-medium text-sm mb-4">
             PERSONAL PERFORMANCE GRADE
           </span>
-          <h1 className="font-headline text-8xl md:text-9xl font-bold uppercase leading-[0.85] mb-6">
+          <h1 className="font-headline text-5xl md:text-9xl font-bold uppercase leading-[0.85] mb-6">
             HIT
             <br />
             STICK
@@ -76,7 +76,7 @@ export default function HitSticks() {
 
       {/* ===== USE CASE BENTO GRID ===== */}
       <section className="bg-surface-container-low px-8 md:px-16 py-24">
-        <h2 className="font-headline text-6xl font-bold uppercase mb-16 text-center">
+        <h2 className="font-headline text-3xl md:text-6xl font-bold uppercase mb-16 text-center">
           BUILT FOR THE FIELD
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
@@ -85,7 +85,7 @@ export default function HitSticks() {
               <span className="material-symbols-outlined text-4xl mb-6 text-primary block">
                 bolt
               </span>
-              <h3 className="font-headline text-5xl font-bold uppercase mb-4">
+              <h3 className="font-headline text-3xl md:text-5xl font-bold uppercase mb-4">
                 ON-THE-GO PERSONAL USE
               </h3>
               <p className="text-on-surface-variant max-w-md">
@@ -103,7 +103,7 @@ export default function HitSticks() {
               <span className="material-symbols-outlined text-4xl mb-6 text-primary block">
                 cloud_done
               </span>
-              <h3 className="font-headline text-5xl font-bold uppercase mb-4">
+              <h3 className="font-headline text-3xl md:text-5xl font-bold uppercase mb-4">
                 WEATHER RESISTANT
               </h3>
               <p className="text-on-surface-variant">
@@ -121,7 +121,7 @@ export default function HitSticks() {
               <span className="material-symbols-outlined text-4xl mb-6 text-primary block">
                 air
               </span>
-              <h3 className="font-headline text-5xl font-bold uppercase mb-4">
+              <h3 className="font-headline text-3xl md:text-5xl font-bold uppercase mb-4">
                 IDEAL AIRFLOW
               </h3>
               <p className="text-on-surface-variant">
@@ -138,7 +138,7 @@ export default function HitSticks() {
               <span className="material-symbols-outlined text-4xl mb-6 text-primary block">
                 calendar_today
               </span>
-              <h3 className="font-headline text-5xl font-bold uppercase mb-4">
+              <h3 className="font-headline text-3xl md:text-5xl font-bold uppercase mb-4">
                 THE DAY&apos;S USE
               </h3>
               <p className="text-on-surface-variant max-w-md">
@@ -209,7 +209,7 @@ export default function HitSticks() {
               ))}
             </ul>
           </div>
-          <div className="w-full md:w-1/2 relative h-[600px] bg-surface-container-low overflow-hidden">
+          <div className="w-full md:w-1/2 relative h-[300px] md:h-[600px] bg-surface-container-low overflow-hidden">
             <img
               alt="Concentrate Color Macro"
               className="w-full h-full object-cover opacity-90"
