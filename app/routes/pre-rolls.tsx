@@ -9,7 +9,7 @@ export default function PreRolls() {
   return (
     <>
       {/* ===== HERO: EDITORIAL SPLIT ===== */}
-      <section className="relative w-full min-h-[921px] grid grid-cols-1 md:grid-cols-12 bg-surface">
+      <section className="relative w-full min-h-screen md:min-h-[921px] grid grid-cols-1 md:grid-cols-12 bg-surface">
         <div className="md:col-span-7 relative overflow-hidden order-2 md:order-1 bg-white">
           <img
             alt="Highsman 1.2g Triple Infused lineup"
@@ -17,7 +17,7 @@ export default function PreRolls() {
             src={IMAGES.preRollsLineup}
           />
           <div className="absolute bottom-0 left-0 p-12 bg-gradient-to-t from-white/20 to-transparent w-full">
-            <h2 className="font-headline text-8xl md:text-[12rem] leading-none uppercase font-bold tracking-tighter editorial-text-mask">
+            <h2 className="font-headline text-4xl md:text-[12rem] leading-none uppercase font-bold tracking-tighter editorial-text-mask">
               TRIPLE
             </h2>
           </div>
@@ -30,7 +30,7 @@ export default function PreRolls() {
             <span className="font-headline text-primary text-2xl tracking-[0.3em] uppercase">
               Product Profile
             </span>
-            <h1 className="font-headline text-7xl md:text-8xl leading-[0.85] uppercase font-bold text-primary">
+            <h1 className="font-headline text-4xl md:text-8xl leading-[0.85] uppercase font-bold text-primary">
               1.2G TRIPLE INFUSED PRE-ROLLS
             </h1>
           </div>
@@ -48,7 +48,7 @@ export default function PreRolls() {
             </p>
           </div>
           <div className="flex flex-col gap-4 pt-4">
-            <button className="bg-primary text-on-primary px-10 py-5 font-headline text-3xl uppercase font-semibold flex items-center justify-between group hover:bg-primary-container transition-all">
+            <button className="bg-primary text-on-primary px-6 py-3 md:px-10 md:py-5 font-headline text-xl md:text-3xl uppercase font-semibold flex items-center justify-between group hover:bg-primary-container transition-all">
               FIND NEAR YOU
               <span className="material-symbols-outlined group-hover:translate-x-2 transition-transform">
                 location_on
@@ -71,7 +71,7 @@ export default function PreRolls() {
               className="h-32 md:h-40"
               src={IMAGES.tripleInfusedIcon}
             />
-            <h2 className="font-headline text-6xl md:text-8xl uppercase leading-none">
+            <h2 className="font-headline text-3xl md:text-8xl uppercase leading-none">
               TRIPLE INFUSED FLAVOR &amp; POTENCY
             </h2>
           </div>
@@ -96,11 +96,11 @@ export default function PreRolls() {
           ].map((item) => (
             <div
               key={item.title}
-              className={`${item.bg} p-12 space-y-6 flex flex-col justify-between aspect-square`}
+              className={`${item.bg} p-12 space-y-6 flex flex-col justify-between aspect-auto md:aspect-square`}
             >
               <div className="w-full h-32 mb-6 overflow-hidden bg-surface-container" />
               <div className="space-y-4">
-                <h3 className="font-headline text-5xl uppercase text-primary">
+                <h3 className="font-headline text-3xl md:text-5xl uppercase text-primary">
                   {item.title}
                 </h3>
                 <p className="text-on-surface-variant">{item.desc}</p>
@@ -113,7 +113,7 @@ export default function PreRolls() {
       {/* ===== FLAVOR ROSTER: ASYMMETRIC EDITORIAL ===== */}
       <section className="bg-surface-container-lowest py-24">
         <div className="px-8 md:px-16 mb-16 flex justify-between items-end">
-          <h2 className="font-headline text-7xl md:text-9xl uppercase tracking-tighter">
+          <h2 className="font-headline text-4xl md:text-9xl uppercase tracking-tighter">
             SIGNATURE ROSTER
           </h2>
           <div className="hidden md:block font-headline text-3xl uppercase text-primary pb-4">
@@ -161,7 +161,7 @@ export default function PreRolls() {
                 <span className="font-headline text-4xl text-outline-variant group-hover:text-primary">
                   {flavor.num}
                 </span>
-                <h3 className="font-headline text-5xl md:text-7xl uppercase">
+                <h3 className="font-headline text-2xl md:text-7xl uppercase">
                   {flavor.name}
                 </h3>
               </div>
@@ -182,7 +182,7 @@ export default function PreRolls() {
       </section>
 
       {/* ===== SECONDARY IMAGERY ===== */}
-      <section className="grid grid-cols-1 md:grid-cols-2 h-[600px] w-full">
+      <section className="grid grid-cols-1 md:grid-cols-2 h-auto md:h-[600px] w-full">
         <div className="relative overflow-hidden">
           <img
             alt="Highsman Product Showcase"
@@ -196,7 +196,7 @@ export default function PreRolls() {
             </div>
           </div>
         </div>
-        <div className="bg-surface-container-high p-16 flex flex-col justify-center items-start space-y-6">
+        <div className="bg-surface-container-high p-8 md:p-16 flex flex-col justify-center items-start space-y-6">
           <h3 className="font-headline text-6xl uppercase leading-tight">
             THE ELITE STANDARD
           </h3>
@@ -224,17 +224,17 @@ export default function PreRolls() {
       {/* ===== CTA ===== */}
       <section className="bg-primary text-on-primary py-32 px-8 text-center relative overflow-hidden">
         <div className="relative z-10 max-w-4xl mx-auto space-y-12">
-          <h2 className="font-headline text-8xl md:text-[10rem] leading-[0.8] uppercase font-bold tracking-tighter">
+          <h2 className="font-headline text-4xl md:text-[10rem] leading-[0.8] uppercase font-bold tracking-tighter">
             GET IN THE GAME.
           </h2>
           <p className="font-headline text-3xl uppercase tracking-widest">
             Experience the 1.2g Difference.
           </p>
           <div className="flex flex-col md:flex-row gap-6 justify-center">
-            <button className="bg-on-primary text-primary px-12 py-6 font-headline text-4xl uppercase font-bold hover:bg-surface-container-highest transition-all">
+            <button className="bg-on-primary text-primary px-6 py-4 md:px-12 md:py-6 font-headline text-xl md:text-4xl uppercase font-bold hover:bg-surface-container-highest transition-all">
               FIND A STORE
             </button>
-            <button className="border-4 border-on-primary text-on-primary px-12 py-6 font-headline text-4xl uppercase font-bold hover:bg-on-primary hover:text-primary transition-all">
+            <button className="border-4 border-on-primary text-on-primary px-6 py-4 md:px-12 md:py-6 font-headline text-xl md:text-4xl uppercase font-bold hover:bg-on-primary hover:text-primary transition-all">
               VIEW LAB RESULTS
             </button>
           </div>
