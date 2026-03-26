@@ -64,7 +64,7 @@ export default function GroundGame() {
             src={IMAGES.groundGameProduct}
           />
           {/* Floating High-Impact Stat */}
-          <div className="absolute bottom-12 right-0 bg-surface p-8 z-20 md:-left-12 md:bottom-24 md:h-fit shadow-2xl">
+          <div className="absolute bottom-4 right-0 md:bottom-12 bg-surface p-8 z-20 md:-left-12 md:bottom-24 md:h-fit shadow-2xl">
             <div className="flex flex-col">
               <span className="font-headline text-5xl md:text-8xl font-bold leading-none text-primary">
                 0%
@@ -157,7 +157,7 @@ export default function GroundGame() {
             <span className="font-headline text-sm uppercase tracking-[0.4em] text-on-surface-variant block mb-4">
               THE HIGHSMAN WAY
             </span>
-            <p className="font-headline text-3xl font-bold leading-snug uppercase">
+            <p className="font-headline text-xl md:text-3xl font-bold leading-snug uppercase">
               DESIGNED FOR ENTHUSIASTS WHO LIKE TO ROLL THEIR OWN WITHOUT
               SACRIFICE.
             </p>
