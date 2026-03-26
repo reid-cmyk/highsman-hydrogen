@@ -26,6 +26,7 @@
     "@remix-run/dev": "^2.8.0",
     "@shopify/cli": "^3.56.0",
     "@shopify/hydrogen-codegen": "^0.3.0",
+    "@shopify/mini-oxygen": "^3.0.0",
     "@types/react": "^18.2.22",
     "@types/react-dom": "^18.2.7",
     "autoprefixer": "^10.4.19",
