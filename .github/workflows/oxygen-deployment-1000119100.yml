@@ -33,7 +33,7 @@ jobs:
             ${{ runner.os }}-
 
       - name: Install dependencies
-                run: npm install
+        run: npm install
 
       - name: Build and Publish to Oxygen
         run: npx shopify hydrogen deploy
