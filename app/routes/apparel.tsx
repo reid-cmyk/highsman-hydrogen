@@ -49,7 +49,7 @@ export default function Apparel() {
   return (
     <>
       {/* ===== HERO SECTION ===== */}
-      <section className="relative h-[921px] w-full overflow-hidden flex items-end">
+      <section className="relative h-[70vh] md:h-[921px] w-full overflow-hidden flex items-end">
         <div className="absolute inset-0 z-0">
           <img
             alt="Highsman Varsity Jacket Model"
@@ -63,7 +63,7 @@ export default function Apparel() {
             <h2 className="text-white/60 font-headline text-2xl tracking-[0.4em] mb-2">
               LIMITED EDITION
             </h2>
-            <h1 className="text-white font-headline text-8xl md:text-[12rem] leading-[0.85] font-bold uppercase tracking-tighter mb-8 italic">
+            <h1 className="text-white font-headline text-5xl md:text-[12rem] leading-[0.85] font-bold uppercase tracking-tighter mb-8 italic">
               GAME DAY
               <br />
               COLLECTION
@@ -98,7 +98,7 @@ export default function Apparel() {
             ].map((text, i) => (
               <span
                 key={i}
-                className="text-black font-headline text-3xl font-bold tracking-widest uppercase italic"
+                className="text-black font-headline text-xl md:text-3xl font-bold tracking-widest uppercase italic"
               >
                 {text}
               </span>
@@ -117,25 +117,25 @@ export default function Apparel() {
 
           {/* Editorial Break */}
           <div className="col-span-1 md:col-span-2 lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-8 my-12">
-            <div className="h-[600px] overflow-hidden">
+            <div className="h-[300px] md:h-[600px] overflow-hidden">
               <img
                 alt="Lifestyle editorial"
                 className="w-full h-full object-cover grayscale"
                 src={IMAGES.apparelLifestyle2}
               />
             </div>
-            <div className="flex flex-col justify-center items-start p-12 bg-white text-black">
+            <div className="flex flex-col justify-center items-start p-6 md:p-12 bg-white text-black">
               <span className="font-headline text-2xl tracking-[0.4em] mb-4 text-gray-500 uppercase">
                 THE MANIFESTO
               </span>
-              <h2 className="font-headline text-6xl font-bold leading-tight mb-6 uppercase">
+              <h2 className="font-headline text-3xl md:text-6xl font-bold leading-tight mb-6 uppercase">
                 BUILT FOR THE RECOVERY AS MUCH AS THE RUSH.
               </h2>
               <p className="font-body text-lg mb-8 max-w-sm">
                 Every piece is designed with elite craftsmanship to ensure you
                 look as good off the clock as you do on it.
               </p>
-              <button className="border-2 border-black px-10 py-3 font-headline text-2xl font-bold tracking-widest hover:bg-black hover:text-white transition-all uppercase">
+              <button className="border-2 border-black px-10 py-3 font-headline text-lg md:text-2xl font-bold tracking-widest hover:bg-black hover:text-white transition-all uppercase">
                 OUR STORY
               </button>
             </div>
@@ -154,7 +154,7 @@ export default function Apparel() {
           <span className="font-headline text-4xl font-bold tracking-[0.5em] mb-8 block uppercase">
             SPARK GREATNESS.
           </span>
-          <p className="font-headline text-6xl md:text-9xl font-bold leading-[0.9] uppercase italic tracking-tighter">
+          <p className="font-headline text-3xl md:text-9xl font-bold leading-[0.9] uppercase italic tracking-tighter">
             THE GRIND ISN&apos;T
             <br />
             GIVEN. IT&apos;S EARNED.
@@ -203,7 +203,7 @@ function ProductCard({
       </div>
       <div className="flex justify-between items-start mb-4">
         <div>
-          <h3 className="font-headline text-3xl font-bold uppercase tracking-tight">
+          <h3 className="font-headline text-xl md:text-3xl font-bold uppercase tracking-tight">
             {name}
           </h3>
           <p className="text-white/50 font-body text-xs uppercase tracking-widest">
