@@ -1,0 +1,28 @@
+/**
+ * Centralized image URLs from the original Stitch design.
+ * All images are hosted on Google's CDN (lh3.googleusercontent.com).
+ */
+
+export const IMAGES = {
+  // ===== HERO IMAGES =====
+  heroHomepage:
+    'https://lh3.googleusercontent.com/aida-public/AB6AXuBetz8geObCxumRbGiZbw22dQgcPNofMCMbb8Rgmz1iNb6GxvwwBpF5HueZWfGql2GrFt6UkKwY5ZX9raKuGHmbnhL-3mj1xc9n8jElE4lne6dB7WnxsmLp1mzSSdH-Ba6ahCDlheAlITYeiduChHmrSBhjBesbTYrv9-YuBmDxiPkrPPQODqRUrcddgpyFaBgX1mb3fU5vmgoSOIjJRSL9-TodikQXqY6xvtke_rNIakhvsNWRniQrScHm7cgouGbe359OgfAoKQHP',
+  apparelHero:
+    'https://lh3.googleusercontent.com/aida-public/AB6AXuAAI53mcfgAJRSmvxhUVvxhtwJ0njTii7rG7hmk0GAQDJ3JgrWUvvQcfOF78pVqXgfABvi6WZwvJlr_KzjwSCE1t2ReN7SuoW8wZWTx_audh6t1AKFZuoHQp8FUrh31d3jbPA87r3ObRVUFPKoptN5L-QNWDrxtK2PJ4a0zlfLCpLAdxg0Sissw29QjRYcWm5Y5Cj1NOWvZhHNxbKDLxTkapTqiPzxviHsbgk8PFPnlzK0hFsYzXIfjoVa9jmCFeNWsahGh8eD7l7n1',
+  strainsHero:
+    'https://lh3.googleusercontent.com/aida-public/AB6AXuDPMl2-h3tEN1596ptXYKtG1fNlNp5QPMpqGUVHXomr5BLLmgAtfCiAQJ4lub3R3wx8zUS9DC4wgVBJ3T37CpVX38YYBuYcRKPmte9hNQyb4EV-bt0_RfbACcn8erFtbi1IMY1JflHBLNmScRCHToUkVt3WKwlRMtm1_PJApNcESGR2_tXT8XBWFmlD6OriOw9Up74nDGz6oQ1iLzail3tKmb8ECSYZWafobis_pGTpKDQTOO29NumW3_voDBldzeQUif0tsI0UHI6H',
+  hitStickHero:
+    'https://lh3.googleusercontent.com/aida/ADBb0ujKS00aQqr67Ch8IJpmztZ4OlzffsPrtcsMz0lUK75wCqSj_UuODLLRiboxEOaCZy4qRQYGgbpp_FE2X1NgkdOJfex5zK_NfJgX1KIYi9KyZNrq2qCWstHpdkn-wwomwyXE1RxBcEoBDT29DhCo0YD_s6WURsxR7SGwhrx-mqktNJ7ThA5TukGQBR73ti-nWY_vQMTItNO7K74EqKjNhrEx9Uqps6nhoMLxOQF0lmm6sy7Py8lU1VBr2TruQHLQYwGeJT9EcIVH39k',
+
+  // ===== PGIDUCT" IMAGES =====
+  LITuMmjjFxJOlO_G5B7JJQQegUg11stppLwVN6YNHtQwhLGwHIXXqhTkkiRZWjxVE7TRnxZMscnUIZ6gAhj381sw9RRilLWXL5rb0DIVUpEUcnqcXStBb1EYABuFrHLaUfp9TEaqwMY8QaXBA6CCjobgq89zUJAtmtT69kFS0D8fp00-JtLzFRPssS_FT6a4Tfmhh3jYxzAfm832aufjL¹4TBSWQ6pkXQPvaSnNFS9ahJ30fiB1Ixp1AohTerJppeVhBW9jyTWqO-1k1sVI',
+  preRollsProduct:
+    'https://lh3.googleusercontent.com/aida/ADBb0uiePx12hFvW3EbnEX-Y6-8H5SDr3st7jElgPTyPW3Ph98ottKmy1Cs1H3zYTBXWsFFj9N1EKk9P-ruyU0qb_2-vCSXz_JTp-m-ULirU9g88PXx3Mrk0JekgUR1sYYcFOHgJLhZNjZIFN16MXSDLFhjen-kdPYz7nlNnkFiDZxHxE4c6fXtcBpaJLnFvH2iXQvWAHKT0KYHlEmm1IRKncK_MLd2ZPp8faPo2OOdZ_oL4i1TKR1agLfXB88lk19kiTexf4fl9w6RCUTw',
+  groundGameProduct:
+    'https://lh3.googleusercontent.com/aida/ADBb0ui8PcFYPihANVGqMstHRbjKnGEfb9zi0AKlPw1_yjPSAppmFCIluxpLq08QNw-QSzpfCmXsyczqkzQkOeF-OrqzMNXTw9_aD28JscQywBRa_LvrxrIil9gzagYIRiNDj7vlMBqG4Aj-hBWDCVDLyU0VC4g8sU5zNjOmUj4TwcdU5JI_gQPRXAghtOyfkUWxZmlj2jT4Xkjb04qlAFyKoIUhgWgOBMjEV87WnM4fqrb3xL9duLgJWf-tzsHUH8rO0yM0no136yi-8bV',
+  preRollsLineup:
+    'https://lh3.googleusercontent.com/aida/ADBb0ugQ_YWhf4cCYhRK6HUoR77YVMm2BR_B_DvvyWBV_7DOyX_GHw8Q-4KyKRZ-O-ILjBF_NnINxpPQc19hKLP0kuaEdXT7KIU7Pq88P_wCL_rbnK-arIGsg5vrAYgUBzJm8320_g_nohUqLsLA02A7sMTXJKQxsekvjsGykR66e0nu22gGPox9fdWN1ppLbmdaQxhjY4oJf11ur5S5ZBavqTGphhStpRRUfaPHkI4sTBM6wEJXQRZXSAHbE1qSkVsnsfR01RRTsYONSA',
+
+  // ===== BRAND / ICON IMAGES =====
+  tripleInfusedIcon:
+    'https://lh3.googleusercontent.com/aida/ADBb0ujswsGv-PGFUrSzqdMx_FUm8zJsVlhnbIDpRF7R3pZBCrN5tgPbuUp8z5LT6c8GyhH3qk9ET7ccqSTIYKG41flH_BfHW1jQyb2Pa22LzcFXkWYhmLnON7-CKYveEj1kyce6EuGYjTfe44Uetxeroy8k2EwJt-H6o3znL4-6Lmk2PbGln-cjm6prlEeiQoo0Ng1oweo4ssa6k7b4fdmSk7u8cPSLoaQISUg9XsyS3ZExhnVIgAgq9lb6ZlnRDnxdu_gKe4xROAOGrVo',
