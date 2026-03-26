@@ -102,7 +102,7 @@ export default function OurStrains() {
                     </div>
                   )}
                 </div>
-                <h2 className="font-headline text-5xl font-bold uppercase leading-tight mb-4">
+                <h2 className="font-headline text-3xl md:text-5xl font-bold uppercase leading-tight mb-4">
                   {strain.name}
                 </h2>
                 <p className="font-body text-on-surface-variant text-sm leading-relaxed mb-6">
@@ -131,13 +131,13 @@ export default function OurStrains() {
             >
               verified
             </span>
-            <h3 className="font-headline text-5xl font-bold uppercase mb-4">
+            <h3 className="font-headline text-3xl md:text-5xl font-bold uppercase mb-4">
               CERTIFIED PERFORMANCE
             </h3>
             <p className="font-body text-sm uppercase tracking-widest max-w-[200px]">
               Triple-tested for purity, potency, and profile accuracy.
             </p>
-            <button className="mt-8 border-2 border-on-primary px-8 py-3 font-headline text-2xl uppercase font-bold hover:bg-on-primary hover:text-primary transition-colors">
+            <button className="mt-8 border-2 border-on-primary px-6 py-2 md:px-8 md:py-3 font-headline text-lg md:text-2xl uppercase font-bold hover:bg-on-primary hover:text-primary transition-colors">
               VIEW LAB RESULTS
             </button>
           </div>
@@ -167,10 +167,10 @@ export default function OurStrains() {
             READY FOR THE KICKOFF?
           </h2>
           <div className="flex flex-col md:flex-row gap-6 justify-center">
-            <button className="bg-primary text-on-primary px-12 py-5 font-headline text-3xl font-bold uppercase hover:bg-primary-container transition-all active:scale-95">
+            <button className="bg-primary text-on-primary px-6 py-3 md:px-12 md:py-5 font-headline text-xl md:text-3xl font-bold uppercase hover:bg-primary-container transition-all active:scale-95">
               FIND A STORE
             </button>
-            <button className="border-2 border-primary text-primary px-12 py-5 font-headline text-3xl font-bold uppercase hover:bg-surface-container-highest transition-all active:scale-95">
+            <button className="border-2 border-primary text-primary px-6 py-3 md:px-12 md:py-5 font-headline text-xl md:text-3xl font-bold uppercase hover:bg-surface-container-highest transition-all active:scale-95">
               JOIN OUR MAILING LIST
             </button>
           </div>
