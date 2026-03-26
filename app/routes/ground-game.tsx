@@ -9,7 +9,7 @@ export default function GroundGame() {
   return (
     <>
       {/* ===== HERO EDITORIAL SECTION ===== */}
-      <section className="grid grid-cols-1 md:grid-cols-12 min-h-[921px] bg-surface relative overflow-hidden">
+      <section className="grid grid-cols-1 md:grid-cols-12 min-h-screen md:min-h-[921px] bg-surface relative overflow-hidden">
         {/* Left Branding Column */}
         <div className="md:col-span-1 border-r border-outline-variant/20 flex-col justify-center items-center py-12 hidden md:flex">
           <p className="font-headline text-2xl font-bold uppercase tracking-[0.5em] -rotate-90 whitespace-nowrap text-on-surface-variant">
@@ -27,7 +27,7 @@ export default function GroundGame() {
               BUDGET FRIENDLY
             </span>
           </div>
-          <h1 className="font-headline text-[120px] leading-[0.85] font-bold uppercase mb-6 tracking-tighter">
+          <h1 className="font-headline text-6xl md:text-[120px] leading-[0.85] font-bold uppercase mb-6 tracking-tighter">
             GROUND <br />
             GAME
           </h1>
@@ -38,7 +38,7 @@ export default function GroundGame() {
           </p>
           <div className="flex flex-col gap-6">
             <div className="flex items-baseline gap-4">
-              <span className="font-headline text-7xl font-bold text-white">
+              <span className="font-headline text-4xl md:text-7xl font-bold text-white">
                 THC: 40%
               </span>
             </div>
@@ -66,7 +66,7 @@ export default function GroundGame() {
           {/* Floating High-Impact Stat */}
           <div className="absolute bottom-12 right-0 bg-surface p-8 z-20 md:-left-12 md:bottom-24 md:h-fit shadow-2xl">
             <div className="flex flex-col">
-              <span className="font-headline text-8xl font-bold leading-none text-primary">
+              <span className="font-headline text-5xl md:text-8xl font-bold leading-none text-primary">
                 0%
               </span>
               <span className="font-body text-sm uppercase tracking-widest text-on-surface-variant font-bold">
@@ -107,7 +107,7 @@ export default function GroundGame() {
             />
             <div className="absolute inset-0 bg-black/40" />
             <div className="absolute bottom-8 left-8">
-              <h2 className="font-headline text-6xl font-bold uppercase text-white drop-shadow-lg">
+              <h2 className="font-headline text-3xl md:text-6xl font-bold uppercase text-white drop-shadow-lg">
                 THE NO-TRIM <br />
                 DIFFERENCE
               </h2>
@@ -142,7 +142,7 @@ export default function GroundGame() {
 
           {/* Feature Block */}
           <div className="bg-primary text-on-primary p-12 flex flex-col justify-center">
-            <h3 className="font-headline text-5xl font-bold uppercase leading-tight mb-6 italic">
+            <h3 className="font-headline text-3xl md:text-5xl font-bold uppercase leading-tight mb-6 italic">
               READY FOR <br />
               KICKOFF
             </h3>
