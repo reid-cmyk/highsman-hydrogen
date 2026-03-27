@@ -22,7 +22,7 @@ export const IMAGES = {
   groundGameProduct:
     'https://lh3.googleusercontent.com/aida/ADBb0ui8PcFYPihANVGqMstHRbjKnGEfb9zi0AKlPw1_yjPSAppmFCIluxpLq08QNw-QSzpfCmXsyczqkzQkOeF-OrqzMNXTw9_aD28JscQywBRa_LvrxrIil9gzagYIRiNDj7vlMBqG4Aj-hBWDCVDLyU0VC4g8sU5zNjOmUj4TwcdU5JI_gQPRXAghtOyfkUWxZmlj2jT4Xkjb04qlAFyKoIUhgWgOBMjEV87WnM4fqrb3xL9duLgJWf-tzsHUH8rO0yM0no136yi-8bU',
   preRollsLineup:
-    '/preroll-banner-purple.jpeg',
+    'https://lh3.googleusercontent.com/aida/ADBb0ugQ_YWhf4cCYhRK6HUoR77YVMm2BR_B_DvvyWBV_7DOyX_GHw8Q-4KyKRZ-O-ILjBF_NnINxpPQc19hKLP0kuaEdXT7KIU7Pq88P_wCL_rbnK-arIGsg5vrAYgUBzJm8320_g_nohUqLsLA02A7sMTXJKQxsekvjsGykR66e0nu22gGPox9fdWN1ppLbmdaQxhjY4oJf11ur5S5ZBavqTGphhStpRRUfaPHkI4sTBM6wEJXQRZXSAHbE1qSkVsnsfR01RRTsYONSA',
 
   // ===== BRAND / ICON IMAGES =====
   tripleInfusedIcon:
