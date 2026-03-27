@@ -1,5 +1,6 @@
 import {Link, useLocation} from '@remix-run/react';
 import {useState} from 'react';
+import {IMAGES} from '~/lib/images';
 
 const NAV_LINKS = [
   {label: 'HOME', href: '/'},
@@ -18,9 +19,7 @@ export function Header() {
     <header className="flex justify-between items-center w-full px-8 py-4 bg-[#131313] fixed top-0 z-50">
       {/* Logo */}
       <Link to="/" className="flex items-center">
-        <span className="font-headline text-4xl font-bold tracking-tighter text-white uppercase">
-          HIGHSMAN
-        </span>
+        <img src={IMAGES.highsmanLogo} alt="Highsman" className="h-8 w-auto object-contain" />
       </Link>
 
       {/* Desktop Navigation */}
