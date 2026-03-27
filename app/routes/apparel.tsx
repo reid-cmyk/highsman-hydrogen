@@ -17,7 +17,8 @@ export default function Apparel() {
 
   return (
     <>
-      {/* ===== HERO SECTION ===== */}
+      
+{/* ===== HERO SECTION ===== */}
       <section className="relative h-[60vh] md:h-[800px] w-full overflow-hidden flex items-end">
         <div className="absolute inset-0 z-0">
           <img
@@ -33,9 +34,7 @@ export default function Apparel() {
               OFFICIAL MERCH
             </h2>
             <h1 className="text-white font-headline text-4xl md:text-[10rem] leading-[0.85] font-bold uppercase tracking-tighter mb-6 italic">
-              SHOP THE
-              <br />
-              COLLECTION
+              SHOP THE <br /> COLLECTION
             </h1>
             <p className="text-white/80 max-w-md font-body text-sm leading-relaxed uppercase tracking-wider">
               Highsman apparel blends athletic heritage with premium street
@@ -81,6 +80,7 @@ export default function Apparel() {
             {products.length} ITEMS
           </span>
         </div>
+
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 md:gap-x-8 gap-y-10 md:gap-y-16">
           {products.map((product: any) => (
             <ProductCard key={product.id} product={product} />
@@ -95,9 +95,7 @@ export default function Apparel() {
             SPARK GREATNESS.
           </span>
           <p className="font-headline text-2xl md:text-9xl font-bold leading-[0.9] uppercase italic tracking-tighter">
-            THE GRIND ISN&apos;T
-            <br />
-            GIVEN. IT&apos;S EARNED.
+            THE GRIND ISN&apos;T <br /> GIVEN. IT&apos;S EARNED.
           </p>
         </div>
         <div className="absolute -bottom-10 -right-10 opacity-5 pointer-events-none">
@@ -135,12 +133,7 @@ function ProductCard({product}: {product: any}) {
             </span>
           </div>
         )}
-        {!product.availableForSale && (
-          <div className="absolute top-3 left-3 bg-black text-white px-3 py-1 font-headline text-xs tracking-widest">
-            SOLD OUT
-          </div>
-        )}
-        {isOnSale && product.availableForSale && (
+        {isOnSale && (
           <div className="absolute top-3 left-3 bg-red-600 text-white px-3 py-1 font-headline text-xs tracking-widest">
             SALE
           </div>
