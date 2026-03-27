@@ -1,4 +1,5 @@
 import {Link} from '@remix-run/react';
+import {IMAGES} from '~/lib/images';
 
 const FOOTER_LINKS = [
   {label: 'PRIVACY POLICY', href: '/policies/privacy-policy'},
@@ -14,9 +15,8 @@ export function Footer() {
     <footer className="flex flex-col md:flex-row justify-between items-center w-full px-12 py-16 gap-8 bg-[#0E0E0E] border-t border-white/10">
       {/* Brand */}
       <div className="flex flex-col gap-4">
-        <span className="font-headline text-2xl font-bold text-white uppercase tracking-widest">
-          HIGHSMAN
-        </span>
+        <img src={IMAGES.highsmanLogo} alt="Highsman" className="h-8 w-auto object-contain" />
+        <img src={IMAGES.sparkGreatnessLogo} alt="Spark Greatness" className="h-6 w-auto object-contain invert opacity-90" />
         <p className="font-body text-[10px] tracking-widest uppercase text-white/50">
           &copy; {new Date().getFullYear()} HIGHSMAN. ALL RIGHTS RESERVED.
         </p>
