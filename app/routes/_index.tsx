@@ -10,7 +10,7 @@ export default function Homepage() {
   return (
     <>
       {/* ===== HERO SECTION ===== */}
-      <section className="relative h-[90vh] flex items-end px-4 pb-12 md:px-12 md:pb-24 overflow-hidden mt-44">
+      <section className="relative h-[90vh] flex items-end px-4 pb-12 md:px-12 md:pb-24 overflow-hidden mt-[10rem]">
         <div className="absolute inset-0 z-0">
           <img
             alt="NFL running back in action - Highsman"
@@ -24,8 +24,7 @@ export default function Homepage() {
             spark greatness
           </h1>
           <p className="font-body text-sm md:text-xl mt-8 max-w-xl text-on-surface-variant uppercase tracking-[0.2em] leading-tight">
-            Premium cannabis for the high-performance lifestyle, founded by NFL
-            Legend Ricky Williams.
+            Premium cannabis for the high-performance lifestyle. We live at the intersection of cannabis and sports.
           </p>
           <div className="mt-12 flex gap-4">
             <Link
