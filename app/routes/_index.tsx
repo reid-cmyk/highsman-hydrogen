@@ -155,7 +155,7 @@ export default function Homepage() {
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <img
                 alt="7g Ground Game Flower"
-                className="w-4/5 h-4/5 object-cover transition-transform duration-700 group-hover:scale-110"
+                className="w-[70%] h-[70%] object-cover transition-transform duration-700 group-hover:scale-110"
                 src={IMAGES.groundGameProduct}
               />
             </div>
