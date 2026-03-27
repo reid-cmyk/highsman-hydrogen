@@ -30,7 +30,7 @@ export function Header() {
             <Link
               key={link.href}
               to={link.href}
-              className={`font-headline uppercase tracking-widest font-bold text-xl transition-colors ${
+              className={`font-headline uppercase tracking-widest font-bold text-3xl transition-colors ${
                 isActive
                   ? 'text-white border-b-4 border-white pb-1'
                   : 'text-[#C6C6C6] hover:text-white'
@@ -83,7 +83,7 @@ export function Header() {
                   key={link.href}
                   to={link.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`px-8 py-4 font-headline uppercase tracking-widest font-bold text-xl transition-colors ${
+                  className={`px-8 py-4 font-headline uppercase tracking-widest font-bold text-3xl transition-colors ${
                     isActive
                       ? 'text-white bg-surface-container'
                       : 'text-[#C6C6C6] hover:text-white hover:bg-surface-container'
