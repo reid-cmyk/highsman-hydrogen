@@ -101,7 +101,7 @@ export default function PreRolls() {
               key={item.title}
               className={`${item.bg} p-12 space-y-6 flex flex-col justify-between aspect-auto md:aspect-square`}
             >
-              <div className="w-full h-32 mb-6 overflow-hidden bg-surface-container"><img alt={item.title} className="w-full h-full object-cover" src={item.image} /></div>
+              <div className="w-full h-48 mb-6 overflow-hidden bg-surface-container"><img alt={item.title} className="w-full h-full object-cover" src={item.image} /></div>
               <div className="space-y-4">
                 <h3 className="font-headline text-3xl md:text-5xl uppercase text-primary">
                   {item.title}
