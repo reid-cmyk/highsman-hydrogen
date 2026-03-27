@@ -10,10 +10,10 @@ export default function PreRolls() {
     <>
       {/* ===== HERO: EDITORIAL SPLIT ===== */}
       <section className="relative w-full min-h-screen md:min-h-[921px] grid grid-cols-1 md:grid-cols-12 bg-surface">
-        <div className="md:col-span-7 relative overflow-hidden order-2 md:order-1 bg-white">
+        <div className="md:col-span-7 relative overflow-hidden order-2 md:order-1 bg-[#2D1B69]">
           <img
             alt="Highsman 1.2g Triple Infused lineup"
-            className="w-full h-full object-contain p-4 scale-110 transition-transform"
+            className="w-full h-full object-cover transition-transform"
             src={IMAGES.preRollsLineup}
           />
           <div className="absolute bottom-0 left-0 p-12 bg-gradient-to-t from-white/20 to-transparent w-full">
