@@ -14,7 +14,6 @@ export async function loader({params, context}: LoaderFunctionArgs) {
   const {product} = await context.storefront.query(PRODUCT_QUERY, {
     variables: {handle},
   });
-
   if (!product) throw new Response('Not Found', {status: 404});
   return json({product});
 }
@@ -25,9 +24,7 @@ export default function Product() {
     product.variants.nodes[0],
   );
   const [selectedImage, setSelectedImage] = useState(0);
-
   const images = product.images.nodes;
-  const isAvailable = selectedVariant?.availableForSale;
 
   return (
     <section className="max-w-7xl mx-auto px-6 md:px-8 py-8 md:py-16">
@@ -89,7 +86,7 @@ export default function Product() {
               )}
           </div>
 
-          {/* Variant Selector */}
+          {/* Variant Selector - all variants selectable for dropship */}
           {product.variants.nodes.length > 1 && (
             <div className="mb-8">
               <h3 className="font-headline text-sm uppercase tracking-[0.3em] text-white/60 mb-3">
@@ -100,13 +97,10 @@ export default function Product() {
                   <button
                     key={variant.id}
                     onClick={() => setSelectedVariant(variant)}
-                    disabled={!variant.availableForSale}
                     className={`px-4 py-2 border font-headline text-sm uppercase tracking-widest transition-all ${
                       variant.id === selectedVariant.id
                         ? 'bg-white text-black border-white'
-                        : variant.availableForSale
-                          ? 'border-white/30 hover:border-white'
-                          : 'border-white/10 text-white/30 cursor-not-allowed line-through'
+                        : 'border-white/30 hover:border-white'
                     }`}
                   >
                     {variant.title}
@@ -116,7 +110,7 @@ export default function Product() {
             </div>
           )}
 
-          {/* Add to Cart */}
+          {/* Add to Cart - always enabled for dropship products */}
           <CartForm
             route="/cart"
             action={CartForm.ACTIONS.LinesAdd}
@@ -131,14 +125,9 @@ export default function Product() {
           >
             <button
               type="submit"
-              disabled={!isAvailable}
-              className={`w-full py-4 font-headline text-xl md:text-2xl font-bold uppercase tracking-[0.2em] transition-all ${
-                isAvailable
-                  ? 'bg-white text-black hover:bg-gray-200'
-                  : 'bg-white/10 text-white/30 cursor-not-allowed'
-              }`}
+              className="w-full py-4 font-headline text-xl md:text-2xl font-bold uppercase tracking-[0.2em] transition-all bg-white text-black hover:bg-gray-200"
             >
-              {isAvailable ? 'ADD TO CART' : 'SOLD OUT'}
+              ADD TO CART
             </button>
           </CartForm>
 
