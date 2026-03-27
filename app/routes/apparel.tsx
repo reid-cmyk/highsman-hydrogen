@@ -1,82 +1,46 @@
-import type {MetaFunction} from '@shopify/remix-oxygen';
+import {json, type LoaderFunctionArgs, type MetaFunction} from '@shopify/remix-oxygen';
+import {useLoaderData, Link} from '@remix-run/react';
+import {Image, Money} from '@shopify/hydrogen';
 import {IMAGES} from '~/lib/images';
 
 export const meta: MetaFunction = () => {
-  return [{title: 'HIGHSMAN | Apparel - Game Day Collection'}];
+  return [{title: 'HIGHSMAN | Apparel - Shop The Collection'}];
 };
 
-const PRODUCTS = [
-  {
-    name: 'VARSITY "H" JACKET',
-    material: 'PREMIUM WOOL & LEATHER',
-    price: '$245.00',
-    badge: 'NEW DROP',
-    image: IMAGES.varsityJacket,
-  },
-  {
-    name: 'SIDELINE HOODIE',
-    material: 'HEAVYWEIGHT FLEECE',
-    price: '$110.00',
-    image: IMAGES.sidelineHoodie,
-  },
-  {
-    name: 'GRIDIRON JOGGERS',
-    material: 'RELAXED TAPER FIT',
-    price: '$95.00',
-    image: IMAGES.gridironJoggers,
-  },
-  {
-    name: 'BOX LOGO TEE',
-    material: '100% ORGANIC COTTON',
-    price: '$45.00',
-    image: IMAGES.boxLogoTee,
-  },
-  {
-    name: 'OFF-SEASON BEANIE',
-    material: 'RIBBED MERINO WOOL',
-    price: '$35.00',
-    image: IMAGES.offSeasonBeanie,
-  },
-  {
-    name: 'PERFORMANCE SOCKS',
-    material: 'COMPRESSION TECH / 2-PACK',
-    price: '$22.00',
-    image: IMAGES.performanceSocks,
-  },
-];
+export async function loader({context}: LoaderFunctionArgs) {
+  const {products} = await context.storefront.query(PRODUCTS_QUERY);
+  return json({products: products.nodes});
+}
 
 export default function Apparel() {
+  const {products} = useLoaderData<typeof loader>();
+
   return (
     <>
       {/* ===== HERO SECTION ===== */}
-      <section className="relative h-[70vh] md:h-[921px] w-full overflow-hidden flex items-end">
+      <section className="relative h-[60vh] md:h-[800px] w-full overflow-hidden flex items-end">
         <div className="absolute inset-0 z-0">
           <img
-            alt="Highsman Varsity Jacket Model"
+            alt="Highsman Apparel Collection"
             className="w-full h-full object-cover grayscale brightness-75"
             src={IMAGES.apparelHero}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#131313] via-transparent to-transparent opacity-80" />
         </div>
-        <div className="relative z-10 w-full px-8 pb-16 md:pb-24">
+        <div className="relative z-10 w-full px-6 md:px-8 pb-12 md:pb-24">
           <div className="max-w-7xl mx-auto">
-            <h2 className="text-white/60 font-headline text-2xl tracking-[0.4em] mb-2">
-              LIMITED EDITION
+            <h2 className="text-white/60 font-headline text-lg md:text-2xl tracking-[0.4em] mb-2">
+              OFFICIAL MERCH
             </h2>
-            <h1 className="text-white font-headline text-5xl md:text-[12rem] leading-[0.85] font-bold uppercase tracking-tighter mb-8 italic">
-              GAME DAY
+            <h1 className="text-white font-headline text-4xl md:text-[10rem] leading-[0.85] font-bold uppercase tracking-tighter mb-6 italic">
+              SHOP THE
               <br />
               COLLECTION
             </h1>
-            <div className="flex flex-col md:flex-row md:items-center gap-6">
-              <button className="bg-white text-black px-12 py-4 font-headline text-2xl font-bold tracking-widest hover:bg-gray-200 transition-all uppercase">
-                SHOP THE LOOK
-              </button>
-              <p className="text-white/80 max-w-md font-body text-sm leading-relaxed uppercase tracking-wider">
-                Engineered for those who thrive in the spotlight. Highsman
-                apparel blends athletic heritage with premium street culture.
-              </p>
-            </div>
+            <p className="text-white/80 max-w-md font-body text-sm leading-relaxed uppercase tracking-wider">
+              Highsman apparel blends athletic heritage with premium street
+              culture. Rep the brand on and off the field.
+            </p>
           </div>
         </div>
       </section>
@@ -108,53 +72,29 @@ export default function Apparel() {
       </section>
 
       {/* ===== PRODUCT GRID ===== */}
-      <section className="max-w-7xl mx-auto px-8 py-24">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-20 gap-x-8">
-          {/* First 3 products */}
-          {PRODUCTS.slice(0, 3).map((product) => (
-            <ProductCard key={product.name} {...product} />
-          ))}
-
-          {/* Editorial Break */}
-          <div className="col-span-1 md:col-span-2 lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-8 my-12">
-            <div className="h-[300px] md:h-[600px] overflow-hidden">
-              <img
-                alt="Lifestyle editorial"
-                className="w-full h-full object-cover grayscale"
-                src={IMAGES.apparelLifestyle2}
-              />
-            </div>
-            <div className="flex flex-col justify-center items-start p-6 md:p-12 bg-white text-black">
-              <span className="font-headline text-2xl tracking-[0.4em] mb-4 text-gray-500 uppercase">
-                THE MANIFESTO
-              </span>
-              <h2 className="font-headline text-3xl md:text-6xl font-bold leading-tight mb-6 uppercase">
-                BUILT FOR THE RECOVERY AS MUCH AS THE RUSH.
-              </h2>
-              <p className="font-body text-lg mb-8 max-w-sm">
-                Every piece is designed with elite craftsmanship to ensure you
-                look as good off the clock as you do on it.
-              </p>
-              <button className="border-2 border-black px-10 py-3 font-headline text-lg md:text-2xl font-bold tracking-widest hover:bg-black hover:text-white transition-all uppercase">
-                OUR STORY
-              </button>
-            </div>
-          </div>
-
-          {/* Last 3 products */}
-          {PRODUCTS.slice(3).map((product) => (
-            <ProductCard key={product.name} {...product} />
+      <section className="max-w-7xl mx-auto px-6 md:px-8 py-16 md:py-24">
+        <div className="flex items-center justify-between mb-12">
+          <h2 className="font-headline text-3xl md:text-5xl font-bold uppercase tracking-tight">
+            ALL PRODUCTS
+          </h2>
+          <span className="text-white/50 font-body text-sm uppercase tracking-widest">
+            {products.length} ITEMS
+          </span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 md:gap-x-8 gap-y-10 md:gap-y-16">
+          {products.map((product: any) => (
+            <ProductCard key={product.id} product={product} />
           ))}
         </div>
       </section>
 
       {/* ===== SIGNATURE QUOTE ===== */}
-      <section className="w-full bg-white text-black py-32 px-8 overflow-hidden relative">
+      <section className="w-full bg-white text-black py-20 md:py-32 px-6 md:px-8 overflow-hidden relative">
         <div className="max-w-7xl mx-auto text-center relative z-10">
-          <span className="font-headline text-4xl font-bold tracking-[0.5em] mb-8 block uppercase">
+          <span className="font-headline text-2xl md:text-4xl font-bold tracking-[0.5em] mb-8 block uppercase">
             SPARK GREATNESS.
           </span>
-          <p className="font-headline text-3xl md:text-9xl font-bold leading-[0.9] uppercase italic tracking-tighter">
+          <p className="font-headline text-2xl md:text-9xl font-bold leading-[0.9] uppercase italic tracking-tighter">
             THE GRIND ISN&apos;T
             <br />
             GIVEN. IT&apos;S EARNED.
@@ -170,51 +110,89 @@ export default function Apparel() {
   );
 }
 
-function ProductCard({
-  name,
-  material,
-  price,
-  badge,
-  image,
-}: {
-  name: string;
-  material: string;
-  price: string;
-  badge?: string;
-  image?: string;
-}) {
+function ProductCard({product}: {product: any}) {
+  const image = product.images.nodes[0];
+  const price = product.priceRange.minVariantPrice;
+  const comparePrice = product.compareAtPriceRange?.minVariantPrice;
+  const isOnSale =
+    comparePrice &&
+    parseFloat(comparePrice.amount) > parseFloat(price.amount);
+
   return (
-    <div className="group">
-      <div className="aspect-[4/5] bg-neutral-900 overflow-hidden relative mb-6">
+    <Link to={`/products/${product.handle}`} className="group block">
+      <div className="aspect-[3/4] bg-neutral-100 overflow-hidden relative mb-4">
         {image ? (
-          <img
-            src={image}
-            alt={name}
+          <Image
+            data={image}
+            aspectRatio="3/4"
+            sizes="(min-width: 1024px) 25vw, (min-width: 768px) 33vw, 50vw"
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
           />
         ) : (
-          <div className="w-full h-full bg-surface-container-high transition-transform duration-700 group-hover:scale-105" />
+          <div className="w-full h-full bg-neutral-200 flex items-center justify-center">
+            <span className="text-neutral-400 font-headline text-xl">
+              NO IMAGE
+            </span>
+          </div>
         )}
-        {badge && (
-          <div className="absolute top-4 left-4 bg-black text-white px-3 py-1 font-headline text-lg tracking-widest">
-            {badge}
+        {!product.availableForSale && (
+          <div className="absolute top-3 left-3 bg-black text-white px-3 py-1 font-headline text-xs tracking-widest">
+            SOLD OUT
+          </div>
+        )}
+        {isOnSale && product.availableForSale && (
+          <div className="absolute top-3 left-3 bg-red-600 text-white px-3 py-1 font-headline text-xs tracking-widest">
+            SALE
           </div>
         )}
       </div>
-      <div className="flex justify-between items-start mb-4">
-        <div>
-          <h3 className="font-headline text-xl md:text-3xl font-bold uppercase tracking-tight">
-            {name}
-          </h3>
-          <p className="text-white/50 font-body text-xs uppercase tracking-widest">
-            {material}
-          </p>
-        </div>
-        <span className="font-headline text-2xl font-bold">{price}</span>
+      <h3 className="font-headline text-sm md:text-lg font-bold uppercase tracking-tight mb-1 group-hover:text-white/70 transition-colors">
+        {product.title}
+      </h3>
+      <div className="flex items-center gap-2">
+        <span className="font-headline text-sm md:text-lg">
+          <Money data={price} />
+        </span>
+        {isOnSale && (
+          <span className="font-headline text-sm md:text-base text-white/40 line-through">
+            <Money data={comparePrice} />
+          </span>
+        )}
       </div>
-      <button className="w-full border border-white/20 hover:bg-white hover:text-black transition-all py-3 font-headline text-xl tracking-[0.2em] uppercase">
-        ADD TO CART
-      </button>
-    </div>
+    </Link>
   );
 }
+
+const PRODUCTS_QUERY = `#graphql
+  query AllProducts {
+    products(first: 50, sortKey: BEST_SELLING) {
+      nodes {
+        id
+        title
+        handle
+        availableForSale
+        priceRange {
+          minVariantPrice {
+            amount
+            currencyCode
+          }
+        }
+        compareAtPriceRange {
+          minVariantPrice {
+            amount
+            currencyCode
+          }
+        }
+        images(first: 1) {
+          nodes {
+            id
+            url
+            altText
+            width
+            height
+          }
+        }
+      }
+    }
+  }
+`;
