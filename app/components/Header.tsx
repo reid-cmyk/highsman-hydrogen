@@ -19,7 +19,7 @@ export function Header() {
     <header className="flex justify-between items-center w-full px-8 py-4 bg-[#131313] fixed top-0 z-50">
       {/* Logo */}
       <Link to="/" className="flex items-center">
-        <img src={IMAGES.highsmanLogo} alt="Highsman" className="h-16 w-auto object-contain" />
+        <img src={IMAGES.highsmanLogo} alt="Highsman" className="h-32 w-auto object-contain" />
       </Link>
 
       {/* Desktop Navigation */}
