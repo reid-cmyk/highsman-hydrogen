@@ -175,7 +175,7 @@ export default function Homepage() {
                 </p>
               </div>
               <div className="flex flex-col items-end gap-6">
-                <div className="font-headline text-[6rem] md:text-[12rem] font-extrabold <Link
+                <Link
                   to="/ground-game"
                   className="bg-primary text-on-primary px-8 py-4 md:px-20 md:py-8 font-headline text-xl md:text-4xl font-bold uppercase hover:bg-white hover:text-black transition-all relative z-10"
                 >
