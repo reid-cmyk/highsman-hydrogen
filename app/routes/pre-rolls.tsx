@@ -82,23 +82,26 @@ export default function PreRolls() {
               title: 'THC-A DIAMONDS',
               desc: 'Pure THCa crystalline diamonds for immediate high-velocity impact. Maximum clarity, maximum power.',
               bg: 'bg-surface-container-high',
+              image: IMAGES.thcaDiamonds,
             },
             {
               title: 'LIVE RESIN',
               desc: "Fresh Frozen Live Resin preserving the full spectrum of the plant's biological profile and terpenes.",
               bg: 'bg-surface-bright',
+              image: IMAGES.liveResin,
             },
             {
               title: 'HTE EXTRACT',
               desc: 'High Terpene Extract for complex flavor architecture and sustained aromatic intensity.',
               bg: 'bg-surface-container-high',
+              image: IMAGES.hteExtract,
             },
           ].map((item) => (
             <div
               key={item.title}
               className={`${item.bg} p-12 space-y-6 flex flex-col justify-between aspect-auto md:aspect-square`}
             >
-              <div className="w-full h-32 mb-6 overflow-hidden bg-surface-container" />
+              <div className="w-full h-32 mb-6 overflow-hidden bg-surface-container"><img alt={item.title} className="w-full h-full object-cover" src={item.image} /></div>
               <div className="space-y-4">
                 <h3 className="font-headline text-3xl md:text-5xl uppercase text-primary">
                   {item.title}
