@@ -13,7 +13,7 @@ export default function PreRolls() {
         <div className="md:col-span-7 relative overflow-hidden order-2 md:order-1 bg-[#2D1B69]">
           <img
             alt="Highsman 1.2g Triple Infused lineup"
-            className="w-full h-full object-cover transition-transform"
+            className="absolute inset-0 w-full h-full object-cover transition-transform"
             src={IMAGES.preRollsLineup}
           />
           <div className="absolute bottom-0 left-0 p-12 bg-gradient-to-t from-white/20 to-transparent w-full">
