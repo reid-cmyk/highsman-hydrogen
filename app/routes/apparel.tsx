@@ -72,32 +72,81 @@ export default function Apparel() {
 
       {/* ===== PRODUCT GRID ===== */}
       <section className="max-w-7xl mx-auto px-6 md:px-8 py-16 md:py-24">
-        <div className="flex items-center justify-between mb-12">
-          <h2 className="font-headline text-3xl md:text-5xl font-bold uppercase tracking-tight">
-            ALL PRODUCTS
-          </h2>
-          <span className="text-white/50 font-body text-sm uppercase tracking-widest">
-            {products.length} ITEMS
-          </span>
-        </div>
+                  {(() => {
+            const categories = [
+              {
+                name: "Headwear",
+                filter: (p) => /hat|snapback|trucker|beanie|visor|cap|pom-pom|dad hat/i.test(p.title),
+              },
+              {
+                name: "T-Shirts",
+                filter: (p) => /tee|t-shirt|polo/i.test(p.title) && !/hoodie|jacket|jersey/i.test(p.title),
+              },
+              {
+                name: "Hoodies & Outerwear",
+                filter: (p) => /hoodie|pullover|zip up|jacket|bomber|varsity|letterman/i.test(p.title),
+              },
+              {
+                name: "Jerseys",
+                filter: (p) => /jersey/i.test(p.title),
+              },
+              {
+                name: "Bottoms",
+                filter: (p) => /shorts|joggers|pants|fleece shorts|mesh shorts/i.test(p.title),
+              },
+              {
+                name: "Accessories",
+                filter: (p) => /sock|towel|tray|pelican|case/i.test(p.title),
+              },
+            ];
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 md:gap-x-8 gap-y-10 md:gap-y-16">
-          {products.map((product: any) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
-      </section>
+            const categorized = categories.map(cat => ({
+              ...cat,
+              products: products.filter(cat.filter),
+            })).filter(cat => cat.products.length > 0);
 
-      {/* ===== SIGNATURE QUOTE ===== */}
-      <section className="w-full bg-white text-black py-20 md:py-32 px-6 md:px-8 overflow-hidden relative">
-        <div className="max-w-7xl mx-auto text-center relative z-10">
-          <span className="font-headline text-2xl md:text-4xl font-bold tracking-[0.5em] mb-8 block uppercase">
-            SPARK GREATNESS.
-          </span>
-          <p className="font-headline text-2xl md:text-9xl font-bold leading-[0.9] uppercase italic tracking-tighter">
-            THE GRIND ISN&apos;T <br /> GIVEN. IT&apos;S EARNED.
-          </p>
-        </div>
+            const categorizedIds = new Set(categorized.flatMap(cat => cat.products.map(p => p.id)));
+            const uncategorized = products.filter(p => !categorizedIds.has(p.id));
+
+            return (
+              <>
+                {categorized.map((cat) => (
+                  <div key={cat.name} className="mb-16">
+                    <div className="flex justify-between items-baseline mb-8 border-b border-white/20 pb-4">
+                      <h2 className="font-headline text-2xl md:text-4xl font-black uppercase tracking-tighter">
+                        {cat.name}
+                      </h2>
+                      <span className="font-headline text-sm text-white/50 tracking-widest">
+                        {cat.products.length} {cat.products.length === 1 ? "ITEM" : "ITEMS"}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                      {cat.products.map((product) => (
+                        <ProductCard key={product.id} product={product} />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                {uncategorized.length > 0 && (
+                  <div className="mb-16">
+                    <div className="flex justify-between items-baseline mb-8 border-b border-white/20 pb-4">
+                      <h2 className="font-headline text-2xl md:text-4xl font-black uppercase tracking-tighter">
+                        More Products
+                      </h2>
+                      <span className="font-headline text-sm text-white/50 tracking-widest">
+                        {uncategorized.length} {uncategorized.length === 1 ? "ITEM" : "ITEMS"}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                      {uncategorized.map((product) => (
+                        <ProductCard key={product.id} product={product} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         <div className="absolute -bottom-10 -right-10 opacity-5 pointer-events-none">
           <span className="font-headline text-[30rem] font-bold leading-none">
             H
@@ -162,6 +211,7 @@ const PRODUCTS_QUERY = `#graphql
       nodes {
         id
         title
+      productType
         handle
         availableForSale
         priceRange {
