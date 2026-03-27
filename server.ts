@@ -23,12 +23,25 @@ export default {
         storefrontHeaders: getStorefrontHeaders(request),
       });
 
-      // Create cart handler
+      // Create cart handler with cookie-based cart ID
       const cart = createCartHandler({
         storefront,
         getCartId: () => {
+          // Check cookie first
+          const cookieHeader = request.headers.get('Cookie') || '';
+          const match = cookieHeader.match(/cart=([^;]+)/);
+          if (match) return match[1];
+          // Fallback to URL param
           const url = new URL(request.url);
           return url.searchParams.get('cartId') ?? undefined;
+        },
+        setCartId: (cartId: string) => {
+          const headers = new Headers();
+          headers.append(
+            'Set-Cookie',
+            `cart=${cartId}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000`,
+          );
+          return headers;
         },
       });
 
