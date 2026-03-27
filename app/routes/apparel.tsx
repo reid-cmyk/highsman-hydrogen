@@ -122,9 +122,9 @@ function ProductCard({product}: {product: any}) {
         {image ? (
           <Image
             data={image}
-            aspectRatio="3/4"
+           
             sizes="(min-width: 1024px) 25vw, (min-width: 768px) 33vw, 50vw"
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+            className="w-full h-full object-contain transition-transform duration-700 group-hover:scale-105"
           />
         ) : (
           <div className="w-full h-full bg-neutral-200 flex items-center justify-center">
