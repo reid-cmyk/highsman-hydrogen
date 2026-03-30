@@ -10,12 +10,6 @@ export default function HitSticks() {
     <>
       {/* ===== HERO SECTION ===== */}
       <section className="relative min-h-screen md:min-h-[921px] flex flex-col md:flex-row items-center overflow-hidden px-8 md:px-16 py-12 gap-12">
-        {/* Background Text Aesthetic */}
-        <div className="absolute top-20 -left-10 opacity-5 select-none pointer-events-none hidden lg:block">
-          <h2 className="font-headline text-[25rem] leading-none font-bold uppercase">
-            HIT STICK
-          </h2>
-        </div>
 
         {/* Product Showcase */}
         <div className="w-full md:w-1/2 z-10">
