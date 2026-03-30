@@ -23,7 +23,7 @@ export default function HitSticks() {
             <img
               alt="Highsman Hit Stick"
               className="max-w-full max-h-[600px] w-auto h-auto object-contain"
-              src={IMAGES.hitStickHero}
+              src={IMAGES.hitStickProduct}
             />
           </div>
         </div>
