@@ -12,21 +12,21 @@ export const IMAGES = {
   strainsHero:
     'https://lh3.googleusercontent.com/aida-public/AB6AXuDPMl2-h3tEN1596ptXYKtG1fNlNp5QPMpqGUVHXomr5BLLmgAtfCiAQJ4lub3R3wx8zUS9DC4wgVBJ3T37CpVX38YYBuYcRKPmte9hNQyb4EV-bt0_RfbACcn8erFtbi1IMY1JflHBLNmScRCHToUkVt3WKwlRMtm1_PJApNcESGR2_tXT8XBWFmlD6OriOw9Up74nDGz6oQ1iLzail3tKmb8ECSYZWafobis_pGTpKDQTOO29NumW3_voDBldzeQUif0tsI0UHI6H',
   hitStickHero:
-    'https://lh3.googleusercontent.com/aida/ADBb0ujKS00aQqr67Ch8IJpmztZ4OlzffsPrtcsMz0lUK75wCqSj_UuODLLRiboxEOaCZy4qRQYGgbpp_FE2X1NgkdOJfex5zK_NfJgX1KIYi9KyZNrq2qCWstHpdkn-wwomwyXE1RxBcEoBDT29DhCo0YD_s6WURsxR7SGwhrx-mqktNJ7ThA5TukGQBR73ti-nWY_vQMTItNO7K74EqKjNhrEx9Uqps6nhoMLxOQF0lmm6sy7Py8lU1VBr2TruQHLQYwGeJT9EcIVH39k',
+    '/hitstick-hero.jpeg',
 
   // ===== PRODUCT IMAGES =====
   hitStickProduct:
-    'https://lh3.googleusercontent.com/aida/ADBb0ujjFxJOlO_G5B7JJQQegUg11stppLwVN6YNHtQwhLGwHIXXqhTkkiRZWjxVE7TRnxZMscnUIZ6gAhj381sw9RRilLWXL5rb0DIVUpEUcnqcXStBb1EYABuFrHLaUfp9TEaqwMY8QaXBA6CCjobgq89zUJAtmtT69kFS0D8fp00-JtLzFRPssS_FT6a4Tfmhh3jYxzAfm832aufjy94TBSWQ6pkXQPvaSnNFS9ahJ30fiB1Ixp1AohTerJppeVhBW9jyTWqO-1k1sVI',
+    '/hitstick-product.jpeg',
   preRollsProduct:
-    'https://lh3.googleusercontent.com/aida/ADBb0uiePx12hFvW3EbnEX-Y6-8H5SDr3st7jElgPTyPW3Ph98ottKmy1Cs1H3zYTBXWsFFj9N1EKk9P-ruyU0qb_2-vCSXz_JTp-m-ULirU9g88PXx3Mrk0JekgUR1sYYcFOHgJLhZNjZIFN16MXSDLFhjen-kdPYz7nlNnkFiDZxHxE4c6fXtcBpaJLnFvH2iXQvWAHKT0KYHlEmm1IRKncK_MLd2ZPp8faPo2OOdZ_oL4i1TKR1agLfXB88lk19kiTexf4fl9w6RCUTw',
+    '/prerolls-product.jpeg',
   groundGameProduct:
-    'https://lh3.googleusercontent.com/aida/ADBb0ui8PcFYPihANVGqMstHRbjKnGEfb9zi0AKlPw1_yjPSAppmFCIluxpLq08QNw-QSzpfCmXsyczqkzQkOeF-OrqzMNXTw9_aD28JscQywBRa_LvrxrIil9gzagYIRiNDj7vlMBqG4Aj-hBWDCVDLyU0VC4g8sU5zNjOmUj4TwcdU5JI_gQPRXAghtOyfkUWxZmlj2jT4Xkjb04qlAFyKoIUhgWgOBMjEV87WnM4fqrb3xL9duLgJWf-tzsHUH8rO0yM0no136yi-8bU',
+    '/groundgame-product.jpeg',
   preRollsLineup:
-    'https://lh3.googleusercontent.com/aida/ADBb0ugQ_YWhf4cCYhRK6HUoR77YVMm2BR_B_DvvyWBV_7DOyX_GHw8Q-4KyKRZ-O-ILjBF_NnINxpPQc19hKLP0kuaEdXT7KIU7Pq88P_wCL_rbnK-arIGsg5vrAYgUBzJm8320_g_nohUqLsLA02A7sMTXJKQxsekvjsGykR66e0nu22gGPox9fdWN1ppLbmdaQxhjY4oJf11ur5S5ZBavqTGphhStpRRUfaPHkI4sTBM6wEJXQRZXSAHbE1qSkVsnsfR01RRTsYONSA',
+    '/prerolls-lineup.jpeg',
 
   // ===== BRAND / ICON IMAGES =====
   tripleInfusedIcon:
-    'https://lh3.googleusercontent.com/aida/ADBb0ujswsGv-PGFUrSzqdMx_FUm8zJsVlhnbIDpRF7R3pZBCrN9tgPbuUp8z5LT6c8GyhH3qk9ET7ccqSTIYKG41flH_BfHW1jQyb2Pa22LzcFXkWYhmLnON7-CKYveEj1kyce6EuGYjTfe44Uetxeroy8k2EwJt-H6o3znL4-6Lmk2PbGln-cjm6prlEeiQoo0Ng1oweo4ssa6k7b4fdmSk7u8cPSLoaQISUg9XsyS3ZExhnVIgAgq9lb6ZlnRDnxdu_gKe4xROAOGrVo',
+    '/triple-infused-icon.jpeg',
 
   // ===== LIFESTYLE / EDITORIAL =====
   apparelLifestyle:
@@ -34,9 +34,9 @@ export const IMAGES = {
   apparelLifestyle2:
     'https://lh3.googleusercontent.com/aida-public/AB6AXuBlipf86WYcGwAch766R30i4qCP8zPRj-ZvsQ2nb7yL1KRE_1vsWDznLpPuUITS8assiA8WYL6daQpqQ-forib86yovkywtBsuuOoMgx-OsqkimP001QJm7-lj9MBaXff21RbXJE3l8oOu06ZCxVXVrCIjUTRJr9hnglU7ECgpl-84Py_YFtGJIDlsLqVa219xVP8xr7p2bNxL_AWl0dBNPR3OQD3P_8mJvvVjlQ4jLEKFwErc966zHCkAo7LeXCKdpbWhl-0c_C615',
   rickyWilliams:
-    'https://lh3.googleusercontent.com/aida/ADBb0ug0oAVy1s1opGSDO5T7dJJk4BHCvxkJ40RIqh1Pd2oZ00xGFHQblb02o_MjL2woydiQPXhp-5yVF3cmX4dyNhReV7Jsdelv-IiueLpVKCllWV_NtHVvl6IwkREc6jVoXNGm6riI-8s1SPhrCGEmsJR7Qb63_TlB_OgodIybs8USJVSEtQfK-Z14P-pwrsEsC6WZ8wyb5TMOjFcL4uZojP9gTm6nz6EvOPpfmb1014WdM5olFJe4Oa9S1NCYF3K6h8shRwa0BAiUYKM',
+    '/ricky-williams.jpeg',
   strainsBanner:
-    'https://lh3.googleusercontent.com/aida/ADBb0ug6u1kGROqmy-tShUpiAQeEMht0wolsRbfm99EIYK9VlisdzfbpiV09Jev_bGhJQdmmDPniuNXRI5WDfBDIZNpveafWa8EwOycjVRiPaJIU6JVNKs3IJGg6jHb430UV73WxyAa2cqHbmMTrF3IlPOZdWrjbveMRQ8x0IB2zWMeUDNndV3YTrPBOGvqYET4KmBv7VzJQnuW99GAp7jUX4H7sPYBxqsHIkx169t3ibPcQ2pL7Dk_mroZQB50ZQhc0BerATCIdsWWK9D4',
+    '/strains-banner.jpeg',
 
   // ===== MACRO / DETAIL =====
   concentrateMacro:
