@@ -12,21 +12,21 @@ export const IMAGES = {
   strainsHero:
     'https://lh3.googleusercontent.com/aida-public/AB6AXuDPMl2-h3tEN1596ptXYKtG1fNlNp5QPMpqGUVHXomr5BLLmgAtfCiAQJ4lub3R3wx8zUS9DC4wgVBJ3T37CpVX38YYBuYcRKPmte9hNQyb4EV-bt0_RfbACcn8erFtbi1IMY1JflHBLNmScRCHToUkVt3WKwlRMtm1_PJApNcESGR2_tXT8XBWFmlD6OriOw9Up74nDGz6oQ1iLzail3tKmb8ECSYZWafobis_pGTpKDQTOO29NumW3_voDBldzeQUif0tsI0UHI6H',
   hitStickHero:
-    '/hitstick-hero.jpeg',
+    '/hitStickHero.png',
 
   // ===== PRODUCT IMAGES =====
   hitStickProduct:
     '/hitstick-product.jpeg',
   preRollsProduct:
-    '/prerolls-product.jpeg',
+    '/preRollsProduct.jpeg',
   groundGameProduct:
-    '/groundgame-product.jpeg',
+    '/groundGameProduct.jpeg',
   preRollsLineup:
-    '/prerolls-lineup.jpeg',
+    '/preRollsLineup.jpeg',
 
   // ===== BRAND / ICON IMAGES =====
   tripleInfusedIcon:
-    '/triple-infused-icon.jpeg',
+    '/tripleInfusedIcon.jpeg',
 
   // ===== LIFESTYLE / EDITORIAL =====
   apparelLifestyle:
@@ -34,7 +34,7 @@ export const IMAGES = {
   apparelLifestyle2:
     'https://lh3.googleusercontent.com/aida-public/AB6AXuBlipf86WYcGwAch766R30i4qCP8zPRj-ZvsQ2nb7yL1KRE_1vsWDznLpPuUITS8assiA8WYL6daQpqQ-forib86yovkywtBsuuOoMgx-OsqkimP001QJm7-lj9MBaXff21RbXJE3l8oOu06ZCxVXVrCIjUTRJr9hnglU7ECgpl-84Py_YFtGJIDlsLqVa219xVP8xr7p2bNxL_AWl0dBNPR3OQD3P_8mJvvVjlQ4jLEKFwErc966zHCkAo7LeXCKdpbWhl-0c_C615',
   rickyWilliams:
-    '/ricky-williams.jpeg',
+    '/rickyWilliams.jpeg',
   strainsBanner:
     '/strains-banner.jpeg',
 
@@ -79,7 +79,7 @@ export const IMAGES = {
 
   // ===== LOGOS =====
   highsmanLogo:
-    '/highsman-logo.png',
+    '/highsmanLogo.png',
   sparkGreatnessLogo:
     '/spark-greatness-logo.png',
 } as const;
