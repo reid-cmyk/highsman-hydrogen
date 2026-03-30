@@ -248,27 +248,38 @@ export default function Homepage() {
         </div>
       </section>
 
-      {/* ===== THE LINEUP STRAINS BAR ===== */}
-      <div className="bg-white border-y border-black overflow-hidden whitespace-nowrap py-12 md:py-20 flex-col flex items-center">
-        <h2 className="font-headline text-4xl md:text-8xl font-black uppercase text-black mb-12 tracking-tighter">
-          THE LINEUP
-        </h2>
-        <div className="flex w-full">
-          <img
-            alt="Strains Banner"
-            className="w-full h-auto object-contain block"
-            src={IMAGES.strainsBanner}
+      {/* ===== INSTAGRAM FEED ===== */}
+      <section className="py-16 md:py-24 bg-white border-y border-black">
+        <div className="container mx-auto px-4 md:px-12">
+          <div className="text-center mb-10">
+            <h2 className="font-headline text-4xl md:text-8xl font-black uppercase tracking-tighter mb-4">
+              Follow Us On Insta
+            </h2>
+            <a
+              href="https://www.instagram.com/highsman"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-body text-on-surface-variant uppercase tracking-widest text-sm hover:text-primary transition-colors"
+            >
+              @highsman
+            </a>
+          </div>
+          {/* Instagram feed — powered by LightWidget (free at lightwidget.com)
+              To activate your live feed:
+              1. Go to https://lightwidget.com
+              2. Log in with your @highsman Instagram account
+              3. Create a new widget (Grid layout recommended)
+              4. Replace YOUR_WIDGET_ID below with the ID from your embed code */}
+          <iframe
+            src="//lightwidget.com/widgets/YOUR_WIDGET_ID.html"
+            scrolling="no"
+            allowTransparency={true}
+            className="lightwidget-plugin w-full border-0 overflow-hidden"
+            style={{minHeight: '500px'}}
+            title="Highsman Instagram Feed"
           />
         </div>
-        <div className="mt-12">
-          <Link
-            to="/our-strains"
-            className="bg-black text-white px-8 py-3 md:px-16 md:py-5 font-headline text-xl md:text-3xl font-bold uppercase hover:bg-neutral-800 transition-colors inline-block"
-          >
-            VIEW THE LINEUP
-          </Link>
-        </div>
-      </div>
+      </section>
 
       {/* ===== STORE LOCATOR ===== */}
       <section className="py-16 md:py-32 bg-surface-container-lowest border-t border-outline-variant/10">
