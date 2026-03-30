@@ -10,7 +10,7 @@ export const meta: MetaFunction = () => {
 export default function Homepage() {
   useEffect(() => {
     const s = document.createElement('script');
-    s.src = 'https://w.behold.so/widget.js';
+    s.src = 'https://cdn.lightwidget.com/widgets/lightwidget.js';
     s.async = true;
     document.body.appendChild(s);
     return () => { if (document.body.contains(s)) document.body.removeChild(s); };
@@ -279,8 +279,15 @@ export default function Homepage() {
               @highsman
             </a>
           </div>
-          {/* Behold Instagram feed — replace YOUR_BEHOLD_WIDGET_ID with your ID from behold.so */}
-          <div id="behold-widget-YOUR_BEHOLD_WIDGET_ID" />
+          {/* LightWidget Instagram Feed */}
+          <iframe
+            src={"https://cdn.lightwidget.com/widgets/cbc291738c9451ffb620aab485bc2610.html"}
+            scrolling="no"
+            allowTransparency={true}
+            className="lightwidget-widget"
+            style={{width: '100%', border: 0, overflow: 'hidden'}}
+            title="Highsman Instagram Feed"
+          />
         </div>
       </section>
 
