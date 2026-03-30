@@ -16,21 +16,21 @@ export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <header className="flex justify-between items-center w-full px-8 py-2 bg-[#131313] fixed top-0 z-50">
+    <header className="flex justify-between items-center w-full px-4 py-2 bg-[#131313] fixed top-0 z-50">
       {/* Logo */}
-      <Link to="/" className="flex items-center">
+      <Link to="/" className="flex items-center flex-shrink-0">
         <img src={IMAGES.highsmanLogo} alt="Highsman" className="h-32 w-auto object-contain" />
       </Link>
 
       {/* Desktop Navigation */}
-      <nav className="hidden md:flex gap-8 items-center">
+      <nav className="hidden md:flex gap-4 items-center">
         {NAV_LINKS.map((link) => {
           const isActive = location.pathname === link.href;
           return (
             <Link
               key={link.href}
               to={link.href}
-              className={`font-headline uppercase tracking-widest font-bold text-3xl transition-colors ${
+              className={`font-headline uppercase tracking-widest font-bold text-lg whitespace-nowrap transition-colors ${
                 isActive
                   ? 'text-white border-b-4 border-white pb-1'
                   : 'text-[#C6C6C6] hover:text-white'
@@ -43,7 +43,7 @@ export function Header() {
       </nav>
 
       {/* Utility Icons */}
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-4 flex-shrink-0">
         <button
           className="hover:bg-surface-bright transition-all duration-200 p-2"
           aria-label="Account"
@@ -83,7 +83,7 @@ export function Header() {
                   key={link.href}
                   to={link.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`px-8 py-4 font-headline uppercase tracking-widest font-bold text-3xl transition-colors ${
+                  className={`px-8 py-4 font-headline uppercase tracking-widest font-bold text-2xl transition-colors ${
                     isActive
                       ? 'text-white bg-surface-container'
                       : 'text-[#C6C6C6] hover:text-white hover:bg-surface-container'
