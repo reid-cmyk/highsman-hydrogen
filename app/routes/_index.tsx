@@ -1,4 +1,5 @@
-import {Link} from '@remix-run/react';
+import {useEffect} from 'react';
+import {Link} from '@remix-run/react'
 import type {MetaFunction} from '@shopify/remix-oxygen';
 import {IMAGES} from '~/lib/images';
 
@@ -7,6 +8,20 @@ export const meta: MetaFunction = () => {
 };
 
 export default function Homepage() {
+  useEffect(() => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.lightwidget.com' + '/widgets/lightwidget.js';
+    s.async = true;
+    document.body.appendChild(s);
+    return () => { if (document.body.contains(s)) document.body.removeChild(s); };
+  }, []);
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.lightwidget.com/widgets/lightwidget.js';
+    script.async = true;
+    document.body.appendChild(script);
+    return () => { document.body.removeChild(script); };
+  }, []);
   return (
     <>
       {/* ===== HERO SECTION ===== */}
@@ -269,12 +284,12 @@ export default function Homepage() {
               1. Go to https://lightwidget.com
               2. Log in with your @highsman Instagram account
               3. Create a new widget (Grid layout recommended)
-              4. Replace YOUR_WIDGET_ID below with the ID from your embed code */}
+              4. Replace cbc291738c9451ffb620aab485bc2610 below with the ID from your embed code */}
           <iframe
             src="//lightwidget.com/widgets/YOUR_WIDGET_ID.html"
             scrolling="no"
             allowTransparency={true}
-            className="lightwidget-plugin w-full border-0 overflow-hidden"
+            className="lightwidget-widget w-full border-0 overflow-hidden"
             style={{minHeight: '500px'}}
             title="Highsman Instagram Feed"
           />
