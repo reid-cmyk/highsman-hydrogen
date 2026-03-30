@@ -1,4 +1,4 @@
-h/**
+/**
  * Centralized image URLs from the original Stitch design.
  * All images are hosted on Google's CDN (lh3.googleusercontent.com).
  */
