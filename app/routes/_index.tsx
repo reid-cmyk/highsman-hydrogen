@@ -58,14 +58,6 @@ export default function Homepage() {
           <p className="font-body text-sm md:text-xl mt-8 max-w-xl text-on-surface-variant uppercase tracking-[0.2em] leading-tight">
             Premium cannabis for the high-performance lifestyle. We live at the intersection of cannabis and sports.
           </p>
-          <div className="mt-12 flex gap-4">
-            <Link
-              to="/our-strains"
-              className="bg-primary text-on-primary px-8 py-3 md:px-16 md:py-5 font-headline text-xl md:text-3xl font-bold uppercase hover:bg-primary-container transition-colors"
-            >
-              SHOP NOW
-            </Link>
-          </div>
         </div>
       </section>
 
