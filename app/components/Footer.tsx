@@ -16,7 +16,7 @@ export function Footer() {
       {/* Brand */}
       <div className="flex flex-col gap-4">
         <img src={IMAGES.highsmanLogo} alt="Highsman" className="h-8 w-auto object-contain" />
-        <img src={IMAGES.sparkGreatnessLogo} alt="Spark Greatness" className="h-6 w-auto object-contain invert opacity-90" />
+        <img src={IMAGES.sparkGreatnessLogoWhite} alt="Spark Greatness" className="h-6 w-auto object-contain opacity-90" />
         <p className="font-body text-[10px] tracking-widest uppercase text-white/50">
           &copy; {new Date().getFullYear()} HIGHSMAN. ALL RIGHTS RESERVED.
         </p>
