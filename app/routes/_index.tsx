@@ -97,7 +97,7 @@ export default function Homepage() {
           <div className="col-span-12 md:col-span-7 bg-surface-container h-[350px] md:h-[600px] relative group overflow-hidden">
             <img
               className="absolute inset-0 w-full h-full transition-transform duration-700 group-hover:scale-105 object-contain"
-              src={IMAGES.hitStickProduct}
+              src={IMAGES.hitStickHero}
               alt="Hit Stick product"
             />
             <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors duration-500" />
