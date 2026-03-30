@@ -52,7 +52,7 @@ export default function Homepage() {
           <div className="absolute inset-0 bg-gradient-to-t from-[#131313] via-transparent to-transparent" />
         </div>
         <div className="relative z-10 max-w-5xl">
-          <h1 className="font-headline text-5xl md:text-[14rem] leading-[0.8] font-bold uppercase italic tracking-tighter">
+          <h1 className="font-headline text-[8vw] md:text-[13vw] leading-[0.8] font-bold uppercase italic tracking-tighter">
             spark greatness
           </h1>
           <p className="font-body text-sm md:text-xl mt-8 max-w-xl text-on-surface-variant uppercase tracking-[0.2em] leading-tight">
