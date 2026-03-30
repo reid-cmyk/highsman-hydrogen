@@ -71,11 +71,11 @@ export const IMAGES = {
     'https://lh3.googleusercontent.com/aida-public/AB6AXuBgZqhDlAzpn1dmAw8CQ3rWs0gl0AL2z_rto4VHww70PtKGRupFx0FlyiWHDwedbsYZUErTlj6g1HmLSb_wtPDK4y2JBsbQZvw9cU3gyHRC00OmHhQIAuVdL2xAffCxWMtJSNyRA1DfeqjsiqWwDh3hgptITtC3lEqRcLHPEG3vMvjHuxdtsV5f6EVoGUcRO8EcLclWixdRx2mx1X5kllkp3fJULqWWhzWRtRZsAAIgiy7xn3RKPS8xBY_9JkNJv9rjvbFPaCOekXW1',
   // ===== INFUSION IMAGES =====
   thcaDiamonds:
-    'https://lh3.googleusercontent.com/aida/ADBb0ujWfX6lOJ86VB84BOSO__1WdROF0mChYVJZaFUekfUx34dEoaYtVfqZ2D8wRYHx76ocpQWxO7XW1-WabAwgKEIFEBXwReX1xR7USaJF8P9tYs-7pmFmoSZIbL2XUYYYprdLkAc9YhwtbAFiasSR7ZCFkEiFyjHFuwK8oMW-QHxiAlQfY4SgQJ1TSdhzqf4GzXrlWrgCXkM5rG5TCdwU1JbojiWVqTP0znwoozPC5_MqntrvrMVPWNzngoRvqjvcfMLJdhAM4_Gv4FI',
+    '/THCADiamonds.png',
   liveResin:
-    'https://lh3.googleusercontent.com/aida/ADBb0uigyCtK6IpV3xUU9T4ITlfEAUeJ7VmTf8_jLLt2o47MO_pd_s19QDZV0TBDHiTWDNI2Q5GP4huGyUrrjjYfi-MGv0HPHpkcK7hacA0Tup5oED9XR-OcuxkfOOHWE35K5cBigptBE3mkhhH8U2x9USoBfKuScDcwxZfFnN9Jk0tPKLgvHbGGxRPpuR2WDQ8iJYAOBNkgq0mQnVi7Pwrum-vcwfMFbsvZDikhOpZp8PbF9C9nI0IuzpWYioQVBayxTzefBerdTzn4hw',
+    '/Liveresin.png',
   hteExtract:
-    'https://lh3.googleusercontent.com/aida/ADBb0ujUrx20yl5gGIjgarfJvmaiNlXKgGZPBdGgU5cxsypKz9eSBDmiE16WJqPCeslJ8KEtsUHNTU6TWRaAVoQ_9Fae-c4cRc_D7cPEv7RgQgzUj9QfYMwqqe9q_4YIB7oSY2czrhwVynp2-IgBS0zmlaijI3mVPoo0NmLB-zsJuWT1KN0uWKvVAqtldWLlfEb5jdYNxqAXKQzE869cmUbZcUR7plxeNM53MxTW9DEY1QTejbTG1-toa9WN0QHTsfinz6T67dOAGea-1Q',
+    '/HTEextract.png',
 
   // ===== LOGOS =====
   highsmanLogo:
