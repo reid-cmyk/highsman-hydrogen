@@ -69,6 +69,7 @@ export const IMAGES = {
     'https://lh3.googleusercontent.com/aida-public/AB6AXuD1625NNkenXGvZxBjA37oHJZmudZT5DMoZLm_G2pA5PD78EsXcFE4aacWrN3YZBbfy8rpFRZwTgtDMlNv0ACheyfjpmZAitRxPngsSL24FUUDGn2bVmqNWOtC6316faynLCj0ey_KZvEWNHJm5gAJgwh5dShyCHgp18KO5L-8ks2zPUIRNCZk9BqgQeKBOL7QfeuENapLXD1aAaSCV3OEgTs_83QDe_QzqqlzDtLWruREyw_5zZG3jvoXEfK7T1A-q0hnrK5YSGG-Q',
   performanceSocks:
     'https://lh3.googleusercontent.com/aida-public/AB6AXuBgZqhDlAzpn1dmAw8CQ3rWs0gl0AL2z_rto4VHww70PtKGRupFx0FlyiWHDwedbsYZUErTlj6g1HmLSb_wtPDK4y2JBsbQZvw9cU3gyHRC00OmHhQIAuVdL2xAffCxWMtJSNyRA1DfeqjsiqWwDh3hgptITtC3lEqRcLHPEG3vMvjHuxdtsV5f6EVoGUcRO8EcLclWixdRx2mx1X5kllkp3fJULqWWhzWRtRZsAAIgiy7xn3RKPS8xBY_9JkNJv9rjvbFPaCOekXW1',
+
   // ===== INFUSION IMAGES =====
   thcaDiamonds:
     '/THCADiamonds.png',
@@ -80,6 +81,8 @@ export const IMAGES = {
   // ===== LOGOS =====
   highsmanLogo:
     '/highsmanLogo.png',
-  sparkGreatnessLogo:
-    '/spark-greatness-logo.png',
+  sparkGreatnessLogoBlack:
+    '/HM_SparkGreatness_Black.png',
+  sparkGreatnessLogoWhite:
+    '/HM_SparkGreatness_White.png',
 } as const;
