@@ -22,15 +22,15 @@ export function Header() {
         <img src={IMAGES.highsmanLogo} alt="Highsman" className="h-32 w-auto object-contain" />
       </Link>
 
-      {/* Desktop Navigation */}
-      <nav className="hidden md:flex gap-4 items-center">
+      {/* Desktop Navigation — hidden below 1024px (collapses at ~125% zoom) */}
+      <nav className="hidden lg:flex gap-5 items-center">
         {NAV_LINKS.map((link) => {
           const isActive = location.pathname === link.href;
           return (
             <Link
               key={link.href}
               to={link.href}
-              className={`font-headline uppercase tracking-widest font-bold text-lg whitespace-nowrap transition-colors ${
+              className={`font-headline uppercase tracking-widest font-bold text-2xl whitespace-nowrap transition-colors ${
                 isActive
                   ? 'text-white border-b-4 border-white pb-1'
                   : 'text-[#C6C6C6] hover:text-white'
@@ -60,9 +60,9 @@ export function Header() {
           </span>
         </Link>
 
-        {/* Mobile Menu Toggle */}
+        {/* Mobile/Zoom Menu Toggle — visible below 1024px */}
         <button
-          className="md:hidden hover:bg-surface-bright transition-all duration-200 p-2"
+          className="lg:hidden hover:bg-surface-bright transition-all duration-200 p-2"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           aria-label="Menu"
         >
@@ -72,9 +72,9 @@ export function Header() {
         </button>
       </div>
 
-      {/* Mobile Menu */}
+      {/* Mobile / Collapsed Menu */}
       {mobileMenuOpen && (
-        <div className="absolute top-full left-0 w-full bg-surface-container-low z-50 md:hidden">
+        <div className="absolute top-full left-0 w-full bg-surface-container-low z-50 lg:hidden">
           <nav className="flex flex-col py-4">
             {NAV_LINKS.map((link) => {
               const isActive = location.pathname === link.href;
