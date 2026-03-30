@@ -16,11 +16,7 @@ export default function PreRolls() {
             className="absolute inset-0 w-full h-full object-cover transition-transform"
             src={IMAGES.preRollsLineup}
           />
-          <div className="absolute bottom-0 left-0 p-12 bg-gradient-to-t from-white/20 to-transparent w-full">
-            <h2 className="font-headline text-4xl md:text-[12rem] leading-none uppercase font-bold tracking-tighter editorial-text-mask">
-              TRIPLE
-            </h2>
-          </div>
+
           <div className="absolute top-8 left-8 bg-primary text-on-primary px-6 py-2 font-headline text-3xl font-bold tracking-widest">
             20% EXTRA FREE
           </div>
