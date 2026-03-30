@@ -17,9 +17,7 @@ export default function PreRolls() {
             src={IMAGES.preRollsLineup}
           />
 
-          <div className="absolute top-8 left-8 bg-primary text-on-primary px-6 py-2 font-headline text-3xl font-bold tracking-widest">
-            20% EXTRA FREE
-          </div>
+
         </div>
         <div className="md:col-span-5 flex flex-col justify-center p-8 md:p-16 space-y-8 bg-surface-container-low order-1 md:order-2">
           <div className="space-y-2">
