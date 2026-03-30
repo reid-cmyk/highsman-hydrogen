@@ -146,16 +146,14 @@ export default function OurStrains() {
 
       {/* ===== STRAIN BADGES BANNER ===== */}
       <section className="bg-surface-container-highest py-16 px-8 border-y border-outline-variant/30">
-        <div className="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-12 opacity-80 grayscale">
+        <div className="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-12 ">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div
+            <img
               key={i}
-              className="h-20 w-20 bg-surface-container flex items-center justify-center"
-            >
-              <span className="font-headline text-3xl font-bold text-on-surface-variant">
-                H
-              </span>
-            </div>
+              src="/Hlogo.png"
+              alt="Highsman H Logo"
+              className="h-20 w-auto object-contain"
+            />
           ))}
         </div>
       </section>
