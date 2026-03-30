@@ -25,7 +25,7 @@ export default function Homepage() {
   return (
     <>
       {/* ===== HERO SECTION ===== */}
-      <section className="relative h-[90vh] flex items-end px-4 pb-12 md:px-12 md:pb-24 overflow-hidden mt-[9rem]">
+      <section className="relative h-[90vh] flex items-end px-4 pb-12 md:px-12 md:pb-24 overflow-hidden mt-[4rem]">
         <div className="absolute inset-0 z-0">
           <img
             alt="NFL running back in action - Highsman"
