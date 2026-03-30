@@ -5,7 +5,7 @@ const FOOTER_LINKS = [
   {label: 'PRIVACY POLICY', href: '/policies/privacy-policy'},
   {label: 'TERMS OF SERVICE', href: '/policies/terms-of-service'},
   {label: 'CONTACT', href: '/contact'},
-  {label: 'WHOLESALE', href: '/wholesale'},
+  {label: 'WHOLESALE', href: '/contact'},
   {label: 'INSTAGRAM', href: 'https://instagram.com/highsman', external: true},
   {label: 'TWITTER', href: 'https://twitter.com/highsman', external: true},
 ];
