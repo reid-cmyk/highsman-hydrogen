@@ -1,4 +1,4 @@
-/**
+h/**
  * Centralized image URLs from the original Stitch design.
  * All images are hosted on Google's CDN (lh3.googleusercontent.com).
  */
@@ -16,7 +16,7 @@ export const IMAGES = {
 
   // ===== PRODUCT IMAGES =====
   hitStickProduct:
-    '/hitstick-product.jpeg',
+    '/hitStickProduct.png',
   preRollsProduct:
     '/preRollsProduct.jpeg',
   groundGameProduct:
