@@ -79,7 +79,7 @@ export const IMAGES = {
 
   // ===== LOGOS =====
   highsmanLogo:
-    'https://lh3.googleusercontent.com/aida/ADBb0ui9-mDdfcZclzRSidi9XrezU04_u1y6iBaCPzDBSu_jTHIEmDyGUWeB8bvziM1DEbvYJQRSjJ89ZRXVT5xfm7bXXCK0fJvbL77nNzeODPSt75-tennR2sqt8FSbjafuKapMzXc8piea45nwT8b4YZxF-QDRu-RRWVi4OE7claDBcGcNNJ3D6Ix7k7v0KyZIrgEndfUt1bCgwg_ydvEoxiCiWetyzQdhRZlxB5fOVcmhjfzwA9P9z3uf1zXUMA2mZUpQ3zVAmzXADQk',
+    '/highsman-logo.png',
   sparkGreatnessLogo:
-    'https://lh3.googleusercontent.com/aida/ADBb0ugRPDaNK98VRrrqvgeWlSJPirSKk_A3AbOpfuCp9A8jjqFDwKN7tdusQfy-RABCv8eg8sVLMxmDjPzhF7zYsnjgOZO_Ms2YeHoq7r1_QbTuc2lis_nRDhxbDOg446kGDFm0rMX93SYbgDGI49ojwQWur0hetNAQRRHgrxrLDkjLu3I9ntuS7m-RiZr9q1lg1QfJ25Sf2dO2EPnUU8NgbfHlMkEUN_K7gYYovXTdeoJB36EIaRoks3wmqSjspGQ9lOH29iptHXja5lE',
+    '/spark-greatness-logo.png',
 } as const;
