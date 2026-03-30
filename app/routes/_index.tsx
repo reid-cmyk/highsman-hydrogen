@@ -15,6 +15,23 @@ export default function Homepage() {
     document.body.appendChild(s);
     return () => { if (document.body.contains(s)) document.body.removeChild(s); };
   }, []);
+
+  useEffect(() => {
+    const s = document.createElement('script');
+    s.src = 'https://askhoodie.com/assets/askhoodie.host.js';
+    s.async = true;
+    s.onload = () => {
+      if (typeof window.hoodieEmbedWtbV2 === 'function') {
+        document.cookie = window.hoodieEmbedWtbV2(
+          'ef307616-7713-40b1-9980-dc29c0db39b3',
+          'askhoodieDiv',
+          document.cookie
+        );
+      }
+    };
+    document.body.appendChild(s);
+    return () => { if (document.body.contains(s)) document.body.removeChild(s); };
+  }, []);
   useEffect(() => {
     const script = document.createElement('script');
     script.src = 'https://cdn.lightwidget.com/widgets/lightwidget.js';
@@ -294,49 +311,14 @@ export default function Homepage() {
       {/* ===== STORE LOCATOR ===== */}
       <section className="py-16 md:py-32 bg-surface-container-lowest border-t border-outline-variant/10">
         <div className="container mx-auto px-4 md:px-12">
-          <div className="flex flex-col lg:flex-row items-center gap-16">
-            <div className="w-full lg:w-1/2">
-              <h2 className="font-headline text-4xl md:text-[10rem] font-bold uppercase italic leading-[0.8] mb-8">
-                find us near you
-              </h2>
-              <p className="font-body text-on-surface-variant text-xl uppercase tracking-widest mb-12">
-                LOCATE AN AUTHORIZED HIGHSMAN RETAILER NEAR YOU.
-              </p>
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col md:flex-row items-stretch border border-primary/20">
-                  <div className="flex-grow bg-surface p-6 flex items-center">
-                    <span className="material-symbols-outlined text-primary mr-4 text-3xl">
-                      my_location
-                    </span>
-                    <input
-                      className="bg-transparent border-none text-white font-headline text-xl md:text-4xl focus:ring-0 placeholder:text-on-surface-variant/30 w-full uppercase"
-                      placeholder="ZIP CODE OR CITY"
-                      type="text"
-                    />
-                  </div>
-                  <button className="bg-primary text-on-primary px-8 py-4 md:px-16 md:py-6 font-headline text-xl md:text-4xl font-bold uppercase hover:bg-primary-container transition-all">
-                    SEARCH
-                  </button>
-                </div>
-                <button className="flex items-center justify-center gap-2 font-headline text-xl uppercase tracking-widest text-on-surface-variant hover:text-white transition-colors py-4">
-                  <span className="material-symbols-outlined">map</span>
-                  VIEW FULL STORE MAP
-                </button>
-              </div>
-            </div>
-            <div className="w-full lg:w-1/2 h-[300px] md:h-[600px] bg-surface-container relative">
-              <div className="absolute inset-0 bg-[#1a1a1a] flex items-center justify-center overflow-hidden">
-                <div className="relative z-10 flex flex-col items-center">
-                  <span className="material-symbols-outlined text-white text-8xl mb-4">
-                    location_on
-                  </span>
-                  <p className="font-headline text-3xl font-bold uppercase tracking-widest">
-                    MAP INTERFACE
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+          <h2 className="font-headline text-4xl md:text-[10rem] font-bold uppercase italic leading-[0.8] mb-4">
+            find us near you
+          </h2>
+          <p className="font-body text-on-surface-variant text-xl uppercase tracking-widest mb-12">
+            LOCATE AN AUTHORIZED HIGHSMAN RETAILER NEAR YOU.
+          </p>
+          {/* Hoodie Analytics store locator map */}
+          <div id="askhoodieDiv" />
         </div>
       </section>
 
