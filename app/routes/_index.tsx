@@ -10,7 +10,7 @@ export const meta: MetaFunction = () => {
 export default function Homepage() {
   useEffect(() => {
     const s = document.createElement('script');
-    s.src = 'https://cdn.lightwidget.com' + '/widgets/lightwidget.js';
+    s.src = 'https://w.behold.so/widget.js';
     s.async = true;
     document.body.appendChild(s);
     return () => { if (document.body.contains(s)) document.body.removeChild(s); };
@@ -279,20 +279,8 @@ export default function Homepage() {
               @highsman
             </a>
           </div>
-          {/* Instagram feed — powered by LightWidget (free at lightwidget.com)
-              To activate your live feed:
-              1. Go to https://lightwidget.com
-              2. Log in with your @highsman Instagram account
-              3. Create a new widget (Grid layout recommended)
-              4. Replace cbc291738c9451ffb620aab485bc2610 below with the ID from your embed code */}
-          <iframe
-            src="//lightwidget.com/widgets/YOUR_WIDGET_ID.html"
-            scrolling="no"
-            allowTransparency={true}
-            className="lightwidget-widget w-full border-0 overflow-hidden"
-            style={{minHeight: '500px'}}
-            title="Highsman Instagram Feed"
-          />
+          {/* Behold Instagram feed — replace YOUR_BEHOLD_WIDGET_ID with your ID from behold.so */}
+          <div id="behold-widget-YOUR_BEHOLD_WIDGET_ID" />
         </div>
       </section>
 
