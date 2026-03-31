@@ -8,7 +8,6 @@ const NAV_LINKS = [
   {label: 'PRE-ROLLS', href: '/pre-rolls'},
   {label: 'GROUND GAME', href: '/ground-game'},
   {label: 'OUR STRAINS', href: '/our-strains'},
-  {label: 'APPAREL', href: '/apparel'},
 ];
 
 export function Header() {
