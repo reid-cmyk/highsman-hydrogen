@@ -1,4 +1,5 @@
 import type {MetaFunction} from '@shopify/remix-oxygen';
+import {Link} from '@remix-run/react';
 import {IMAGES} from '~/lib/images';
 
 export const meta: MetaFunction = () => {
@@ -43,12 +44,12 @@ export default function GroundGame() {
               </span>
             </div>
             <div className="flex gap-4">
-              <button className="bg-primary text-on-primary font-headline text-2xl font-bold uppercase px-12 py-4 hover:bg-primary-container transition-all flex items-center gap-3 group">
+              <Link to="/#store-locator" className="bg-primary text-on-primary font-headline text-2xl font-bold uppercase px-12 py-4 hover:bg-primary-container transition-all flex items-center gap-3 group">
                 FIND NEAR YOU
                 <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">
                   location_on
                 </span>
-              </button>
+              </Link>
               <button className="border-2 border-primary text-primary font-headline text-2xl font-bold uppercase px-12 py-4 hover:bg-surface-bright transition-all">
                 VIEW LABS
               </button>
