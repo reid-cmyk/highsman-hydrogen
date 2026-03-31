@@ -48,7 +48,7 @@ export default function PreRolls() {
               <span className="material-symbols-outlined group-hover:translate-x-2 transition-transform">
                 location_on
               </span>
-            </button>
+            </Link>
             <div className="flex justify-between items-center text-on-surface-variant font-headline text-xl">
               <span>THC RANGE: 38% - 44%</span>
               <span className="material-symbols-outlined">verified</span>
