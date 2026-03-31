@@ -188,7 +188,7 @@ export default function Homepage() {
                 <span className="font-headline text-xl md:text-4xl text-primary font-bold uppercase mb-2 block">
                   7G Ready To Roll
                 </span>
-                <h2 className="font-headline text-5xl md:text-[9rem] font-bold uppercase leading-[0.8] mb-4">
+                <h2 className="font-headline text-4xl md:text-[9rem] font-bold uppercase leading-[0.8] mb-4">
                   GROUND <br />
                   GAME
                 </h2>
@@ -220,7 +220,7 @@ export default function Homepage() {
           />
           <div className="absolute inset-0 bg-black/60" />
         </div>
-        <div className="container mx-auto px-12 relative z-10 text-center">
+        <div className="container mx-auto px-4 md:px-12 relative z-10 text-center">
           <h2 className="font-headline text-4xl md:text-[10rem] font-black uppercase leading-[0.85] mb-6 text-white">
             THE APPAREL <br />
             COLLECTION
@@ -303,7 +303,7 @@ export default function Homepage() {
       {/* ===== STORE LOCATOR ===== */}
       <section id="store-locator" className="py-16 md:py-32 bg-surface-container-lowest border-t border-outline-variant/10">
         <div className="container mx-auto px-4 md:px-12">
-          <h2 className="font-headline text-4xl md:text-[10rem] font-bold uppercase italic leading-[0.8] mb-4">
+          <h2 className="font-headline text-3xl md:text-[10rem] font-bold uppercase italic leading-[0.8] mb-4 break-words">
             find us near you
           </h2>
           <p className="font-body text-on-surface-variant text-xl uppercase tracking-widest mb-12">
