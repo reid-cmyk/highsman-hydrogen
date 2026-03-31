@@ -12,7 +12,7 @@ const FOOTER_LINKS = [
 
 export function Footer() {
   return (
-    <footer className="flex flex-col md:flex-row justify-between items-center w-full px-12 py-16 gap-8 bg-[#0E0E0E] border-t border-white/10">
+    <footer className="flex flex-col md:flex-row justify-between items-center w-full px-4 md:px-12 py-16 gap-8 bg-[#0E0E0E] border-t border-white/10">
       {/* Brand */}
       <div className="flex flex-col gap-4">
         <img src={IMAGES.highsmanLogo} alt="Highsman" className="h-8 w-auto object-contain" />
