@@ -301,7 +301,7 @@ export default function Homepage() {
       </section>
 
       {/* ===== STORE LOCATOR ===== */}
-      <section className="py-16 md:py-32 bg-surface-container-lowest border-t border-outline-variant/10">
+      <section id="store-locator" className="py-16 md:py-32 bg-surface-container-lowest border-t border-outline-variant/10">
         <div className="container mx-auto px-4 md:px-12">
           <h2 className="font-headline text-4xl md:text-[10rem] font-bold uppercase italic leading-[0.8] mb-4">
             find us near you
