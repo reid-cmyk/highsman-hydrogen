@@ -1,4 +1,5 @@
 import type {MetaFunction} from '@shopify/remix-oxygen';
+import {Link} from '@remix-run/react';
 import {IMAGES} from '~/lib/images';
 
 export const meta: MetaFunction = () => {
@@ -168,9 +169,9 @@ export default function OurStrains() {
             <button className="bg-primary text-on-primary px-6 py-3 md:px-12 md:py-5 font-headline text-xl md:text-3xl font-bold uppercase hover:bg-primary-container transition-all active:scale-95">
               FIND A STORE
             </button>
-            <button className="border-2 border-primary text-primary px-6 py-3 md:px-12 md:py-5 font-headline text-xl md:text-3xl font-bold uppercase hover:bg-surface-container-highest transition-all active:scale-95">
-              JOIN OUR MAILING LIST
-            </button>
+            <Link to="/contact" className="border-2 border-primary text-primary px-6 py-3 md:px-12 md:py-5 font-headline text-xl md:text-3xl font-bold uppercase hover:bg-surface-container-highest transition-all active:scale-95 inline-block text-center no-underline">
+              SELL HIGHSMAN PRODUCTS
+            </Link>
           </div>
         </div>
       </section>
