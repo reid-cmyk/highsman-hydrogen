@@ -88,7 +88,7 @@ export default function OurStrains() {
               key={strain.name}
               className={`${
                 i % 2 === 0 ? 'bg-surface-container' : 'bg-surface-container-low'
-              } group hover:bg-surface-bright transition-all duration-500 p-8 flex flex-col justify-between min-h-[500px]`}
+              } p-8 flex flex-col justify-between min-h-[500px]`}
             >
               <div>
                 <div className="mb-8 relative overflow-hidden">
@@ -117,9 +117,6 @@ export default function OurStrains() {
                   </span>
                   <IntensityBars count={strain.bars} />
                 </div>
-                <span className="material-symbols-outlined text-4xl group-hover:translate-x-2 transition-transform">
-                  arrow_forward
-                </span>
               </div>
             </div>
           ))}
