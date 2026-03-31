@@ -1,4 +1,5 @@
 import type {MetaFunction} from '@shopify/remix-oxygen';
+import {Link} from '@remix-run/react';
 import {IMAGES} from '~/lib/images';
 
 export const meta: MetaFunction = () => {
@@ -38,12 +39,12 @@ export default function HitSticks() {
             engineered for precision and power&mdash;not a vape.
           </p>
           <div className="flex flex-wrap gap-4 mb-10">
-            <button className="bg-primary text-on-primary px-8 py-4 font-headline text-2xl font-semibold uppercase hover:bg-primary-container transition-all active:scale-95">
+            <Link to="/#store-locator" className="bg-primary text-on-primary px-8 py-4 font-headline text-2xl font-semibold uppercase hover:bg-primary-container transition-all active:scale-95 inline-block text-center no-underline">
               FIND A STORE
-            </button>
-            <button className="border border-outline-variant px-8 py-4 font-headline text-2xl font-semibold uppercase text-primary hover:bg-surface-container-highest transition-all">
+            </Link>
+            <Link to="/our-strains" className="border border-outline-variant px-8 py-4 font-headline text-2xl font-semibold uppercase text-primary hover:bg-surface-container-highest transition-all inline-block text-center no-underline">
               LEARN MORE
-            </button>
+            </Link>
           </div>
 
           {/* High Impact Stats */}
