@@ -232,30 +232,10 @@ export default function HitSticks() {
             Highsman products are available at premier retail partners across the
             country. Find your nearest dispensary and elevate your game today.
           </p>
-          <div className="bg-surface p-8 flex flex-col md:flex-row items-center gap-6 justify-between">
-            <div className="flex items-center gap-4">
-              <span className="material-symbols-outlined text-3xl text-primary">
-                location_on
-              </span>
-              <div className="text-left">
-                <div className="font-headline text-2xl font-bold uppercase">
-                  ENTER ZIP CODE
-                </div>
-                <div className="text-xs text-outline tracking-widest">
-                  FIND NEAREST STOCKIST
-                </div>
-              </div>
-            </div>
-            <div className="w-full md:w-auto flex">
-              <input
-                className="bg-surface-container-high border-none font-headline text-2xl px-6 py-4 w-full md:w-48 focus:ring-0 text-white"
-                placeholder="90210"
-                type="text"
-              />
-              <button className="bg-primary text-on-primary font-headline text-2xl font-bold px-10 py-4 uppercase hover:bg-primary-container transition-all">
-                SEARCH
-              </button>
-            </div>
+          <div className="flex justify-center mt-4">
+            <Link to="/#store-locator" className="bg-primary text-on-primary font-headline text-2xl font-bold px-12 py-5 uppercase hover:bg-primary-container transition-all">
+              FIND A STORE
+            </Link>
           </div>
         </div>
       </section>
