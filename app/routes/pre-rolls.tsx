@@ -229,9 +229,9 @@ export default function PreRolls() {
             Experience the 1.2g Difference.
           </p>
           <div className="flex flex-col md:flex-row gap-6 justify-center">
-            <button className="bg-on-primary text-primary px-6 py-4 md:px-12 md:py-6 font-headline text-xl md:text-4xl uppercase font-bold hover:bg-surface-container-highest transition-all">
+            <Link to="/#store-locator" className="bg-on-primary text-primary px-6 py-4 md:px-12 md:py-6 font-headline text-xl md:text-4xl uppercase font-bold hover:bg-surface-container-highest transition-all">
               FIND A STORE
-            </button>
+            </Link>
             <button className="border-4 border-on-primary text-on-primary px-6 py-4 md:px-12 md:py-6 font-headline text-xl md:text-4xl uppercase font-bold hover:bg-on-primary hover:text-primary transition-all">
               VIEW LAB RESULTS
             </button>
