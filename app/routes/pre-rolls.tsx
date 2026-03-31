@@ -1,4 +1,5 @@
 import type {MetaFunction} from '@shopify/remix-oxygen';
+import {Link} from '@remix-run/react';
 import {IMAGES} from '~/lib/images';
 
 export const meta: MetaFunction = () => {
@@ -42,7 +43,7 @@ export default function PreRolls() {
             </p>
           </div>
           <div className="flex flex-col gap-4 pt-4">
-            <button className="bg-primary text-on-primary px-6 py-3 md:px-10 md:py-5 font-headline text-xl md:text-3xl uppercase font-semibold flex items-center justify-between group hover:bg-primary-container transition-all">
+            <Link to="/#store-locator" className="bg-primary text-on-primary px-6 py-3 md:px-10 md:py-5 font-headline text-xl md:text-3xl uppercase font-semibold flex items-center justify-between group hover:bg-primary-container transition-all">
               FIND NEAR YOU
               <span className="material-symbols-outlined group-hover:translate-x-2 transition-transform">
                 location_on
