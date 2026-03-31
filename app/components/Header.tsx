@@ -16,10 +16,10 @@ export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <header className="flex justify-between items-center w-full px-4 py-2 bg-[#131313] fixed top-0 z-50">
+    <header className="flex justify-between items-center w-full px-4 py-1 lg:py-2 bg-[#131313] fixed top-0 z-50">
       {/* Logo */}
       <Link to="/" className="flex items-center flex-shrink-0">
-        <img src={IMAGES.highsmanLogo} alt="Highsman" className="h-32 w-auto object-contain" />
+        <img src={IMAGES.highsmanLogo} alt="Highsman" className="h-16 lg:h-32 w-auto object-contain" />
       </Link>
 
       {/* Desktop Navigation — hidden below 1024px (collapses at ~125% zoom) */}
