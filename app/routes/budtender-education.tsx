@@ -628,7 +628,7 @@ export default function BudtenderEducation() {
                 <select
                   value={state}
                   onChange={(e) => setState(e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm outline-none transition-colors bg-white ${
+                  className={`w-full px-3 py-2.5 border rounded-lg text-sm text-black outline-none transition-colors bg-white ${
                     errors.state ? 'border-red-400 bg-red-50' : 'border-[#ddd] focus:border-[#c8a84b]'
                   }`}
                 >
