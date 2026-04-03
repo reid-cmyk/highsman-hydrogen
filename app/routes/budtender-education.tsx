@@ -571,9 +571,8 @@ export default function BudtenderEducation() {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
-          {/* Logo */}
+          {/* Header */}
           <div className="text-center mb-8">
-            <img src={LOGO_URL} alt="Highsman" className="h-10 mx-auto mb-6" />
             <h1 className="text-2xl font-bold text-white tracking-tight">
               Budtender Education Portal
             </h1>
@@ -597,7 +596,7 @@ export default function BudtenderEducation() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Your full name"
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm outline-none transition-colors ${
+                  className={`w-full px-3 py-2.5 border rounded-lg text-sm text-black outline-none transition-colors ${
                     errors.name ? 'border-red-400 bg-red-50' : 'border-[#ddd] focus:border-[#c8a84b]'
                   }`}
                 />
@@ -614,7 +613,7 @@ export default function BudtenderEducation() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@dispensary.com"
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm outline-none transition-colors ${
+                  className={`w-full px-3 py-2.5 border rounded-lg text-sm text-black outline-none transition-colors ${
                     errors.email ? 'border-red-400 bg-red-50' : 'border-[#ddd] focus:border-[#c8a84b]'
                   }`}
                 />
@@ -653,7 +652,7 @@ export default function BudtenderEducation() {
                   value={dispensary}
                   onChange={(e) => setDispensary(e.target.value)}
                   placeholder="Where do you work?"
-                  className="w-full px-3 py-2.5 border border-[#ddd] rounded-lg text-sm outline-none transition-colors focus:border-[#c8a84b]"
+                  className="w-full px-3 py-2.5 border border-[#ddd] rounded-lg text-sm text-black outline-none transition-colors focus:border-[#c8a84b]"
                 />
               </div>
 
