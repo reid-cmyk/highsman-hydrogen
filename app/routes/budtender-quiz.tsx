@@ -224,12 +224,11 @@ export default function BudtenderQuiz() {
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-start py-10 px-4">
       {/* Header */}
       <div className="text-center mb-8">
-        <img src={LOGO_URL} alt="Highsman" className="h-12 mx-auto mb-2" />
-        <img src={SPARK_URL} alt="Spark Greatness" className="h-4 mx-auto opacity-80" />
-        <div className="w-10 h-0.5 bg-[#c8a84b] mx-auto mt-4 mb-3" />
-        <p className="text-[11px] tracking-[0.2em] uppercase text-[#777]">
+        <div className="w-10 h-0.5 bg-[#c8a84b] mx-auto mb-5" />
+        <h1 className="text-3xl font-black uppercase tracking-[0.15em] text-white">
           Budtender Certification Quiz
-        </p>
+        </h1>
+        <div className="w-10 h-0.5 bg-[#c8a84b] mx-auto mt-5" />
       </div>
 
       {/* Card */}
@@ -484,7 +483,8 @@ export default function BudtenderQuiz() {
                         <span>
                           <strong>Correct</strong> — {LETTERS[ans.correct]}. {QUESTIONS[i].options[ans.correct]}
                         </span>
-                      ) : (
+   
+                  ) : (
                         <>
                           Your answer: {LETTERS[ans.selected]}. {QUESTIONS[i].options[ans.selected]}
                           <br />
