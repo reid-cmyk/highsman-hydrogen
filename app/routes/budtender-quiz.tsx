@@ -1,5 +1,5 @@
 import type {MetaFunction} from '@shopify/remix-oxygen';
-import {useState} from 'react';
+import {useState, useEffect} from 'react';
 
 export const meta: MetaFunction = () => {
   return [
@@ -147,6 +147,19 @@ function subscribeToKlaviyo(name: string, email: string, state: string) {
 
 // ── Component ────────────────────────────────────────────────────────────────
 export default function BudtenderQuiz() {
+  // Suppress Klaviyo site-wide popup on this page
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.id = 'suppress-klaviyo-popup';
+    style.textContent =
+      '[data-testid="klaviyo-form-overlay"], .klaviyo-form-overlay, ' +
+      '.needsclick.kl-private-reset-css-Xuajs1, #klaviyo-ios-modal, ' +
+      '[class*="klaviyo"][class*="overlay"], [class*="klaviyo"][class*="modal"], ' +
+      '[id*="klaviyo"][id*="popup"] { display: none !important; }';
+    document.head.appendChild(style);
+    return () => { style.remove(); };
+  }, []);
+
   const [screen, setScreen] = useState<Screen>('gate');
 
   // Gate form
@@ -483,8 +496,7 @@ export default function BudtenderQuiz() {
                         <span>
                           <strong>Correct</strong> — {LETTERS[ans.correct]}. {QUESTIONS[i].options[ans.correct]}
                         </span>
-   
-                  ) : (
+                      ) : (
                         <>
                           Your answer: {LETTERS[ans.selected]}. {QUESTIONS[i].options[ans.selected]}
                           <br />
