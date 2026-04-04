@@ -1405,13 +1405,12 @@ export default function BudtenderEducation() {
       ) : (
         /* ── Main Portal View ──────────────────────────────────────────────── */
         <div>
-          {/* ── Hero Banner Image ─────────────────────────────────────────── */}
-          <div className="w-full">
+          {/* ── Training Camp Logo ────────────────────────────────────────── */}
+          <div className="w-full flex justify-center py-8 sm:py-12" style={{background: 'linear-gradient(180deg, #0a0a0a 0%, #111 50%, #0a0a0a 100%)'}}>
             <img
-              src="/budtender-training-camp-banner.png"
+              src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Budtender_Training_Camp_Logo.svg?v=1775335713"
               alt="Highsman Budtender Training Camp"
-              className="w-full block"
-              style={{height: 'clamp(220px, 32vw, 450px)', objectFit: 'cover', objectPosition: 'center 45%'}}
+              className="w-[280px] sm:w-[360px] md:w-[420px] h-auto"
             />
           </div>
 
