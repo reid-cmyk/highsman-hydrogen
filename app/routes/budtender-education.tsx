@@ -1106,10 +1106,10 @@ export default function BudtenderEducation() {
   // ── LOADING SCREEN ──────────────────────────────────────────────────────────
   if (screen === 'loading') {
     return (
-      <div className="min-h-screen bg-[#0B1A0F] flex items-center justify-center">
+      <div className="min-h-screen bg-[#000000] flex items-center justify-center">
         <div className="text-center">
-          <div className="w-10 h-10 border-2 border-[#c8a84b]/30 border-t-[#c8a84b] rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-[#8B9A8B] text-xs uppercase tracking-wider">Loading...</p>
+          <div className="w-10 h-10 border-2 border-[#A9ACAF]/30 border-t-[#c8a84b] rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-[#A9ACAF] text-xs uppercase tracking-wider">Loading...</p>
         </div>
       </div>
     );
@@ -1118,7 +1118,7 @@ export default function BudtenderEducation() {
   // ── GATE SCREEN ─────────────────────────────────────────────────────────────
   if (screen === 'gate') {
     return (
-      <div className="min-h-screen bg-[#0B1A0F] flex items-center justify-center px-4 sm:px-6 py-8 sm:py-12">
+      <div className="min-h-screen bg-[#000000] flex items-center justify-center px-4 sm:px-6 py-8 sm:py-12">
         <div className="w-full max-w-md">
           {/* Header */}
           <div className="text-center mb-6 sm:mb-8">
@@ -1126,20 +1126,20 @@ export default function BudtenderEducation() {
               Budtender Education Portal
             </h1>
             <div className="w-12 h-0.5 bg-[#c8a84b] mx-auto mt-3 mb-4" />
-            <p className="text-[#8B9A8B] text-sm leading-relaxed">
+            <p className="text-[#A9ACAF] text-sm leading-relaxed">
               Exclusive training courses, product knowledge, and sales tools
               for authorized Highsman budtenders.
             </p>
           </div>
 
           {/* Login / Register Toggle */}
-          <div className="flex mb-5 bg-[#0F2417] rounded-lg p-1">
+          <div className="flex mb-5 bg-[#111111] rounded-lg p-1">
             <button
               onClick={() => { setGateMode('login'); setErrors({}); setLoginError(''); }}
               className={`flex-1 py-2.5 text-sm font-semibold rounded-md transition-all ${
                 gateMode === 'login'
-                  ? 'bg-[#c8a84b] text-black'
-                  : 'text-[#8B9A8B] hover:text-white'
+                  ? 'bg-white text-black'
+                  : 'text-[#A9ACAF] hover:text-white'
               }`}
             >
               Sign In
@@ -1148,8 +1148,8 @@ export default function BudtenderEducation() {
               onClick={() => { setGateMode('register'); setErrors({}); setLoginError(''); }}
               className={`flex-1 py-2.5 text-sm font-semibold rounded-md transition-all ${
                 gateMode === 'register'
-                  ? 'bg-[#c8a84b] text-black'
-                  : 'text-[#8B9A8B] hover:text-white'
+                  ? 'bg-white text-black'
+                  : 'text-[#A9ACAF] hover:text-white'
               }`}
             >
               Create Account
@@ -1158,10 +1158,10 @@ export default function BudtenderEducation() {
 
           {gateMode === 'login' ? (
             /* ── LOGIN FORM (email only) ─────────────────────────────────── */
-            <div className="bg-[#0F2417] border border-[#c8a84b]/20 rounded-xl p-6 md:p-8 shadow-2xl">
+            <div className="bg-[#111111] border border-[#A9ACAF]/20 rounded-xl p-6 md:p-8 shadow-2xl">
               <div className="text-center mb-5">
                 <h2 className="text-lg font-bold text-white mb-1">Welcome Back</h2>
-                <p className="text-[#8B9A8B] text-xs">Sign in with your email to continue training</p>
+                <p className="text-[#A9ACAF] text-xs">Sign in with your email to continue training</p>
               </div>
 
               {/* Google Sign-In Button */}
@@ -1179,7 +1179,7 @@ export default function BudtenderEducation() {
                     }
                     (window as any).google.accounts.id.prompt();
                   }}
-                  className="w-full flex items-center justify-center gap-3 py-2.5 px-4 border border-[#c8a84b]/15 rounded-lg text-sm text-white font-medium hover:bg-[#132D1B] transition-colors mb-4"
+                  className="w-full flex items-center justify-center gap-3 py-2.5 px-4 border border-[#A9ACAF]/15 rounded-lg text-sm text-white font-medium hover:bg-[#1a1a1a] transition-colors mb-4"
                 >
                   <svg width="18" height="18" viewBox="0 0 48 48">
                     <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -1193,13 +1193,13 @@ export default function BudtenderEducation() {
 
               <div className="flex items-center gap-3 mb-4">
                 <div className="flex-1 h-px bg-[#c8a84b]/10" />
-                <span className="text-[10px] uppercase tracking-wider text-[#9CA9A0]">or</span>
+                <span className="text-[10px] uppercase tracking-wider text-[#888888]">or</span>
                 <div className="flex-1 h-px bg-[#c8a84b]/10" />
               </div>
 
               <form onSubmit={handleLogin}>
                 <div>
-                  <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#5C6B5C] mb-1">
+                  <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#666666] mb-1">
                     Email Address
                   </label>
                   <input
@@ -1207,8 +1207,8 @@ export default function BudtenderEducation() {
                     value={loginEmail}
                     onChange={(e) => { setLoginEmail(e.target.value); setLoginError(''); }}
                     placeholder="you@dispensary.com"
-                    className={`w-full px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors bg-[#0B1A0F] ${
-                      loginError ? 'border-red-400 bg-red-50' : 'border-[#c8a84b]/20 focus:border-[#c8a84b]'
+                    className={`w-full px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors bg-[#000000] ${
+                      loginError ? 'border-red-400 bg-red-50' : 'border-[#A9ACAF]/20 focus:border-[#A9ACAF]'
                     }`}
                   />
                   {loginError && <p className="text-red-500 text-xs mt-1">{loginError}</p>}
@@ -1216,25 +1216,25 @@ export default function BudtenderEducation() {
 
                 <button
                   type="submit"
-                  className="w-full mt-5 py-3 bg-[#0B1A0F] text-white font-semibold text-sm rounded-lg hover:bg-[#132D1B] transition-colors"
+                  className="w-full mt-5 py-3 bg-[#FFEB3B] text-black font-semibold text-sm rounded-lg hover:bg-[#ffd700] transition-colors"
                 >
                   SIGN IN
                 </button>
               </form>
 
-              <p className="text-center text-[#9CA9A0] text-xs mt-4">
+              <p className="text-center text-[#888888] text-xs mt-4">
                 New here?{' '}
-                <button onClick={() => setGateMode('register')} className="text-[#c8a84b] font-semibold hover:underline">
+                <button onClick={() => setGateMode('register')} className="text-white font-semibold hover:underline">
                   Create an account
                 </button>
               </p>
             </div>
           ) : (
             /* ── REGISTER FORM (full form) ───────────────────────────────── */
-            <div className="bg-[#0F2417] border border-[#c8a84b]/20 rounded-xl p-6 md:p-8 shadow-2xl">
+            <div className="bg-[#111111] border border-[#A9ACAF]/20 rounded-xl p-6 md:p-8 shadow-2xl">
               <div className="text-center mb-5">
                 <h2 className="text-lg font-bold text-white mb-1">Create Your Account</h2>
-                <p className="text-[#8B9A8B] text-xs">Register once, then sign in instantly next time</p>
+                <p className="text-[#A9ACAF] text-xs">Register once, then sign in instantly next time</p>
               </div>
 
               {/* Google Sign-In for Registration */}
@@ -1248,7 +1248,7 @@ export default function BudtenderEducation() {
                     }
                     (window as any).google.accounts.id.prompt();
                   }}
-                  className="w-full flex items-center justify-center gap-3 py-2.5 px-4 border border-[#c8a84b]/15 rounded-lg text-sm text-white font-medium hover:bg-[#132D1B] transition-colors mb-4"
+                  className="w-full flex items-center justify-center gap-3 py-2.5 px-4 border border-[#A9ACAF]/15 rounded-lg text-sm text-white font-medium hover:bg-[#1a1a1a] transition-colors mb-4"
                 >
                   <svg width="18" height="18" viewBox="0 0 48 48">
                     <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -1262,7 +1262,7 @@ export default function BudtenderEducation() {
 
               <div className="flex items-center gap-3 mb-4">
                 <div className="flex-1 h-px bg-[#c8a84b]/10" />
-                <span className="text-[10px] uppercase tracking-wider text-[#9CA9A0]">or register with email</span>
+                <span className="text-[10px] uppercase tracking-wider text-[#888888]">or register with email</span>
                 <div className="flex-1 h-px bg-[#c8a84b]/10" />
               </div>
 
@@ -1270,7 +1270,7 @@ export default function BudtenderEducation() {
                 <div className="space-y-4">
                   {/* Name */}
                   <div>
-                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#5C6B5C] mb-1">
+                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#666666] mb-1">
                       Full Name
                     </label>
                     <input
@@ -1278,8 +1278,8 @@ export default function BudtenderEducation() {
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="Your full name"
-                      className={`w-full px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors bg-[#0B1A0F] ${
-                        errors.name ? 'border-red-400 bg-red-50' : 'border-[#c8a84b]/20 focus:border-[#c8a84b]'
+                      className={`w-full px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors bg-[#000000] ${
+                        errors.name ? 'border-red-400 bg-red-50' : 'border-[#A9ACAF]/20 focus:border-[#A9ACAF]'
                       }`}
                     />
                     {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
@@ -1287,7 +1287,7 @@ export default function BudtenderEducation() {
 
                   {/* Email */}
                   <div>
-                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#5C6B5C] mb-1">
+                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#666666] mb-1">
                       Email Address
                     </label>
                     <input
@@ -1295,8 +1295,8 @@ export default function BudtenderEducation() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="you@dispensary.com"
-                      className={`w-full px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors bg-[#0B1A0F] ${
-                        errors.email ? 'border-red-400 bg-red-50' : 'border-[#c8a84b]/20 focus:border-[#c8a84b]'
+                      className={`w-full px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors bg-[#000000] ${
+                        errors.email ? 'border-red-400 bg-red-50' : 'border-[#A9ACAF]/20 focus:border-[#A9ACAF]'
                       }`}
                     />
                     {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
@@ -1304,14 +1304,14 @@ export default function BudtenderEducation() {
 
                   {/* State */}
                   <div>
-                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#5C6B5C] mb-1">
+                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#666666] mb-1">
                       State
                     </label>
                     <select
                       value={state}
                       onChange={(e) => setState(e.target.value)}
                       className={`w-full px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors ${
-                        errors.state ? 'border-red-400 bg-red-50' : 'border-[#c8a84b]/20 focus:border-[#c8a84b]'
+                        errors.state ? 'border-red-400 bg-red-50' : 'border-[#A9ACAF]/20 focus:border-[#A9ACAF]'
                       }`}
                     >
                       <option value="">Select state</option>
@@ -1326,15 +1326,15 @@ export default function BudtenderEducation() {
 
                   {/* Dispensary */}
                   <div>
-                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#5C6B5C] mb-1">
-                      Dispensary Name <span className="text-[#8B9A8B] font-normal">(optional)</span>
+                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#666666] mb-1">
+                      Dispensary Name <span className="text-[#A9ACAF] font-normal">(optional)</span>
                     </label>
                     <input
                       type="text"
                       value={dispensary}
                       onChange={(e) => setDispensary(e.target.value)}
                       placeholder="Where do you work?"
-                      className="w-full px-3 py-2.5 border border-[#c8a84b]/30 rounded-lg text-sm text-black outline-none transition-colors focus:border-[#c8a84b]"
+                      className="w-full px-3 py-2.5 border border-[#A9ACAF]/30 rounded-lg text-sm text-black outline-none transition-colors focus:border-[#A9ACAF]"
                     />
                   </div>
 
@@ -1350,7 +1350,7 @@ export default function BudtenderEducation() {
                       onChange={(e) => setConsent(e.target.checked)}
                       className="mt-0.5 w-4 h-4 accent-[#c8a84b]"
                     />
-                    <span className="text-xs text-[#8B9A8B] leading-relaxed">
+                    <span className="text-xs text-[#A9ACAF] leading-relaxed">
                       I agree to receive training updates and exclusive budtender offers from Highsman via email.
                     </span>
                   </label>
@@ -1359,22 +1359,22 @@ export default function BudtenderEducation() {
 
                 <button
                   type="submit"
-                  className="w-full mt-6 py-3 bg-[#0B1A0F] text-white font-semibold text-sm rounded-lg hover:bg-[#132D1B] transition-colors"
+                  className="w-full mt-6 py-3 bg-[#FFEB3B] text-black font-semibold text-sm rounded-lg hover:bg-[#ffd700] transition-colors"
                 >
                   CREATE ACCOUNT
                 </button>
               </form>
 
-              <p className="text-center text-[#9CA9A0] text-xs mt-4">
+              <p className="text-center text-[#888888] text-xs mt-4">
                 Already registered?{' '}
-                <button onClick={() => setGateMode('login')} className="text-[#c8a84b] font-semibold hover:underline">
+                <button onClick={() => setGateMode('login')} className="text-white font-semibold hover:underline">
                   Sign in
                 </button>
               </p>
             </div>
           )}
 
-          <p className="text-center text-[#5C6B5C] text-[10px] mt-6">
+          <p className="text-center text-[#666666] text-[10px] mt-6">
             © Highsman · For authorized budtender use only
           </p>
         </div>
@@ -1386,16 +1386,16 @@ export default function BudtenderEducation() {
   const currentCourse = COURSES.find((c) => c.id === activeCourse);
 
   return (
-    <div ref={portalRef} className="min-h-screen bg-[#0B1A0F]">
+    <div ref={portalRef} className="min-h-screen bg-[#000000]">
       {/* ── Sub-Header (thin progress bar below global nav) ────────────── */}
-      <div className="bg-[#081510] border-b border-[#c8a84b]/15">
+      <div className="bg-[#081510] border-b border-[#A9ACAF]/15">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] sm:text-xs font-semibold text-[#8B9A8B] tracking-wide">Budtender Education</span>
+            <span className="text-[10px] sm:text-xs font-semibold text-[#A9ACAF] tracking-wide">Budtender Education</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-[#8B9A8B]">{completedCourses.size}/{COURSES.length}</span>
-            <div className="w-16 sm:w-20 h-1 bg-[#132D1B] rounded-full overflow-hidden">
+            <span className="text-[10px] text-[#A9ACAF]">{completedCourses.size}/{COURSES.length}</span>
+            <div className="w-16 sm:w-20 h-1 bg-[#1a1a1a] rounded-full overflow-hidden">
               <div
                 className="h-full bg-[#c8a84b] rounded-full transition-all duration-500"
                 style={{width: `${(completedCourses.size / COURSES.length) * 100}%`}}
@@ -1410,7 +1410,7 @@ export default function BudtenderEducation() {
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           <button
             onClick={closeCourse}
-            className="text-[#8B9A8B] text-xs sm:text-sm hover:text-white transition-colors mb-5 sm:mb-6 flex items-center gap-2"
+            className="text-[#A9ACAF] text-xs sm:text-sm hover:text-white transition-colors mb-5 sm:mb-6 flex items-center gap-2"
           >
             ← Back to courses
           </button>
@@ -1418,18 +1418,18 @@ export default function BudtenderEducation() {
           <div className="text-center mb-8">
             <span className="text-4xl mb-3 block">🏃</span>
             <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2" style={{fontFamily: 'Teko, sans-serif', fontWeight: 700}}>RUSHING BONUS</h2>
-            <p className="text-[#8B9A8B] text-sm sm:text-base">Tell us about yourself to earn your final <span className="text-[#c8a84b] font-bold">100 pts</span> and complete Training Camp.</p>
+            <p className="text-[#A9ACAF] text-sm sm:text-base">Tell us about yourself to earn your final <span className="text-[#c8a84b] font-bold">100 pts</span> and complete Training Camp.</p>
           </div>
 
           <div className="space-y-5">
             {RUSHING_BONUS_QUESTIONS.map((q) => (
-              <div key={q.id} className="bg-[#0F2417] border border-[#c8a84b]/12 rounded-xl p-4 sm:p-5">
+              <div key={q.id} className="bg-[#111111] border border-[#A9ACAF]/15 rounded-xl p-4 sm:p-5">
                 <label className="block text-sm font-semibold text-white mb-2">{q.label}</label>
                 {q.type === 'select' ? (
                   <select
                     value={surveyAnswers[q.id] || ''}
                     onChange={(e) => setSurveyAnswers({...surveyAnswers, [q.id]: e.target.value})}
-                    className="w-full px-3 py-2.5 bg-[#0B1A0F] border border-[#c8a84b]/20 rounded-lg text-sm text-white outline-none focus:border-[#c8a84b] transition-colors"
+                    className="w-full px-3 py-2.5 bg-[#000000] border border-[#A9ACAF]/20 rounded-lg text-sm text-white outline-none focus:border-[#A9ACAF] transition-colors"
                   >
                     <option value="">Select...</option>
                     {q.options.map((opt) => (
@@ -1445,7 +1445,7 @@ export default function BudtenderEducation() {
                         className={`w-9 h-9 rounded-lg text-sm font-bold transition-all ${
                           surveyAnswers[q.id] === String(n)
                             ? 'bg-[#c8a84b] text-black'
-                            : 'bg-[#0F2417] border border-[#c8a84b]/20 text-white hover:border-[#c8a84b]/50'
+                            : 'bg-[#111111] border border-[#A9ACAF]/20 text-white hover:border-[#A9ACAF]/50'
                         }`}
                       >
                         {n}
@@ -1458,7 +1458,7 @@ export default function BudtenderEducation() {
                     value={surveyAnswers[q.id] || ''}
                     onChange={(e) => setSurveyAnswers({...surveyAnswers, [q.id]: e.target.value})}
                     placeholder="Type your answer..."
-                    className="w-full px-3 py-2.5 bg-[#0B1A0F] border border-[#c8a84b]/20 rounded-lg text-sm text-white outline-none focus:border-[#c8a84b] transition-colors placeholder:text-[#5C6B5C]"
+                    className="w-full px-3 py-2.5 bg-[#000000] border border-[#A9ACAF]/20 rounded-lg text-sm text-white outline-none focus:border-[#A9ACAF] transition-colors placeholder:text-[#666666]"
                   />
                 )}
               </div>
@@ -1469,7 +1469,7 @@ export default function BudtenderEducation() {
             <button
               onClick={handleSurveySubmit}
               disabled={surveySubmitting || RUSHING_BONUS_QUESTIONS.some(q => !surveyAnswers[q.id] || surveyAnswers[q.id].trim() === '')}
-              className="px-8 py-3 bg-[#c8a84b] text-black font-bold text-sm rounded-xl hover:bg-[#d4b65c] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-8 py-3 bg-[#FFEB3B] text-black font-bold text-sm rounded-xl hover:bg-[#ffd700] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               style={{fontFamily: 'Teko, sans-serif', fontSize: '1.25rem', letterSpacing: '0.05em'}}
             >
               {surveySubmitting ? 'Submitting...' : 'SUBMIT & EARN 100 PTS 🏃'}
@@ -1481,7 +1481,7 @@ export default function BudtenderEducation() {
           {/* Back button */}
           <button
             onClick={closeCourse}
-            className="text-[#8B9A8B] text-xs sm:text-sm hover:text-white transition-colors mb-5 sm:mb-6 flex items-center gap-2"
+            className="text-[#A9ACAF] text-xs sm:text-sm hover:text-white transition-colors mb-5 sm:mb-6 flex items-center gap-2"
           >
             ← Back to courses
           </button>
@@ -1498,13 +1498,13 @@ export default function BudtenderEducation() {
               </span>
             </div>
             <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-white">{currentCourse.title}</h2>
-            <p className="text-[#8B9A8B] text-xs sm:text-sm mt-1">{currentCourse.subtitle}</p>
+            <p className="text-[#A9ACAF] text-xs sm:text-sm mt-1">{currentCourse.subtitle}</p>
           </div>
 
           {/* ── Video Player (if course has video) ─────────────────────────── */}
           {currentCourse.videoUrl && (
             <div className="mb-6 sm:mb-8">
-              <div className="bg-[#0F2417] border border-[#c8a84b]/12 rounded-xl sm:rounded-2xl overflow-hidden">
+              <div className="bg-[#111111] border border-[#A9ACAF]/15 rounded-xl sm:rounded-2xl overflow-hidden">
                 <video
                   controls
                   playsInline
@@ -1521,7 +1521,7 @@ export default function BudtenderEducation() {
                   className="w-2 h-2 rounded-full"
                   style={{background: currentCourse.color}}
                 />
-                <span className="text-[10px] sm:text-xs text-[#8B9A8B]">
+                <span className="text-[10px] sm:text-xs text-[#A9ACAF]">
                   Watch the full video, then scroll down for key takeaways
                 </span>
               </div>
@@ -1542,18 +1542,18 @@ export default function BudtenderEducation() {
           </div>
 
           {/* Slide content */}
-          <div className="bg-[#0F2417] border border-[#c8a84b]/12 rounded-xl sm:rounded-2xl p-5 sm:p-6 md:p-10 mb-5 sm:mb-6">
-            <div className="text-[9px] sm:text-[10px] uppercase tracking-widest text-[#8B9A8B] mb-2">
+          <div className="bg-[#111111] border border-[#A9ACAF]/15 rounded-xl sm:rounded-2xl p-5 sm:p-6 md:p-10 mb-5 sm:mb-6">
+            <div className="text-[9px] sm:text-[10px] uppercase tracking-widest text-[#A9ACAF] mb-2">
               {currentCourse.videoUrl ? 'Key Takeaway' : 'Slide'} {slideIndex + 1} of {currentCourse.slides.length}
             </div>
             <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-3 sm:mb-4">
               {currentCourse.slides[slideIndex].title}
             </h3>
-            <p className="text-[#9CA9A0] text-sm sm:text-base leading-relaxed mb-5 sm:mb-6">
+            <p className="text-[#888888] text-sm sm:text-base leading-relaxed mb-5 sm:mb-6">
               {currentCourse.slides[slideIndex].content}
             </p>
             {currentCourse.slides[slideIndex].keyPoints && (
-              <div className="bg-[#0F2417] rounded-lg sm:rounded-xl p-3 sm:p-4">
+              <div className="bg-[#111111] rounded-lg sm:rounded-xl p-3 sm:p-4">
                 <div className="text-[9px] sm:text-[10px] uppercase tracking-widest text-[#c8a84b] font-bold mb-2 sm:mb-3">
                   Key Takeaways
                 </div>
@@ -1572,7 +1572,7 @@ export default function BudtenderEducation() {
             <button
               onClick={prevSlide}
               disabled={slideIndex === 0}
-              className="px-3 sm:px-5 py-2.5 text-xs sm:text-sm font-medium rounded-lg border border-[#c8a84b]/20 text-white hover:bg-[#0F2417] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              className="px-3 sm:px-5 py-2.5 text-xs sm:text-sm font-medium rounded-lg border border-[#A9ACAF]/20 text-white hover:bg-[#111111] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >
               ← Previous
             </button>
@@ -1617,7 +1617,7 @@ export default function BudtenderEducation() {
           </div>
 
           {/* Audio summary */}
-          <div className="mt-8 bg-[#0F2417] border border-[#c8a84b]/15 rounded-xl p-4">
+          <div className="mt-8 bg-[#111111] border border-[#A9ACAF]/15 rounded-xl p-4">
             <div className="flex items-center gap-3">
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center text-lg"
@@ -1627,9 +1627,9 @@ export default function BudtenderEducation() {
               </div>
               <div className="flex-1">
                 <div className="text-white text-sm font-semibold">Audio Overview</div>
-                <div className="text-[#8B9A8B] text-xs">Listen to a summary of this course</div>
+                <div className="text-[#A9ACAF] text-xs">Listen to a summary of this course</div>
               </div>
-              <div className="text-[#8B9A8B] text-xs px-3 py-1 bg-[#0F2417] rounded-full">
+              <div className="text-[#A9ACAF] text-xs px-3 py-1 bg-[#111111] rounded-full">
                 Coming Soon
               </div>
             </div>
@@ -1640,7 +1640,7 @@ export default function BudtenderEducation() {
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           <button
             onClick={() => { setCourseQuizActive(null); setQuizComplete(false); }}
-            className="text-[#8B9A8B] text-xs sm:text-sm hover:text-white transition-colors mb-5 sm:mb-6 flex items-center gap-2"
+            className="text-[#A9ACAF] text-xs sm:text-sm hover:text-white transition-colors mb-5 sm:mb-6 flex items-center gap-2"
           >
             ← Back to course
           </button>
@@ -1650,12 +1650,12 @@ export default function BudtenderEducation() {
               <h2 className="text-xl font-bold text-white mb-1">
                 {COURSES.find((c) => c.id === courseQuizActive)?.title} — Quiz
               </h2>
-              <div className="text-[#8B9A8B] text-sm mb-6">
+              <div className="text-[#A9ACAF] text-sm mb-6">
                 Question {quizQ + 1} of {COURSE_QUIZZES[courseQuizActive].length}
               </div>
 
               {/* Progress */}
-              <div className="w-full h-1 bg-[#132D1B] rounded-full mb-8">
+              <div className="w-full h-1 bg-[#1a1a1a] rounded-full mb-8">
                 <div
                   className="h-full bg-[#c8a84b] rounded-full transition-all duration-500"
                   style={{width: `${((quizQ + 1) / COURSE_QUIZZES[courseQuizActive].length) * 100}%`}}
@@ -1663,17 +1663,17 @@ export default function BudtenderEducation() {
               </div>
 
               {/* Question */}
-              <div className="bg-[#0F2417] border border-[#c8a84b]/15 rounded-2xl p-6 md:p-8">
+              <div className="bg-[#111111] border border-[#A9ACAF]/15 rounded-2xl p-6 md:p-8">
                 <p className="text-white font-semibold mb-6">{COURSE_QUIZZES[courseQuizActive][quizQ].q}</p>
                 <div className="space-y-3">
                   {COURSE_QUIZZES[courseQuizActive][quizQ].options.map((opt, i) => {
                     const isCorrect = i === COURSE_QUIZZES[courseQuizActive][quizQ].correct;
                     const isSelected = quizSelected === i;
-                    let btnClass = 'border-[#c8a84b]/25 text-[#C0CCC0] hover:bg-[#0F2417]';
+                    let btnClass = 'border-[#A9ACAF]/25 text-[#A9ACAF] hover:bg-[#111111]';
                     if (quizAnswered) {
                       if (isCorrect) btnClass = 'border-emerald-500 bg-emerald-500/10 text-emerald-400';
                       else if (isSelected) btnClass = 'border-red-500 bg-red-500/10 text-red-400';
-                      else btnClass = 'border-[#c8a84b]/15 text-[#8B9A8B]';
+                      else btnClass = 'border-[#A9ACAF]/15 text-[#A9ACAF]';
                     }
                     return (
                       <button
@@ -1706,7 +1706,7 @@ export default function BudtenderEducation() {
           ) : (
             /* Quiz Results */
             <div className="text-center">
-              <div className="bg-[#0F2417] border border-[#c8a84b]/15 rounded-2xl p-8 md:p-12">
+              <div className="bg-[#111111] border border-[#A9ACAF]/15 rounded-2xl p-8 md:p-12">
                 <div className="w-24 h-24 rounded-full border-4 border-[#c8a84b] flex items-center justify-center mx-auto mb-6">
                   <span className="text-white text-2xl font-bold">
                     {quizScore}/{COURSE_QUIZZES[courseQuizActive].length}
@@ -1717,7 +1717,7 @@ export default function BudtenderEducation() {
                     ? 'Course Complete! ✓'
                     : 'Keep Studying'}
                 </h3>
-                <p className="text-[#8B9A8B] text-sm mb-6">
+                <p className="text-[#A9ACAF] text-sm mb-6">
                   {quizScore >= Math.ceil(COURSE_QUIZZES[courseQuizActive].length * 0.66)
                     ? `Nice work, ${userName}! You\'ve earned your badge for this course.`
                     : `Review the slides and try again, ${userName}. You need 66% to pass.`}
@@ -1725,7 +1725,7 @@ export default function BudtenderEducation() {
                 <div className="flex gap-3 justify-center">
                   <button
                     onClick={() => startCourseQuiz(courseQuizActive)}
-                    className="px-5 py-2.5 text-sm border border-[#c8a84b]/25 text-white rounded-lg hover:bg-[#0F2417] transition-colors"
+                    className="px-5 py-2.5 text-sm border border-[#A9ACAF]/25 text-white rounded-lg hover:bg-[#111111] transition-colors"
                   >
                     Retake Quiz
                   </button>
@@ -1767,35 +1767,35 @@ export default function BudtenderEducation() {
                   <div className="relative" ref={userMenuRef}>
                     <button
                       onClick={() => setUserMenuOpen(!userMenuOpen)}
-                      className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#c8a84b]/20 bg-[#0F2417] hover:bg-[#132D1B] hover:border-[#c8a84b]/30 transition-all cursor-pointer"
+                      className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#A9ACAF]/20 bg-[#111111] hover:bg-[#1a1a1a] hover:border-[#A9ACAF]/30 transition-all cursor-pointer"
                     >
                       <div className="w-9 h-9 rounded-full bg-[#c8a84b] flex items-center justify-center text-black font-bold shrink-0" style={{fontFamily: 'Teko, sans-serif', fontSize: '1.1rem'}}>
                         {userName ? userName.charAt(0).toUpperCase() : 'U'}
                       </div>
-                      <svg className="w-3.5 h-3.5 text-[#8B9A8B]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      <svg className="w-3.5 h-3.5 text-[#A9ACAF]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                     </button>
 
                     {userMenuOpen && (
-                      <div className="absolute right-0 top-full mt-2 w-64 bg-[#132D1B] border border-[#c8a84b]/15 rounded-2xl shadow-2xl overflow-hidden z-50">
-                        <div className="px-5 py-4 border-b border-[#c8a84b]/12">
+                      <div className="absolute right-0 top-full mt-2 w-64 bg-[#1a1a1a] border border-[#A9ACAF]/15 rounded-2xl shadow-2xl overflow-hidden z-50">
+                        <div className="px-5 py-4 border-b border-[#A9ACAF]/15">
                           <div className="text-base font-semibold text-white" style={{fontFamily: 'Teko, sans-serif', fontSize: '1.25rem'}}>{userName}</div>
                           {userEmail && (
-                            <div className="text-xs text-[#8B9A8B] mt-0.5 truncate">{userEmail}</div>
+                            <div className="text-xs text-[#A9ACAF] mt-0.5 truncate">{userEmail}</div>
                           )}
                         </div>
-                        <div className="px-5 py-4 border-b border-[#c8a84b]/12">
+                        <div className="px-5 py-4 border-b border-[#A9ACAF]/15">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs uppercase tracking-wider text-[#8B9A8B]" style={{fontFamily: 'Teko, sans-serif'}}>Progress</span>
-                            <span className="text-xs text-[#8B9A8B]">{completedCourses.size}/{COURSES.length}</span>
+                            <span className="text-xs uppercase tracking-wider text-[#A9ACAF]" style={{fontFamily: 'Teko, sans-serif'}}>Progress</span>
+                            <span className="text-xs text-[#A9ACAF]">{completedCourses.size}/{COURSES.length}</span>
                           </div>
-                          <div className="w-full h-2 bg-[#132D1B] rounded-full overflow-hidden mb-3">
+                          <div className="w-full h-2 bg-[#1a1a1a] rounded-full overflow-hidden mb-3">
                             <div
                               className="h-full bg-[#c8a84b] rounded-full transition-all"
                               style={{width: `${(completedCourses.size / COURSES.length) * 100}%`}}
                             />
                           </div>
                           <div className="flex items-center justify-between">
-                            <span className="text-xs uppercase tracking-wider text-[#8B9A8B]" style={{fontFamily: 'Teko, sans-serif'}}>Rewards</span>
+                            <span className="text-xs uppercase tracking-wider text-[#A9ACAF]" style={{fontFamily: 'Teko, sans-serif'}}>Rewards</span>
                             <span className="text-sm font-bold text-[#c8a84b]" style={{fontFamily: 'Teko, sans-serif', fontSize: '1rem'}}>
                               {calculatePoints(completedCourses, COURSES.length).toLocaleString()} pts · ${pointsToDollars(calculatePoints(completedCourses, COURSES.length))}
                             </span>
@@ -1803,7 +1803,7 @@ export default function BudtenderEducation() {
                         </div>
                         <button
                           onClick={handleLogout}
-                          className="w-full text-left px-5 py-3.5 text-sm text-[#8B9A8B] hover:text-white hover:bg-[#0F2417] transition-colors"
+                          className="w-full text-left px-5 py-3.5 text-sm text-[#A9ACAF] hover:text-white hover:bg-[#111111] transition-colors"
                         >
                           Sign Out
                         </button>
@@ -1815,9 +1815,9 @@ export default function BudtenderEducation() {
               {/* ── Main heading ────────────────────────────────────── */}
               <h1 className="mb-4 text-center" style={{fontFamily: 'Teko, sans-serif', fontWeight: 700, lineHeight: 0.95}}>
                 <span className="block text-white" style={{fontSize: 'clamp(2.4rem, 7vw, 4.5rem)'}}>WELCOME TO HIGHSMAN</span>
-                <span className="block text-[#c8a84b]" style={{fontSize: 'clamp(3.2rem, 9vw, 5.5rem)'}}>BUDTENDER TRAINING CAMP</span>
+                <span className="block text-white" style={{fontSize: 'clamp(3.2rem, 9vw, 5.5rem)'}}>BUDTENDER TRAINING CAMP</span>
               </h1>
-              <p className="text-[#9CA9A0] text-base sm:text-lg md:text-xl leading-relaxed mb-8 max-w-2xl mx-auto text-center">
+              <p className="text-[#888888] text-base sm:text-lg md:text-xl leading-relaxed mb-8 max-w-2xl mx-auto text-center">
                 Learn the lineup, earn points, cash them in at the Highsman Budtender Store. Every course you crush puts real credit in your pocket.
               </p>
 
@@ -1832,25 +1832,25 @@ export default function BudtenderEducation() {
                 const bonusAvailable = !allDone && completedCourses.size === COURSES.length - 1;
                 return (
                   <div className="mb-8 rounded-2xl sm:rounded-3xl overflow-hidden" style={{background: 'linear-gradient(135deg, rgba(200,168,75,0.12) 0%, rgba(15,36,23,0.8) 100%)'}}>
-                    <div className="border border-[#c8a84b]/20 rounded-2xl sm:rounded-3xl p-6 sm:p-8">
+                    <div className="border border-[#A9ACAF]/20 rounded-2xl sm:rounded-3xl p-6 sm:p-8">
                       {/* Top row: pts + dollars */}
                       <div className="flex items-end justify-between gap-4 mb-5">
                         <div>
                           <div className="uppercase tracking-[0.2em] text-[#c8a84b] mb-1" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(0.75rem, 2vw, 0.875rem)', fontWeight: 500}}>Your Rewards</div>
                           <div className="flex items-baseline gap-2">
                             <span className="text-white" style={{fontFamily: 'Teko, sans-serif', fontWeight: 700, fontSize: 'clamp(3rem, 10vw, 4.5rem)', lineHeight: 1}}>{pts.toLocaleString()}</span>
-                            <span className="uppercase tracking-wider text-[#8B9A8B]" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(1rem, 3vw, 1.5rem)', fontWeight: 400}}>PTS</span>
+                            <span className="uppercase tracking-wider text-[#A9ACAF]" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(1rem, 3vw, 1.5rem)', fontWeight: 400}}>PTS</span>
                           </div>
                           <div className="text-[#c8a84b] mt-1" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(1.2rem, 4vw, 1.75rem)', fontWeight: 600}}>${dollars} store credit</div>
                         </div>
                         <div className="text-right shrink-0 hidden sm:block">
-                          <div className="uppercase tracking-wider text-[#5C6B5C]" style={{fontFamily: 'Teko, sans-serif', fontSize: '0.75rem'}}>Max Possible</div>
+                          <div className="uppercase tracking-wider text-[#666666]" style={{fontFamily: 'Teko, sans-serif', fontSize: '0.75rem'}}>Max Possible</div>
                           <div className="text-[#4A5A4A]" style={{fontFamily: 'Teko, sans-serif', fontSize: '2rem', fontWeight: 700, lineHeight: 1}}>{MAX_POINTS.toLocaleString()}</div>
                           <div className="text-[#4A5A4A]" style={{fontFamily: 'Teko, sans-serif', fontSize: '0.875rem'}}>${pointsToDollars(MAX_POINTS)}</div>
                         </div>
                       </div>
                       {/* Progress bar */}
-                      <div className="w-full h-3 sm:h-4 bg-[#132D1B] rounded-full overflow-hidden mb-4">
+                      <div className="w-full h-3 sm:h-4 bg-[#1a1a1a] rounded-full overflow-hidden mb-4">
                         <div
                           className="h-full rounded-full transition-all duration-700 ease-out"
                           style={{
@@ -1861,7 +1861,7 @@ export default function BudtenderEducation() {
                         />
                       </div>
                       {/* Next reward hint */}
-                      <div className="text-[#8B9A8B]" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(0.9rem, 2.5vw, 1.1rem)', fontWeight: 400}}>
+                      <div className="text-[#A9ACAF]" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(0.9rem, 2.5vw, 1.1rem)', fontWeight: 400}}>
                         {allDone ? (
                           <span className="text-emerald-400" style={{fontWeight: 600}}>HALL OF FAME — ALL COURSES COMPLETE — MAXIMUM REWARDS UNLOCKED 🏆</span>
                         ) : bonusAvailable ? (
@@ -1883,11 +1883,11 @@ export default function BudtenderEducation() {
                   {icon: '🏃', label: 'RUSHING BONUS', value: '+100', sub: 'survey'},
                   {icon: '🏆', label: 'HALL OF FAME', value: `+${POINTS_ALL_COMPLETE_BONUS.toLocaleString()}`, sub: 'bonus'},
                 ].map((item, i) => (
-                  <div key={i} className="bg-[#0F2417]/80 border border-[#c8a84b]/12 rounded-xl sm:rounded-2xl p-4 sm:p-5 text-center hover:border-[#c8a84b]/20 transition-colors">
+                  <div key={i} className="bg-[#111111]/80 border border-[#A9ACAF]/15 rounded-xl sm:rounded-2xl p-4 sm:p-5 text-center hover:border-[#A9ACAF]/20 transition-colors">
                     <div className="text-2xl sm:text-3xl mb-2">{item.icon}</div>
                     <div className="text-[#c8a84b]" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(1.5rem, 4vw, 2rem)', fontWeight: 700, lineHeight: 1}}>{item.value}</div>
-                    <div className="text-[#8B9A8B] uppercase tracking-wider" style={{fontFamily: 'Teko, sans-serif', fontSize: '0.7rem', fontWeight: 500}}>{item.sub}</div>
-                    <div className="text-[#5C6B5C] mt-1 uppercase tracking-wider" style={{fontFamily: 'Teko, sans-serif', fontSize: '0.65rem', fontWeight: 400}}>{item.label}</div>
+                    <div className="text-[#A9ACAF] uppercase tracking-wider" style={{fontFamily: 'Teko, sans-serif', fontSize: '0.7rem', fontWeight: 500}}>{item.sub}</div>
+                    <div className="text-[#666666] mt-1 uppercase tracking-wider" style={{fontFamily: 'Teko, sans-serif', fontSize: '0.65rem', fontWeight: 400}}>{item.label}</div>
                   </div>
                 ))}
               </div>
@@ -1899,7 +1899,7 @@ export default function BudtenderEducation() {
           <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
             <div className="flex items-center justify-between mb-6 sm:mb-8">
               <h2 className="text-lg sm:text-xl font-bold text-white uppercase tracking-wider" style={{fontFamily: 'Teko, sans-serif'}}>Training Courses</h2>
-              <span className="text-[10px] sm:text-xs text-[#8B9A8B]">{completedCourses.size} of {COURSES.length} complete</span>
+              <span className="text-[10px] sm:text-xs text-[#A9ACAF]">{completedCourses.size} of {COURSES.length} complete</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -1909,7 +1909,7 @@ export default function BudtenderEducation() {
                   <button
                     key={course.id}
                     onClick={() => openCourse(course.id)}
-                    className="text-left bg-[#0F2417] border border-[#c8a84b]/12 rounded-xl sm:rounded-2xl p-5 sm:p-6 hover:border-[#c8a84b]/30 hover:bg-[#132D1B] transition-all group relative overflow-hidden"
+                    className="text-left bg-[#111111] border border-[#A9ACAF]/15 rounded-xl sm:rounded-2xl p-5 sm:p-6 hover:border-[#A9ACAF]/30 hover:bg-[#1a1a1a] transition-all group relative overflow-hidden"
                   >
                     {/* Subtle top accent line */}
                     <div className="absolute top-0 left-0 right-0 h-[2px]" style={{background: course.color, opacity: 0.5}} />
@@ -1929,21 +1929,21 @@ export default function BudtenderEducation() {
                           Completed ✓
                         </span>
                       ) : (
-                        <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-[#5C6B5C]">
+                        <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-[#666666]">
                           {course.duration}
                         </span>
                       )}
                     </div>
-                    <h3 className="text-base sm:text-lg font-bold text-white mb-1 group-hover:text-[#c8a84b] transition-colors">
+                    <h3 className="text-base sm:text-lg font-bold text-white mb-1 group-hover:text-[#A9ACAF] transition-colors">
                       {course.title}
                     </h3>
-                    <p className="text-[#8B9A8B] text-xs sm:text-sm leading-relaxed">{course.subtitle}</p>
+                    <p className="text-[#A9ACAF] text-xs sm:text-sm leading-relaxed">{course.subtitle}</p>
                     <div className="flex items-center gap-2 mt-3 sm:mt-4">
-                      <div className="text-[10px] sm:text-xs text-[#5C6B5C]">
+                      <div className="text-[10px] sm:text-xs text-[#666666]">
                         {course.videoUrl ? (COURSE_QUIZZES[course.id] ? '📹 Video + Quiz' : '📹 Video') : (COURSE_QUIZZES[course.id] ? `${course.slides.length} slides + Quiz` : `${course.slides.length} slides`)}
                       </div>
                       <span className="text-[#3B4B3B]">·</span>
-                      <div className="text-[10px] sm:text-xs text-[#5C6B5C]">
+                      <div className="text-[10px] sm:text-xs text-[#666666]">
                         {COURSE_QUIZZES[course.id] ? 'Quiz included' : 'Quiz coming soon'}
                       </div>
                       <span className="text-[#3B4B3B]">·</span>
@@ -1955,7 +1955,7 @@ export default function BudtenderEducation() {
                     </div>
                     {/* Progress bar */}
                     {!isComplete && (
-                      <div className="w-full h-[2px] bg-[#0F2417] rounded-full mt-3 sm:mt-4">
+                      <div className="w-full h-[2px] bg-[#111111] rounded-full mt-3 sm:mt-4">
                         <div className="h-full rounded-full" style={{background: course.color, width: '0%'}} />
                       </div>
                     )}
@@ -1976,7 +1976,7 @@ export default function BudtenderEducation() {
                   {/* Rushing Bonus Card */}
                   <button
                     onClick={() => openCourse('rushing-bonus')}
-                    className="text-left bg-[#0F2417] border border-[#c8a84b]/12 rounded-xl sm:rounded-2xl p-5 sm:p-6 hover:border-[#c8a84b]/30 hover:bg-[#132D1B] transition-all group relative overflow-hidden"
+                    className="text-left bg-[#111111] border border-[#A9ACAF]/15 rounded-xl sm:rounded-2xl p-5 sm:p-6 hover:border-[#A9ACAF]/30 hover:bg-[#1a1a1a] transition-all group relative overflow-hidden"
                   >
                     <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#c8a84b] opacity-50" />
                     <div className="flex items-start justify-between mb-3 sm:mb-4">
@@ -1991,15 +1991,15 @@ export default function BudtenderEducation() {
                           Completed ✓
                         </span>
                       ) : (
-                        <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-[#5C6B5C]">3 min</span>
+                        <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-[#666666]">3 min</span>
                       )}
                     </div>
-                    <h3 className="text-base sm:text-lg font-bold text-white mb-1 group-hover:text-[#c8a84b] transition-colors">
+                    <h3 className="text-base sm:text-lg font-bold text-white mb-1 group-hover:text-[#A9ACAF] transition-colors">
                       Rushing Bonus
                     </h3>
-                    <p className="text-[#8B9A8B] text-xs sm:text-sm leading-relaxed">Tell us about yourself — earn your final 100 pts</p>
+                    <p className="text-[#A9ACAF] text-xs sm:text-sm leading-relaxed">Tell us about yourself — earn your final 100 pts</p>
                     <div className="flex items-center gap-2 mt-3 sm:mt-4">
-                      <div className="text-[10px] sm:text-xs text-[#5C6B5C]">📝 Survey</div>
+                      <div className="text-[10px] sm:text-xs text-[#666666]">📝 Survey</div>
                       <span className="text-[#3B4B3B]">·</span>
                       {rushingComplete ? (
                         <div className="text-[10px] sm:text-xs text-emerald-400 font-semibold">+100 pts earned</div>
@@ -2010,18 +2010,18 @@ export default function BudtenderEducation() {
                   </button>
 
                   {/* Hall of Fame Tracker */}
-                  <div className={`rounded-xl sm:rounded-2xl p-5 sm:p-6 relative overflow-hidden border ${allDone ? 'border-[#c8a84b]/40 bg-gradient-to-br from-[#c8a84b]/15 to-[#151515]' : 'border-[#c8a84b]/12 bg-[#0F2417]'}`}>
+                  <div className={`rounded-xl sm:rounded-2xl p-5 sm:p-6 relative overflow-hidden border ${allDone ? 'border-[#A9ACAF]/40 bg-gradient-to-br from-[#c8a84b]/15 to-[#151515]' : 'border-[#A9ACAF]/15 bg-[#111111]'}`}>
                     <div className="absolute top-0 left-0 right-0 h-[2px]" style={{background: allDone ? '#c8a84b' : '#555', opacity: allDone ? 1 : 0.5}} />
                     <div className="flex items-center gap-2 mb-3">
                       <span className="text-xl sm:text-2xl">🏆</span>
-                      <span className={`text-[9px] sm:text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded ${allDone ? 'text-[#c8a84b] bg-[#c8a84b]/15' : 'text-[#5C6B5C] bg-[#0F2417]'}`}>
+                      <span className={`text-[9px] sm:text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded ${allDone ? 'text-[#c8a84b] bg-[#c8a84b]/15' : 'text-[#666666] bg-[#111111]'}`}>
                         {allDone ? 'Unlocked' : 'Locked'}
                       </span>
                     </div>
                     <h3 className="text-base sm:text-lg font-bold text-white mb-1" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(1.2rem, 3vw, 1.5rem)', fontWeight: 700}}>
                       HALL OF FAME
                     </h3>
-                    <p className="text-[#8B9A8B] text-xs sm:text-sm mb-4">
+                    <p className="text-[#A9ACAF] text-xs sm:text-sm mb-4">
                       {allDone ? 'You made it! Maximum rewards unlocked.' : `Complete all ${COURSES.length} modules to earn the ${POINTS_ALL_COMPLETE_BONUS.toLocaleString()} pt bonus.`}
                     </p>
 
@@ -2031,10 +2031,10 @@ export default function BudtenderEducation() {
                         const done = completedCourses.has(c.id);
                         return (
                           <div key={c.id} className="flex items-center gap-2">
-                            <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] shrink-0 ${done ? 'bg-emerald-500 text-white' : 'border border-[#c8a84b]/25 text-transparent'}`}>
+                            <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] shrink-0 ${done ? 'bg-emerald-500 text-white' : 'border border-[#A9ACAF]/25 text-transparent'}`}>
                               {done ? '✓' : ''}
                             </div>
-                            <span className={`text-xs ${done ? 'text-[#8B9A8B] line-through' : 'text-[#8B9A8B]'}`}>{c.title}</span>
+                            <span className={`text-xs ${done ? 'text-[#A9ACAF] line-through' : 'text-[#A9ACAF]'}`}>{c.title}</span>
                             <span className={`text-[10px] ml-auto ${done ? 'text-emerald-400' : 'text-[#4A5A4A]'}`}>+{getCoursePoints(c.id)}</span>
                           </div>
                         );
@@ -2043,7 +2043,7 @@ export default function BudtenderEducation() {
 
                     {/* Progress bar + percentage */}
                     <div className="flex items-center gap-3">
-                      <div className="flex-1 h-2 bg-[#132D1B] rounded-full overflow-hidden">
+                      <div className="flex-1 h-2 bg-[#1a1a1a] rounded-full overflow-hidden">
                         <div
                           className="h-full rounded-full transition-all duration-700 ease-out"
                           style={{
@@ -2052,7 +2052,7 @@ export default function BudtenderEducation() {
                           }}
                         />
                       </div>
-                      <span className={`text-sm font-bold ${allDone ? 'text-[#c8a84b]' : 'text-[#8B9A8B]'}`} style={{fontFamily: 'Teko, sans-serif', fontSize: '1.1rem'}}>
+                      <span className={`text-sm font-bold ${allDone ? 'text-[#c8a84b]' : 'text-[#A9ACAF]'}`} style={{fontFamily: 'Teko, sans-serif', fontSize: '1.1rem'}}>
                         {completionPct}%
                       </span>
                     </div>
@@ -2069,16 +2069,16 @@ export default function BudtenderEducation() {
           </section>
 
           {/* ── Budtenders Only Section ───────────────────────────────────── */}
-          <section className="border-t border-[#c8a84b]/12 bg-[#081510]">
+          <section className="border-t border-[#A9ACAF]/15 bg-[#0a0a0a]">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
               <div className="text-center mb-8 sm:mb-12">
-                <div className="inline-block px-3 py-1 bg-[#c8a84b]/10 border border-[#c8a84b]/20 rounded-full text-[9px] sm:text-[10px] uppercase tracking-widest text-[#c8a84b] font-bold mb-4">
+                <div className="inline-block px-3 py-1 bg-[#A9ACAF]/10 border border-[#A9ACAF]/20 rounded-full text-[9px] sm:text-[10px] uppercase tracking-widest text-[#A9ACAF] font-bold mb-4">
                   Budtenders Only
                 </div>
                 <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-2 uppercase tracking-wider" style={{fontFamily: 'Teko, sans-serif'}}>
                   Exclusive Events & Competitions
                 </h2>
-                <p className="text-[#8B9A8B] text-xs sm:text-sm max-w-md mx-auto">
+                <p className="text-[#A9ACAF] text-xs sm:text-sm max-w-md mx-auto">
                   Perks reserved for the Highsman budtender network. Register for events, enter competitions, and win prizes.
                 </p>
               </div>
@@ -2094,24 +2094,24 @@ export default function BudtenderEducation() {
                   return (
                     <div
                       key={i}
-                      className="bg-[#0F2417] border border-[#c8a84b]/12 rounded-xl sm:rounded-2xl p-5 sm:p-6"
+                      className="bg-[#111111] border border-[#A9ACAF]/15 rounded-xl sm:rounded-2xl p-5 sm:p-6"
                     >
                       <div className="flex items-center justify-between mb-3">
-                        <span className={`text-[9px] sm:text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded ${tagColors[event.tag] || 'text-[#8B9A8B]'}`}>
+                        <span className={`text-[9px] sm:text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded ${tagColors[event.tag] || 'text-[#A9ACAF]'}`}>
                           {event.tag}
                         </span>
-                        <span className="text-[10px] sm:text-xs text-[#5C6B5C]">{event.date}</span>
+                        <span className="text-[10px] sm:text-xs text-[#666666]">{event.date}</span>
                       </div>
                       <h3 className="text-base sm:text-lg font-bold text-white mb-1">{event.title}</h3>
-                      <p className="text-[#8B9A8B] text-[10px] sm:text-xs mb-1">{event.location}</p>
-                      <p className="text-[#9CA9A0] text-xs sm:text-sm leading-relaxed mb-4">{event.description}</p>
+                      <p className="text-[#A9ACAF] text-[10px] sm:text-xs mb-1">{event.location}</p>
+                      <p className="text-[#888888] text-xs sm:text-sm leading-relaxed mb-4">{event.description}</p>
                       <button
                         onClick={() => registerEvent(i)}
                         disabled={isRegistered}
                         className={`w-full py-2.5 text-xs sm:text-sm font-semibold rounded-lg transition-colors ${
                           isRegistered
                             ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 cursor-default'
-                            : 'bg-[#132D1B] text-white hover:bg-[#132D1B] border border-[#c8a84b]/20'
+                            : 'bg-[#1a1a1a] text-white hover:bg-[#1a1a1a] border border-[#A9ACAF]/20'
                         }`}
                       >
                         {isRegistered ? 'Registered ✓' : 'Register Interest'}
@@ -2122,14 +2122,14 @@ export default function BudtenderEducation() {
               </div>
 
               {/* Monthly Prize Banner */}
-              <div className="mt-6 sm:mt-8 bg-[#0F2417] border border-[#c8a84b]/20 rounded-xl sm:rounded-2xl p-6 sm:p-8 text-center">
+              <div className="mt-6 sm:mt-8 bg-[#111111] border border-[#A9ACAF]/20 rounded-xl sm:rounded-2xl p-6 sm:p-8 text-center">
                 <div className="text-2xl sm:text-3xl mb-3">🏆</div>
                 <h3 className="text-lg sm:text-xl font-bold text-white mb-2">Monthly Sales Competition</h3>
-                <p className="text-[#9CA9A0] text-xs sm:text-sm max-w-lg mx-auto mb-4">
+                <p className="text-[#888888] text-xs sm:text-sm max-w-lg mx-auto mb-4">
                   Top-selling Highsman budtender each month wins <span className="text-[#c8a84b] font-bold">$500 cash</span> + a signed Ricky Williams jersey.
                   Track your sales and submit your numbers weekly.
                 </p>
-                <div className="text-[#8B9A8B] text-[10px] sm:text-xs">
+                <div className="text-[#A9ACAF] text-[10px] sm:text-xs">
                   Contact your Highsman rep or email <span className="text-[#c8a84b]">team@highsman.com</span> to submit sales numbers.
                 </div>
               </div>
