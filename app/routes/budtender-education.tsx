@@ -50,6 +50,25 @@ const RICKY_VIDEO_URL =
 const SCIENCE_VIDEO_URL =
   'https://cdn.shopify.com/videos/c/o/v/591d15c90b9c44d3a1b1a603e7a31e9f.mp4';
 
+// ── Points / Rewards System ─────────────────────────────────────────────────
+const POINTS_SIGNUP = 100;
+const POINTS_PER_COURSE = 200;
+const POINTS_ALL_COMPLETE_BONUS = 1000;
+const POINTS_PER_DOLLAR = 200; // 200 pts = $1
+
+function calculatePoints(completedCount: number, totalCourses: number): number {
+  let pts = POINTS_SIGNUP + completedCount * POINTS_PER_COURSE;
+  if (completedCount >= totalCourses) pts += POINTS_ALL_COMPLETE_BONUS;
+  return pts;
+}
+
+function pointsToDollars(pts: number): string {
+  return (pts / POINTS_PER_DOLLAR).toFixed(2);
+}
+
+// Max possible: 100 + 4×200 + 1000 = 1,900 pts  →  $9.50
+const MAX_POINTS = POINTS_SIGNUP + 4 * POINTS_PER_COURSE + POINTS_ALL_COMPLETE_BONUS;
+
 // ── Session Persistence ──────────────────────────────────────────────────────
 const SESSION_KEY = 'highsman_budtender_session';
 const SESSION_EXPIRY_DAYS = 60; // 2 months
@@ -550,6 +569,7 @@ export default function BudtenderEducation() {
   const [quizComplete, setQuizComplete] = useState(false);
   const [registeredEvents, setRegisteredEvents] = useState<Set<number>>(new Set());
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [pointsToast, setPointsToast] = useState<{pts: number; msg: string} | null>(null);
 
   const portalRef = useRef<HTMLDivElement>(null);
   const googleBtnRef = useRef<HTMLDivElement>(null);
@@ -771,7 +791,14 @@ export default function BudtenderEducation() {
       setQuizComplete(true);
       const passed = (quizScore + (quizSelected === questions[quizQ].correct ? 1 : 0)) >= Math.ceil(questions.length * 0.66);
       if (passed) {
-        setCompletedCourses(new Set([...completedCourses, courseQuizActive]));
+        const newCompleted = new Set([...completedCourses, courseQuizActive]);
+        setCompletedCourses(newCompleted);
+        // Points toast
+        const isAllDone = newCompleted.size >= COURSES.length;
+        const earnedPts = POINTS_PER_COURSE + (isAllDone ? POINTS_ALL_COMPLETE_BONUS : 0);
+        const bonusMsg = isAllDone ? ` + ${POINTS_ALL_COMPLETE_BONUS.toLocaleString()} completion bonus!` : '';
+        setPointsToast({pts: earnedPts, msg: `+${POINTS_PER_COURSE} pts earned${bonusMsg}`});
+        setTimeout(() => setPointsToast(null), 4000);
       }
     }
   }
@@ -1203,9 +1230,16 @@ export default function BudtenderEducation() {
             ) : (
               <button
                 onClick={() => {
-                  setCompletedCourses(prev => new Set([...prev, currentCourse.id]));
+                  const newCompleted = new Set([...completedCourses, currentCourse.id]);
+                  setCompletedCourses(newCompleted);
                   setActiveCourse(null);
                   setSlideIndex(0);
+                  // Points toast
+                  const isAllDone = newCompleted.size >= COURSES.length;
+                  const earnedPts = POINTS_PER_COURSE + (isAllDone ? POINTS_ALL_COMPLETE_BONUS : 0);
+                  const bonusMsg = isAllDone ? ` + ${POINTS_ALL_COMPLETE_BONUS.toLocaleString()} completion bonus!` : '';
+                  setPointsToast({pts: earnedPts, msg: `+${POINTS_PER_COURSE} pts earned${bonusMsg}`});
+                  setTimeout(() => setPointsToast(null), 4000);
                 }}
                 className="px-3 sm:px-5 py-2.5 text-xs sm:text-sm font-bold rounded-lg text-white transition-colors"
                 style={{background: currentCourse.color}}
@@ -1356,11 +1390,77 @@ export default function BudtenderEducation() {
                   <span className="text-[#c8a84b]">Highsman</span>{' '}
                   Expert
                 </h1>
-                <p className="text-[#aaa] text-sm sm:text-base md:text-lg leading-relaxed mb-10 max-w-xl">
-                  Master our products, perfect your pitch, and unlock exclusive
-                  budtender rewards. Complete all courses to earn your Highsman
-                  Certified status.
+                <p className="text-[#aaa] text-sm sm:text-base md:text-lg leading-relaxed mb-6 max-w-xl">
+                  Learn the lineup, earn points, and cash them in at the Highsman Budtender Store. Every course you complete puts real credit in your pocket.
                 </p>
+
+                {/* ── Points Banner ────────────────────────────────────── */}
+                {(() => {
+                  const pts = calculatePoints(completedCourses.size, COURSES.length);
+                  const dollars = pointsToDollars(pts);
+                  const allDone = completedCourses.size === COURSES.length;
+                  const nextPts = allDone ? 0 : POINTS_PER_COURSE;
+                  const bonusAvailable = !allDone && completedCourses.size === COURSES.length - 1;
+                  return (
+                    <div className="mb-8 sm:mb-10 bg-gradient-to-r from-[#c8a84b]/15 via-[#c8a84b]/8 to-transparent border border-[#c8a84b]/25 rounded-2xl p-5 sm:p-6 max-w-xl">
+                      <div className="flex items-start justify-between gap-4 mb-4">
+                        <div>
+                          <div className="text-[10px] uppercase tracking-widest text-[#c8a84b] font-bold mb-1">Your Rewards</div>
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-3xl sm:text-4xl font-black text-white">{pts.toLocaleString()}</span>
+                            <span className="text-sm text-[#888]">pts</span>
+                          </div>
+                          <div className="text-sm sm:text-base font-semibold text-[#c8a84b] mt-0.5">${dollars} store credit</div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="text-[9px] uppercase tracking-wider text-[#666] mb-1">Max Possible</div>
+                          <div className="text-lg font-bold text-[#555]">{MAX_POINTS.toLocaleString()}</div>
+                          <div className="text-[10px] text-[#555]">${pointsToDollars(MAX_POINTS)}</div>
+                        </div>
+                      </div>
+                      {/* Points progress bar */}
+                      <div className="w-full h-2.5 bg-white/8 rounded-full overflow-hidden mb-3">
+                        <div
+                          className="h-full rounded-full transition-all duration-700 ease-out"
+                          style={{
+                            width: `${(pts / MAX_POINTS) * 100}%`,
+                            background: 'linear-gradient(90deg, #c8a84b, #e0c66a)',
+                          }}
+                        />
+                      </div>
+                      {/* Next reward hint */}
+                      <div className="text-xs text-[#999]">
+                        {allDone ? (
+                          <span className="text-emerald-400 font-semibold">All courses complete — maximum rewards unlocked!</span>
+                        ) : bonusAvailable ? (
+                          <span>Finish the last course for <span className="text-[#c8a84b] font-semibold">+{POINTS_PER_COURSE} pts</span> plus a <span className="text-[#c8a84b] font-semibold">1,000 pt completion bonus!</span></span>
+                        ) : (
+                          <span>Complete the next course for <span className="text-[#c8a84b] font-semibold">+{nextPts} pts</span> — {COURSES.length - completedCourses.size} courses left</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* ── How It Works (collapsed row) ────────────────────── */}
+                <div className="flex flex-wrap gap-3 sm:gap-4 mb-8 sm:mb-10 max-w-xl">
+                  <div className="flex items-center gap-2 bg-white/5 border border-white/8 rounded-lg px-3 py-2">
+                    <span className="text-base">🎉</span>
+                    <span className="text-[10px] sm:text-xs text-[#ccc]"><strong className="text-white">+{POINTS_SIGNUP}</strong> pts for signing up</span>
+                  </div>
+                  <div className="flex items-center gap-2 bg-white/5 border border-white/8 rounded-lg px-3 py-2">
+                    <span className="text-base">📚</span>
+                    <span className="text-[10px] sm:text-xs text-[#ccc]"><strong className="text-white">+{POINTS_PER_COURSE}</strong> pts per course</span>
+                  </div>
+                  <div className="flex items-center gap-2 bg-white/5 border border-white/8 rounded-lg px-3 py-2">
+                    <span className="text-base">🏆</span>
+                    <span className="text-[10px] sm:text-xs text-[#ccc]"><strong className="text-white">+{POINTS_ALL_COMPLETE_BONUS.toLocaleString()}</strong> bonus for finishing all</span>
+                  </div>
+                  <div className="flex items-center gap-2 bg-[#c8a84b]/10 border border-[#c8a84b]/20 rounded-lg px-3 py-2">
+                    <span className="text-base">💰</span>
+                    <span className="text-[10px] sm:text-xs text-[#c8a84b]"><strong>{POINTS_PER_DOLLAR} pts</strong> = $1 store credit</span>
+                  </div>
+                </div>
 
                 {/* Stats row + Account */}
                 <div className="flex items-center gap-4 sm:gap-8">
@@ -1410,11 +1510,17 @@ export default function BudtenderEducation() {
                             <span className="text-[10px] uppercase tracking-wider text-[#666]">Progress</span>
                             <span className="text-[10px] text-[#999]">{completedCourses.size}/{COURSES.length}</span>
                           </div>
-                          <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                          <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden mb-2.5">
                             <div
                               className="h-full bg-[#c8a84b] rounded-full transition-all"
                               style={{width: `${(completedCourses.size / COURSES.length) * 100}%`}}
                             />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] uppercase tracking-wider text-[#666]">Rewards</span>
+                            <span className="text-[10px] font-bold text-[#c8a84b]">
+                              {calculatePoints(completedCourses.size, COURSES.length).toLocaleString()} pts · ${pointsToDollars(calculatePoints(completedCourses.size, COURSES.length))}
+                            </span>
                           </div>
                         </div>
                         <button
@@ -1482,6 +1588,12 @@ export default function BudtenderEducation() {
                       <div className="text-[10px] sm:text-xs text-[#555]">
                         {COURSE_QUIZZES[course.id] ? 'Quiz included' : 'Quiz coming soon'}
                       </div>
+                      <span className="text-[#333]">·</span>
+                      {isComplete ? (
+                        <div className="text-[10px] sm:text-xs text-emerald-400 font-semibold">+{POINTS_PER_COURSE} pts earned</div>
+                      ) : (
+                        <div className="text-[10px] sm:text-xs text-[#c8a84b] font-semibold">+{POINTS_PER_COURSE} pts</div>
+                      )}
                     </div>
                     {/* Progress bar */}
                     {!isComplete && (
@@ -1573,6 +1685,21 @@ export default function BudtenderEducation() {
               </p>
             </div>
           </footer>
+        </div>
+      )}
+
+      {/* ── Points Toast ──────────────────────────────────────────────── */}
+      {pointsToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] animate-bounce">
+          <div className="bg-[#c8a84b] text-black px-6 py-3 rounded-2xl shadow-2xl shadow-[#c8a84b]/30 flex items-center gap-3">
+            <span className="text-2xl">🎉</span>
+            <div>
+              <div className="font-black text-lg">{pointsToast.msg}</div>
+              <div className="text-xs font-semibold opacity-80">
+                ${pointsToDollars(pointsToast.pts)} added to your store credit
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
