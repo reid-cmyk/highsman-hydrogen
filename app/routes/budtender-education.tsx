@@ -1476,8 +1476,8 @@ export default function BudtenderEducation() {
 
               {/* ── Main heading ────────────────────────────────────── */}
               <h1 className="mb-4 text-center" style={{fontFamily: 'Teko, sans-serif', fontWeight: 700, lineHeight: 0.95}}>
-                <span className="block text-white" style={{fontSize: 'clamp(2.8rem, 8vw, 5rem)'}}>BECOME A CERTIFIED</span>
-                <span className="block text-[#c8a84b]" style={{fontSize: 'clamp(3.2rem, 9vw, 5.5rem)'}}>HIGHSMAN EXPERT</span>
+                <span className="block text-white" style={{fontSize: 'clamp(2.4rem, 7vw, 4.5rem)'}}>WELCOME TO HIGHSMAN</span>
+                <span className="block text-[#c8a84b]" style={{fontSize: 'clamp(3.2rem, 9vw, 5.5rem)'}}>BUDTENDER TRAINING CAMP</span>
               </h1>
               <p className="text-[#aaa] text-base sm:text-lg md:text-xl leading-relaxed mb-8 max-w-2xl mx-auto text-center">
                 Learn the lineup, earn points, cash them in at the Highsman Budtender Store. Every course you crush puts real credit in your pocket.
