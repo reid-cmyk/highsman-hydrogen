@@ -61,6 +61,8 @@ const RICKY_VIDEO_URL =
   'https://cdn.shopify.com/videos/c/o/v/7b8854ab03ef40ce8c27d83e4b35589e.mp4';
 const SCIENCE_VIDEO_URL =
   'https://cdn.shopify.com/videos/c/o/v/591d15c90b9c44d3a1b1a603e7a31e9f.mp4';
+const TRIPLE_THREAT_VIDEO_URL =
+  'https://cdn.shopify.com/videos/c/o/v/e73a4ecef2fb4f4f96a1792ee2911cb2.mp4';
 
 // ── Points / Rewards System ─────────────────────────────────────────────────
 const POINTS_SIGNUP = 200;
@@ -359,16 +361,18 @@ const COURSES: Course[] = [
     icon: '🔥',
     color: '#ea580c',
     audioSummary: '',
+    videoUrl: TRIPLE_THREAT_VIDEO_URL,
     slides: [
       {
         title: 'Welcome to Triple Threat',
         content:
-          'Triple Threat is the flagship pre-roll — 1.2 grams of Triple Infused goodness, ready to spark. This is the product that showcases the full Triple Infusion process at its best.',
+          'Watch the training video above, then review the key takeaways below. Triple Threat is the flagship pre-roll — 1.2 grams of Triple Infused goodness, ready to spark. This is the product that showcases the full Triple Infusion process at its best.',
         keyPoints: [
-          '1.2 grams per pre-roll',
-          'Full Triple Infusion process',
-          'Showcase product for the Highsman experience',
-          'Perfect for the "try before you commit" buyer',
+          'Watch the full video above before continuing',
+          '1.2 grams per pre-roll — 20% more than industry standard',
+          'Full Triple Infusion: THCA Diamonds + Live Resin + HTE',
+          'Built-in glass tip for unrestricted airflow',
+          'Premium indoor whole flower only — no trim, shake, or filler',
         ],
       },
       {
@@ -584,7 +588,110 @@ const COURSE_QUIZZES: Record<string, QuizQuestion[]> = {
       correct: 2,
     },
   ],
-  // The Products — quiz coming once content is finalized
+  'triple-threat': [
+    {
+      q: 'What is the specific weight of the Triple Threat pre-roll compared to the industry standard?',
+      options: [
+        '0.5 grams — half the standard size',
+        '0.75 grams — the mini pre-roll format',
+        '1.0 grams — matches the standard weight',
+        '1.2 grams — 20% more than the standard 1.0g',
+      ],
+      correct: 3,
+    },
+    {
+      q: 'Which three components make up the Triple Infusion process?',
+      options: [
+        'THCA Diamonds, CBN Isolate, and CBD Extract',
+        'THCA Diamonds, Live Resin, and HTE (High Terpene Extract)',
+        'Kief, Hash Oil, and Live Rosin',
+        'Delta-8, Distillate, and Terpene Spray',
+      ],
+      correct: 1,
+    },
+    {
+      q: 'How are the infusions integrated into the Triple Threat flower?',
+      options: [
+        'Applied to the outside using a spray coating method',
+        'Centrifuge-forced into the microstructure of the flower',
+        'Hand-rolled into the flower before curing',
+        'Mixed with shake and trim before pressing',
+      ],
+      correct: 1,
+    },
+    {
+      q: 'What is the primary benefit of the built-in glass tip?',
+      options: [
+        'It keeps the pre-roll from unraveling',
+        'It makes the pre-roll look more premium on the shelf',
+        'It filters out THC for a milder experience',
+        'Unrestricted airflow and a cooler, smoother pull',
+      ],
+      correct: 3,
+    },
+    {
+      q: 'What type of tip is built into the Triple Threat?',
+      options: [
+        'A rubber mouthpiece tip',
+        'A bamboo fiber filter',
+        'A built-in glass tip',
+        'A standard paper crutch',
+      ],
+      correct: 2,
+    },
+    {
+      q: 'What type of flower is used inside the Triple Threat?',
+      options: [
+        'Outdoor-grown shake and trim',
+        'Premium indoor whole flower only — no trim, shake, or filler',
+        'A proprietary blend of indoor and outdoor flower',
+        'CBD hemp flower infused with THC concentrate',
+      ],
+      correct: 1,
+    },
+    {
+      q: 'How does the Triple Threat achieve its smooth, hash-like burn?',
+      options: [
+        'By adding menthol compounds before rolling',
+        'A 50% decarb process that locks flavor into the microstructure',
+        'By curing significantly longer than standard methods',
+        'By removing all terpenes before the infusion step',
+      ],
+      correct: 1,
+    },
+    {
+      q: 'Where does the Triple Threat\'s natural flavor profile come from?',
+      options: [
+        'Added artificial flavoring in the wrap',
+        'The paper used during the rolling process',
+        'Terpenes forced into the microstructure alongside interior kief',
+        'The strain\'s surface-level genetics alone',
+      ],
+      correct: 2,
+    },
+    {
+      q: 'Why does the Triple Threat burn differently than a standard infused pre-roll?',
+      options: [
+        'It uses a slower-burning wrap',
+        'The THC content is lower, producing less harsh smoke',
+        'Concentrates are spun into the flower at high speed — not coated on the outside',
+        'It contains CBD that counteracts harshness',
+      ],
+      correct: 2,
+    },
+    {
+      q: 'How should a budtender open their Triple Threat pitch?',
+      options: [
+        '"Would you like to try our premium pre-roll today?"',
+        '"This is our most popular product — flying off shelves."',
+        '"1.2 grams of triple-infused flower — 20% more than standard at the same price."',
+        '"This has THCA Diamonds, Live Resin, and HTE — want to hear about each?"',
+      ],
+      correct: 2,
+    },
+  ],
+  // Hit Sticks — quiz coming once content is finalized
+  // Ground Game — quiz coming once content is finalized
 };
 
 const LETTERS = ['A', 'B', 'C', 'D'];
@@ -1833,7 +1940,7 @@ export default function BudtenderEducation() {
                     <p className="text-[#888] text-xs sm:text-sm leading-relaxed">{course.subtitle}</p>
                     <div className="flex items-center gap-2 mt-3 sm:mt-4">
                       <div className="text-[10px] sm:text-xs text-[#555]">
-                        {(course.id === 'meet-ricky' || course.id === 'meet-highsman') ? '📹 Video' : `${course.slides.length} slides`}
+                        {course.videoUrl ? (COURSE_QUIZZES[course.id] ? '📹 Video + Quiz' : '📹 Video') : (COURSE_QUIZZES[course.id] ? `${course.slides.length} slides + Quiz` : `${course.slides.length} slides`)}
                       </div>
                       <span className="text-[#333]">·</span>
                       <div className="text-[10px] sm:text-xs text-[#555]">
