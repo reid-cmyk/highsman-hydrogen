@@ -1752,111 +1752,6 @@ export default function BudtenderEducation() {
             />
           </div>
 
-          {/* ── Progression Tracker ─────────────────────────────────────── */}
-          {(() => {
-            const rookieDone = completedCourses.has('meet-ricky') && completedCourses.has('meet-highsman');
-            const startingDone = completedCourses.has('the-science') && completedCourses.has('triple-threat') && completedCourses.has('ground-game');
-            const franchiseDone = completedCourses.has('hit-sticks');
-            const hallOfFameDone = completedCourses.size >= COURSES.length;
-            const tiers = [
-              {
-                label: 'UNSIGNED',
-                img: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Budtender_Education_Unsigned_Image.svg?v=1775343989',
-                unlocked: true, // Always lit — starting state
-              },
-              {
-                label: 'ROOKIE',
-                img: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Budtender_Education_Rookie.svg?v=1775343989',
-                unlocked: rookieDone,
-              },
-              {
-                label: 'STARTING LINEUP',
-                img: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Budtender_Education_Starting_Lineup.svg?v=1775343990',
-                unlocked: startingDone,
-              },
-              {
-                label: 'FRANCHISE PLAYER',
-                img: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Budtender_Education_Franchise_Player.svg?v=1775343989',
-                unlocked: franchiseDone,
-              },
-              {
-                label: 'HALL OF FLAME',
-                img: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Budtender_Education_Hall_of_Flame.svg?v=1775343989',
-                unlocked: hallOfFameDone,
-              },
-            ];
-            return (
-              <div className="bg-black py-4 sm:py-6">
-                <div className="max-w-6xl mx-auto px-4 sm:px-6">
-                  <div className="grid grid-cols-5 gap-1 sm:gap-2 md:gap-3">
-                    {tiers.map((tier, i) => (
-                      <div key={i} className="relative group">
-                        <div
-                          className="relative overflow-hidden rounded-lg sm:rounded-xl transition-all duration-700"
-                          style={{
-                            filter: tier.unlocked ? 'none' : 'grayscale(100%)',
-                            opacity: tier.unlocked ? 1 : 0.3,
-                          }}
-                        >
-                          <img
-                            src={tier.img}
-                            alt={tier.label}
-                            className="w-full h-auto block"
-                          />
-                          {/* Gold glow when unlocked */}
-                          {tier.unlocked && (
-                            <div className="absolute inset-0 rounded-lg sm:rounded-xl" style={{boxShadow: 'inset 0 0 20px rgba(200,168,75,0.15)'}} />
-                          )}
-                          {/* Hall of Flame — user name overlay */}
-                          {i === 4 && hallOfFameDone && (
-                            <div className="absolute inset-x-0 bottom-[18%] sm:bottom-[20%] flex items-center justify-center pointer-events-none">
-                              <span
-                                className="text-[#c8a84b] text-center uppercase leading-none"
-                                style={{
-                                  fontFamily: 'Teko, sans-serif',
-                                  fontWeight: 700,
-                                  fontSize: 'clamp(0.45rem, 1.8vw, 1rem)',
-                                  letterSpacing: '0.05em',
-                                  textShadow: '0 1px 3px rgba(0,0,0,0.8)',
-                                }}
-                              >
-                                {userName}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        {/* Tier label */}
-                        <div
-                          className={`text-center mt-1 sm:mt-2 uppercase tracking-wider ${tier.unlocked ? 'text-white' : 'text-[#444]'}`}
-                          style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(0.5rem, 1.5vw, 0.8rem)', fontWeight: tier.unlocked ? 600 : 400}}
-                        >
-                          {tier.label}
-                          {tier.unlocked && i > 0 && <span className="ml-1 text-[#c8a84b]">✓</span>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {/* Connecting progress line */}
-                  <div className="mt-2 sm:mt-3 mx-[10%] h-[2px] bg-[#222] rounded-full overflow-hidden relative">
-                    <div
-                      className="h-full rounded-full transition-all duration-1000 ease-out"
-                      style={{
-                        width: `${(() => {
-                          if (hallOfFameDone) return 100;
-                          if (franchiseDone) return 80;
-                          if (startingDone) return 60;
-                          if (rookieDone) return 40;
-                          return 10;
-                        })()}%`,
-                        background: 'linear-gradient(90deg, #c8a84b, #e0c66a)',
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-
           {/* ── Hero ──────────────────────────────────────────────────────── */}
           <section className="relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-[#c8a84b]/8 via-transparent to-[#c8a84b]/3" />
@@ -1925,6 +1820,105 @@ export default function BudtenderEducation() {
               <p className="text-[#A9ACAF] text-base sm:text-lg md:text-xl leading-relaxed mb-8 max-w-2xl mx-auto text-center">
                 Work your way from <span className="text-white font-semibold">Unsigned</span> to the <span className="text-white font-semibold">Hall of Flame</span>, earning credits with every module you complete. Finish the full program and walk away with <span className="text-[#c8a84b] font-bold">$50 in store credit</span> at the Highsman Budtender Store.
               </p>
+
+              {/* ── Progression Tracker ─────────────────────────────── */}
+              {(() => {
+                const rookieDone = completedCourses.has('meet-ricky') && completedCourses.has('meet-highsman');
+                const startingDone = completedCourses.has('the-science') && completedCourses.has('triple-threat') && completedCourses.has('ground-game');
+                const franchiseDone = completedCourses.has('hit-sticks');
+                const hallOfFlameDone = completedCourses.size >= COURSES.length;
+                const tiers = [
+                  {
+                    label: 'UNSIGNED',
+                    img: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Budtender_Education_Unsigned_Image.svg?v=1775343989',
+                    unlocked: true,
+                  },
+                  {
+                    label: 'ROOKIE',
+                    img: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Budtender_Education_Rookie.svg?v=1775343989',
+                    unlocked: rookieDone,
+                  },
+                  {
+                    label: 'STARTING LINEUP',
+                    img: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Budtender_Education_Starting_Lineup.svg?v=1775343990',
+                    unlocked: startingDone,
+                  },
+                  {
+                    label: 'FRANCHISE PLAYER',
+                    img: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Budtender_Education_Franchise_Player.svg?v=1775343989',
+                    unlocked: franchiseDone,
+                  },
+                  {
+                    label: 'HALL OF FLAME',
+                    img: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Budtender_Education_Hall_of_Flame.svg?v=1775343989',
+                    unlocked: hallOfFlameDone,
+                  },
+                ];
+                return (
+                  <div className="mb-8">
+                    <div className="grid grid-cols-5 gap-1 sm:gap-2 md:gap-3">
+                      {tiers.map((tier, i) => (
+                        <div key={i} className="relative group">
+                          <div
+                            className="relative overflow-hidden rounded-lg sm:rounded-xl transition-all duration-700"
+                            style={{
+                              filter: tier.unlocked ? 'none' : 'grayscale(100%)',
+                              opacity: tier.unlocked ? 1 : 0.3,
+                            }}
+                          >
+                            <img
+                              src={tier.img}
+                              alt={tier.label}
+                              className="w-full h-auto block"
+                            />
+                            {tier.unlocked && (
+                              <div className="absolute inset-0 rounded-lg sm:rounded-xl" style={{boxShadow: 'inset 0 0 20px rgba(200,168,75,0.15)'}} />
+                            )}
+                            {i === 4 && hallOfFlameDone && (
+                              <div className="absolute inset-x-0 bottom-[18%] sm:bottom-[20%] flex items-center justify-center pointer-events-none">
+                                <span
+                                  className="text-[#c8a84b] text-center uppercase leading-none"
+                                  style={{
+                                    fontFamily: 'Teko, sans-serif',
+                                    fontWeight: 700,
+                                    fontSize: 'clamp(0.45rem, 1.8vw, 1rem)',
+                                    letterSpacing: '0.05em',
+                                    textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                                  }}
+                                >
+                                  {userName}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          <div
+                            className={`text-center mt-1 sm:mt-2 uppercase tracking-wider ${tier.unlocked ? 'text-white' : 'text-[#444]'}`}
+                            style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(0.5rem, 1.5vw, 0.8rem)', fontWeight: tier.unlocked ? 600 : 400}}
+                          >
+                            {tier.label}
+                            {tier.unlocked && i > 0 && <span className="ml-1 text-[#c8a84b]">✓</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 sm:mt-3 mx-[10%] h-[2px] bg-[#222] rounded-full overflow-hidden relative">
+                      <div
+                        className="h-full rounded-full transition-all duration-1000 ease-out"
+                        style={{
+                          width: `${(() => {
+                            if (hallOfFlameDone) return 100;
+                            if (franchiseDone) return 80;
+                            if (startingDone) return 60;
+                            if (rookieDone) return 40;
+                            return 10;
+                          })()}%`,
+                          background: 'linear-gradient(90deg, #c8a84b, #e0c66a)',
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* ── Points Hero Card ────────────────────────────────── */}
               {(() => {
