@@ -513,9 +513,11 @@ export default function BudtenderEducation() {
   const [quizScore, setQuizScore] = useState(0);
   const [quizComplete, setQuizComplete] = useState(false);
   const [registeredEvents, setRegisteredEvents] = useState<Set<number>>(new Set());
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   const portalRef = useRef<HTMLDivElement>(null);
   const googleBtnRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   // ── Auto-login: check localStorage on mount ─────────────────────────────
   useEffect(() => {
@@ -566,6 +568,18 @@ export default function BudtenderEducation() {
       saveSession({...session, completedCourses: [...completedCourses]});
     }
   }, [completedCourses, screen]);
+
+  // ── Close user menu on outside click ────────────────────────────────────
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [userMenuOpen]);
 
   // ── Login with saved session (email only) ───────────────────────────────
   function handleLogin(e: React.FormEvent) {
@@ -1027,6 +1041,7 @@ export default function BudtenderEducation() {
             </div>
           </div>
           <div className="flex items-center gap-3 sm:gap-4">
+            {/* Progress */}
             <span className="text-[10px] sm:text-xs text-[#999] hidden sm:inline">
               {completedCourses.size}/{COURSES.length} completed
             </span>
@@ -1036,12 +1051,48 @@ export default function BudtenderEducation() {
                 style={{width: `${(completedCourses.size / COURSES.length) * 100}%`}}
               />
             </div>
-            <button
-              onClick={handleLogout}
-              className="text-[10px] sm:text-xs text-[#666] hover:text-white transition-colors px-2 py-1 rounded border border-white/10 hover:border-white/20"
-            >
-              Sign Out
-            </button>
+
+            {/* User avatar / dropdown */}
+            <div className="relative" ref={userMenuRef}>
+              <button
+                onClick={() => setUserMenuOpen(!userMenuOpen)}
+                className="w-8 h-8 rounded-full bg-[#c8a84b] flex items-center justify-center text-black text-xs font-bold hover:bg-[#d4b65c] transition-colors"
+              >
+                {userName ? userName.charAt(0).toUpperCase() : 'U'}
+              </button>
+
+              {userMenuOpen && (
+                <div className="absolute right-0 top-full mt-2 w-56 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
+                  {/* User info */}
+                  <div className="px-4 py-3 border-b border-white/8">
+                    <div className="text-sm font-semibold text-white">{userName}</div>
+                    {userEmail && (
+                      <div className="text-[11px] text-[#888] mt-0.5 truncate">{userEmail}</div>
+                    )}
+                  </div>
+                  {/* Progress */}
+                  <div className="px-4 py-3 border-b border-white/8">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] uppercase tracking-wider text-[#666]">Progress</span>
+                      <span className="text-[10px] text-[#999]">{completedCourses.size}/{COURSES.length}</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[#c8a84b] rounded-full transition-all"
+                        style={{width: `${(completedCourses.size / COURSES.length) * 100}%`}}
+                      />
+                    </div>
+                  </div>
+                  {/* Sign out */}
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-left px-4 py-3 text-sm text-[#999] hover:text-white hover:bg-white/5 transition-colors"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
