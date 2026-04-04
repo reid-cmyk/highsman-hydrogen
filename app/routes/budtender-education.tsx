@@ -1411,7 +1411,7 @@ export default function BudtenderEducation() {
               src="/budtender-training-camp-banner.png"
               alt="Highsman Budtender Training Camp"
               className="w-full block"
-              style={{height: 'clamp(220px, 32vw, 420px)', objectFit: 'cover', objectPosition: 'center 35%'}}
+              style={{height: 'clamp(220px, 32vw, 450px)', objectFit: 'cover', objectPosition: 'center 45%'}}
             />
           </div>
 
