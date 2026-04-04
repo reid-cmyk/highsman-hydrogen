@@ -1746,7 +1746,7 @@ export default function BudtenderEducation() {
           {/* ── Hero Banner ──────────────────────────────────────────────── */}
           <div className="w-full">
             <img
-              src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Budtender_Trainnig_Camp_Banner_Num_2.png?v=1775336704"
+              src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Budtender_Training_Camp_Hero_Banner.png?v=1775339073"
               alt="Highsman Budtender Training Camp"
               className="w-full h-auto block"
             />
