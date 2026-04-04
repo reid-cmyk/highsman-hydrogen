@@ -1405,6 +1405,16 @@ export default function BudtenderEducation() {
       ) : (
         /* ── Main Portal View ──────────────────────────────────────────────── */
         <div>
+          {/* ── Hero Banner Image ─────────────────────────────────────────── */}
+          <div className="w-full">
+            <img
+              src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Budtender_Training_Camp_banner.png?v=1775333344"
+              alt="Highsman Budtender Training Camp"
+              className="w-full h-auto block"
+              style={{maxHeight: '500px', objectFit: 'cover', objectPosition: 'center'}}
+            />
+          </div>
+
           {/* ── Hero ──────────────────────────────────────────────────────── */}
           <section className="relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-[#c8a84b]/8 via-transparent to-[#c8a84b]/3" />
@@ -1466,11 +1476,11 @@ export default function BudtenderEducation() {
                 </div>
 
               {/* ── Main heading ────────────────────────────────────── */}
-              <h1 className="mb-4" style={{fontFamily: 'Teko, sans-serif', fontWeight: 700, lineHeight: 0.95}}>
+              <h1 className="mb-4 text-center" style={{fontFamily: 'Teko, sans-serif', fontWeight: 700, lineHeight: 0.95}}>
                 <span className="block text-white" style={{fontSize: 'clamp(2.8rem, 8vw, 5rem)'}}>BECOME A CERTIFIED</span>
                 <span className="block text-[#c8a84b]" style={{fontSize: 'clamp(3.2rem, 9vw, 5.5rem)'}}>HIGHSMAN EXPERT</span>
               </h1>
-              <p className="text-[#aaa] text-base sm:text-lg md:text-xl leading-relaxed mb-8 max-w-2xl">
+              <p className="text-[#aaa] text-base sm:text-lg md:text-xl leading-relaxed mb-8 max-w-2xl mx-auto text-center">
                 Learn the lineup, earn points, cash them in at the Highsman Budtender Store. Every course you crush puts real credit in your pocket.
               </p>
 
