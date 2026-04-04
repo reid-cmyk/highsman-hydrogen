@@ -8,6 +8,18 @@ export const meta: MetaFunction = () => {
   ];
 };
 
+// ── Load Teko font ──────────────────────────────────────────────────────────
+function useTekoFont() {
+  useEffect(() => {
+    if (document.getElementById('teko-font-link')) return;
+    const link = document.createElement('link');
+    link.id = 'teko-font-link';
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=Teko:wght@300;400;500;600;700&display=swap';
+    document.head.appendChild(link);
+  }, []);
+}
+
 // ── Hide Shopify theme chrome (header + footer) ─────────────────────────────
 function useHideThemeChrome() {
   useEffect(() => {
@@ -52,13 +64,27 @@ const SCIENCE_VIDEO_URL =
 
 // ── Points / Rewards System ─────────────────────────────────────────────────
 const POINTS_SIGNUP = 100;
-const POINTS_PER_COURSE = 200;
 const POINTS_ALL_COMPLETE_BONUS = 1000;
-const POINTS_PER_DOLLAR = 200; // 200 pts = $1
+const POINTS_PER_DOLLAR = 100; // 100 pts = $1
 
-function calculatePoints(completedCount: number, totalCourses: number): number {
-  let pts = POINTS_SIGNUP + completedCount * POINTS_PER_COURSE;
-  if (completedCount >= totalCourses) pts += POINTS_ALL_COMPLETE_BONUS;
+// Tiered: first two courses = 200 pts, next two = 300 pts
+const COURSE_POINTS: Record<string, number> = {
+  'meet-ricky': 200,
+  'meet-highsman': 200,
+  'the-science': 300,
+  'the-products': 300,
+};
+
+function getCoursePoints(courseId: string): number {
+  return COURSE_POINTS[courseId] || 200;
+}
+
+function calculatePoints(completedIds: Set<string>, totalCourses: number): number {
+  let pts = POINTS_SIGNUP;
+  for (const id of completedIds) {
+    pts += getCoursePoints(id);
+  }
+  if (completedIds.size >= totalCourses) pts += POINTS_ALL_COMPLETE_BONUS;
   return pts;
 }
 
@@ -66,8 +92,8 @@ function pointsToDollars(pts: number): string {
   return (pts / POINTS_PER_DOLLAR).toFixed(2);
 }
 
-// Max possible: 100 + 4×200 + 1000 = 1,900 pts  →  $9.50
-const MAX_POINTS = POINTS_SIGNUP + 4 * POINTS_PER_COURSE + POINTS_ALL_COMPLETE_BONUS;
+// Max: 100 + 200+200+300+300 + 1000 = 2,100 pts → $21.00
+const MAX_POINTS = POINTS_SIGNUP + 200 + 200 + 300 + 300 + POINTS_ALL_COMPLETE_BONUS;
 
 // ── Session Persistence ──────────────────────────────────────────────────────
 const SESSION_KEY = 'highsman_budtender_session';
@@ -527,6 +553,7 @@ type GateMode = 'login' | 'register';
 export default function BudtenderEducation() {
   // Hide site header & footer so this page feels like its own app
   useHideThemeChrome();
+  useTekoFont();
 
   // Suppress Klaviyo popup
   useEffect(() => {
@@ -794,10 +821,11 @@ export default function BudtenderEducation() {
         const newCompleted = new Set([...completedCourses, courseQuizActive]);
         setCompletedCourses(newCompleted);
         // Points toast
+        const coursePts = getCoursePoints(courseQuizActive);
         const isAllDone = newCompleted.size >= COURSES.length;
-        const earnedPts = POINTS_PER_COURSE + (isAllDone ? POINTS_ALL_COMPLETE_BONUS : 0);
+        const earnedPts = coursePts + (isAllDone ? POINTS_ALL_COMPLETE_BONUS : 0);
         const bonusMsg = isAllDone ? ` + ${POINTS_ALL_COMPLETE_BONUS.toLocaleString()} completion bonus!` : '';
-        setPointsToast({pts: earnedPts, msg: `+${POINTS_PER_COURSE} pts earned${bonusMsg}`});
+        setPointsToast({pts: earnedPts, msg: `+${coursePts} pts earned${bonusMsg}`});
         setTimeout(() => setPointsToast(null), 4000);
       }
     }
@@ -1235,10 +1263,11 @@ export default function BudtenderEducation() {
                   setActiveCourse(null);
                   setSlideIndex(0);
                   // Points toast
+                  const coursePts = getCoursePoints(currentCourse.id);
                   const isAllDone = newCompleted.size >= COURSES.length;
-                  const earnedPts = POINTS_PER_COURSE + (isAllDone ? POINTS_ALL_COMPLETE_BONUS : 0);
+                  const earnedPts = coursePts + (isAllDone ? POINTS_ALL_COMPLETE_BONUS : 0);
                   const bonusMsg = isAllDone ? ` + ${POINTS_ALL_COMPLETE_BONUS.toLocaleString()} completion bonus!` : '';
-                  setPointsToast({pts: earnedPts, msg: `+${POINTS_PER_COURSE} pts earned${bonusMsg}`});
+                  setPointsToast({pts: earnedPts, msg: `+${coursePts} pts earned${bonusMsg}`});
                   setTimeout(() => setPointsToast(null), 4000);
                 }}
                 className="px-3 sm:px-5 py-2.5 text-xs sm:text-sm font-bold rounded-lg text-white transition-colors"
@@ -1380,152 +1409,54 @@ export default function BudtenderEducation() {
           <section className="relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-[#c8a84b]/8 via-transparent to-[#c8a84b]/3" />
             <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-[#c8a84b]/5 to-transparent hidden md:block" />
-            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12 md:py-20 relative">
-              <div className="max-w-2xl">
-                <div className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-[#c8a84b] font-semibold mb-4">
+            <div className="max-w-6xl mx-auto px-5 sm:px-6 pt-8 pb-6 sm:pt-12 sm:pb-8 md:pt-16 md:pb-10 relative">
+
+              {/* ── Account button (top right) ──────────────────────── */}
+              <div className="flex justify-between items-start mb-6 sm:mb-8">
+                <div className="text-xs sm:text-sm uppercase tracking-[0.2em] text-[#c8a84b] font-semibold" style={{fontFamily: 'Teko, sans-serif', fontSize: '0.95rem', letterSpacing: '0.25em'}}>
                   Welcome back, {userName}
                 </div>
-                <h1 className="text-2xl sm:text-3xl md:text-5xl font-bold text-white leading-tight mb-5">
-                  Become a Certified{' '}
-                  <span className="text-[#c8a84b]">Highsman</span>{' '}
-                  Expert
-                </h1>
-                <p className="text-[#aaa] text-sm sm:text-base md:text-lg leading-relaxed mb-6 max-w-xl">
-                  Learn the lineup, earn points, and cash them in at the Highsman Budtender Store. Every course you complete puts real credit in your pocket.
-                </p>
-
-                {/* ── Points Banner ────────────────────────────────────── */}
-                {(() => {
-                  const pts = calculatePoints(completedCourses.size, COURSES.length);
-                  const dollars = pointsToDollars(pts);
-                  const allDone = completedCourses.size === COURSES.length;
-                  const nextPts = allDone ? 0 : POINTS_PER_COURSE;
-                  const bonusAvailable = !allDone && completedCourses.size === COURSES.length - 1;
-                  return (
-                    <div className="mb-8 sm:mb-10 bg-gradient-to-r from-[#c8a84b]/15 via-[#c8a84b]/8 to-transparent border border-[#c8a84b]/25 rounded-2xl p-5 sm:p-6 max-w-xl">
-                      <div className="flex items-start justify-between gap-4 mb-4">
-                        <div>
-                          <div className="text-[10px] uppercase tracking-widest text-[#c8a84b] font-bold mb-1">Your Rewards</div>
-                          <div className="flex items-baseline gap-2">
-                            <span className="text-3xl sm:text-4xl font-black text-white">{pts.toLocaleString()}</span>
-                            <span className="text-sm text-[#888]">pts</span>
-                          </div>
-                          <div className="text-sm sm:text-base font-semibold text-[#c8a84b] mt-0.5">${dollars} store credit</div>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <div className="text-[9px] uppercase tracking-wider text-[#666] mb-1">Max Possible</div>
-                          <div className="text-lg font-bold text-[#555]">{MAX_POINTS.toLocaleString()}</div>
-                          <div className="text-[10px] text-[#555]">${pointsToDollars(MAX_POINTS)}</div>
-                        </div>
-                      </div>
-                      {/* Points progress bar */}
-                      <div className="w-full h-2.5 bg-white/8 rounded-full overflow-hidden mb-3">
-                        <div
-                          className="h-full rounded-full transition-all duration-700 ease-out"
-                          style={{
-                            width: `${(pts / MAX_POINTS) * 100}%`,
-                            background: 'linear-gradient(90deg, #c8a84b, #e0c66a)',
-                          }}
-                        />
-                      </div>
-                      {/* Next reward hint */}
-                      <div className="text-xs text-[#999]">
-                        {allDone ? (
-                          <span className="text-emerald-400 font-semibold">All courses complete — maximum rewards unlocked!</span>
-                        ) : bonusAvailable ? (
-                          <span>Finish the last course for <span className="text-[#c8a84b] font-semibold">+{POINTS_PER_COURSE} pts</span> plus a <span className="text-[#c8a84b] font-semibold">1,000 pt completion bonus!</span></span>
-                        ) : (
-                          <span>Complete the next course for <span className="text-[#c8a84b] font-semibold">+{nextPts} pts</span> — {COURSES.length - completedCourses.size} courses left</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* ── How It Works (collapsed row) ────────────────────── */}
-                <div className="flex flex-wrap gap-3 sm:gap-4 mb-8 sm:mb-10 max-w-xl">
-                  <div className="flex items-center gap-2 bg-white/5 border border-white/8 rounded-lg px-3 py-2">
-                    <span className="text-base">🎉</span>
-                    <span className="text-[10px] sm:text-xs text-[#ccc]"><strong className="text-white">+{POINTS_SIGNUP}</strong> pts for signing up</span>
-                  </div>
-                  <div className="flex items-center gap-2 bg-white/5 border border-white/8 rounded-lg px-3 py-2">
-                    <span className="text-base">📚</span>
-                    <span className="text-[10px] sm:text-xs text-[#ccc]"><strong className="text-white">+{POINTS_PER_COURSE}</strong> pts per course</span>
-                  </div>
-                  <div className="flex items-center gap-2 bg-white/5 border border-white/8 rounded-lg px-3 py-2">
-                    <span className="text-base">🏆</span>
-                    <span className="text-[10px] sm:text-xs text-[#ccc]"><strong className="text-white">+{POINTS_ALL_COMPLETE_BONUS.toLocaleString()}</strong> bonus for finishing all</span>
-                  </div>
-                  <div className="flex items-center gap-2 bg-[#c8a84b]/10 border border-[#c8a84b]/20 rounded-lg px-3 py-2">
-                    <span className="text-base">💰</span>
-                    <span className="text-[10px] sm:text-xs text-[#c8a84b]"><strong>{POINTS_PER_DOLLAR} pts</strong> = $1 store credit</span>
-                  </div>
-                </div>
-
-                {/* Stats row + Account */}
-                <div className="flex items-center gap-4 sm:gap-8">
-                  <div>
-                    <div className="text-xl sm:text-2xl font-bold text-white">{COURSES.length}</div>
-                    <div className="text-[9px] sm:text-[10px] uppercase tracking-wider text-[#777] mt-0.5">Courses</div>
-                  </div>
-                  <div className="w-px h-8 sm:h-10 bg-white/10" />
-                  <div>
-                    <div className="text-xl sm:text-2xl font-bold text-white">{completedCourses.size}</div>
-                    <div className="text-[9px] sm:text-[10px] uppercase tracking-wider text-[#777] mt-0.5">Completed</div>
-                  </div>
-                  <div className="w-px h-8 sm:h-10 bg-white/10" />
-                  <div>
-                    <div className="text-xl sm:text-2xl font-bold text-[#c8a84b]">
-                      {completedCourses.size === COURSES.length ? '✓' : '—'}
-                    </div>
-                    <div className="text-[9px] sm:text-[10px] uppercase tracking-wider text-[#777] mt-0.5">Certified</div>
-                  </div>
-                  <div className="w-px h-8 sm:h-10 bg-white/10" />
                   {/* Account dropdown */}
                   <div className="relative" ref={userMenuRef}>
                     <button
                       onClick={() => setUserMenuOpen(!userMenuOpen)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 hover:border-white/25 transition-all cursor-pointer"
+                      className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 hover:border-white/25 transition-all cursor-pointer"
                     >
-                      <div className="w-8 h-8 rounded-full bg-[#c8a84b] flex items-center justify-center text-black text-xs font-bold shrink-0">
+                      <div className="w-9 h-9 rounded-full bg-[#c8a84b] flex items-center justify-center text-black font-bold shrink-0" style={{fontFamily: 'Teko, sans-serif', fontSize: '1.1rem'}}>
                         {userName ? userName.charAt(0).toUpperCase() : 'U'}
                       </div>
-                      <div className="hidden sm:block text-left">
-                        <div className="text-xs font-semibold text-white leading-tight">{userName}</div>
-                        <div className="text-[9px] uppercase tracking-wider text-[#777]">Account</div>
-                      </div>
-                      <svg className="w-3.5 h-3.5 text-[#888] ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      <svg className="w-3.5 h-3.5 text-[#888]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                     </button>
 
                     {userMenuOpen && (
-                      <div className="absolute left-0 sm:left-auto sm:right-0 bottom-full mb-2 w-56 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
-                        <div className="px-4 py-3 border-b border-white/8">
-                          <div className="text-sm font-semibold text-white">{userName}</div>
+                      <div className="absolute right-0 bottom-full mb-2 w-64 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
+                        <div className="px-5 py-4 border-b border-white/8">
+                          <div className="text-base font-semibold text-white" style={{fontFamily: 'Teko, sans-serif', fontSize: '1.25rem'}}>{userName}</div>
                           {userEmail && (
-                            <div className="text-[11px] text-[#888] mt-0.5 truncate">{userEmail}</div>
+                            <div className="text-xs text-[#888] mt-0.5 truncate">{userEmail}</div>
                           )}
                         </div>
-                        <div className="px-4 py-3 border-b border-white/8">
-                          <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-[10px] uppercase tracking-wider text-[#666]">Progress</span>
-                            <span className="text-[10px] text-[#999]">{completedCourses.size}/{COURSES.length}</span>
+                        <div className="px-5 py-4 border-b border-white/8">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs uppercase tracking-wider text-[#666]" style={{fontFamily: 'Teko, sans-serif'}}>Progress</span>
+                            <span className="text-xs text-[#999]">{completedCourses.size}/{COURSES.length}</span>
                           </div>
-                          <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden mb-2.5">
+                          <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden mb-3">
                             <div
                               className="h-full bg-[#c8a84b] rounded-full transition-all"
                               style={{width: `${(completedCourses.size / COURSES.length) * 100}%`}}
                             />
                           </div>
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] uppercase tracking-wider text-[#666]">Rewards</span>
-                            <span className="text-[10px] font-bold text-[#c8a84b]">
-                              {calculatePoints(completedCourses.size, COURSES.length).toLocaleString()} pts · ${pointsToDollars(calculatePoints(completedCourses.size, COURSES.length))}
+                            <span className="text-xs uppercase tracking-wider text-[#666]" style={{fontFamily: 'Teko, sans-serif'}}>Rewards</span>
+                            <span className="text-sm font-bold text-[#c8a84b]" style={{fontFamily: 'Teko, sans-serif', fontSize: '1rem'}}>
+                              {calculatePoints(completedCourses, COURSES.length).toLocaleString()} pts · ${pointsToDollars(calculatePoints(completedCourses, COURSES.length))}
                             </span>
                           </div>
                         </div>
                         <button
                           onClick={handleLogout}
-                          className="w-full text-left px-4 py-3 text-sm text-[#999] hover:text-white hover:bg-white/5 transition-colors"
+                          className="w-full text-left px-5 py-3.5 text-sm text-[#999] hover:text-white hover:bg-white/5 transition-colors"
                         >
                           Sign Out
                         </button>
@@ -1533,7 +1464,87 @@ export default function BudtenderEducation() {
                     )}
                   </div>
                 </div>
+
+              {/* ── Main heading ────────────────────────────────────── */}
+              <h1 className="mb-4" style={{fontFamily: 'Teko, sans-serif', fontWeight: 700, lineHeight: 0.95}}>
+                <span className="block text-white" style={{fontSize: 'clamp(2.8rem, 8vw, 5rem)'}}>BECOME A CERTIFIED</span>
+                <span className="block text-[#c8a84b]" style={{fontSize: 'clamp(3.2rem, 9vw, 5.5rem)'}}>HIGHSMAN EXPERT</span>
+              </h1>
+              <p className="text-[#aaa] text-base sm:text-lg md:text-xl leading-relaxed mb-8 max-w-2xl">
+                Learn the lineup, earn points, cash them in at the Highsman Budtender Store. Every course you crush puts real credit in your pocket.
+              </p>
+
+              {/* ── Points Hero Card ────────────────────────────────── */}
+              {(() => {
+                const pts = calculatePoints(completedCourses, COURSES.length);
+                const dollars = pointsToDollars(pts);
+                const allDone = completedCourses.size === COURSES.length;
+                // Find next uncompleted course
+                const nextCourse = COURSES.find(c => !completedCourses.has(c.id));
+                const nextCoursePts = nextCourse ? getCoursePoints(nextCourse.id) : 0;
+                const bonusAvailable = !allDone && completedCourses.size === COURSES.length - 1;
+                return (
+                  <div className="mb-8 rounded-2xl sm:rounded-3xl overflow-hidden" style={{background: 'linear-gradient(135deg, rgba(200,168,75,0.15) 0%, rgba(200,168,75,0.04) 100%)'}}>
+                    <div className="border border-[#c8a84b]/20 rounded-2xl sm:rounded-3xl p-6 sm:p-8">
+                      {/* Top row: pts + dollars */}
+                      <div className="flex items-end justify-between gap-4 mb-5">
+                        <div>
+                          <div className="uppercase tracking-[0.2em] text-[#c8a84b] mb-1" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(0.75rem, 2vw, 0.875rem)', fontWeight: 500}}>Your Rewards</div>
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-white" style={{fontFamily: 'Teko, sans-serif', fontWeight: 700, fontSize: 'clamp(3rem, 10vw, 4.5rem)', lineHeight: 1}}>{pts.toLocaleString()}</span>
+                            <span className="uppercase tracking-wider text-[#888]" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(1rem, 3vw, 1.5rem)', fontWeight: 400}}>PTS</span>
+                          </div>
+                          <div className="text-[#c8a84b] mt-1" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(1.2rem, 4vw, 1.75rem)', fontWeight: 600}}>${dollars} store credit</div>
+                        </div>
+                        <div className="text-right shrink-0 hidden sm:block">
+                          <div className="uppercase tracking-wider text-[#555]" style={{fontFamily: 'Teko, sans-serif', fontSize: '0.75rem'}}>Max Possible</div>
+                          <div className="text-[#444]" style={{fontFamily: 'Teko, sans-serif', fontSize: '2rem', fontWeight: 700, lineHeight: 1}}>{MAX_POINTS.toLocaleString()}</div>
+                          <div className="text-[#444]" style={{fontFamily: 'Teko, sans-serif', fontSize: '0.875rem'}}>${pointsToDollars(MAX_POINTS)}</div>
+                        </div>
+                      </div>
+                      {/* Progress bar */}
+                      <div className="w-full h-3 sm:h-4 bg-white/8 rounded-full overflow-hidden mb-4">
+                        <div
+                          className="h-full rounded-full transition-all duration-700 ease-out"
+                          style={{
+                            width: `${Math.max((pts / MAX_POINTS) * 100, 2)}%`,
+                            background: 'linear-gradient(90deg, #c8a84b, #e0c66a, #c8a84b)',
+                            boxShadow: '0 0 12px rgba(200,168,75,0.4)',
+                          }}
+                        />
+                      </div>
+                      {/* Next reward hint */}
+                      <div className="text-[#999]" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(0.9rem, 2.5vw, 1.1rem)', fontWeight: 400}}>
+                        {allDone ? (
+                          <span className="text-emerald-400" style={{fontWeight: 600}}>ALL COURSES COMPLETE — MAXIMUM REWARDS UNLOCKED</span>
+                        ) : bonusAvailable ? (
+                          <span>Finish the last course for <span className="text-[#c8a84b]" style={{fontWeight: 600}}>+{nextCoursePts} pts</span> plus a <span className="text-[#c8a84b]" style={{fontWeight: 600}}>1,000 pt completion bonus!</span></span>
+                        ) : (
+                          <span>Complete the next course for <span className="text-[#c8a84b]" style={{fontWeight: 600}}>+{nextCoursePts} pts</span> — {COURSES.length - completedCourses.size} courses left</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── How It Works row ─────────────────────────────────── */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+                {[
+                  {icon: '🎉', label: 'SIGN UP', value: `+${POINTS_SIGNUP}`, sub: 'pts'},
+                  {icon: '📚', label: 'PER COURSE', value: '+200–300', sub: 'pts'},
+                  {icon: '🏆', label: 'FINISH ALL', value: `+${POINTS_ALL_COMPLETE_BONUS.toLocaleString()}`, sub: 'bonus'},
+                  {icon: '💰', label: 'EXCHANGE', value: `${POINTS_PER_DOLLAR}`, sub: 'pts = $1'},
+                ].map((item, i) => (
+                  <div key={i} className="bg-white/[0.03] border border-white/8 rounded-xl sm:rounded-2xl p-4 sm:p-5 text-center hover:border-[#c8a84b]/20 transition-colors">
+                    <div className="text-2xl sm:text-3xl mb-2">{item.icon}</div>
+                    <div className="text-[#c8a84b]" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(1.5rem, 4vw, 2rem)', fontWeight: 700, lineHeight: 1}}>{item.value}</div>
+                    <div className="text-[#888] uppercase tracking-wider" style={{fontFamily: 'Teko, sans-serif', fontSize: '0.7rem', fontWeight: 500}}>{item.sub}</div>
+                    <div className="text-[#555] mt-1 uppercase tracking-wider" style={{fontFamily: 'Teko, sans-serif', fontSize: '0.65rem', fontWeight: 400}}>{item.label}</div>
+                  </div>
+                ))}
               </div>
+
             </div>
           </section>
 
@@ -1590,9 +1601,9 @@ export default function BudtenderEducation() {
                       </div>
                       <span className="text-[#333]">·</span>
                       {isComplete ? (
-                        <div className="text-[10px] sm:text-xs text-emerald-400 font-semibold">+{POINTS_PER_COURSE} pts earned</div>
+                        <div className="text-[10px] sm:text-xs text-emerald-400 font-semibold">+{getCoursePoints(course.id)} pts earned</div>
                       ) : (
-                        <div className="text-[10px] sm:text-xs text-[#c8a84b] font-semibold">+{POINTS_PER_COURSE} pts</div>
+                        <div className="text-[10px] sm:text-xs text-[#c8a84b] font-semibold">+{getCoursePoints(course.id)} pts</div>
                       )}
                     </div>
                     {/* Progress bar */}
