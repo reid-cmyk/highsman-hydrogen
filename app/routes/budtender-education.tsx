@@ -1817,8 +1817,8 @@ export default function BudtenderEducation() {
                 <span className="block text-white" style={{fontSize: 'clamp(2.4rem, 7vw, 4.5rem)'}}>WELCOME TO HIGHSMAN</span>
                 <span className="block text-white" style={{fontSize: 'clamp(3.2rem, 9vw, 5.5rem)'}}>BUDTENDER TRAINING CAMP</span>
               </h1>
-              <p className="text-[#888888] text-base sm:text-lg md:text-xl leading-relaxed mb-8 max-w-2xl mx-auto text-center">
-                Learn the lineup, earn points, cash them in at the Highsman Budtender Store. Every course you crush puts real credit in your pocket.
+              <p className="text-[#A9ACAF] text-base sm:text-lg md:text-xl leading-relaxed mb-8 max-w-2xl mx-auto text-center">
+                Work your way from <span className="text-white font-semibold">Unsigned</span> to the <span className="text-white font-semibold">Hall of Fame</span>, earning credits with every module you complete. Finish the full program and walk away with <span className="text-[#c8a84b] font-bold">$50 in store credit</span> at the Highsman Budtender Store.
               </p>
 
               {/* ── Points Hero Card ────────────────────────────────── */}
