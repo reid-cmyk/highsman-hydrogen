@@ -1411,7 +1411,6 @@ export default function BudtenderEducation() {
               src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Budtender_Training_Camp_banner.png?v=1775333344"
               alt="Highsman Budtender Training Camp"
               className="w-full h-auto block"
-              style={{maxHeight: '500px', objectFit: 'cover', objectPosition: 'center'}}
             />
           </div>
 
