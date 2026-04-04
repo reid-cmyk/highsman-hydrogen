@@ -66,7 +66,7 @@ const TRIPLE_THREAT_VIDEO_URL =
 
 // ── Points / Rewards System ─────────────────────────────────────────────────
 const POINTS_SIGNUP = 200;
-const POINTS_ALL_COMPLETE_BONUS = 2000; // Hall of Fame bonus
+const POINTS_ALL_COMPLETE_BONUS = 2000; // Hall of Flame bonus
 const POINTS_PER_DOLLAR = 100; // 100 pts = $1
 
 // Tiered by level: Rookie=200, Practice Squad=300, Starting Lineup=400 each, Franchise Player=1000, Rushing Bonus=100
@@ -518,7 +518,7 @@ const COURSES: Course[] = [
         content: 'Complete this quick survey to earn your Rushing Bonus points and help us get to know our budtender community better.',
         keyPoints: [
           'Takes about 2–3 minutes',
-          'Required for Hall of Fame completion',
+          'Required for Hall of Flame completion',
           '+100 pts upon submission',
         ],
       },
@@ -1097,7 +1097,7 @@ export default function BudtenderEducation() {
         const coursePts = getCoursePoints('rushing-bonus');
         const isAllDone = newCompleted.size >= COURSES.length;
         const earnedPts = coursePts + (isAllDone ? POINTS_ALL_COMPLETE_BONUS : 0);
-        const bonusMsg = isAllDone ? ` + ${POINTS_ALL_COMPLETE_BONUS.toLocaleString()} Hall of Fame bonus!` : '';
+        const bonusMsg = isAllDone ? ` + ${POINTS_ALL_COMPLETE_BONUS.toLocaleString()} Hall of Flame bonus!` : '';
         setPointsToast({pts: earnedPts, msg: `+${coursePts} pts earned${bonusMsg}`});
         setTimeout(() => setPointsToast(null), 4000);
       });
@@ -1780,7 +1780,7 @@ export default function BudtenderEducation() {
                 unlocked: franchiseDone,
               },
               {
-                label: 'HALL OF FAME',
+                label: 'HALL OF FLAME',
                 img: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Budtender_Education_Hall_of_Flame.svg?v=1775343989',
                 unlocked: hallOfFameDone,
               },
@@ -1807,7 +1807,7 @@ export default function BudtenderEducation() {
                           {tier.unlocked && (
                             <div className="absolute inset-0 rounded-lg sm:rounded-xl" style={{boxShadow: 'inset 0 0 20px rgba(200,168,75,0.15)'}} />
                           )}
-                          {/* Hall of Fame — user name overlay */}
+                          {/* Hall of Flame — user name overlay */}
                           {i === 4 && hallOfFameDone && (
                             <div className="absolute inset-x-0 bottom-[18%] sm:bottom-[20%] flex items-center justify-center pointer-events-none">
                               <span
@@ -1923,7 +1923,7 @@ export default function BudtenderEducation() {
                 <span className="block text-white" style={{fontSize: 'clamp(3.2rem, 9vw, 5.5rem)'}}>BUDTENDER TRAINING CAMP</span>
               </h1>
               <p className="text-[#A9ACAF] text-base sm:text-lg md:text-xl leading-relaxed mb-8 max-w-2xl mx-auto text-center">
-                Work your way from <span className="text-white font-semibold">Unsigned</span> to the <span className="text-white font-semibold">Hall of Fame</span>, earning credits with every module you complete. Finish the full program and walk away with <span className="text-[#c8a84b] font-bold">$50 in store credit</span> at the Highsman Budtender Store.
+                Work your way from <span className="text-white font-semibold">Unsigned</span> to the <span className="text-white font-semibold">Hall of Flame</span>, earning credits with every module you complete. Finish the full program and walk away with <span className="text-[#c8a84b] font-bold">$50 in store credit</span> at the Highsman Budtender Store.
               </p>
 
               {/* ── Points Hero Card ────────────────────────────────── */}
@@ -1968,7 +1968,7 @@ export default function BudtenderEducation() {
                       {/* Next reward hint */}
                       <div className="text-[#A9ACAF]" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(0.9rem, 2.5vw, 1.1rem)', fontWeight: 400}}>
                         {allDone ? (
-                          <span className="text-emerald-400" style={{fontWeight: 600}}>HALL OF FAME — ALL COURSES COMPLETE — MAXIMUM REWARDS UNLOCKED 🏆</span>
+                          <span className="text-emerald-400" style={{fontWeight: 600}}>HALL OF FLAME — ALL COURSES COMPLETE — MAXIMUM REWARDS UNLOCKED 🏆</span>
                         ) : bonusAvailable ? (
                           <span>Finish the last course for <span className="text-[#c8a84b]" style={{fontWeight: 600}}>+{nextCoursePts} pts</span> plus a <span className="text-[#c8a84b]" style={{fontWeight: 600}}>1,000 pt completion bonus!</span></span>
                         ) : (
@@ -1986,7 +1986,7 @@ export default function BudtenderEducation() {
                   {icon: '🎉', label: 'SIGN UP', value: `+${POINTS_SIGNUP}`, sub: 'pts'},
                   {icon: '📚', label: 'COURSES', value: '+200–1K', sub: 'pts each'},
                   {icon: '🏃', label: 'RUSHING BONUS', value: '+100', sub: 'survey'},
-                  {icon: '🏆', label: 'HALL OF FAME', value: `+${POINTS_ALL_COMPLETE_BONUS.toLocaleString()}`, sub: 'bonus'},
+                  {icon: '🏆', label: 'HALL OF FLAME', value: `+${POINTS_ALL_COMPLETE_BONUS.toLocaleString()}`, sub: 'bonus'},
                 ].map((item, i) => (
                   <div key={i} className="bg-[#111111]/80 border border-[#A9ACAF]/15 rounded-xl sm:rounded-2xl p-4 sm:p-5 text-center hover:border-[#A9ACAF]/20 transition-colors">
                     <div className="text-2xl sm:text-3xl mb-2">{item.icon}</div>
@@ -2069,7 +2069,7 @@ export default function BudtenderEducation() {
               })}
             </div>
 
-            {/* ── Rushing Bonus + Hall of Fame Tracker ──────────────────────── */}
+            {/* ── Rushing Bonus + Hall of Flame Tracker ──────────────────────── */}
             {(() => {
               const nonBonusCourses = COURSES.filter(c => c.id !== 'rushing-bonus');
               const completedNonBonus = nonBonusCourses.filter(c => completedCourses.has(c.id)).length;
@@ -2114,7 +2114,7 @@ export default function BudtenderEducation() {
                     </div>
                   </button>
 
-                  {/* Hall of Fame Tracker */}
+                  {/* Hall of Flame Tracker */}
                   <div className={`rounded-xl sm:rounded-2xl p-5 sm:p-6 relative overflow-hidden border ${allDone ? 'border-[#A9ACAF]/40 bg-gradient-to-br from-[#c8a84b]/15 to-[#151515]' : 'border-[#A9ACAF]/15 bg-[#111111]'}`}>
                     <div className="absolute top-0 left-0 right-0 h-[2px]" style={{background: allDone ? '#c8a84b' : '#555', opacity: allDone ? 1 : 0.5}} />
                     <div className="flex items-center gap-2 mb-3">
@@ -2124,7 +2124,7 @@ export default function BudtenderEducation() {
                       </span>
                     </div>
                     <h3 className="text-base sm:text-lg font-bold text-white mb-1" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(1.2rem, 3vw, 1.5rem)', fontWeight: 700}}>
-                      HALL OF FAME
+                      HALL OF FLAME
                     </h3>
                     <p className="text-[#A9ACAF] text-xs sm:text-sm mb-4">
                       {allDone ? 'You made it! Maximum rewards unlocked.' : `Complete all ${COURSES.length} modules to earn the ${POINTS_ALL_COMPLETE_BONUS.toLocaleString()} pt bonus.`}
