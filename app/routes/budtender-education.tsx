@@ -525,11 +525,11 @@ export default function BudtenderEducation() {
   // ── GATE SCREEN ─────────────────────────────────────────────────────────────
   if (screen === 'gate') {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center px-4 py-12">
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center px-4 sm:px-6 py-8 sm:py-12">
         <div className="w-full max-w-md">
           {/* Header */}
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold text-white tracking-tight">
+          <div className="text-center mb-6 sm:mb-8">
+            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
               Budtender Education Portal
             </h1>
             <div className="w-12 h-0.5 bg-[#c8a84b] mx-auto mt-3 mb-4" />
@@ -652,20 +652,23 @@ export default function BudtenderEducation() {
 
   return (
     <div ref={portalRef} className="min-h-screen bg-[#0a0a0a]">
-      {/* ── Sticky Header ──────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-50 bg-[#0a0a0a]/95 backdrop-blur border-b border-white/10">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      {/* ── Sub-Header (below global nav) ────────────────────────────────── */}
+      <div className="bg-[#111] border-b border-white/10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={LOGO_URL} alt="Highsman" className="h-6" />
-            <span className="text-[10px] uppercase tracking-widest text-[#c8a84b] font-semibold hidden sm:block">
-              Budtender Education
-            </span>
+            <div className="w-8 h-8 rounded-full bg-[#c8a84b]/20 flex items-center justify-center">
+              <span className="text-[#c8a84b] text-xs font-bold">BE</span>
+            </div>
+            <div>
+              <div className="text-xs sm:text-sm font-semibold text-white tracking-wide">Budtender Education</div>
+              <div className="text-[10px] text-[#666] uppercase tracking-wider hidden sm:block">Highsman Training Portal</div>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-[#999]">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <span className="text-[10px] sm:text-xs text-[#999]">
               {completedCourses.size}/{COURSES.length} completed
             </span>
-            <div className="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">
+            <div className="w-16 sm:w-24 h-1.5 bg-white/10 rounded-full overflow-hidden">
               <div
                 className="h-full bg-[#c8a84b] rounded-full transition-all duration-500"
                 style={{width: `${(completedCourses.size / COURSES.length) * 100}%`}}
@@ -673,67 +676,67 @@ export default function BudtenderEducation() {
             </div>
           </div>
         </div>
-      </header>
+      </div>
 
       {/* ── Course Viewer (when a course is open) ──────────────────────────── */}
       {currentCourse && !courseQuizActive ? (
-        <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           {/* Back button */}
           <button
             onClick={closeCourse}
-            className="text-[#999] text-sm hover:text-white transition-colors mb-6 flex items-center gap-2"
+            className="text-[#888] text-xs sm:text-sm hover:text-white transition-colors mb-5 sm:mb-6 flex items-center gap-2"
           >
             ← Back to courses
           </button>
 
           {/* Course header */}
-          <div className="mb-8">
-            <div className="flex items-center gap-3 mb-2">
-              <span className="text-2xl">{currentCourse.icon}</span>
+          <div className="mb-6 sm:mb-8">
+            <div className="flex items-center gap-2 sm:gap-3 mb-2">
+              <span className="text-xl sm:text-2xl">{currentCourse.icon}</span>
               <span
-                className="text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded"
-                style={{color: currentCourse.color, background: currentCourse.color + '20'}}
+                className="text-[9px] sm:text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded"
+                style={{color: currentCourse.color, background: currentCourse.color + '15'}}
               >
                 {currentCourse.level}
               </span>
             </div>
-            <h2 className="text-2xl md:text-3xl font-bold text-white">{currentCourse.title}</h2>
-            <p className="text-[#999] text-sm mt-1">{currentCourse.subtitle}</p>
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-white">{currentCourse.title}</h2>
+            <p className="text-[#888] text-xs sm:text-sm mt-1">{currentCourse.subtitle}</p>
           </div>
 
           {/* Slide progress */}
-          <div className="flex gap-1 mb-6">
+          <div className="flex gap-1 mb-5 sm:mb-6">
             {currentCourse.slides.map((_, i) => (
               <div
                 key={i}
                 className="h-1 rounded-full flex-1 transition-all duration-300"
                 style={{
-                  background: i <= slideIndex ? currentCourse.color : 'rgba(255,255,255,0.1)',
+                  background: i <= slideIndex ? currentCourse.color : 'rgba(255,255,255,0.08)',
                 }}
               />
             ))}
           </div>
 
           {/* Slide content */}
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 md:p-10 mb-6">
-            <div className="text-[10px] uppercase tracking-widest text-[#999] mb-2">
+          <div className="bg-[#151515] border border-white/8 rounded-xl sm:rounded-2xl p-5 sm:p-6 md:p-10 mb-5 sm:mb-6">
+            <div className="text-[9px] sm:text-[10px] uppercase tracking-widest text-[#777] mb-2">
               Slide {slideIndex + 1} of {currentCourse.slides.length}
             </div>
-            <h3 className="text-xl md:text-2xl font-bold text-white mb-4">
+            <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-3 sm:mb-4">
               {currentCourse.slides[slideIndex].title}
             </h3>
-            <p className="text-[#ccc] leading-relaxed mb-6">
+            <p className="text-[#bbb] text-sm sm:text-base leading-relaxed mb-5 sm:mb-6">
               {currentCourse.slides[slideIndex].content}
             </p>
             {currentCourse.slides[slideIndex].keyPoints && (
-              <div className="bg-white/5 rounded-xl p-4">
-                <div className="text-[10px] uppercase tracking-widest text-[#c8a84b] font-bold mb-3">
+              <div className="bg-white/5 rounded-lg sm:rounded-xl p-3 sm:p-4">
+                <div className="text-[9px] sm:text-[10px] uppercase tracking-widest text-[#c8a84b] font-bold mb-2 sm:mb-3">
                   Key Takeaways
                 </div>
                 {currentCourse.slides[slideIndex].keyPoints!.map((point, i) => (
                   <div key={i} className="flex items-start gap-2 mb-2 last:mb-0">
-                    <span className="text-[#c8a84b] mt-0.5 text-sm">▸</span>
-                    <span className="text-[#ddd] text-sm">{point}</span>
+                    <span className="text-[#c8a84b] mt-0.5 text-xs sm:text-sm">▸</span>
+                    <span className="text-[#ccc] text-xs sm:text-sm leading-relaxed">{point}</span>
                   </div>
                 ))}
               </div>
@@ -741,11 +744,11 @@ export default function BudtenderEducation() {
           </div>
 
           {/* Slide navigation */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <button
               onClick={prevSlide}
               disabled={slideIndex === 0}
-              className="px-5 py-2.5 text-sm font-medium rounded-lg border border-white/20 text-white hover:bg-white/5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              className="px-3 sm:px-5 py-2.5 text-xs sm:text-sm font-medium rounded-lg border border-white/15 text-white hover:bg-white/5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >
               ← Previous
             </button>
@@ -753,7 +756,7 @@ export default function BudtenderEducation() {
             {slideIndex < currentCourse.slides.length - 1 ? (
               <button
                 onClick={() => nextSlide(currentCourse)}
-                className="px-5 py-2.5 text-sm font-medium rounded-lg text-white transition-colors"
+                className="px-3 sm:px-5 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-white transition-colors"
                 style={{background: currentCourse.color}}
               >
                 Next →
@@ -761,7 +764,7 @@ export default function BudtenderEducation() {
             ) : COURSE_QUIZZES[currentCourse.id] ? (
               <button
                 onClick={() => startCourseQuiz(currentCourse.id)}
-                className="px-5 py-2.5 text-sm font-bold rounded-lg text-white transition-colors animate-pulse"
+                className="px-3 sm:px-5 py-2.5 text-xs sm:text-sm font-bold rounded-lg text-white transition-colors animate-pulse"
                 style={{background: currentCourse.color}}
               >
                 Take Quiz →
@@ -773,7 +776,7 @@ export default function BudtenderEducation() {
                   setActiveCourse(null);
                   setSlideIndex(0);
                 }}
-                className="px-5 py-2.5 text-sm font-bold rounded-lg text-white transition-colors"
+                className="px-3 sm:px-5 py-2.5 text-xs sm:text-sm font-bold rounded-lg text-white transition-colors"
                 style={{background: currentCourse.color}}
               >
                 Complete Course ✓
@@ -802,10 +805,10 @@ export default function BudtenderEducation() {
         </div>
       ) : courseQuizActive ? (
         /* ── Course Quiz View ──────────────────────────────────────────────── */
-        <div className="max-w-2xl mx-auto px-4 py-8">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           <button
             onClick={() => { setCourseQuizActive(null); setQuizComplete(false); }}
-            className="text-[#999] text-sm hover:text-white transition-colors mb-6 flex items-center gap-2"
+            className="text-[#888] text-xs sm:text-sm hover:text-white transition-colors mb-5 sm:mb-6 flex items-center gap-2"
           >
             ← Back to course
           </button>
@@ -910,38 +913,41 @@ export default function BudtenderEducation() {
         <div>
           {/* ── Hero ──────────────────────────────────────────────────────── */}
           <section className="relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-[#c8a84b]/10 to-transparent" />
-            <div className="max-w-6xl mx-auto px-4 py-16 md:py-24 relative">
+            <div className="absolute inset-0 bg-gradient-to-br from-[#c8a84b]/8 via-transparent to-[#c8a84b]/3" />
+            <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-[#c8a84b]/5 to-transparent hidden md:block" />
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16 md:py-24 relative">
               <div className="max-w-2xl">
-                <div className="text-[10px] uppercase tracking-[0.2em] text-[#c8a84b] font-bold mb-3">
+                <div className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-[#c8a84b] font-semibold mb-4">
                   Welcome back, {userName}
                 </div>
-                <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight mb-4">
+                <h1 className="text-2xl sm:text-3xl md:text-5xl font-bold text-white leading-tight mb-5">
                   Become a Certified{' '}
                   <span className="text-[#c8a84b]">Highsman</span>{' '}
                   Expert
                 </h1>
-                <p className="text-[#999] text-base md:text-lg leading-relaxed mb-8">
+                <p className="text-[#aaa] text-sm sm:text-base md:text-lg leading-relaxed mb-10 max-w-xl">
                   Master our products, perfect your pitch, and unlock exclusive
                   budtender rewards. Complete all courses to earn your Highsman
                   Certified status.
                 </p>
-                <div className="flex flex-wrap gap-6">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-white">{COURSES.length}</div>
-                    <div className="text-[10px] uppercase tracking-wider text-[#999]">Courses</div>
+
+                {/* Stats row */}
+                <div className="flex items-center gap-4 sm:gap-8">
+                  <div>
+                    <div className="text-xl sm:text-2xl font-bold text-white">{COURSES.length}</div>
+                    <div className="text-[9px] sm:text-[10px] uppercase tracking-wider text-[#777] mt-0.5">Courses</div>
                   </div>
-                  <div className="w-px h-10 bg-white/10" />
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-white">{completedCourses.size}</div>
-                    <div className="text-[10px] uppercase tracking-wider text-[#999]">Completed</div>
+                  <div className="w-px h-8 sm:h-10 bg-white/10" />
+                  <div>
+                    <div className="text-xl sm:text-2xl font-bold text-white">{completedCourses.size}</div>
+                    <div className="text-[9px] sm:text-[10px] uppercase tracking-wider text-[#777] mt-0.5">Completed</div>
                   </div>
-                  <div className="w-px h-10 bg-white/10" />
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-[#c8a84b]">
+                  <div className="w-px h-8 sm:h-10 bg-white/10" />
+                  <div>
+                    <div className="text-xl sm:text-2xl font-bold text-[#c8a84b]">
                       {completedCourses.size === COURSES.length ? '✓' : '—'}
                     </div>
-                    <div className="text-[10px] uppercase tracking-wider text-[#999]">Certified</div>
+                    <div className="text-[9px] sm:text-[10px] uppercase tracking-wider text-[#777] mt-0.5">Certified</div>
                   </div>
                 </div>
               </div>
@@ -949,57 +955,60 @@ export default function BudtenderEducation() {
           </section>
 
           {/* ── Course Grid ──────────────────────────────────────────────── */}
-          <section className="max-w-6xl mx-auto px-4 pb-16">
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-xl font-bold text-white">Training Courses</h2>
-              <span className="text-xs text-[#999]">{completedCourses.size} of {COURSES.length} complete</span>
+          <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
+            <div className="flex items-center justify-between mb-6 sm:mb-8">
+              <h2 className="text-lg sm:text-xl font-bold text-white">Training Courses</h2>
+              <span className="text-[10px] sm:text-xs text-[#777]">{completedCourses.size} of {COURSES.length} complete</span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {COURSES.map((course) => {
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              {COURSES.map((course, idx) => {
                 const isComplete = completedCourses.has(course.id);
                 return (
                   <button
                     key={course.id}
                     onClick={() => openCourse(course.id)}
-                    className="text-left bg-white/5 border border-white/10 rounded-2xl p-6 hover:bg-white/8 hover:border-white/20 transition-all group"
+                    className="text-left bg-[#151515] border border-white/8 rounded-xl sm:rounded-2xl p-5 sm:p-6 hover:border-[#c8a84b]/30 hover:bg-[#1a1a1a] transition-all group relative overflow-hidden"
                   >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">{course.icon}</span>
+                    {/* Subtle top accent line */}
+                    <div className="absolute top-0 left-0 right-0 h-[2px]" style={{background: course.color, opacity: 0.5}} />
+
+                    <div className="flex items-start justify-between mb-3 sm:mb-4">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <span className="text-xl sm:text-2xl">{course.icon}</span>
                         <span
-                          className="text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded"
-                          style={{color: course.color, background: course.color + '20'}}
+                          className="text-[9px] sm:text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded"
+                          style={{color: course.color, background: course.color + '15'}}
                         >
                           {course.level}
                         </span>
                       </div>
                       {isComplete ? (
-                        <span className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded">
+                        <span className="text-[9px] sm:text-[10px] uppercase tracking-wider font-bold text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded">
                           Completed ✓
                         </span>
                       ) : (
-                        <span className="text-[10px] uppercase tracking-wider text-[#666]">
+                        <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-[#555]">
                           {course.duration}
                         </span>
                       )}
                     </div>
-                    <h3 className="text-lg font-bold text-white mb-1 group-hover:text-[#c8a84b] transition-colors">
+                    <h3 className="text-base sm:text-lg font-bold text-white mb-1 group-hover:text-[#c8a84b] transition-colors">
                       {course.title}
                     </h3>
-                    <p className="text-[#999] text-sm">{course.subtitle}</p>
-                    <div className="flex items-center gap-2 mt-4">
-                      <div className="text-xs text-[#666]">
+                    <p className="text-[#888] text-xs sm:text-sm leading-relaxed">{course.subtitle}</p>
+                    <div className="flex items-center gap-2 mt-3 sm:mt-4">
+                      <div className="text-[10px] sm:text-xs text-[#555]">
                         {(course.id === 'meet-ricky' || course.id === 'meet-highsman') ? '📹 Video' : `${course.slides.length} slides`}
                       </div>
                       <span className="text-[#333]">·</span>
-                      <div className="text-xs text-[#666]">
+                      <div className="text-[10px] sm:text-xs text-[#555]">
                         {COURSE_QUIZZES[course.id] ? 'Quiz included' : 'Quiz coming soon'}
                       </div>
                     </div>
-                    {/* Progress bar for incomplete */}
+                    {/* Progress bar */}
                     {!isComplete && (
-                      <div className="w-full h-0.5 bg-white/5 rounded-full mt-4">
+                      <div className="w-full h-[2px] bg-white/5 rounded-full mt-3 sm:mt-4">
                         <div className="h-full rounded-full" style={{background: course.color, width: '0%'}} />
                       </div>
                     )}
@@ -1009,16 +1018,16 @@ export default function BudtenderEducation() {
             </div>
 
             {/* Full certification quiz link */}
-            <div className="mt-8 bg-gradient-to-r from-[#c8a84b]/10 to-transparent border border-[#c8a84b]/20 rounded-2xl p-6 flex flex-col md:flex-row items-center gap-4">
+            <div className="mt-6 sm:mt-8 bg-[#151515] border border-[#c8a84b]/20 rounded-xl sm:rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
               <div className="flex-1">
-                <h3 className="text-lg font-bold text-white mb-1">Ready for the Full Certification?</h3>
-                <p className="text-[#999] text-sm">
+                <h3 className="text-base sm:text-lg font-bold text-white mb-1">Ready for the Full Certification?</h3>
+                <p className="text-[#888] text-xs sm:text-sm">
                   Complete the comprehensive 11-question Highsman Certification Quiz to prove your mastery.
                 </p>
               </div>
               <a
                 href="/budtender-quiz"
-                className="px-6 py-3 bg-[#c8a84b] text-black font-bold text-sm rounded-lg hover:bg-[#d4b65c] transition-colors whitespace-nowrap"
+                className="w-full sm:w-auto text-center px-6 py-3 bg-[#c8a84b] text-black font-bold text-xs sm:text-sm rounded-lg hover:bg-[#d4b65c] transition-colors whitespace-nowrap"
               >
                 Take Certification Quiz →
               </a>
@@ -1026,21 +1035,21 @@ export default function BudtenderEducation() {
           </section>
 
           {/* ── Budtenders Only Section ───────────────────────────────────── */}
-          <section className="border-t border-white/10">
-            <div className="max-w-6xl mx-auto px-4 py-16">
-              <div className="text-center mb-12">
-                <div className="inline-block px-3 py-1 bg-[#c8a84b]/10 border border-[#c8a84b]/20 rounded-full text-[10px] uppercase tracking-widest text-[#c8a84b] font-bold mb-4">
+          <section className="border-t border-white/8 bg-[#0d0d0d]">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
+              <div className="text-center mb-8 sm:mb-12">
+                <div className="inline-block px-3 py-1 bg-[#c8a84b]/10 border border-[#c8a84b]/20 rounded-full text-[9px] sm:text-[10px] uppercase tracking-widest text-[#c8a84b] font-bold mb-4">
                   Budtenders Only
                 </div>
-                <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-2">
                   Exclusive Events & Competitions
                 </h2>
-                <p className="text-[#999] text-sm max-w-md mx-auto">
+                <p className="text-[#888] text-xs sm:text-sm max-w-md mx-auto">
                   Perks reserved for the Highsman budtender network. Register for events, enter competitions, and win prizes.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 {EVENTS.map((event, i) => {
                   const isRegistered = registeredEvents.has(i);
                   const tagColors: Record<string, string> = {
@@ -1051,24 +1060,24 @@ export default function BudtenderEducation() {
                   return (
                     <div
                       key={i}
-                      className="bg-white/5 border border-white/10 rounded-2xl p-6"
+                      className="bg-[#151515] border border-white/8 rounded-xl sm:rounded-2xl p-5 sm:p-6"
                     >
                       <div className="flex items-center justify-between mb-3">
-                        <span className={`text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded ${tagColors[event.tag] || 'text-[#999]'}`}>
+                        <span className={`text-[9px] sm:text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded ${tagColors[event.tag] || 'text-[#999]'}`}>
                           {event.tag}
                         </span>
-                        <span className="text-xs text-[#666]">{event.date}</span>
+                        <span className="text-[10px] sm:text-xs text-[#555]">{event.date}</span>
                       </div>
-                      <h3 className="text-lg font-bold text-white mb-1">{event.title}</h3>
-                      <p className="text-[#999] text-xs mb-1">{event.location}</p>
-                      <p className="text-[#bbb] text-sm mb-4">{event.description}</p>
+                      <h3 className="text-base sm:text-lg font-bold text-white mb-1">{event.title}</h3>
+                      <p className="text-[#777] text-[10px] sm:text-xs mb-1">{event.location}</p>
+                      <p className="text-[#aaa] text-xs sm:text-sm leading-relaxed mb-4">{event.description}</p>
                       <button
                         onClick={() => registerEvent(i)}
                         disabled={isRegistered}
-                        className={`w-full py-2.5 text-sm font-semibold rounded-lg transition-colors ${
+                        className={`w-full py-2.5 text-xs sm:text-sm font-semibold rounded-lg transition-colors ${
                           isRegistered
                             ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 cursor-default'
-                            : 'bg-white/10 text-white hover:bg-white/15 border border-white/20'
+                            : 'bg-white/8 text-white hover:bg-white/12 border border-white/15'
                         }`}
                       >
                         {isRegistered ? 'Registered ✓' : 'Register Interest'}
@@ -1079,14 +1088,14 @@ export default function BudtenderEducation() {
               </div>
 
               {/* Monthly Prize Banner */}
-              <div className="mt-8 bg-gradient-to-r from-[#c8a84b]/20 via-[#c8a84b]/10 to-transparent border border-[#c8a84b]/30 rounded-2xl p-8 text-center">
-                <div className="text-3xl mb-3">🏆</div>
-                <h3 className="text-xl font-bold text-white mb-2">Monthly Sales Competition</h3>
-                <p className="text-[#ccc] text-sm max-w-lg mx-auto mb-4">
+              <div className="mt-6 sm:mt-8 bg-[#151515] border border-[#c8a84b]/20 rounded-xl sm:rounded-2xl p-6 sm:p-8 text-center">
+                <div className="text-2xl sm:text-3xl mb-3">🏆</div>
+                <h3 className="text-lg sm:text-xl font-bold text-white mb-2">Monthly Sales Competition</h3>
+                <p className="text-[#aaa] text-xs sm:text-sm max-w-lg mx-auto mb-4">
                   Top-selling Highsman budtender each month wins <span className="text-[#c8a84b] font-bold">$500 cash</span> + a signed Ricky Williams jersey.
                   Track your sales and submit your numbers weekly.
                 </p>
-                <div className="text-[#999] text-xs">
+                <div className="text-[#777] text-[10px] sm:text-xs">
                   Contact your Highsman rep or email <span className="text-[#c8a84b]">team@highsman.com</span> to submit sales numbers.
                 </div>
               </div>
@@ -1094,10 +1103,10 @@ export default function BudtenderEducation() {
           </section>
 
           {/* ── Footer ───────────────────────────────────────────────────── */}
-          <footer className="border-t border-white/5 py-8">
-            <div className="max-w-6xl mx-auto px-4 flex flex-col items-center gap-4">
-              <img src={SPARK_URL} alt="Spark Greatness" className="h-6 opacity-40" />
-              <p className="text-[#555] text-[10px] text-center">
+          <footer className="border-t border-white/5 py-6 sm:py-8">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col items-center gap-3 sm:gap-4">
+              <img src={SPARK_URL} alt="Spark Greatness" className="h-5 sm:h-6 opacity-40" />
+              <p className="text-[#444] text-[9px] sm:text-[10px] text-center">
                 © Highsman · For authorized budtender use only · Not for public distribution
               </p>
             </div>
