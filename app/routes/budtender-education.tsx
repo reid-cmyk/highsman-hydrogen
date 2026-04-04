@@ -42,21 +42,77 @@ interface Course {
 
 const COURSES: Course[] = [
   {
-    id: 'brand-story',
-    title: 'The Highsman Story',
-    subtitle: 'Brand origins, mission & identity',
-    duration: '10 min',
+    id: 'meet-ricky',
+    title: 'Meet Ricky',
+    subtitle: "Ricky Williams' journey — from the NFL to cannabis",
+    duration: '5 min',
     level: 'Beginner',
-    icon: '🏆',
+    icon: '🏈',
     color: '#c8a84b',
     audioSummary: '',
     slides: [
       {
+        title: 'Welcome to Meet Ricky',
+        content:
+          'This course is a brand video that takes you through Ricky Williams\' journey — from Heisman Trophy winner and NFL star to cannabis advocate and founder of Highsman. Highsman sits at the intersection of Sports and Cannabis.',
+        keyPoints: [
+          'Video coming soon — check back shortly',
+          'Ricky Williams: Heisman winner, NFL star, cannabis pioneer',
+          'Highsman = Sports × Cannabis',
+          'Quiz will follow once the video is live',
+        ],
+      },
+      {
+        title: 'The Heisman to Highsman',
+        content:
+          'Ricky Williams won the Heisman Trophy in 1998 and went on to a celebrated NFL career. But his real legacy is bigger than football — he became one of the first athletes to openly advocate for cannabis, putting his career on the line for what he believed in.',
+        keyPoints: [
+          '1998 Heisman Trophy winner',
+          'Over 10,000 career rushing yards in the NFL',
+          'Put his career on the line for cannabis advocacy',
+          'Turned personal conviction into a premium brand',
+        ],
+      },
+      {
+        title: 'Sports × Cannabis',
+        content:
+          'Highsman is not a stoner brand. It is not a wellness brand. It is a performance brand. Ricky represents the intersection of sports and cannabis — the idea that cannabis and peak performance are not opposites, they go hand in hand. That is the Highsman identity.',
+        keyPoints: [
+          'Performance brand, not a stoner brand',
+          'Cannabis and peak performance go hand in hand',
+          'Built on athletic credibility',
+          'Tagline: SPARK GREATNESS™',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'meet-highsman',
+    title: 'Meet Highsman',
+    subtitle: 'The brand — where we came from and what we stand for',
+    duration: '8 min',
+    level: 'Beginner',
+    icon: '🏆',
+    color: '#7c3aed',
+    audioSummary: '',
+    slides: [
+      {
+        title: 'Welcome to Meet Highsman',
+        content:
+          'This course covers the Highsman brand — our origin story, what we stand for, and how we show up in the world. A brand video is being produced to bring this to life. For now, these slides capture the key brand pillars every budtender should know.',
+        keyPoints: [
+          'Brand video coming soon',
+          'Quiz will follow once the video is live',
+          'Learn the brand pillars that guide everything we do',
+        ],
+      },
+      {
         title: 'Who Is Highsman?',
         content:
-          'Highsman is a premium cannabis brand founded by Ricky Williams — Heisman Trophy winner, NFL star, and lifelong cannabis advocate. The brand represents the intersection of peak performance and premium cannabis.',
+          'Highsman is a premium cannabis brand founded by Ricky Williams (#34). We sit at the intersection of Sports and Cannabis — representing cannabis and peak performance. Our tagline is SPARK GREATNESS™.',
         keyPoints: [
           'Founded by Ricky Williams (#34)',
+          'The intersection of Sports and Cannabis',
           'Tagline: SPARK GREATNESS™',
           'Premium positioning — never discount-driven',
         ],
@@ -99,13 +155,13 @@ const COURSES: Course[] = [
     ],
   },
   {
-    id: 'triple-infusion',
-    title: 'Triple Infusion Science',
-    subtitle: 'The process that sets us apart',
+    id: 'the-science',
+    title: 'The Science',
+    subtitle: 'Triple Infusion — the process that sets us apart',
     duration: '15 min',
     level: 'Intermediate',
     icon: '🔬',
-    color: '#7c3aed',
+    color: '#059669',
     audioSummary: '',
     slides: [
       {
@@ -155,15 +211,25 @@ const COURSES: Course[] = [
     ],
   },
   {
-    id: 'product-lineup',
-    title: 'Product Lineup Mastery',
+    id: 'the-products',
+    title: 'The Products',
     subtitle: 'Know every SKU inside and out',
     duration: '12 min',
     level: 'Beginner',
     icon: '📦',
-    color: '#059669',
+    color: '#dc2626',
     audioSummary: '',
     slides: [
+      {
+        title: 'Welcome to The Products',
+        content:
+          'This course covers every Highsman product in detail — what it is, who it is for, and how to sell it. Full product deep-dives and a quiz are coming soon. For now, here is a quick overview of the lineup.',
+        keyPoints: [
+          'Detailed product content coming soon',
+          'Quiz will be added once content is finalized',
+          'Learn the lineup so you can match product to customer',
+        ],
+      },
       {
         title: 'Ground Game — 7G Ready To Roll Flower',
         content:
@@ -210,73 +276,6 @@ const COURSES: Course[] = [
       },
     ],
   },
-  {
-    id: 'sales-mastery',
-    title: 'Floor Sales Mastery',
-    subtitle: 'Pitches, closes & objection handling',
-    duration: '20 min',
-    level: 'Advanced',
-    icon: '🎯',
-    color: '#dc2626',
-    audioSummary: '',
-    slides: [
-      {
-        title: 'The 30-Second Floor Pitch',
-        content:
-          '"Most infused pre-rolls just coat the outside — Diamonds, Live Resin, and terpene extract sitting on the surface. Highsman actually spins the concentrates into the flower at high speed so they go all the way through, like they were always there. That\'s why it burns smooth, the flavor lasts the whole smoke, and it doesn\'t have that harsh \'infused\' edge. Closest thing to hash in a pre-roll format."',
-        keyPoints: [
-          'Memorize this pitch word for word',
-          'Deliver in 30 seconds or less',
-          'Focus on the DIFFERENCE, not the specs',
-          'End with the hash comparison',
-        ],
-      },
-      {
-        title: 'The 10-Second Intercept',
-        content:
-          'When a customer is about to order something else: "Hey — before you order, we\'re running a great deal today that most people are switching to." Then transition into the floor pitch or product recommendation.',
-        keyPoints: [
-          'Use when customer is about to order competitor',
-          'Casual, non-pushy tone',
-          '"Most people are switching to" = social proof',
-          'Transition immediately into product pitch',
-        ],
-      },
-      {
-        title: 'The Assumptive Close',
-        content:
-          'Never ask "Would you like to buy one?" Always assume the sale: "Do you want the Hit Stick or the Pre Roll?" or "Single or the two-pack?" This is the single most important sales technique.',
-        keyPoints: [
-          'NEVER: "Would you like to try it?"',
-          'ALWAYS: "Single or two-pack?"',
-          'Give them two YES options',
-          'Confidence = trust = sales',
-        ],
-      },
-      {
-        title: 'Handling Objections',
-        content:
-          'Common objections and how to handle them confidently without being pushy. Remember: lead with sensory outcomes, not specs.',
-        keyPoints: [
-          '"Too expensive" → "It\'s actually the best value per gram in the infused category"',
-          '"I don\'t like infused" → "This is different — no harsh edge, burns like pure flower"',
-          '"I have my regular brand" → Use the 10-second intercept',
-          '"What strain is it?" → Focus on experience, not lineage',
-        ],
-      },
-      {
-        title: 'Daily Sales Mindset',
-        content:
-          'Every shift is an opportunity. Set a personal goal for Highsman units per day. Track your numbers. The best budtenders treat every interaction as a chance to educate and convert.',
-        keyPoints: [
-          'Set a daily unit goal',
-          'Track your Highsman sales',
-          'Educate first, sell second',
-          'Confidence comes from product knowledge',
-        ],
-      },
-    ],
-  },
 ];
 
 // ── Quiz Data (Mini-assessment per course) ────────────────────────────────────
@@ -287,29 +286,9 @@ interface QuizQuestion {
 }
 
 const COURSE_QUIZZES: Record<string, QuizQuestion[]> = {
-  'brand-story': [
-    {
-      q: "What is Highsman's official tagline?",
-      options: ['Hit Different', 'SPARK GREATNESS™', 'Smoke Better', 'Elevate Higher'],
-      correct: 1,
-    },
-    {
-      q: 'Which archetype best describes Highsman?',
-      options: ['The Rebel', 'The Sage', 'The High Performer', 'The Caregiver'],
-      correct: 2,
-    },
-    {
-      q: 'What is the correct sales close technique?',
-      options: [
-        '"Would you like to buy one?"',
-        '"Are you interested?"',
-        '"Do you want the single or the two-pack?"',
-        '"Can I help you with anything?"',
-      ],
-      correct: 2,
-    },
-  ],
-  'triple-infusion': [
+  // Meet Ricky — quiz coming once video is live
+  // Meet Highsman — quiz coming once video is live
+  'the-science': [
     {
       q: 'At what RPM does the centrifuge spin?',
       options: ['5,000 RPM', '10,000 RPM', '15,000 RPM', '20,000 RPM'],
@@ -325,51 +304,28 @@ const COURSE_QUIZZES: Record<string, QuizQuestion[]> = {
       options: ['Loose powder', 'A dense pliable puck', 'Oily liquid', 'Dry flakes'],
       correct: 1,
     },
-  ],
-  'product-lineup': [
     {
-      q: 'Which SKU is the highest value for roll-your-own consumers?',
-      options: ['Hit Stick 0.5G', 'Triple Threat 1.2G', 'Ground Game 7G', 'Pre Roll Multi-Pack'],
-      correct: 2,
-    },
-    {
-      q: 'What is the Hit Stick weight?',
-      options: ['0.25 grams', '0.5 grams', '1.0 grams', '1.2 grams'],
-      correct: 1,
-    },
-    {
-      q: 'What product should you recommend to a first-time buyer?',
-      options: ['Ground Game 7G', 'Triple Threat 1.2G', 'Hit Stick 0.5G', 'Full lineup sampler'],
-      correct: 2,
-    },
-  ],
-  'sales-mastery': [
-    {
-      q: 'How long should the Floor Pitch take?',
-      options: ['10 seconds', '20 seconds', '30 seconds', '60 seconds'],
-      correct: 2,
-    },
-    {
-      q: 'What is the 10-Second Intercept opening line?',
+      q: 'What is the main customer benefit of Triple Infusion?',
       options: [
-        '"Can I help you find something?"',
-        '"Hey — before you order, we\'re running a great deal today"',
-        '"Have you heard of Highsman?"',
-        '"Would you like a recommendation?"',
+        'Higher THC percentage',
+        'Flavor lasts the full smoke with no harsh infused edge',
+        'Burns faster for a quick session',
+        'More smoke per gram',
       ],
       correct: 1,
     },
     {
-      q: 'A customer says "I don\'t like infused products." Best response?',
+      q: 'What should you NEVER call the infusion process?',
       options: [
-        '"That\'s okay, it\'s not for everyone"',
-        '"This is different — no harsh edge, burns like pure flower"',
-        '"Our infusion is award-winning"',
-        '"It has 40% THC though"',
+        'Triple Infused',
+        'Microstructure infusion',
+        'Coated or dipped',
+        'Centrifuge processed',
       ],
-      correct: 1,
+      correct: 2,
     },
   ],
+  // The Products — quiz coming once content is finalized
 };
 
 const LETTERS = ['A', 'B', 'C', 'D'];
@@ -802,13 +758,25 @@ export default function BudtenderEducation() {
               >
                 Next →
               </button>
-            ) : (
+            ) : COURSE_QUIZZES[currentCourse.id] ? (
               <button
                 onClick={() => startCourseQuiz(currentCourse.id)}
                 className="px-5 py-2.5 text-sm font-bold rounded-lg text-white transition-colors animate-pulse"
                 style={{background: currentCourse.color}}
               >
                 Take Quiz →
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setCompletedCourses(prev => new Set([...prev, currentCourse.id]));
+                  setActiveCourse(null);
+                  setSlideIndex(0);
+                }}
+                className="px-5 py-2.5 text-sm font-bold rounded-lg text-white transition-colors"
+                style={{background: currentCourse.color}}
+              >
+                Complete Course ✓
               </button>
             )}
           </div>
@@ -1021,9 +989,13 @@ export default function BudtenderEducation() {
                     </h3>
                     <p className="text-[#999] text-sm">{course.subtitle}</p>
                     <div className="flex items-center gap-2 mt-4">
-                      <div className="text-xs text-[#666]">{course.slides.length} slides</div>
+                      <div className="text-xs text-[#666]">
+                        {(course.id === 'meet-ricky' || course.id === 'meet-highsman') ? '📹 Video' : `${course.slides.length} slides`}
+                      </div>
                       <span className="text-[#333]">·</span>
-                      <div className="text-xs text-[#666]">Quiz included</div>
+                      <div className="text-xs text-[#666]">
+                        {COURSE_QUIZZES[course.id] ? 'Quiz included' : 'Quiz coming soon'}
+                      </div>
                     </div>
                     {/* Progress bar for incomplete */}
                     {!isComplete && (
