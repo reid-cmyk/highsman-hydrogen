@@ -1365,7 +1365,7 @@ export default function BudtenderEducation() {
                     </button>
 
                     {userMenuOpen && (
-                      <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-56 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
+                      <div className="absolute left-0 sm:left-auto sm:right-0 bottom-full mb-2 w-56 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
                         <div className="px-4 py-3 border-b border-white/8">
                           <div className="text-sm font-semibold text-white">{userName}</div>
                           {userEmail && (
