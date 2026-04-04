@@ -1410,7 +1410,8 @@ export default function BudtenderEducation() {
             <img
               src="/budtender-training-camp-banner.png"
               alt="Highsman Budtender Training Camp"
-              className="w-full h-auto block"
+              className="w-full block"
+              style={{height: 'clamp(200px, 30vw, 400px)', objectFit: 'cover', objectPosition: 'center top'}}
             />
           </div>
 
