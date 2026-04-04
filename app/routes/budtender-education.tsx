@@ -63,7 +63,7 @@ const SCIENCE_VIDEO_URL =
   'https://cdn.shopify.com/videos/c/o/v/591d15c90b9c44d3a1b1a603e7a31e9f.mp4';
 
 // ── Points / Rewards System ─────────────────────────────────────────────────
-const POINTS_SIGNUP = 100;
+const POINTS_SIGNUP = 200;
 const POINTS_ALL_COMPLETE_BONUS = 1000;
 const POINTS_PER_DOLLAR = 100; // 100 pts = $1
 
@@ -92,7 +92,7 @@ function pointsToDollars(pts: number): string {
   return (pts / POINTS_PER_DOLLAR).toFixed(2);
 }
 
-// Max: 100 + 200+200+300+300 + 1000 = 2,100 pts → $21.00
+// Max: 200 + 200+200+300+300 + 1000 = 2,200 pts → $22.00
 const MAX_POINTS = POINTS_SIGNUP + 200 + 200 + 300 + 300 + POINTS_ALL_COMPLETE_BONUS;
 
 // ── Session Persistence ──────────────────────────────────────────────────────
