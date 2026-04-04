@@ -532,7 +532,7 @@ const RUSHING_BONUS_QUESTIONS = [
   {id: 'rating_hit_sticks', label: 'Rate Hit Sticks (1–10)', type: 'rating' as const, options: []},
   {id: 'rating_triple_threat', label: 'Rate Triple Threat (1–10)', type: 'rating' as const, options: []},
   {id: 'rating_ground_game', label: 'Rate Ground Game (1–10)', type: 'rating' as const, options: []},
-  {id: 'brand_feeling', label: 'How do you feel about the Highsman brand?', type: 'text' as const, options: []},
+  {id: 'brand_feeling', label: 'How do you feel about the Highsman brand? (1–10)', type: 'rating' as const, options: []},
   {id: 'favorite_brand', label: 'Favorite cannabis brand (outside of Highsman)', type: 'text' as const, options: []},
   {id: 'favorite_form_factor', label: 'Favorite form factor', type: 'select' as const, options: ['Pre Rolls', 'Flower', 'Chillums', 'Gummies', 'Vapes', 'Dabs']},
 ];
