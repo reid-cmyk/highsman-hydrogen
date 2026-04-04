@@ -1353,15 +1353,16 @@ export default function BudtenderEducation() {
                   <div className="relative" ref={userMenuRef}>
                     <button
                       onClick={() => setUserMenuOpen(!userMenuOpen)}
-                      className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 hover:border-white/25 transition-all cursor-pointer"
                     >
-                      <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#c8a84b] flex items-center justify-center text-black text-xs sm:text-sm font-bold">
+                      <div className="w-8 h-8 rounded-full bg-[#c8a84b] flex items-center justify-center text-black text-xs font-bold shrink-0">
                         {userName ? userName.charAt(0).toUpperCase() : 'U'}
                       </div>
-                      <div className="hidden sm:block">
+                      <div className="hidden sm:block text-left">
                         <div className="text-xs font-semibold text-white leading-tight">{userName}</div>
                         <div className="text-[9px] uppercase tracking-wider text-[#777]">Account</div>
                       </div>
+                      <svg className="w-3.5 h-3.5 text-[#888] ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                     </button>
 
                     {userMenuOpen && (
