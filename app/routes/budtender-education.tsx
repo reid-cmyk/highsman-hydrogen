@@ -19,6 +19,8 @@ const GROUND_GAME_IMG =
   'https://d3k81ch9hvuctc.cloudfront.net/company/XiTH4j/images/774d8da6-ed37-4110-8788-acd0d7b1447b.jpeg';
 const TRIPLE_THREAT_IMG =
   'https://d3k81ch9hvuctc.cloudfront.net/company/XiTH4j/images/24ca7f27-c951-4fa7-8f85-848a3d43c758.jpeg';
+const RICKY_VIDEO_URL =
+  'https://cdn.shopify.com/videos/c/o/v/7b8854ab03ef40ce8c27d83e4b35589e.mp4';
 
 // ── Session Persistence ──────────────────────────────────────────────────────
 const SESSION_KEY = 'highsman_budtender_session';
@@ -106,6 +108,7 @@ interface Course {
   slides: CourseSlide[];
   audioSummary: string;
   quizLink?: string;
+  videoUrl?: string;
 }
 
 const COURSES: Course[] = [
@@ -118,16 +121,17 @@ const COURSES: Course[] = [
     icon: '🏈',
     color: '#c8a84b',
     audioSummary: '',
+    videoUrl: RICKY_VIDEO_URL,
     slides: [
       {
         title: 'Welcome to Meet Ricky',
         content:
-          'This course is a brand video that takes you through Ricky Williams\' journey — from Heisman Trophy winner and NFL star to cannabis advocate and founder of Highsman. Highsman sits at the intersection of Sports and Cannabis.',
+          'Watch the video above to hear Ricky Williams tell his story — from Heisman Trophy winner and NFL star to cannabis advocate and founder of Highsman. Highsman sits at the intersection of Sports and Cannabis.',
         keyPoints: [
-          'Video coming soon — check back shortly',
+          'Watch the full video above before continuing',
           'Ricky Williams: Heisman winner, NFL star, cannabis pioneer',
           'Highsman = Sports × Cannabis',
-          'Quiz will follow once the video is live',
+          'Quiz coming soon',
         ],
       },
       {
@@ -1123,6 +1127,33 @@ export default function BudtenderEducation() {
             <p className="text-[#888] text-xs sm:text-sm mt-1">{currentCourse.subtitle}</p>
           </div>
 
+          {/* ── Video Player (if course has video) ─────────────────────────── */}
+          {currentCourse.videoUrl && (
+            <div className="mb-6 sm:mb-8">
+              <div className="bg-[#151515] border border-white/8 rounded-xl sm:rounded-2xl overflow-hidden">
+                <video
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="w-full aspect-video bg-black"
+                  poster=""
+                >
+                  <source src={currentCourse.videoUrl} type="video/mp4" />
+                  Your browser does not support the video tag.
+                </video>
+              </div>
+              <div className="flex items-center gap-2 mt-3 px-1">
+                <div
+                  className="w-2 h-2 rounded-full"
+                  style={{background: currentCourse.color}}
+                />
+                <span className="text-[10px] sm:text-xs text-[#888]">
+                  Watch the full video, then scroll down for key takeaways
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Slide progress */}
           <div className="flex gap-1 mb-5 sm:mb-6">
             {currentCourse.slides.map((_, i) => (
@@ -1139,7 +1170,7 @@ export default function BudtenderEducation() {
           {/* Slide content */}
           <div className="bg-[#151515] border border-white/8 rounded-xl sm:rounded-2xl p-5 sm:p-6 md:p-10 mb-5 sm:mb-6">
             <div className="text-[9px] sm:text-[10px] uppercase tracking-widest text-[#777] mb-2">
-              Slide {slideIndex + 1} of {currentCourse.slides.length}
+              {currentCourse.videoUrl ? 'Key Takeaway' : 'Slide'} {slideIndex + 1} of {currentCourse.slides.length}
             </div>
             <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-3 sm:mb-4">
               {currentCourse.slides[slideIndex].title}
