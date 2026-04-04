@@ -8,6 +8,32 @@ export const meta: MetaFunction = () => {
   ];
 };
 
+// ── Hide Shopify theme chrome (header + footer) ─────────────────────────────
+function useHideThemeChrome() {
+  useEffect(() => {
+    const header = document.querySelector('header') as HTMLElement | null;
+    const footer = document.querySelector('footer') as HTMLElement | null;
+    // Also remove any top padding/margin the main content area has for the fixed header
+    const main = document.querySelector('main') as HTMLElement | null;
+
+    if (header) header.style.display = 'none';
+    if (footer) footer.style.display = 'none';
+    if (main) {
+      main.dataset.origPt = main.style.paddingTop;
+      main.style.paddingTop = '0';
+    }
+
+    return () => {
+      if (header) header.style.display = '';
+      if (footer) footer.style.display = '';
+      if (main) {
+        main.style.paddingTop = main.dataset.origPt || '';
+        delete main.dataset.origPt;
+      }
+    };
+  }, []);
+}
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 const KLAVIYO_PUBLIC_KEY = 'XiTH4j';
 const BUDTENDER_LIST_ID = 'WBSrLZ';
@@ -480,6 +506,9 @@ type Screen = 'loading' | 'gate' | 'portal';
 type GateMode = 'login' | 'register';
 
 export default function BudtenderEducation() {
+  // Hide site header & footer so this page feels like its own app
+  useHideThemeChrome();
+
   // Suppress Klaviyo popup
   useEffect(() => {
     const style = document.createElement('style');
