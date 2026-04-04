@@ -67,14 +67,15 @@ const POINTS_SIGNUP = 200;
 const POINTS_ALL_COMPLETE_BONUS = 2000; // Hall of Fame bonus
 const POINTS_PER_DOLLAR = 100; // 100 pts = $1
 
-// Tiered by level: Rookie=200, Practice Squad=300, Starting Lineup=500 each, Franchise Player=1000
+// Tiered by level: Rookie=200, Practice Squad=300, Starting Lineup=400 each, Franchise Player=1000, Rushing Bonus=100
 const COURSE_POINTS: Record<string, number> = {
   'meet-ricky': 200,        // Rookie
   'meet-highsman': 300,     // Practice Squad
-  'hit-sticks': 500,        // Starting Lineup
-  'triple-threat': 500,     // Starting Lineup
-  'ground-game': 500,       // Starting Lineup
+  'hit-sticks': 400,        // Starting Lineup
+  'triple-threat': 400,     // Starting Lineup
+  'ground-game': 400,       // Starting Lineup
   'the-science': 1000,      // Franchise Player
+  'rushing-bonus': 100,     // Rushing Bonus (survey)
 };
 
 function getCoursePoints(courseId: string): number {
@@ -94,8 +95,8 @@ function pointsToDollars(pts: number): string {
   return (pts / POINTS_PER_DOLLAR).toFixed(2);
 }
 
-// Max: 200 + 200+300+500+500+500+1000 + 2000 = 5,200 pts → $52.00
-const MAX_POINTS = POINTS_SIGNUP + 200 + 300 + 500 + 500 + 500 + 1000 + POINTS_ALL_COMPLETE_BONUS;
+// Max: 200 + 200+300+400+400+400+1000+100 + 2000 = 5,000 pts → $50.00
+const MAX_POINTS = POINTS_SIGNUP + 200 + 300 + 400 + 400 + 400 + 1000 + 100 + POINTS_ALL_COMPLETE_BONUS;
 
 // ── Session Persistence ──────────────────────────────────────────────────────
 const SESSION_KEY = 'highsman_budtender_session';
@@ -497,6 +498,43 @@ const COURSES: Course[] = [
       },
     ],
   },
+  // ── Rushing Bonus (Survey) ──────────────────────────────────────────────
+  {
+    id: 'rushing-bonus',
+    title: 'Rushing Bonus',
+    subtitle: 'Tell us about yourself — earn your final 100 pts',
+    duration: '3 min',
+    level: 'Rookie',
+    icon: '🏃',
+    color: '#c8a84b',
+    audioSummary: '',
+    slides: [
+      {
+        title: 'Rushing Bonus Survey',
+        content: 'Complete this quick survey to earn your Rushing Bonus points and help us get to know our budtender community better.',
+        keyPoints: [
+          'Takes about 2–3 minutes',
+          'Required for Hall of Fame completion',
+          '+100 pts upon submission',
+        ],
+      },
+    ],
+  },
+];
+
+// ── Rushing Bonus Survey Questions ──────────────────────────────────────────
+const RUSHING_BONUS_QUESTIONS = [
+  {id: 'sex', label: 'Gender', type: 'select' as const, options: ['Male', 'Female', 'Non-binary', 'Prefer not to say']},
+  {id: 'age', label: 'Age Range', type: 'select' as const, options: ['18–24', '25–34', '35–44', '45–54', '55+']},
+  {id: 'sports_fan', label: 'Are you a football or sports fan?', type: 'select' as const, options: ['Big time football fan', 'Sports fan (not football)', 'Casual fan', 'Not really into sports']},
+  {id: 'astrology', label: 'Are you into astrology?', type: 'select' as const, options: ['Yes, love it', 'A little', 'Not really', 'Not at all']},
+  {id: 'years_in_industry', label: 'Years in the cannabis industry', type: 'select' as const, options: ['Less than 1 year', '1–2 years', '3–5 years', '5+ years']},
+  {id: 'rating_hit_sticks', label: 'Rate Hit Sticks (1–10)', type: 'rating' as const, options: []},
+  {id: 'rating_triple_threat', label: 'Rate Triple Threat (1–10)', type: 'rating' as const, options: []},
+  {id: 'rating_ground_game', label: 'Rate Ground Game (1–10)', type: 'rating' as const, options: []},
+  {id: 'brand_feeling', label: 'How do you feel about the Highsman brand?', type: 'text' as const, options: []},
+  {id: 'favorite_brand', label: 'Favorite cannabis brand (outside of Highsman)', type: 'text' as const, options: []},
+  {id: 'favorite_form_factor', label: 'Favorite form factor', type: 'select' as const, options: ['Pre Rolls', 'Flower', 'Chillums', 'Gummies', 'Vapes', 'Dabs']},
 ];
 
 // ── Quiz Data (Mini-assessment per course) ────────────────────────────────────
@@ -672,6 +710,8 @@ export default function BudtenderEducation() {
   const [registeredEvents, setRegisteredEvents] = useState<Set<number>>(new Set());
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [pointsToast, setPointsToast] = useState<{pts: number; msg: string} | null>(null);
+  const [surveyAnswers, setSurveyAnswers] = useState<Record<string, string>>({});
+  const [surveySubmitting, setSurveySubmitting] = useState(false);
 
   const portalRef = useRef<HTMLDivElement>(null);
   const googleBtnRef = useRef<HTMLDivElement>(null);
@@ -908,6 +948,52 @@ export default function BudtenderEducation() {
 
   function registerEvent(idx: number) {
     setRegisteredEvents(new Set([...registeredEvents, idx]));
+  }
+
+  // ── Rushing Bonus Survey Submit ──────────────────────────────────────────
+  function handleSurveySubmit() {
+    // Check all required fields
+    const missing = RUSHING_BONUS_QUESTIONS.filter(q => !surveyAnswers[q.id] || surveyAnswers[q.id].trim() === '');
+    if (missing.length > 0) return;
+    setSurveySubmitting(true);
+    // Submit survey data to Klaviyo as profile properties
+    fetch(`https://a.klaviyo.com/api/v2/people/search?email=${encodeURIComponent(userEmail)}&api_key=${KLAVIYO_PUBLIC_KEY}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data?.id) {
+          return fetch(`https://a.klaviyo.com/api/v1/person/${data.id}?api_key=${KLAVIYO_PUBLIC_KEY}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+              $survey_gender: surveyAnswers.sex,
+              $survey_age: surveyAnswers.age,
+              $survey_sports_fan: surveyAnswers.sports_fan,
+              $survey_astrology: surveyAnswers.astrology,
+              $survey_years_industry: surveyAnswers.years_in_industry,
+              $survey_rating_hit_sticks: surveyAnswers.rating_hit_sticks,
+              $survey_rating_triple_threat: surveyAnswers.rating_triple_threat,
+              $survey_rating_ground_game: surveyAnswers.rating_ground_game,
+              $survey_brand_feeling: surveyAnswers.brand_feeling,
+              $survey_favorite_brand: surveyAnswers.favorite_brand,
+              $survey_favorite_form_factor: surveyAnswers.favorite_form_factor,
+            }),
+          });
+        }
+      })
+      .catch(() => {}) // Silent fail — still award points
+      .finally(() => {
+        setSurveySubmitting(false);
+        const newCompleted = new Set([...completedCourses, 'rushing-bonus']);
+        setCompletedCourses(newCompleted);
+        setActiveCourse(null);
+        // Points toast
+        const coursePts = getCoursePoints('rushing-bonus');
+        const isAllDone = newCompleted.size >= COURSES.length;
+        const earnedPts = coursePts + (isAllDone ? POINTS_ALL_COMPLETE_BONUS : 0);
+        const bonusMsg = isAllDone ? ` + ${POINTS_ALL_COMPLETE_BONUS.toLocaleString()} Hall of Fame bonus!` : '';
+        setPointsToast({pts: earnedPts, msg: `+${coursePts} pts earned${bonusMsg}`});
+        setTimeout(() => setPointsToast(null), 4000);
+      });
   }
 
   // ── LOADING SCREEN ──────────────────────────────────────────────────────────
@@ -1212,8 +1298,78 @@ export default function BudtenderEducation() {
         </div>
       </div>
 
-      {/* ── Course Viewer (when a course is open) ──────────────────────────── */}
-      {currentCourse && !courseQuizActive ? (
+      {/* ── Rushing Bonus Survey (special view) ──────────────────────────── */}
+      {activeCourse === 'rushing-bonus' && !courseQuizActive ? (
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+          <button
+            onClick={closeCourse}
+            className="text-[#888] text-xs sm:text-sm hover:text-white transition-colors mb-5 sm:mb-6 flex items-center gap-2"
+          >
+            ← Back to courses
+          </button>
+
+          <div className="text-center mb-8">
+            <span className="text-4xl mb-3 block">🏃</span>
+            <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2" style={{fontFamily: 'Teko, sans-serif', fontWeight: 700}}>RUSHING BONUS</h2>
+            <p className="text-[#999] text-sm sm:text-base">Tell us about yourself to earn your final <span className="text-[#c8a84b] font-bold">100 pts</span> and complete Training Camp.</p>
+          </div>
+
+          <div className="space-y-5">
+            {RUSHING_BONUS_QUESTIONS.map((q) => (
+              <div key={q.id} className="bg-[#151515] border border-white/8 rounded-xl p-4 sm:p-5">
+                <label className="block text-sm font-semibold text-white mb-2">{q.label}</label>
+                {q.type === 'select' ? (
+                  <select
+                    value={surveyAnswers[q.id] || ''}
+                    onChange={(e) => setSurveyAnswers({...surveyAnswers, [q.id]: e.target.value})}
+                    className="w-full px-3 py-2.5 bg-[#0a0a0a] border border-white/15 rounded-lg text-sm text-white outline-none focus:border-[#c8a84b] transition-colors"
+                  >
+                    <option value="">Select...</option>
+                    {q.options.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                ) : q.type === 'rating' ? (
+                  <div className="flex gap-2 flex-wrap">
+                    {[1,2,3,4,5,6,7,8,9,10].map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => setSurveyAnswers({...surveyAnswers, [q.id]: String(n)})}
+                        className={`w-9 h-9 rounded-lg text-sm font-bold transition-all ${
+                          surveyAnswers[q.id] === String(n)
+                            ? 'bg-[#c8a84b] text-black'
+                            : 'bg-white/5 border border-white/15 text-white hover:border-[#c8a84b]/50'
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={surveyAnswers[q.id] || ''}
+                    onChange={(e) => setSurveyAnswers({...surveyAnswers, [q.id]: e.target.value})}
+                    placeholder="Type your answer..."
+                    className="w-full px-3 py-2.5 bg-[#0a0a0a] border border-white/15 rounded-lg text-sm text-white outline-none focus:border-[#c8a84b] transition-colors placeholder:text-[#555]"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-8 text-center">
+            <button
+              onClick={handleSurveySubmit}
+              disabled={surveySubmitting || RUSHING_BONUS_QUESTIONS.some(q => !surveyAnswers[q.id] || surveyAnswers[q.id].trim() === '')}
+              className="px-8 py-3 bg-[#c8a84b] text-black font-bold text-sm rounded-xl hover:bg-[#d4b65c] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{fontFamily: 'Teko, sans-serif', fontSize: '1.25rem', letterSpacing: '0.05em'}}
+            >
+              {surveySubmitting ? 'Submitting...' : 'SUBMIT & EARN 100 PTS 🏃'}
+            </button>
+          </div>
+        </div>
+      ) : currentCourse && !courseQuizActive ? (
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           {/* Back button */}
           <button
@@ -1616,9 +1772,9 @@ export default function BudtenderEducation() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                 {[
                   {icon: '🎉', label: 'SIGN UP', value: `+${POINTS_SIGNUP}`, sub: 'pts'},
-                  {icon: '📚', label: 'PER COURSE', value: '+200–1K', sub: 'pts'},
+                  {icon: '📚', label: 'COURSES', value: '+200–1K', sub: 'pts each'},
+                  {icon: '🏃', label: 'RUSHING BONUS', value: '+100', sub: 'survey'},
                   {icon: '🏆', label: 'HALL OF FAME', value: `+${POINTS_ALL_COMPLETE_BONUS.toLocaleString()}`, sub: 'bonus'},
-                  {icon: '💰', label: 'EXCHANGE', value: `${POINTS_PER_DOLLAR}`, sub: 'pts = $1'},
                 ].map((item, i) => (
                   <div key={i} className="bg-white/[0.03] border border-white/8 rounded-xl sm:rounded-2xl p-4 sm:p-5 text-center hover:border-[#c8a84b]/20 transition-colors">
                     <div className="text-2xl sm:text-3xl mb-2">{item.icon}</div>
