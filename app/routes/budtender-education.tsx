@@ -1796,7 +1796,7 @@ export default function BudtenderEducation() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              {COURSES.map((course, idx) => {
+              {COURSES.filter(c => c.id !== 'rushing-bonus').map((course, idx) => {
                 const isComplete = completedCourses.has(course.id);
                 return (
                   <button
@@ -1856,6 +1856,108 @@ export default function BudtenderEducation() {
                 );
               })}
             </div>
+
+            {/* ── Rushing Bonus + Hall of Fame Tracker ──────────────────────── */}
+            {(() => {
+              const nonBonusCourses = COURSES.filter(c => c.id !== 'rushing-bonus');
+              const completedNonBonus = nonBonusCourses.filter(c => completedCourses.has(c.id)).length;
+              const rushingComplete = completedCourses.has('rushing-bonus');
+              const allDone = completedCourses.size >= COURSES.length;
+              const completionPct = Math.round((completedCourses.size / COURSES.length) * 100);
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-3 sm:mt-4">
+                  {/* Rushing Bonus Card */}
+                  <button
+                    onClick={() => openCourse('rushing-bonus')}
+                    className="text-left bg-[#151515] border border-white/8 rounded-xl sm:rounded-2xl p-5 sm:p-6 hover:border-[#c8a84b]/30 hover:bg-[#1a1a1a] transition-all group relative overflow-hidden"
+                  >
+                    <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#c8a84b] opacity-50" />
+                    <div className="flex items-start justify-between mb-3 sm:mb-4">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <span className="text-xl sm:text-2xl">🏃</span>
+                        <span className="text-[9px] sm:text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded text-[#c8a84b] bg-[#c8a84b]/15">
+                          Final Step
+                        </span>
+                      </div>
+                      {rushingComplete ? (
+                        <span className="text-[9px] sm:text-[10px] uppercase tracking-wider font-bold text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded">
+                          Completed ✓
+                        </span>
+                      ) : (
+                        <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-[#555]">3 min</span>
+                      )}
+                    </div>
+                    <h3 className="text-base sm:text-lg font-bold text-white mb-1 group-hover:text-[#c8a84b] transition-colors">
+                      Rushing Bonus
+                    </h3>
+                    <p className="text-[#888] text-xs sm:text-sm leading-relaxed">Tell us about yourself — earn your final 100 pts</p>
+                    <div className="flex items-center gap-2 mt-3 sm:mt-4">
+                      <div className="text-[10px] sm:text-xs text-[#555]">📝 Survey</div>
+                      <span className="text-[#333]">·</span>
+                      {rushingComplete ? (
+                        <div className="text-[10px] sm:text-xs text-emerald-400 font-semibold">+100 pts earned</div>
+                      ) : (
+                        <div className="text-[10px] sm:text-xs text-[#c8a84b] font-semibold">+100 pts</div>
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Hall of Fame Tracker */}
+                  <div className={`rounded-xl sm:rounded-2xl p-5 sm:p-6 relative overflow-hidden border ${allDone ? 'border-[#c8a84b]/40 bg-gradient-to-br from-[#c8a84b]/15 to-[#151515]' : 'border-white/8 bg-[#151515]'}`}>
+                    <div className="absolute top-0 left-0 right-0 h-[2px]" style={{background: allDone ? '#c8a84b' : '#555', opacity: allDone ? 1 : 0.5}} />
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-xl sm:text-2xl">🏆</span>
+                      <span className={`text-[9px] sm:text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded ${allDone ? 'text-[#c8a84b] bg-[#c8a84b]/15' : 'text-[#555] bg-white/5'}`}>
+                        {allDone ? 'Unlocked' : 'Locked'}
+                      </span>
+                    </div>
+                    <h3 className="text-base sm:text-lg font-bold text-white mb-1" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(1.2rem, 3vw, 1.5rem)', fontWeight: 700}}>
+                      HALL OF FAME
+                    </h3>
+                    <p className="text-[#888] text-xs sm:text-sm mb-4">
+                      {allDone ? 'You made it! Maximum rewards unlocked.' : `Complete all ${COURSES.length} modules to earn the ${POINTS_ALL_COMPLETE_BONUS.toLocaleString()} pt bonus.`}
+                    </p>
+
+                    {/* Completion tracker */}
+                    <div className="space-y-2 mb-4">
+                      {COURSES.map((c) => {
+                        const done = completedCourses.has(c.id);
+                        return (
+                          <div key={c.id} className="flex items-center gap-2">
+                            <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] shrink-0 ${done ? 'bg-emerald-500 text-white' : 'border border-white/20 text-transparent'}`}>
+                              {done ? '✓' : ''}
+                            </div>
+                            <span className={`text-xs ${done ? 'text-[#999] line-through' : 'text-[#666]'}`}>{c.title}</span>
+                            <span className={`text-[10px] ml-auto ${done ? 'text-emerald-400' : 'text-[#444]'}`}>+{getCoursePoints(c.id)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Progress bar + percentage */}
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-2 bg-white/8 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-700 ease-out"
+                          style={{
+                            width: `${completionPct}%`,
+                            background: allDone ? 'linear-gradient(90deg, #c8a84b, #e0c66a)' : '#555',
+                          }}
+                        />
+                      </div>
+                      <span className={`text-sm font-bold ${allDone ? 'text-[#c8a84b]' : 'text-[#666]'}`} style={{fontFamily: 'Teko, sans-serif', fontSize: '1.1rem'}}>
+                        {completionPct}%
+                      </span>
+                    </div>
+                    {allDone && (
+                      <div className="mt-3 text-center">
+                        <span className="text-[#c8a84b] font-bold" style={{fontFamily: 'Teko, sans-serif', fontSize: '1.5rem'}}>+{POINTS_ALL_COMPLETE_BONUS.toLocaleString()} PTS BONUS 🎉</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
           </section>
 
