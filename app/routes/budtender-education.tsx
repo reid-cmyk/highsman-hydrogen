@@ -1310,58 +1310,63 @@ export default function BudtenderEducation() {
       ) : (
         /* ── Main Portal View ──────────────────────────────────────────────── */
         <div>
+          {/* ── Account dropdown (floats top-right of content area) ─────── */}
+          <div className="relative z-30">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6">
+              <div className="flex justify-end pt-4" ref={userMenuRef}>
+                <div className="relative">
+                  <button
+                    onClick={() => setUserMenuOpen(!userMenuOpen)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all"
+                  >
+                    <div className="w-7 h-7 rounded-full bg-[#c8a84b] flex items-center justify-center text-black text-xs font-bold">
+                      {userName ? userName.charAt(0).toUpperCase() : 'U'}
+                    </div>
+                    <span className="text-xs text-[#ccc] hidden sm:inline">{userName}</span>
+                    <svg className="w-3 h-3 text-[#888]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  </button>
+
+                  {userMenuOpen && (
+                    <div className="absolute right-0 top-full mt-2 w-56 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
+                      {/* User info */}
+                      <div className="px-4 py-3 border-b border-white/8">
+                        <div className="text-sm font-semibold text-white">{userName}</div>
+                        {userEmail && (
+                          <div className="text-[11px] text-[#888] mt-0.5 truncate">{userEmail}</div>
+                        )}
+                      </div>
+                      {/* Progress */}
+                      <div className="px-4 py-3 border-b border-white/8">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[10px] uppercase tracking-wider text-[#666]">Progress</span>
+                          <span className="text-[10px] text-[#999]">{completedCourses.size}/{COURSES.length}</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-[#c8a84b] rounded-full transition-all"
+                            style={{width: `${(completedCourses.size / COURSES.length) * 100}%`}}
+                          />
+                        </div>
+                      </div>
+                      {/* Sign out */}
+                      <button
+                        onClick={handleLogout}
+                        className="w-full text-left px-4 py-3 text-sm text-[#999] hover:text-white hover:bg-white/5 transition-colors"
+                      >
+                        Sign Out
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* ── Hero ──────────────────────────────────────────────────────── */}
           <section className="relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-[#c8a84b]/8 via-transparent to-[#c8a84b]/3" />
             <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-[#c8a84b]/5 to-transparent hidden md:block" />
-            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16 md:py-24 relative">
-
-              {/* ── Account dropdown (top-right of hero) ──────────────────── */}
-              <div className="absolute top-4 sm:top-6 right-4 sm:right-6 z-30" ref={userMenuRef}>
-                <button
-                  onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all"
-                >
-                  <div className="w-7 h-7 rounded-full bg-[#c8a84b] flex items-center justify-center text-black text-xs font-bold">
-                    {userName ? userName.charAt(0).toUpperCase() : 'U'}
-                  </div>
-                  <span className="text-xs text-[#ccc] hidden sm:inline">{userName}</span>
-                  <svg className="w-3 h-3 text-[#888]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                </button>
-
-                {userMenuOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-56 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
-                    {/* User info */}
-                    <div className="px-4 py-3 border-b border-white/8">
-                      <div className="text-sm font-semibold text-white">{userName}</div>
-                      {userEmail && (
-                        <div className="text-[11px] text-[#888] mt-0.5 truncate">{userEmail}</div>
-                      )}
-                    </div>
-                    {/* Progress */}
-                    <div className="px-4 py-3 border-b border-white/8">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[10px] uppercase tracking-wider text-[#666]">Progress</span>
-                        <span className="text-[10px] text-[#999]">{completedCourses.size}/{COURSES.length}</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-[#c8a84b] rounded-full transition-all"
-                          style={{width: `${(completedCourses.size / COURSES.length) * 100}%`}}
-                        />
-                      </div>
-                    </div>
-                    {/* Sign out */}
-                    <button
-                      onClick={handleLogout}
-                      className="w-full text-left px-4 py-3 text-sm text-[#999] hover:text-white hover:bg-white/5 transition-colors"
-                    >
-                      Sign Out
-                    </button>
-                  </div>
-                )}
-              </div>
-
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12 md:py-20 relative">
               <div className="max-w-2xl">
                 <div className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-[#c8a84b] font-semibold mb-4">
                   Welcome back, {userName}
