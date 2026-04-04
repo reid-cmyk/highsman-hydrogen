@@ -1873,12 +1873,12 @@ export default function BudtenderEducation() {
                             />
                             {/* Highsman logo on the Unsigned locker */}
                             {i === 0 && (
-                              <div className="absolute pointer-events-none" style={{top: '28%', left: '50%', transform: 'translateX(-50%)', width: '40%'}}>
+                              <div className="absolute pointer-events-none" style={{top: '32%', left: '50%', transform: 'translateX(-50%)', width: '50%', zIndex: 10}}>
                                 <img
                                   src="https://d3k81ch9hvuctc.cloudfront.net/company/XiTH4j/images/56982811-5ee5-41d7-ba35-b6dc317e2204.png"
                                   alt="Highsman"
                                   className="w-full h-auto"
-                                  style={{filter: 'brightness(0.9)', opacity: 0.85}}
+                                  style={{filter: 'brightness(0) invert(1) drop-shadow(0 0 4px rgba(255,255,255,0.5))', opacity: 0.9}}
                                 />
                               </div>
                             )}
