@@ -64,15 +64,17 @@ const SCIENCE_VIDEO_URL =
 
 // ── Points / Rewards System ─────────────────────────────────────────────────
 const POINTS_SIGNUP = 200;
-const POINTS_ALL_COMPLETE_BONUS = 1000;
+const POINTS_ALL_COMPLETE_BONUS = 2000; // Hall of Fame bonus
 const POINTS_PER_DOLLAR = 100; // 100 pts = $1
 
-// Tiered: first two courses = 200 pts, next two = 300 pts
+// Tiered by level: Rookie=200, Practice Squad=300, Starting Lineup=500 each, Franchise Player=1000
 const COURSE_POINTS: Record<string, number> = {
-  'meet-ricky': 200,
-  'meet-highsman': 200,
-  'the-science': 300,
-  'the-products': 300,
+  'meet-ricky': 200,        // Rookie
+  'meet-highsman': 300,     // Practice Squad
+  'hit-sticks': 500,        // Starting Lineup
+  'triple-threat': 500,     // Starting Lineup
+  'ground-game': 500,       // Starting Lineup
+  'the-science': 1000,      // Franchise Player
 };
 
 function getCoursePoints(courseId: string): number {
@@ -92,8 +94,8 @@ function pointsToDollars(pts: number): string {
   return (pts / POINTS_PER_DOLLAR).toFixed(2);
 }
 
-// Max: 200 + 200+200+300+300 + 1000 = 2,200 pts → $22.00
-const MAX_POINTS = POINTS_SIGNUP + 200 + 200 + 300 + 300 + POINTS_ALL_COMPLETE_BONUS;
+// Max: 200 + 200+300+500+500+500+1000 + 2000 = 5,200 pts → $52.00
+const MAX_POINTS = POINTS_SIGNUP + 200 + 300 + 500 + 500 + 500 + 1000 + POINTS_ALL_COMPLETE_BONUS;
 
 // ── Session Persistence ──────────────────────────────────────────────────────
 const SESSION_KEY = 'highsman_budtender_session';
@@ -175,7 +177,7 @@ interface Course {
   title: string;
   subtitle: string;
   duration: string;
-  level: 'Beginner' | 'Intermediate' | 'Advanced';
+  level: 'Rookie' | 'Practice Squad' | 'Starting Lineup' | 'Franchise Player';
   icon: string;
   color: string;
   slides: CourseSlide[];
@@ -185,12 +187,13 @@ interface Course {
 }
 
 const COURSES: Course[] = [
+  // ── Rookie ──────────────────────────────────────────────────────────────
   {
     id: 'meet-ricky',
     title: 'Meet Ricky',
     subtitle: "Ricky Williams' journey — from the NFL to cannabis",
     duration: '5 min',
-    level: 'Beginner',
+    level: 'Rookie',
     icon: '🏈',
     color: '#c8a84b',
     audioSummary: '',
@@ -231,12 +234,13 @@ const COURSES: Course[] = [
       },
     ],
   },
+  // ── Practice Squad ──────────────────────────────────────────────────────
   {
     id: 'meet-highsman',
     title: 'Meet Highsman',
     subtitle: 'The brand — where we came from and what we stand for',
     duration: '8 min',
-    level: 'Beginner',
+    level: 'Practice Squad',
     icon: '🏆',
     color: '#7c3aed',
     audioSummary: '',
@@ -299,12 +303,149 @@ const COURSES: Course[] = [
       },
     ],
   },
+  // ── Starting Lineup (3 product courses) ─────────────────────────────────
+  {
+    id: 'hit-sticks',
+    title: 'Hit Sticks',
+    subtitle: '0.5G Triple Infused Pre Roll — the grab-and-go option',
+    duration: '8 min',
+    level: 'Starting Lineup',
+    icon: '⚡',
+    color: '#dc2626',
+    audioSummary: '',
+    slides: [
+      {
+        title: 'Welcome to Hit Sticks',
+        content:
+          'Hit Sticks are the grab-and-go option — 0.5 grams of Triple Infused pre-roll. Lower commitment, same premium quality. This course covers everything you need to know to sell Hit Sticks.',
+        keyPoints: [
+          '0.5 grams — compact and convenient',
+          'Same Triple Infusion quality as every Highsman product',
+          'Perfect trial product for first-time customers',
+          'Lower price point, easy impulse buy',
+        ],
+      },
+      {
+        title: 'Who Is the Hit Sticks Customer?',
+        content:
+          'Hit Sticks are built for the quick-session smoker and the curious first-timer. Customers who want premium quality without a big commitment. This is the gateway to the Highsman lineup.',
+        keyPoints: [
+          'Quick-session smokers',
+          'First-time Highsman customers',
+          'Price-conscious buyers who still want premium',
+          'Impulse purchase — perfect for countertop display',
+        ],
+      },
+      {
+        title: 'Selling Hit Sticks',
+        content:
+          'Position Hit Sticks as the entry point. "Want to try the best infused pre-roll in the game? Start with a Hit Stick." Once they try it, upsell to Triple Threat or Ground Game on the next visit.',
+        keyPoints: [
+          'Lead with: "Try the best infused pre-roll in the game"',
+          'Use as a gateway to the full lineup',
+          'Upsell path: Hit Stick → Triple Threat → Ground Game',
+          'Assumptive close: "One or two?"',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'triple-threat',
+    title: 'Triple Threat Pre Roll',
+    subtitle: '1.2G Triple Infused flagship pre-roll',
+    duration: '8 min',
+    level: 'Starting Lineup',
+    icon: '🔥',
+    color: '#ea580c',
+    audioSummary: '',
+    slides: [
+      {
+        title: 'Welcome to Triple Threat',
+        content:
+          'Triple Threat is the flagship pre-roll — 1.2 grams of Triple Infused goodness, ready to spark. This is the product that showcases the full Triple Infusion process at its best.',
+        keyPoints: [
+          '1.2 grams per pre-roll',
+          'Full Triple Infusion process',
+          'Showcase product for the Highsman experience',
+          'Perfect for the "try before you commit" buyer',
+        ],
+      },
+      {
+        title: 'Who Is the Triple Threat Customer?',
+        content:
+          'Triple Threat is for the customer who wants the full Highsman experience in a single pre-roll. They already know they like pre-rolls, they want premium, and they are ready to pay for quality.',
+        keyPoints: [
+          'Experienced pre-roll smokers',
+          'Customers who ask "what is your best?"',
+          'Social smokers — great for sharing',
+          'The "I want to try something special" buyer',
+        ],
+      },
+      {
+        title: 'Selling Triple Threat',
+        content:
+          'This is your lead product. When someone asks for a recommendation, Triple Threat is the answer. "This is our flagship — 1.2 grams of Triple Infused. Flavor lasts the full smoke." Let the product do the talking.',
+        keyPoints: [
+          'Lead recommendation for pre-roll shoppers',
+          'Pitch: "Flavor lasts the full smoke, not just the first hit"',
+          'Upsell from Hit Sticks: "Ready for the full experience?"',
+          'Assumptive close: "Single or the two-pack?"',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'ground-game',
+    title: 'Ground Game',
+    subtitle: '7G Ready To Roll Triple Infused Flower',
+    duration: '8 min',
+    level: 'Starting Lineup',
+    icon: '🌿',
+    color: '#16a34a',
+    audioSummary: '',
+    slides: [
+      {
+        title: 'Welcome to Ground Game',
+        content:
+          'Ground Game is Highsman\'s premium flower product — 7 grams of Triple Infused flower for consumers who prefer to roll their own. It is the highest-value SKU in the lineup and a great entry point for daily consumers.',
+        keyPoints: [
+          '7 grams of Triple Infused flower',
+          'Highest value SKU for roll-your-own consumers',
+          'Premium quality at a compelling price point',
+          'Great for daily consumers',
+        ],
+      },
+      {
+        title: 'Who Is the Ground Game Customer?',
+        content:
+          'Ground Game is for the roll-your-own crowd — daily consumers who go through flower and want the best. They value quantity and quality. This is the SKU with the highest repeat purchase rate.',
+        keyPoints: [
+          'Daily consumers who roll their own',
+          'Value-conscious but quality-first',
+          'Highest repeat purchase rate in the lineup',
+          'Often buy alongside pre-rolls for variety',
+        ],
+      },
+      {
+        title: 'Selling Ground Game',
+        content:
+          'Position Ground Game as the smart buy for daily smokers. "Seven grams of Triple Infused flower — same process as our pre-rolls but you roll it your way." Emphasize the value and the quality.',
+        keyPoints: [
+          'Pitch: "Same Triple Infusion, you roll it your way"',
+          'Emphasize 7G value for daily consumers',
+          'Cross-sell with pre-rolls: "Grab a Hit Stick for on-the-go too"',
+          'Assumptive close: "You rolling tonight?"',
+        ],
+      },
+    ],
+  },
+  // ── Franchise Player ────────────────────────────────────────────────────
   {
     id: 'the-science',
     title: 'The Science',
     subtitle: 'Triple Infusion — the process that sets us apart',
     duration: '15 min',
-    level: 'Intermediate',
+    level: 'Franchise Player',
     icon: '🔬',
     color: '#059669',
     videoUrl: SCIENCE_VIDEO_URL,
@@ -352,72 +493,6 @@ const COURSES: Course[] = [
           'No harsh infused edge',
           'Smooth, consistent burn',
           'This is your key selling point',
-        ],
-      },
-    ],
-  },
-  {
-    id: 'the-products',
-    title: 'The Products',
-    subtitle: 'Know every SKU inside and out',
-    duration: '12 min',
-    level: 'Beginner',
-    icon: '📦',
-    color: '#dc2626',
-    audioSummary: '',
-    slides: [
-      {
-        title: 'Welcome to The Products',
-        content:
-          'This course covers every Highsman product in detail — what it is, who it is for, and how to sell it. Full product deep-dives and a quiz are coming soon. For now, here is a quick overview of the lineup.',
-        keyPoints: [
-          'Detailed product content coming soon',
-          'Quiz will be added once content is finalized',
-          'Learn the lineup so you can match product to customer',
-        ],
-      },
-      {
-        title: 'Ground Game — 7G Ready To Roll Flower',
-        content:
-          'Ground Game is Highsman\'s premium flower product — 7 grams of Triple Infused flower for consumers who prefer to roll their own. It is the highest-value SKU in the lineup and a great entry point for new customers.',
-        keyPoints: [
-          '7 grams of Triple Infused flower',
-          'Highest value SKU for roll-your-own consumers',
-          'Premium quality at a compelling price point',
-          'Great for daily consumers',
-        ],
-      },
-      {
-        title: 'Triple Threat — 1.2G Pre Roll',
-        content:
-          'Triple Threat is the flagship pre-roll — 1.2 grams of Triple Infused goodness, ready to spark. This is the product that showcases the full Triple Infusion process at its best.',
-        keyPoints: [
-          '1.2 grams per pre-roll',
-          'Full Triple Infusion process',
-          'Showcase product for new customers',
-          'Perfect for the "try before you commit" buyer',
-        ],
-      },
-      {
-        title: 'Hit Sticks — 0.5G Pre Roll',
-        content:
-          'Hit Sticks are the grab-and-go option — 0.5 grams of Triple Infused pre-roll. Lower commitment, same premium quality. Ideal for customers who want a quick session or are trying Highsman for the first time.',
-        keyPoints: [
-          '0.5 grams — compact and convenient',
-          'Same Triple Infusion quality',
-          'Perfect trial product',
-          'Lower price point, easy impulse buy',
-        ],
-      },
-      {
-        title: 'Selling the Lineup',
-        content:
-          'Every customer interaction should match the product to their need. Roll-your-own? Ground Game. Want the full experience? Triple Threat. Quick session or first timer? Hit Stick. Always use the assumptive close.',
-        keyPoints: [
-          'Match product to consumption style',
-          'Always recommend up: "Single or two-pack?"',
-          'Use the 10-second intercept for switching brands',
-          '"Hey — before you order, we\'re running a great deal today."',
         ],
       },
     ],
@@ -1525,7 +1600,7 @@ export default function BudtenderEducation() {
                       {/* Next reward hint */}
                       <div className="text-[#999]" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(0.9rem, 2.5vw, 1.1rem)', fontWeight: 400}}>
                         {allDone ? (
-                          <span className="text-emerald-400" style={{fontWeight: 600}}>ALL COURSES COMPLETE — MAXIMUM REWARDS UNLOCKED</span>
+                          <span className="text-emerald-400" style={{fontWeight: 600}}>HALL OF FAME — ALL COURSES COMPLETE — MAXIMUM REWARDS UNLOCKED 🏆</span>
                         ) : bonusAvailable ? (
                           <span>Finish the last course for <span className="text-[#c8a84b]" style={{fontWeight: 600}}>+{nextCoursePts} pts</span> plus a <span className="text-[#c8a84b]" style={{fontWeight: 600}}>1,000 pt completion bonus!</span></span>
                         ) : (
@@ -1541,8 +1616,8 @@ export default function BudtenderEducation() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                 {[
                   {icon: '🎉', label: 'SIGN UP', value: `+${POINTS_SIGNUP}`, sub: 'pts'},
-                  {icon: '📚', label: 'PER COURSE', value: '+200–300', sub: 'pts'},
-                  {icon: '🏆', label: 'FINISH ALL', value: `+${POINTS_ALL_COMPLETE_BONUS.toLocaleString()}`, sub: 'bonus'},
+                  {icon: '📚', label: 'PER COURSE', value: '+200–1K', sub: 'pts'},
+                  {icon: '🏆', label: 'HALL OF FAME', value: `+${POINTS_ALL_COMPLETE_BONUS.toLocaleString()}`, sub: 'bonus'},
                   {icon: '💰', label: 'EXCHANGE', value: `${POINTS_PER_DOLLAR}`, sub: 'pts = $1'},
                 ].map((item, i) => (
                   <div key={i} className="bg-white/[0.03] border border-white/8 rounded-xl sm:rounded-2xl p-4 sm:p-5 text-center hover:border-[#c8a84b]/20 transition-colors">
