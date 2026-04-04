@@ -21,6 +21,8 @@ const TRIPLE_THREAT_IMG =
   'https://d3k81ch9hvuctc.cloudfront.net/company/XiTH4j/images/24ca7f27-c951-4fa7-8f85-848a3d43c758.jpeg';
 const RICKY_VIDEO_URL =
   'https://cdn.shopify.com/videos/c/o/v/7b8854ab03ef40ce8c27d83e4b35589e.mp4';
+const SCIENCE_VIDEO_URL =
+  'https://cdn.shopify.com/videos/c/o/v/591d15c90b9c44d3a1b1a603e7a31e9f.mp4';
 
 // ── Session Persistence ──────────────────────────────────────────────────────
 const SESSION_KEY = 'highsman_budtender_session';
@@ -234,6 +236,7 @@ const COURSES: Course[] = [
     level: 'Intermediate',
     icon: '🔬',
     color: '#059669',
+    videoUrl: SCIENCE_VIDEO_URL,
     audioSummary: '',
     slides: [
       {
@@ -1462,21 +1465,6 @@ export default function BudtenderEducation() {
               })}
             </div>
 
-            {/* Full certification quiz link */}
-            <div className="mt-6 sm:mt-8 bg-[#151515] border border-[#c8a84b]/20 rounded-xl sm:rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-              <div className="flex-1">
-                <h3 className="text-base sm:text-lg font-bold text-white mb-1">Ready for the Full Certification?</h3>
-                <p className="text-[#888] text-xs sm:text-sm">
-                  Complete the comprehensive 11-question Highsman Certification Quiz to prove your mastery.
-                </p>
-              </div>
-              <a
-                href="/budtender-quiz"
-                className="w-full sm:w-auto text-center px-6 py-3 bg-[#c8a84b] text-black font-bold text-xs sm:text-sm rounded-lg hover:bg-[#d4b65c] transition-colors whitespace-nowrap"
-              >
-                Take Certification Quiz →
-              </a>
-            </div>
           </section>
 
           {/* ── Budtenders Only Section ───────────────────────────────────── */}
