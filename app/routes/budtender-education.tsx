@@ -308,7 +308,7 @@ const COURSES: Course[] = [
   {
     id: 'hit-sticks',
     title: 'Hit Sticks',
-    subtitle: '0.5G Triple Infused Pre Roll — the grab-and-go option',
+    subtitle: "0.5G Triple Infused It's Half Pre Roll, Half Chillum — the grab-and-go option",
     duration: '8 min',
     level: 'Starting Lineup',
     icon: '⚡',
@@ -1669,7 +1669,7 @@ export default function BudtenderEducation() {
                     </button>
 
                     {userMenuOpen && (
-                      <div className="absolute right-0 bottom-full mb-2 w-64 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
+                      <div className="absolute right-0 top-full mt-2 w-64 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
                         <div className="px-5 py-4 border-b border-white/8">
                           <div className="text-base font-semibold text-white" style={{fontFamily: 'Teko, sans-serif', fontSize: '1.25rem'}}>{userName}</div>
                           {userEmail && (
