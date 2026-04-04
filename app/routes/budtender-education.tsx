@@ -1406,7 +1406,7 @@ export default function BudtenderEducation() {
         /* ── Main Portal View ──────────────────────────────────────────────── */
         <div>
           {/* ── Training Camp Logo ────────────────────────────────────────── */}
-          <div className="w-full flex justify-center py-8 sm:py-12" style={{background: 'linear-gradient(180deg, #0a0a0a 0%, #111 50%, #0a0a0a 100%)'}}>
+          <div className="w-full flex justify-center pt-6 pb-2 sm:pt-8 sm:pb-2" style={{background: 'linear-gradient(180deg, #0a0a0a 0%, #111 50%, #0a0a0a 100%)'}}>
             <img
               src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Budtender_Training_Camp_Logo.svg?v=1775335713"
               alt="Highsman Budtender Training Camp"
@@ -1418,7 +1418,7 @@ export default function BudtenderEducation() {
           <section className="relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-[#c8a84b]/8 via-transparent to-[#c8a84b]/3" />
             <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-[#c8a84b]/5 to-transparent hidden md:block" />
-            <div className="max-w-6xl mx-auto px-5 sm:px-6 pt-8 pb-6 sm:pt-12 sm:pb-8 md:pt-16 md:pb-10 relative">
+            <div className="max-w-6xl mx-auto px-5 sm:px-6 pt-4 pb-6 sm:pt-6 sm:pb-8 md:pt-8 md:pb-10 relative">
 
               {/* ── Account button (top right) ──────────────────────── */}
               <div className="flex justify-between items-start mb-6 sm:mb-8">
