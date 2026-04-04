@@ -306,48 +306,60 @@ const COURSES: Course[] = [
       },
     ],
   },
-  // ── Starting Lineup (3 product courses) ─────────────────────────────────
+  // ── Starting Lineup ─────────────────────────────────────────────────────
   {
-    id: 'hit-sticks',
-    title: 'Hit Sticks',
-    subtitle: "0.5G Triple Infused It's Half Pre Roll, Half Chillum — the grab-and-go option",
-    duration: '8 min',
+    id: 'the-science',
+    title: 'The Science',
+    subtitle: 'Triple Infusion — the process that sets us apart',
+    duration: '15 min',
     level: 'Starting Lineup',
-    icon: '⚡',
-    color: '#dc2626',
+    icon: '🔬',
+    color: '#059669',
+    videoUrl: SCIENCE_VIDEO_URL,
     audioSummary: '',
     slides: [
       {
-        title: 'Welcome to Hit Sticks',
+        title: 'What Is Triple Infusion?',
         content:
-          'Hit Sticks are the grab-and-go option — 0.5 grams of Triple Infused pre-roll. Lower commitment, same premium quality. This course covers everything you need to know to sell Hit Sticks.',
+          'Most infused pre-rolls just coat the outside — Diamonds, Live Resin, and terpene extract sitting on the surface. Highsman actually spins the concentrates into the flower at high speed so they go all the way through, like they were always there.',
         keyPoints: [
-          '0.5 grams — compact and convenient',
-          'Same Triple Infusion quality as every Highsman product',
-          'Perfect trial product for first-time customers',
-          'Lower price point, easy impulse buy',
+          'Not a coating — a structural integration',
+          'Concentrates spun INTO the flower',
+          'Burns smooth, flavor lasts the whole smoke',
+          'Closest thing to hash in a pre-roll format',
         ],
       },
       {
-        title: 'Who Is the Hit Sticks Customer?',
+        title: 'The Three Infusion Components',
         content:
-          'Hit Sticks are built for the quick-session smoker and the curious first-timer. Customers who want premium quality without a big commitment. This is the gateway to the Highsman lineup.',
+          'The Triple Infusion liquid mixture starts with three premium components blended together, then a fourth is added and stirred to create the final infusion material.',
         keyPoints: [
-          'Quick-session smokers',
-          'First-time Highsman customers',
-          'Price-conscious buyers who still want premium',
-          'Impulse purchase — perfect for countertop display',
+          '1. Live Resin — full-spectrum extract',
+          '2. High Terpene Extract (HTE) — flavor & aroma',
+          '3. THCA Isolate (Diamonds) — potency',
+          '4. THC Distillate — added last, stirred in',
         ],
       },
       {
-        title: 'Selling Hit Sticks',
+        title: 'The Centrifuge Process',
         content:
-          'Position Hit Sticks as the entry point. "Want to try the best infused pre-roll in the game? Start with a Hit Stick." Once they try it, upsell to Triple Threat or Ground Game on the next visit.',
+          'The blended liquid is combined with flower and spun in a centrifuge at 10,000 RPM. This forces the concentrates deep into the plant material at a molecular level — true microstructure infusion.',
         keyPoints: [
-          'Lead with: "Try the best infused pre-roll in the game"',
-          'Use as a gateway to the full lineup',
-          'Upsell path: Hit Stick → Triple Threat → Ground Game',
-          'Assumptive close: "One or two?"',
+          'Centrifuge spins at 10,000 RPM',
+          'Forces concentrates INTO the flower',
+          'Result: dense, pliable "puck" or "cake"',
+          'Then heat is applied to release flavor volatiles',
+        ],
+      },
+      {
+        title: 'Why It Matters to the Customer',
+        content:
+          'The customer benefit is simple: flavor that lasts the full smoke, not just the first hit. No harsh "infused" edge. Smooth, consistent burn from start to finish. That is the pitch.',
+        keyPoints: [
+          'Flavor lasts the FULL smoke',
+          'No harsh infused edge',
+          'Smooth, consistent burn',
+          'This is your key selling point',
         ],
       },
     ],
@@ -446,58 +458,46 @@ const COURSES: Course[] = [
   },
   // ── Franchise Player ────────────────────────────────────────────────────
   {
-    id: 'the-science',
-    title: 'The Science',
-    subtitle: 'Triple Infusion — the process that sets us apart',
-    duration: '15 min',
+    id: 'hit-sticks',
+    title: 'Hit Sticks',
+    subtitle: "0.5G Triple Infused It's Half Pre Roll, Half Chillum — the grab-and-go option",
+    duration: '8 min',
     level: 'Franchise Player',
-    icon: '🔬',
-    color: '#059669',
-    videoUrl: SCIENCE_VIDEO_URL,
+    icon: '⚡',
+    color: '#dc2626',
     audioSummary: '',
     slides: [
       {
-        title: 'What Is Triple Infusion?',
+        title: 'Welcome to Hit Sticks',
         content:
-          'Most infused pre-rolls just coat the outside — Diamonds, Live Resin, and terpene extract sitting on the surface. Highsman actually spins the concentrates into the flower at high speed so they go all the way through, like they were always there.',
+          'Hit Sticks are the grab-and-go option — 0.5 grams of Triple Infused pre-roll. Lower commitment, same premium quality. This course covers everything you need to know to sell Hit Sticks.',
         keyPoints: [
-          'Not a coating — a structural integration',
-          'Concentrates spun INTO the flower',
-          'Burns smooth, flavor lasts the whole smoke',
-          'Closest thing to hash in a pre-roll format',
+          '0.5 grams — compact and convenient',
+          'Same Triple Infusion quality as every Highsman product',
+          'Perfect trial product for first-time customers',
+          'Lower price point, easy impulse buy',
         ],
       },
       {
-        title: 'The Three Infusion Components',
+        title: 'Who Is the Hit Sticks Customer?',
         content:
-          'The Triple Infusion liquid mixture starts with three premium components blended together, then a fourth is added and stirred to create the final infusion material.',
+          'Hit Sticks are built for the quick-session smoker and the curious first-timer. Customers who want premium quality without a big commitment. This is the gateway to the Highsman lineup.',
         keyPoints: [
-          '1. Live Resin — full-spectrum extract',
-          '2. High Terpene Extract (HTE) — flavor & aroma',
-          '3. THCA Isolate (Diamonds) — potency',
-          '4. THC Distillate — added last, stirred in',
+          'Quick-session smokers',
+          'First-time Highsman customers',
+          'Price-conscious buyers who still want premium',
+          'Impulse purchase — perfect for countertop display',
         ],
       },
       {
-        title: 'The Centrifuge Process',
+        title: 'Selling Hit Sticks',
         content:
-          'The blended liquid is combined with flower and spun in a centrifuge at 10,000 RPM. This forces the concentrates deep into the plant material at a molecular level — true microstructure infusion.',
+          'Position Hit Sticks as the entry point. "Want to try the best infused pre-roll in the game? Start with a Hit Stick." Once they try it, upsell to Triple Threat or Ground Game on the next visit.',
         keyPoints: [
-          'Centrifuge spins at 10,000 RPM',
-          'Forces concentrates INTO the flower',
-          'Result: dense, pliable "puck" or "cake"',
-          'Then heat is applied to release flavor volatiles',
-        ],
-      },
-      {
-        title: 'Why It Matters to the Customer',
-        content:
-          'The customer benefit is simple: flavor that lasts the full smoke, not just the first hit. No harsh "infused" edge. Smooth, consistent burn from start to finish. That is the pitch.',
-        keyPoints: [
-          'Flavor lasts the FULL smoke',
-          'No harsh infused edge',
-          'Smooth, consistent burn',
-          'This is your key selling point',
+          'Lead with: "Try the best infused pre-roll in the game"',
+          'Use as a gateway to the full lineup',
+          'Upsell path: Hit Stick → Triple Threat → Ground Game',
+          'Assumptive close: "One or two?"',
         ],
       },
     ],
