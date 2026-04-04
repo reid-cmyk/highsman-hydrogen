@@ -1032,70 +1032,19 @@ export default function BudtenderEducation() {
 
   return (
     <div ref={portalRef} className="min-h-screen bg-[#0a0a0a]">
-      {/* ── Sub-Header (below global nav) ────────────────────────────────── */}
+      {/* ── Sub-Header (thin progress bar below global nav) ────────────── */}
       <div className="bg-[#111] border-b border-white/10">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-[#c8a84b]/20 flex items-center justify-center">
-              <span className="text-[#c8a84b] text-xs font-bold">BE</span>
-            </div>
-            <div>
-              <div className="text-xs sm:text-sm font-semibold text-white tracking-wide">Budtender Education</div>
-              <div className="text-[10px] text-[#666] uppercase tracking-wider hidden sm:block">Highsman Training Portal</div>
-            </div>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] sm:text-xs font-semibold text-[#999] tracking-wide">Budtender Education</span>
           </div>
-          <div className="flex items-center gap-3 sm:gap-4">
-            {/* Progress */}
-            <span className="text-[10px] sm:text-xs text-[#999] hidden sm:inline">
-              {completedCourses.size}/{COURSES.length} completed
-            </span>
-            <div className="w-16 sm:w-24 h-1.5 bg-white/10 rounded-full overflow-hidden">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-[#666]">{completedCourses.size}/{COURSES.length}</span>
+            <div className="w-16 sm:w-20 h-1 bg-white/10 rounded-full overflow-hidden">
               <div
                 className="h-full bg-[#c8a84b] rounded-full transition-all duration-500"
                 style={{width: `${(completedCourses.size / COURSES.length) * 100}%`}}
               />
-            </div>
-
-            {/* User avatar / dropdown */}
-            <div className="relative" ref={userMenuRef}>
-              <button
-                onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className="w-8 h-8 rounded-full bg-[#c8a84b] flex items-center justify-center text-black text-xs font-bold hover:bg-[#d4b65c] transition-colors"
-              >
-                {userName ? userName.charAt(0).toUpperCase() : 'U'}
-              </button>
-
-              {userMenuOpen && (
-                <div className="absolute right-0 top-full mt-2 w-56 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
-                  {/* User info */}
-                  <div className="px-4 py-3 border-b border-white/8">
-                    <div className="text-sm font-semibold text-white">{userName}</div>
-                    {userEmail && (
-                      <div className="text-[11px] text-[#888] mt-0.5 truncate">{userEmail}</div>
-                    )}
-                  </div>
-                  {/* Progress */}
-                  <div className="px-4 py-3 border-b border-white/8">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[10px] uppercase tracking-wider text-[#666]">Progress</span>
-                      <span className="text-[10px] text-[#999]">{completedCourses.size}/{COURSES.length}</span>
-                    </div>
-                    <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-[#c8a84b] rounded-full transition-all"
-                        style={{width: `${(completedCourses.size / COURSES.length) * 100}%`}}
-                      />
-                    </div>
-                  </div>
-                  {/* Sign out */}
-                  <button
-                    onClick={handleLogout}
-                    className="w-full text-left px-4 py-3 text-sm text-[#999] hover:text-white hover:bg-white/5 transition-colors"
-                  >
-                    Sign Out
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -1366,6 +1315,53 @@ export default function BudtenderEducation() {
             <div className="absolute inset-0 bg-gradient-to-br from-[#c8a84b]/8 via-transparent to-[#c8a84b]/3" />
             <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-[#c8a84b]/5 to-transparent hidden md:block" />
             <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16 md:py-24 relative">
+
+              {/* ── Account dropdown (top-right of hero) ──────────────────── */}
+              <div className="absolute top-4 sm:top-6 right-4 sm:right-6 z-30" ref={userMenuRef}>
+                <button
+                  onClick={() => setUserMenuOpen(!userMenuOpen)}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all"
+                >
+                  <div className="w-7 h-7 rounded-full bg-[#c8a84b] flex items-center justify-center text-black text-xs font-bold">
+                    {userName ? userName.charAt(0).toUpperCase() : 'U'}
+                  </div>
+                  <span className="text-xs text-[#ccc] hidden sm:inline">{userName}</span>
+                  <svg className="w-3 h-3 text-[#888]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </button>
+
+                {userMenuOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
+                    {/* User info */}
+                    <div className="px-4 py-3 border-b border-white/8">
+                      <div className="text-sm font-semibold text-white">{userName}</div>
+                      {userEmail && (
+                        <div className="text-[11px] text-[#888] mt-0.5 truncate">{userEmail}</div>
+                      )}
+                    </div>
+                    {/* Progress */}
+                    <div className="px-4 py-3 border-b border-white/8">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[10px] uppercase tracking-wider text-[#666]">Progress</span>
+                        <span className="text-[10px] text-[#999]">{completedCourses.size}/{COURSES.length}</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-[#c8a84b] rounded-full transition-all"
+                          style={{width: `${(completedCourses.size / COURSES.length) * 100}%`}}
+                        />
+                      </div>
+                    </div>
+                    {/* Sign out */}
+                    <button
+                      onClick={handleLogout}
+                      className="w-full text-left px-4 py-3 text-sm text-[#999] hover:text-white hover:bg-white/5 transition-colors"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <div className="max-w-2xl">
                 <div className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-[#c8a84b] font-semibold mb-4">
                   Welcome back, {userName}
