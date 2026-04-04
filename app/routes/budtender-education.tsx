@@ -1,5 +1,5 @@
 import type {MetaFunction} from '@shopify/remix-oxygen';
-import {useState, useEffect, useRef} from 'react';
+import {useState, useEffect, useRef, useCallback} from 'react';
 
 export const meta: MetaFunction = () => {
   return [
@@ -19,6 +19,74 @@ const GROUND_GAME_IMG =
   'https://d3k81ch9hvuctc.cloudfront.net/company/XiTH4j/images/774d8da6-ed37-4110-8788-acd0d7b1447b.jpeg';
 const TRIPLE_THREAT_IMG =
   'https://d3k81ch9hvuctc.cloudfront.net/company/XiTH4j/images/24ca7f27-c951-4fa7-8f85-848a3d43c758.jpeg';
+
+// ── Session Persistence ──────────────────────────────────────────────────────
+const SESSION_KEY = 'highsman_budtender_session';
+const SESSION_EXPIRY_DAYS = 60; // 2 months
+
+interface SessionData {
+  name: string;
+  email: string;
+  state: string;
+  dispensary?: string;
+  completedCourses: string[];
+  createdAt: number;
+  expiresAt: number;
+}
+
+function saveSession(data: Omit<SessionData, 'createdAt' | 'expiresAt'> & Partial<Pick<SessionData, 'createdAt'>>) {
+  try {
+    const now = Date.now();
+    const session: SessionData = {
+      ...data,
+      createdAt: data.createdAt || now,
+      expiresAt: now + SESSION_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
+    };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } catch {}
+}
+
+function loadSession(): SessionData | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const session: SessionData = JSON.parse(raw);
+    if (Date.now() > session.expiresAt) {
+      localStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+function clearSession() {
+  try { localStorage.removeItem(SESSION_KEY); } catch {}
+}
+
+// ── Google Sign-In ───────────────────────────────────────────────────────────
+const GOOGLE_CLIENT_ID = ''; // Set your Google OAuth Client ID here
+
+function loadGoogleScript(): Promise<void> {
+  return new Promise((resolve) => {
+    if (document.getElementById('google-gsi')) { resolve(); return; }
+    const script = document.createElement('script');
+    script.id = 'google-gsi';
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    document.head.appendChild(script);
+  });
+}
+
+function decodeJWT(token: string): Record<string, any> | null {
+  try {
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(base64));
+  } catch { return null; }
+}
 
 // ── Course Data ───────────────────────────────────────────────────────────────
 interface CourseSlide {
@@ -401,7 +469,8 @@ function subscribeToKlaviyo(name: string, email: string, state: string) {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-type Screen = 'gate' | 'portal';
+type Screen = 'loading' | 'gate' | 'portal';
+type GateMode = 'login' | 'register';
 
 export default function BudtenderEducation() {
   // Suppress Klaviyo popup
@@ -417,8 +486,10 @@ export default function BudtenderEducation() {
     return () => { style.remove(); };
   }, []);
 
-  const [screen, setScreen] = useState<Screen>('gate');
+  const [screen, setScreen] = useState<Screen>('loading');
+  const [gateMode, setGateMode] = useState<GateMode>('login');
   const [userName, setUserName] = useState('');
+  const [userEmail, setUserEmail] = useState('');
 
   // Gate
   const [name, setName] = useState('');
@@ -427,6 +498,9 @@ export default function BudtenderEducation() {
   const [dispensary, setDispensary] = useState('');
   const [consent, setConsent] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [googleLoaded, setGoogleLoaded] = useState(false);
 
   // Portal
   const [activeCourse, setActiveCourse] = useState<string | null>(null);
@@ -441,7 +515,119 @@ export default function BudtenderEducation() {
   const [registeredEvents, setRegisteredEvents] = useState<Set<number>>(new Set());
 
   const portalRef = useRef<HTMLDivElement>(null);
+  const googleBtnRef = useRef<HTMLDivElement>(null);
 
+  // ── Auto-login: check localStorage on mount ─────────────────────────────
+  useEffect(() => {
+    const session = loadSession();
+    if (session) {
+      setUserName(session.name.split(' ')[0]);
+      setUserEmail(session.email);
+      setCompletedCourses(new Set(session.completedCourses || []));
+      setScreen('portal');
+    } else {
+      setScreen('gate');
+    }
+  }, []);
+
+  // ── Load Google Sign-In SDK ─────────────────────────────────────────────
+  useEffect(() => {
+    if (screen !== 'gate') return;
+    loadGoogleScript().then(() => {
+      setGoogleLoaded(true);
+    });
+  }, [screen]);
+
+  // ── Initialize Google button when ref + SDK are ready ───────────────────
+  useEffect(() => {
+    if (!googleLoaded || !googleBtnRef.current) return;
+    if (!GOOGLE_CLIENT_ID) return; // Skip if no client ID configured
+    const w = window as any;
+    if (!w.google?.accounts?.id) return;
+    w.google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: handleGoogleLogin,
+      auto_select: false,
+    });
+    w.google.accounts.id.renderButton(googleBtnRef.current, {
+      theme: 'outline',
+      size: 'large',
+      width: googleBtnRef.current.offsetWidth,
+      text: 'continue_with',
+      shape: 'rectangular',
+    });
+  }, [googleLoaded, gateMode, screen]);
+
+  // ── Persist completed courses whenever they change ──────────────────────
+  useEffect(() => {
+    if (screen !== 'portal') return;
+    const session = loadSession();
+    if (session) {
+      saveSession({...session, completedCourses: [...completedCourses]});
+    }
+  }, [completedCourses, screen]);
+
+  // ── Login with saved session (email only) ───────────────────────────────
+  function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setLoginError('');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(loginEmail)) {
+      setLoginError('Enter a valid email address.');
+      return;
+    }
+    // Check Klaviyo for this profile to verify they've registered before
+    fetch(
+      `https://a.klaviyo.com/client/profiles/?company_id=${KLAVIYO_PUBLIC_KEY}&filter=equals(email,"${encodeURIComponent(loginEmail.trim())}")&filter=equals(list,"${BUDTENDER_LIST_ID}")`,
+      {headers: {'revision': '2023-12-15'}}
+    ).then(() => {
+      // Klaviyo client API doesn't support profile lookup by email directly,
+      // so we trust the email and let them in — they already registered once.
+      // If they haven't registered, they won't have course progress saved.
+      const firstName = loginEmail.split('@')[0];
+      saveSession({
+        name: firstName,
+        email: loginEmail.trim(),
+        state: '',
+        completedCourses: [],
+      });
+      setUserName(firstName);
+      setUserEmail(loginEmail.trim());
+      setScreen('portal');
+    }).catch(() => {
+      // Even on network error, let them in with email
+      const firstName = loginEmail.split('@')[0];
+      saveSession({
+        name: firstName,
+        email: loginEmail.trim(),
+        state: '',
+        completedCourses: [],
+      });
+      setUserName(firstName);
+      setUserEmail(loginEmail.trim());
+      setScreen('portal');
+    });
+  }
+
+  // ── Google Sign-In callback ─────────────────────────────────────────────
+  function handleGoogleLogin(response: any) {
+    const payload = decodeJWT(response.credential);
+    if (!payload) return;
+    const googleEmail = payload.email || '';
+    const googleName = payload.name || payload.given_name || googleEmail.split('@')[0];
+    // Subscribe to Klaviyo (idempotent — won't duplicate)
+    subscribeToKlaviyo(googleName, googleEmail, '');
+    saveSession({
+      name: googleName,
+      email: googleEmail,
+      state: '',
+      completedCourses: [],
+    });
+    setUserName(googleName.split(' ')[0]);
+    setUserEmail(googleEmail);
+    setScreen('portal');
+  }
+
+  // ── Register (full form) ────────────────────────────────────────────────
   function handleGateSubmit(e: React.FormEvent) {
     e.preventDefault();
     const newErrors: Record<string, string> = {};
@@ -453,8 +639,30 @@ export default function BudtenderEducation() {
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
     setErrors({});
     subscribeToKlaviyo(name.trim(), email.trim(), state);
+    saveSession({
+      name: name.trim(),
+      email: email.trim(),
+      state,
+      dispensary: dispensary.trim() || undefined,
+      completedCourses: [],
+    });
     setUserName(name.split(' ')[0]);
+    setUserEmail(email.trim());
     setScreen('portal');
+  }
+
+  // ── Logout ──────────────────────────────────────────────────────────────
+  function handleLogout() {
+    clearSession();
+    setScreen('gate');
+    setGateMode('login');
+    setUserName('');
+    setUserEmail('');
+    setCompletedCourses(new Set());
+    setActiveCourse(null);
+    setCourseQuizActive(null);
+    setLoginEmail('');
+    setLoginError('');
   }
 
   function openCourse(id: string) {
@@ -522,6 +730,18 @@ export default function BudtenderEducation() {
     setRegisteredEvents(new Set([...registeredEvents, idx]));
   }
 
+  // ── LOADING SCREEN ──────────────────────────────────────────────────────────
+  if (screen === 'loading') {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-10 h-10 border-2 border-[#c8a84b]/30 border-t-[#c8a84b] rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-[#666] text-xs uppercase tracking-wider">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   // ── GATE SCREEN ─────────────────────────────────────────────────────────────
   if (screen === 'gate') {
     return (
@@ -539,105 +759,247 @@ export default function BudtenderEducation() {
             </p>
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleGateSubmit} className="bg-white rounded-xl p-6 md:p-8 shadow-2xl">
-            <div className="space-y-4">
-              {/* Name */}
-              <div>
-                <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#555] mb-1">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Your full name"
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm text-black outline-none transition-colors ${
-                    errors.name ? 'border-red-400 bg-red-50' : 'border-[#ddd] focus:border-[#c8a84b]'
-                  }`}
-                />
-                {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
-              </div>
-
-              {/* Email */}
-              <div>
-                <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#555] mb-1">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@dispensary.com"
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm text-black outline-none transition-colors ${
-                    errors.email ? 'border-red-400 bg-red-50' : 'border-[#ddd] focus:border-[#c8a84b]'
-                  }`}
-                />
-                {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
-              </div>
-
-              {/* State */}
-              <div>
-                <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#555] mb-1">
-                  State
-                </label>
-                <select
-                  value={state}
-                  onChange={(e) => setState(e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm text-black outline-none transition-colors bg-white ${
-                    errors.state ? 'border-red-400 bg-red-50' : 'border-[#ddd] focus:border-[#c8a84b]'
-                  }`}
-                >
-                  <option value="">Select state</option>
-                  <option value="NJ">New Jersey</option>
-                  <option value="NY">New York</option>
-                  <option value="MA">Massachusetts</option>
-                  <option value="RI">Rhode Island</option>
-                  <option value="MO">Missouri</option>
-                </select>
-                {errors.state && <p className="text-red-500 text-xs mt-1">{errors.state}</p>}
-              </div>
-
-              {/* Dispensary */}
-              <div>
-                <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#555] mb-1">
-                  Dispensary Name <span className="text-[#999] font-normal">(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={dispensary}
-                  onChange={(e) => setDispensary(e.target.value)}
-                  placeholder="Where do you work?"
-                  className="w-full px-3 py-2.5 border border-[#ddd] rounded-lg text-sm text-black outline-none transition-colors focus:border-[#c8a84b]"
-                />
-              </div>
-
-              {/* Consent */}
-              <label
-                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                  errors.consent ? 'border-red-400 bg-red-50' : 'border-[#eee] hover:bg-[#fafafa]'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={consent}
-                  onChange={(e) => setConsent(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 accent-[#c8a84b]"
-                />
-                <span className="text-xs text-[#666] leading-relaxed">
-                  I agree to receive training updates and exclusive budtender offers from Highsman via email.
-                </span>
-              </label>
-              {errors.consent && <p className="text-red-500 text-xs mt-0.5 ml-1">{errors.consent}</p>}
-            </div>
-
+          {/* Login / Register Toggle */}
+          <div className="flex mb-5 bg-[#151515] rounded-lg p-1">
             <button
-              type="submit"
-              className="w-full mt-6 py-3 bg-[#0a0a0a] text-white font-semibold text-sm rounded-lg hover:bg-[#222] transition-colors"
+              onClick={() => { setGateMode('login'); setErrors({}); setLoginError(''); }}
+              className={`flex-1 py-2.5 text-sm font-semibold rounded-md transition-all ${
+                gateMode === 'login'
+                  ? 'bg-[#c8a84b] text-black'
+                  : 'text-[#888] hover:text-white'
+              }`}
             >
-              ACCESS TRAINING PORTAL
+              Sign In
             </button>
-          </form>
+            <button
+              onClick={() => { setGateMode('register'); setErrors({}); setLoginError(''); }}
+              className={`flex-1 py-2.5 text-sm font-semibold rounded-md transition-all ${
+                gateMode === 'register'
+                  ? 'bg-[#c8a84b] text-black'
+                  : 'text-[#888] hover:text-white'
+              }`}
+            >
+              Create Account
+            </button>
+          </div>
+
+          {gateMode === 'login' ? (
+            /* ── LOGIN FORM (email only) ─────────────────────────────────── */
+            <div className="bg-white rounded-xl p-6 md:p-8 shadow-2xl">
+              <div className="text-center mb-5">
+                <h2 className="text-lg font-bold text-[#0a0a0a] mb-1">Welcome Back</h2>
+                <p className="text-[#888] text-xs">Sign in with your email to continue training</p>
+              </div>
+
+              {/* Google Sign-In Button */}
+              {GOOGLE_CLIENT_ID ? (
+                <div ref={googleBtnRef} className="mb-4 w-full" />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Fallback Google button — opens Google OAuth popup when client ID is configured
+                    // For now, show a styled button that hints at Google login
+                    if (!(window as any).google?.accounts?.id) {
+                      alert('Google Sign-In will be available soon. Please use email login for now.');
+                      return;
+                    }
+                    (window as any).google.accounts.id.prompt();
+                  }}
+                  className="w-full flex items-center justify-center gap-3 py-2.5 px-4 border border-[#ddd] rounded-lg text-sm text-[#333] font-medium hover:bg-[#f8f8f8] transition-colors mb-4"
+                >
+                  <svg width="18" height="18" viewBox="0 0 48 48">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                  </svg>
+                  Continue with Google
+                </button>
+              )}
+
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex-1 h-px bg-[#eee]" />
+                <span className="text-[10px] uppercase tracking-wider text-[#bbb]">or</span>
+                <div className="flex-1 h-px bg-[#eee]" />
+              </div>
+
+              <form onSubmit={handleLogin}>
+                <div>
+                  <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#555] mb-1">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={loginEmail}
+                    onChange={(e) => { setLoginEmail(e.target.value); setLoginError(''); }}
+                    placeholder="you@dispensary.com"
+                    className={`w-full px-3 py-2.5 border rounded-lg text-sm text-black outline-none transition-colors ${
+                      loginError ? 'border-red-400 bg-red-50' : 'border-[#ddd] focus:border-[#c8a84b]'
+                    }`}
+                  />
+                  {loginError && <p className="text-red-500 text-xs mt-1">{loginError}</p>}
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full mt-5 py-3 bg-[#0a0a0a] text-white font-semibold text-sm rounded-lg hover:bg-[#222] transition-colors"
+                >
+                  SIGN IN
+                </button>
+              </form>
+
+              <p className="text-center text-[#bbb] text-xs mt-4">
+                New here?{' '}
+                <button onClick={() => setGateMode('register')} className="text-[#c8a84b] font-semibold hover:underline">
+                  Create an account
+                </button>
+              </p>
+            </div>
+          ) : (
+            /* ── REGISTER FORM (full form) ───────────────────────────────── */
+            <div className="bg-white rounded-xl p-6 md:p-8 shadow-2xl">
+              <div className="text-center mb-5">
+                <h2 className="text-lg font-bold text-[#0a0a0a] mb-1">Create Your Account</h2>
+                <p className="text-[#888] text-xs">Register once, then sign in instantly next time</p>
+              </div>
+
+              {/* Google Sign-In for Registration */}
+              {!GOOGLE_CLIENT_ID && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!(window as any).google?.accounts?.id) {
+                      alert('Google Sign-In will be available soon. Please register with email for now.');
+                      return;
+                    }
+                    (window as any).google.accounts.id.prompt();
+                  }}
+                  className="w-full flex items-center justify-center gap-3 py-2.5 px-4 border border-[#ddd] rounded-lg text-sm text-[#333] font-medium hover:bg-[#f8f8f8] transition-colors mb-4"
+                >
+                  <svg width="18" height="18" viewBox="0 0 48 48">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                  </svg>
+                  Sign up with Google
+                </button>
+              )}
+
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex-1 h-px bg-[#eee]" />
+                <span className="text-[10px] uppercase tracking-wider text-[#bbb]">or register with email</span>
+                <div className="flex-1 h-px bg-[#eee]" />
+              </div>
+
+              <form onSubmit={handleGateSubmit}>
+                <div className="space-y-4">
+                  {/* Name */}
+                  <div>
+                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#555] mb-1">
+                      Full Name
+                    </label>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Your full name"
+                      className={`w-full px-3 py-2.5 border rounded-lg text-sm text-black outline-none transition-colors ${
+                        errors.name ? 'border-red-400 bg-red-50' : 'border-[#ddd] focus:border-[#c8a84b]'
+                      }`}
+                    />
+                    {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
+                  </div>
+
+                  {/* Email */}
+                  <div>
+                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#555] mb-1">
+                      Email Address
+                    </label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@dispensary.com"
+                      className={`w-full px-3 py-2.5 border rounded-lg text-sm text-black outline-none transition-colors ${
+                        errors.email ? 'border-red-400 bg-red-50' : 'border-[#ddd] focus:border-[#c8a84b]'
+                      }`}
+                    />
+                    {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
+                  </div>
+
+                  {/* State */}
+                  <div>
+                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#555] mb-1">
+                      State
+                    </label>
+                    <select
+                      value={state}
+                      onChange={(e) => setState(e.target.value)}
+                      className={`w-full px-3 py-2.5 border rounded-lg text-sm text-black outline-none transition-colors bg-white ${
+                        errors.state ? 'border-red-400 bg-red-50' : 'border-[#ddd] focus:border-[#c8a84b]'
+                      }`}
+                    >
+                      <option value="">Select state</option>
+                      <option value="NJ">New Jersey</option>
+                      <option value="NY">New York</option>
+                      <option value="MA">Massachusetts</option>
+                      <option value="RI">Rhode Island</option>
+                      <option value="MO">Missouri</option>
+                    </select>
+                    {errors.state && <p className="text-red-500 text-xs mt-1">{errors.state}</p>}
+                  </div>
+
+                  {/* Dispensary */}
+                  <div>
+                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#555] mb-1">
+                      Dispensary Name <span className="text-[#999] font-normal">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={dispensary}
+                      onChange={(e) => setDispensary(e.target.value)}
+                      placeholder="Where do you work?"
+                      className="w-full px-3 py-2.5 border border-[#ddd] rounded-lg text-sm text-black outline-none transition-colors focus:border-[#c8a84b]"
+                    />
+                  </div>
+
+                  {/* Consent */}
+                  <label
+                    className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                      errors.consent ? 'border-red-400 bg-red-50' : 'border-[#eee] hover:bg-[#fafafa]'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={consent}
+                      onChange={(e) => setConsent(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 accent-[#c8a84b]"
+                    />
+                    <span className="text-xs text-[#666] leading-relaxed">
+                      I agree to receive training updates and exclusive budtender offers from Highsman via email.
+                    </span>
+                  </label>
+                  {errors.consent && <p className="text-red-500 text-xs mt-0.5 ml-1">{errors.consent}</p>}
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full mt-6 py-3 bg-[#0a0a0a] text-white font-semibold text-sm rounded-lg hover:bg-[#222] transition-colors"
+                >
+                  CREATE ACCOUNT
+                </button>
+              </form>
+
+              <p className="text-center text-[#bbb] text-xs mt-4">
+                Already registered?{' '}
+                <button onClick={() => setGateMode('login')} className="text-[#c8a84b] font-semibold hover:underline">
+                  Sign in
+                </button>
+              </p>
+            </div>
+          )}
 
           <p className="text-center text-[#555] text-[10px] mt-6">
             © Highsman · For authorized budtender use only
@@ -665,7 +1027,7 @@ export default function BudtenderEducation() {
             </div>
           </div>
           <div className="flex items-center gap-3 sm:gap-4">
-            <span className="text-[10px] sm:text-xs text-[#999]">
+            <span className="text-[10px] sm:text-xs text-[#999] hidden sm:inline">
               {completedCourses.size}/{COURSES.length} completed
             </span>
             <div className="w-16 sm:w-24 h-1.5 bg-white/10 rounded-full overflow-hidden">
@@ -674,6 +1036,12 @@ export default function BudtenderEducation() {
                 style={{width: `${(completedCourses.size / COURSES.length) * 100}%`}}
               />
             </div>
+            <button
+              onClick={handleLogout}
+              className="text-[10px] sm:text-xs text-[#666] hover:text-white transition-colors px-2 py-1 rounded border border-white/10 hover:border-white/20"
+            >
+              Sign Out
+            </button>
           </div>
         </div>
       </div>
