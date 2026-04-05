@@ -726,7 +726,7 @@ const EVENTS = [
 ];
 
 // ── Klaviyo ───────────────────────────────────────────────────────────────────
-function subscribeToKlaviyo(name: string, email: string, state: string) {
+function subscribeToKlaviyo(name: string, email: string, state: string, dispensaryName: string) {
   const [firstName, ...rest] = name.split(' ');
   const lastName = rest.join(' ');
   fetch(
@@ -745,8 +745,10 @@ function subscribeToKlaviyo(name: string, email: string, state: string) {
                   email,
                   first_name: firstName,
                   last_name: lastName,
+                  organization: dispensaryName,
                   properties: {
                     budtender_state: state,
+                    dispensary_name: dispensaryName,
                     is_budtender: true,
                     budtender_education_signup: true,
                     marketing_consent: true,
@@ -965,7 +967,7 @@ export default function BudtenderEducation() {
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
     setErrors({});
     hashPassword(password).then((hashed) => {
-      subscribeToKlaviyo(name.trim(), email.trim(), state);
+      subscribeToKlaviyo(name.trim(), email.trim(), state, dispensary.trim());
       const sessionData = {
         name: name.trim(),
         email: email.trim(),
