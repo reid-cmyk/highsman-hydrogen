@@ -584,7 +584,53 @@ interface QuizQuestion {
 }
 
 const COURSE_QUIZZES: Record<string, QuizQuestion[]> = {
-  // Meet Ricky — quiz coming once video is live
+  'meet-ricky': [
+    {
+      q: 'What year did Ricky Williams win the Heisman Trophy at the University of Texas?',
+      options: ['1996', '1997', '1998', '1999'],
+      correct: 2,
+    },
+    {
+      q: 'Whose all-time rushing record did Ricky Williams break at the University of Texas?',
+      options: ['Vince Young', 'Earl Campbell', 'Cedric Benson', 'Colt McCoy'],
+      correct: 1,
+    },
+    {
+      q: 'How many NCAA records did Ricky Williams set during his college career at Texas?',
+      options: ['5 records', '12 records', '21 records', '46 records'],
+      correct: 2,
+    },
+    {
+      q: 'What was Ricky Williams\' rushing total when he led the entire NFL in 2002?',
+      options: ['1,200 yards', '1,500 yards', '1,853 yards', '2,100 yards'],
+      correct: 2,
+    },
+    {
+      q: 'Why did Ricky Williams use cannabis during his NFL career?',
+      options: [
+        'Recreationally — he openly admitted it was just for fun',
+        'As a tool for physical recovery and mental well-being, not rebellion',
+        'To cope with injuries that ended his career early',
+        'Because he disagreed with the NFL\'s supplement program',
+      ],
+      correct: 1,
+    },
+    {
+      q: 'Approximately how many drug tests did Ricky Williams face during his NFL career?',
+      options: ['About 50', 'Around 150', 'Approximately 300', 'An estimated 500'],
+      correct: 3,
+    },
+    {
+      q: 'How many seasons was Ricky Williams suspended from the NFL due to cannabis use?',
+      options: ['1 season', '2 seasons', '3 seasons', '4 seasons'],
+      correct: 2,
+    },
+    {
+      q: 'Approximately how much did Ricky Williams lose in salary and endorsements due to his suspensions?',
+      options: ['Around $1 million', 'Approximately $5 million', 'An estimated $10 million', 'Over $25 million'],
+      correct: 2,
+    },
+  ],
   // Meet Highsman — quiz coming once video is live
   'the-science': [
     {
