@@ -59,6 +59,8 @@ const TRIPLE_THREAT_IMG =
   'https://d3k81ch9hvuctc.cloudfront.net/company/XiTH4j/images/24ca7f27-c951-4fa7-8f85-848a3d43c758.jpeg';
 const RICKY_VIDEO_URL =
   'https://cdn.shopify.com/videos/c/o/v/7b8854ab03ef40ce8c27d83e4b35589e.mp4';
+const RICKY_VIDEO_2_URL =
+  'https://cdn.shopify.com/videos/c/o/v/93d7bb4e46784b2691cb719857996010.mp4';
 const SCIENCE_VIDEO_URL =
   'https://cdn.shopify.com/videos/c/o/v/591d15c90b9c44d3a1b1a603e7a31e9f.mp4';
 const TRIPLE_THREAT_VIDEO_URL =
@@ -222,6 +224,7 @@ interface Course {
   audioSummary: string;
   quizLink?: string;
   videoUrl?: string;
+  videoUrls?: {url: string; label: string}[];
 }
 
 const COURSES: Course[] = [
@@ -236,6 +239,10 @@ const COURSES: Course[] = [
     color: '#c8a84b',
     audioSummary: '',
     videoUrl: RICKY_VIDEO_URL,
+    videoUrls: [
+      {url: RICKY_VIDEO_URL, label: 'Part 1: Meet Ricky Williams'},
+      {url: RICKY_VIDEO_2_URL, label: 'Part 2: The Highsman Story'},
+    ],
     slides: [
       {
         title: 'Welcome to Meet Ricky',
@@ -915,6 +922,8 @@ export default function BudtenderEducation() {
   const [pointsToast, setPointsToast] = useState<{pts: number; msg: string} | null>(null);
   const [surveyAnswers, setSurveyAnswers] = useState<Record<string, string>>({});
   const [surveySubmitting, setSurveySubmitting] = useState(false);
+  const [videoStep, setVideoStep] = useState(0); // tracks which video in a multi-video course
+  const [videosWatched, setVideosWatched] = useState<Set<number>>(new Set()); // tracks which videos have ended
 
   const portalRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -1111,6 +1120,8 @@ export default function BudtenderEducation() {
     setSlideIndex(0);
     setCourseQuizActive(null);
     setQuizComplete(false);
+    setVideoStep(0);
+    setVideosWatched(new Set());
     window.scrollTo({top: 0, behavior: 'smooth'});
   }
 
@@ -1703,8 +1714,63 @@ export default function BudtenderEducation() {
             <p className="text-[#A9ACAF] text-xs sm:text-sm mt-1">{currentCourse.subtitle}</p>
           </div>
 
-          {/* ── Video Player (if course has video) ─────────────────────────── */}
-          {currentCourse.videoUrl && (
+          {/* ── Video Player (multi-video or single) ────────────────────── */}
+          {currentCourse.videoUrls && currentCourse.videoUrls.length > 1 ? (
+            <div className="mb-6 sm:mb-8">
+              {/* Video step indicator */}
+              <div className="flex items-center gap-2 mb-3">
+                {currentCourse.videoUrls.map((v, i) => (
+                  <button
+                    key={i}
+                    onClick={() => { if (i === 0 || videosWatched.has(i - 1)) setVideoStep(i); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold uppercase tracking-wide transition-all"
+                    style={{
+                      background: videoStep === i ? currentCourse.color : 'rgba(255,255,255,0.06)',
+                      color: videoStep === i ? '#000' : (videosWatched.has(i) ? '#4ade80' : '#A9ACAF'),
+                      opacity: (i === 0 || videosWatched.has(i - 1)) ? 1 : 0.4,
+                      cursor: (i === 0 || videosWatched.has(i - 1)) ? 'pointer' : 'not-allowed',
+                    }}
+                  >
+                    {videosWatched.has(i) ? '✓' : `${i + 1}`}
+                    <span className="hidden sm:inline">{v.label}</span>
+                  </button>
+                ))}
+              </div>
+              {/* Current video */}
+              <div className="bg-[#111111] border border-[#A9ACAF]/15 rounded-xl sm:rounded-2xl overflow-hidden">
+                <video
+                  key={`video-${videoStep}`}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="w-full aspect-video bg-black"
+                  onEnded={() => {
+                    const next = new Set(videosWatched);
+                    next.add(videoStep);
+                    setVideosWatched(next);
+                    // Auto-advance to next video
+                    if (videoStep < currentCourse.videoUrls!.length - 1) {
+                      setVideoStep(videoStep + 1);
+                    }
+                  }}
+                >
+                  <source src={currentCourse.videoUrls[videoStep].url} type="video/mp4" />
+                  Your browser does not support the video tag.
+                </video>
+              </div>
+              <div className="flex items-center gap-2 mt-3 px-1">
+                <div
+                  className="w-2 h-2 rounded-full"
+                  style={{background: currentCourse.color}}
+                />
+                <span className="text-[10px] sm:text-xs text-[#A9ACAF]">
+                  {videosWatched.size >= currentCourse.videoUrls.length
+                    ? 'All videos watched — scroll down for key takeaways and quiz'
+                    : `Watch video ${videoStep + 1} of ${currentCourse.videoUrls.length}: ${currentCourse.videoUrls[videoStep].label}`}
+                </span>
+              </div>
+            </div>
+          ) : currentCourse.videoUrl ? (
             <div className="mb-6 sm:mb-8">
               <div className="bg-[#111111] border border-[#A9ACAF]/15 rounded-xl sm:rounded-2xl overflow-hidden">
                 <video
@@ -1728,8 +1794,29 @@ export default function BudtenderEducation() {
                 </span>
               </div>
             </div>
-          )}
+          ) : null}
 
+          {/* Gate: if multi-video course, require all videos watched before showing slides */}
+          {currentCourse.videoUrls && currentCourse.videoUrls.length > 1 && videosWatched.size < currentCourse.videoUrls.length ? (
+            <div className="bg-[#111111] border border-[#A9ACAF]/15 rounded-xl sm:rounded-2xl p-6 sm:p-8 text-center mb-5 sm:mb-6">
+              <div className="text-3xl mb-3">🎬</div>
+              <h3 className="text-white font-bold text-base sm:text-lg mb-2">Watch Both Videos to Continue</h3>
+              <p className="text-[#A9ACAF] text-xs sm:text-sm mb-4">
+                Complete video {videosWatched.size + 1} of {currentCourse.videoUrls.length} to unlock the key takeaways and quiz.
+              </p>
+              <div className="flex justify-center gap-2">
+                {currentCourse.videoUrls.map((v, i) => (
+                  <div key={i} className="flex items-center gap-1.5 text-xs">
+                    <span style={{color: videosWatched.has(i) ? '#4ade80' : '#A9ACAF'}}>
+                      {videosWatched.has(i) ? '✓' : '○'}
+                    </span>
+                    <span className="text-[#A9ACAF]">{v.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+          <>
           {/* Slide progress */}
           <div className="flex gap-1 mb-5 sm:mb-6">
             {currentCourse.slides.map((_, i) => (
@@ -1818,6 +1905,8 @@ export default function BudtenderEducation() {
               </button>
             )}
           </div>
+          </>
+          )}
 
           {/* Audio summary */}
           <div className="mt-8 bg-[#111111] border border-[#A9ACAF]/15 rounded-xl p-4">
@@ -2254,7 +2343,9 @@ export default function BudtenderEducation() {
                     <p className="text-[#A9ACAF] text-xs sm:text-sm leading-relaxed">{course.subtitle}</p>
                     <div className="flex items-center gap-2 mt-3 sm:mt-4">
                       <div className="text-[10px] sm:text-xs text-[#666666]">
-                        {course.videoUrl ? (COURSE_QUIZZES[course.id] ? '📹 Video + Quiz' : '📹 Video') : (COURSE_QUIZZES[course.id] ? `${course.slides.length} slides + Quiz` : `${course.slides.length} slides`)}
+                        {course.videoUrls && course.videoUrls.length > 1
+                          ? (COURSE_QUIZZES[course.id] ? `📹 ${course.videoUrls.length} Videos + Quiz` : `📹 ${course.videoUrls.length} Videos`)
+                          : course.videoUrl ? (COURSE_QUIZZES[course.id] ? '📹 Video + Quiz' : '📹 Video') : (COURSE_QUIZZES[course.id] ? `${course.slides.length} slides + Quiz` : `${course.slides.length} slides`)}
                       </div>
                       <span className="text-[#3B4B3B]">·</span>
                       <div className="text-[10px] sm:text-xs text-[#666666]">
