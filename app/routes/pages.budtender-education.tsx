@@ -1360,11 +1360,18 @@ export default function BudtenderEducation() {
     ctx.lineTo(W / 2 + 100, 925);
     ctx.stroke();
 
-    // Download as PNG
-    const link = document.createElement('a');
-    link.download = `Highsman_Certificate_${(userFullName || userName || 'Budtender').replace(/\s+/g, '_')}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+    // Download as PNG via Blob (prevents navigation, forces download)
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = `Highsman_Certificate_${(userFullName || userName || 'Budtender').replace(/\s+/g, '_')}.png`;
+      link.href = url;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }, 'image/png');
   }
 
   function startCourseQuiz(courseId: string) {
