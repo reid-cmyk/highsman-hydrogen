@@ -71,17 +71,17 @@ const PRODUCT_VIDEO_URL =
   'https://cdn.shopify.com/videos/c/o/v/2258a7eb83fb4868b504da29efbbdf4e.mp4';
 
 // ── Points / Rewards System ─────────────────────────────────────────────────
-const POINTS_SIGNUP = 300;           // Unsigned → 300 pts on signup
+const POINTS_SIGNUP = 200;           // Unsigned → 200 pts on signup
 const POINTS_ALL_COMPLETE_BONUS = 0; // No separate bonus — points sum to 5000
 const POINTS_PER_DOLLAR = 100;       // 100 pts = $1
 
-// Tier credits: Signup 300 + Rookie 700 + Starting Lineup 1000 + Franchise Player 1250 + Hall of Flame 1750 = 5000 ($50)
+// Tier credits: Signup 200 + Rookie 300 + Starting Lineup 500 + Franchise Player 750 + Products 1250 + Hall of Flame 2000 = 5000 ($50)
 const COURSE_POINTS: Record<string, number> = {
-  'meet-ricky': 700,            // Rookie
-  'meet-highsman': 1000,        // Starting Lineup
-  'the-science': 1250,          // Franchise Player
-  'product-training': 1650,     // Hall of Flame (part 1)
-  'rushing-bonus': 100,         // Hall of Flame (part 2)
+  'meet-ricky': 300,            // Rookie
+  'meet-highsman': 500,         // Starting Lineup
+  'the-science': 750,           // Franchise Player
+  'product-training': 1250,     // Toward Hall of Flame
+  'rushing-bonus': 2000,        // Completes Hall of Flame
 };
 
 function getCoursePoints(courseId: string): number {
@@ -101,8 +101,8 @@ function pointsToDollars(pts: number): string {
   return (pts / POINTS_PER_DOLLAR).toFixed(2);
 }
 
-// Max: 300 + 700+1000+1250+1650+100 = 5,000 pts → $50.00
-const MAX_POINTS = POINTS_SIGNUP + 700 + 1000 + 1250 + 1650 + 100;
+// Max: 200 + 300+500+750+1250+2000 = 5,000 pts → $50.00
+const MAX_POINTS = POINTS_SIGNUP + 300 + 500 + 750 + 1250 + 2000;
 
 // ── Helper: Check if a course is unlocked based on sequential progression ─────
 function isCourseUnlocked(courseId: string, completedCourses: Set<string>): boolean {
@@ -493,7 +493,7 @@ const COURSES: Course[] = [
   {
     id: 'rushing-bonus',
     title: 'Rushing Bonus',
-    subtitle: 'Tell us about yourself — earn your final 100 pts',
+    subtitle: 'Tell us about yourself — earn your final 2,000 pts',
     duration: '3 min',
     level: 'Hall of Flame',
     icon: '🏃',
@@ -506,7 +506,7 @@ const COURSES: Course[] = [
         keyPoints: [
           'Takes about 2–3 minutes',
           'Required for Hall of Flame completion',
-          '+100 pts upon submission',
+          '+2,000 pts upon submission',
         ],
       },
     ],
@@ -2328,9 +2328,9 @@ export default function BudtenderEducation() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                 {[
                   {icon: '🎉', label: 'SIGN UP', value: `+${POINTS_SIGNUP}`, sub: 'pts'},
-                  {icon: '📚', label: 'COURSES', value: '+200–1K', sub: 'pts each'},
-                  {icon: '🏃', label: 'RUSHING BONUS', value: '+100', sub: 'survey'},
-                  {icon: '🏆', label: 'HALL OF FLAME', value: `+${POINTS_ALL_COMPLETE_BONUS.toLocaleString()}`, sub: 'bonus'},
+                  {icon: '📚', label: 'COURSES', value: '+300–1.25K', sub: 'pts each'},
+                  {icon: '🏃', label: 'RUSHING BONUS', value: '+2,000', sub: 'survey'},
+                  {icon: '🏆', label: 'HALL OF FLAME', value: '$50', sub: 'total credit'},
                 ].map((item, i) => (
                   <div key={i} className="bg-[#111111]/80 border border-[#A9ACAF]/15 rounded-xl sm:rounded-2xl p-4 sm:p-5 text-center hover:border-[#A9ACAF]/20 transition-colors">
                     <div className="text-2xl sm:text-3xl mb-2">{item.icon}</div>
@@ -2426,7 +2426,7 @@ export default function BudtenderEducation() {
               })}
             </div>
 
-            {/* ── Rushing Bonus + Hall of Flame Tracker ──────────────────────── */}
+            {/* ── Rushing Bonus + Hall of Flame Tracker (only visible once rushing-bonus is unlocked) ── */}
             {(() => {
               const nonBonusCourses = COURSES.filter(c => c.id !== 'rushing-bonus');
               const completedNonBonus = nonBonusCourses.filter(c => completedCourses.has(c.id)).length;
@@ -2434,6 +2434,7 @@ export default function BudtenderEducation() {
               const rushingUnlocked = isCourseUnlocked('rushing-bonus', completedCourses);
               const allDone = completedCourses.size >= COURSES.length;
               const completionPct = Math.round((completedCourses.size / COURSES.length) * 100);
+              if (!rushingUnlocked) return null;
               return (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-3 sm:mt-4">
                   {/* Rushing Bonus Card */}
@@ -2469,14 +2470,14 @@ export default function BudtenderEducation() {
                     <h3 className="text-base sm:text-lg font-bold text-white mb-1 group-hover:text-[#A9ACAF] transition-colors">
                       Rushing Bonus
                     </h3>
-                    <p className="text-[#A9ACAF] text-xs sm:text-sm leading-relaxed">Tell us about yourself — earn your final 100 pts</p>
+                    <p className="text-[#A9ACAF] text-xs sm:text-sm leading-relaxed">Tell us about yourself — earn your final 2,000 pts</p>
                     <div className="flex items-center gap-2 mt-3 sm:mt-4">
                       <div className="text-[10px] sm:text-xs text-[#666666]">📝 Survey</div>
                       <span className="text-[#3B4B3B]">·</span>
                       {rushingComplete ? (
-                        <div className="text-[10px] sm:text-xs text-emerald-400 font-semibold">+100 pts earned</div>
+                        <div className="text-[10px] sm:text-xs text-emerald-400 font-semibold">+2,000 pts earned</div>
                       ) : (
-                        <div className="text-[10px] sm:text-xs text-[#c8a84b] font-semibold">+100 pts</div>
+                        <div className="text-[10px] sm:text-xs text-[#c8a84b] font-semibold">+2,000 pts</div>
                       )}
                     </div>
                   </button>
