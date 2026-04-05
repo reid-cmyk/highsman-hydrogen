@@ -765,7 +765,7 @@ function subscribeToKlaviyo(name: string, email: string, state: string) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 type Screen = 'loading' | 'gate' | 'portal';
-type GateMode = 'login' | 'register';
+type GateMode = 'login' | 'register' | 'reset';
 
 export default function BudtenderEducation() {
   // Hide site header & footer so this page feels like its own app
@@ -801,6 +801,10 @@ export default function BudtenderEducation() {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [password, setPassword] = useState('');  // registration password
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [resetError, setResetError] = useState('');
+  const [resetSuccess, setResetSuccess] = useState(false);
 
   // Portal
   const [activeCourse, setActiveCourse] = useState<string | null>(null);
@@ -911,6 +915,35 @@ export default function BudtenderEducation() {
       }
       localStorage.setItem('highsman_budtender_accounts', JSON.stringify(accounts));
     } catch {}
+  }
+
+  // ── Reset Password ─────────────────────────────────────────────────────
+  function handleResetPassword(e: React.FormEvent) {
+    e.preventDefault();
+    setResetError('');
+    setResetSuccess(false);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resetEmail)) {
+      setResetError('Enter a valid email address.');
+      return;
+    }
+    if (!resetNewPassword || resetNewPassword.length < 6) {
+      setResetError('New password must be at least 6 characters.');
+      return;
+    }
+    const accounts = getAllAccounts();
+    const idx = accounts.findIndex(
+      (a) => a.email.toLowerCase() === resetEmail.trim().toLowerCase()
+    );
+    if (idx < 0) {
+      setResetError('No account found with that email. Please create an account first.');
+      return;
+    }
+    hashPassword(resetNewPassword).then((hashed) => {
+      accounts[idx].password = hashed;
+      localStorage.setItem('highsman_budtender_accounts', JSON.stringify(accounts));
+      setResetSuccess(true);
+      setResetNewPassword('');
+    });
   }
 
   // ── Register (full form with password) ──────────────────────────────────
@@ -1117,29 +1150,31 @@ export default function BudtenderEducation() {
             </p>
           </div>
 
-          {/* Login / Register Toggle */}
-          <div className="flex mb-5 bg-[#111111] rounded-lg p-1">
-            <button
-              onClick={() => { setGateMode('login'); setErrors({}); setLoginError(''); }}
-              className={`flex-1 py-2.5 text-sm font-semibold rounded-md transition-all ${
-                gateMode === 'login'
-                  ? 'bg-white text-black'
-                  : 'text-[#A9ACAF] hover:text-white'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              onClick={() => { setGateMode('register'); setErrors({}); setLoginError(''); }}
-              className={`flex-1 py-2.5 text-sm font-semibold rounded-md transition-all ${
-                gateMode === 'register'
-                  ? 'bg-white text-black'
-                  : 'text-[#A9ACAF] hover:text-white'
-              }`}
-            >
-              Create Account
-            </button>
-          </div>
+          {/* Login / Register Toggle (hidden on reset screen) */}
+          {gateMode !== 'reset' && (
+            <div className="flex mb-5 bg-[#111111] rounded-lg p-1">
+              <button
+                onClick={() => { setGateMode('login'); setErrors({}); setLoginError(''); }}
+                className={`flex-1 py-2.5 text-sm font-semibold rounded-md transition-all ${
+                  gateMode === 'login'
+                    ? 'bg-white text-black'
+                    : 'text-[#A9ACAF] hover:text-white'
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                onClick={() => { setGateMode('register'); setErrors({}); setLoginError(''); }}
+                className={`flex-1 py-2.5 text-sm font-semibold rounded-md transition-all ${
+                  gateMode === 'register'
+                    ? 'bg-white text-black'
+                    : 'text-[#A9ACAF] hover:text-white'
+                }`}
+              >
+                Create Account
+              </button>
+            </div>
+          )}
 
           {gateMode === 'login' ? (
             /* ── LOGIN FORM (email + password) ──────────────────────────── */
@@ -1196,6 +1231,81 @@ export default function BudtenderEducation() {
                 New here?{' '}
                 <button onClick={() => setGateMode('register')} className="text-white font-semibold hover:underline">
                   Create an account
+                </button>
+              </p>
+              <p className="text-center text-[#888888] text-xs mt-2">
+                <button onClick={() => { setGateMode('reset'); setResetEmail(loginEmail); setResetError(''); setResetSuccess(false); setResetNewPassword(''); }} className="text-[#A9ACAF] hover:text-white hover:underline transition-colors">
+                  Forgot your password?
+                </button>
+              </p>
+            </div>
+          ) : gateMode === 'reset' ? (
+            /* ── RESET PASSWORD FORM ────────────────────────────────────── */
+            <div className="bg-[#111111] border border-[#A9ACAF]/20 rounded-xl p-6 md:p-8 shadow-2xl">
+              <div className="text-center mb-5">
+                <h2 className="text-lg font-bold text-white mb-1">Reset Password</h2>
+                <p className="text-[#A9ACAF] text-xs">Enter your email and set a new password</p>
+              </div>
+
+              {resetSuccess ? (
+                <div className="text-center">
+                  <div className="text-3xl mb-3">✅</div>
+                  <p className="text-emerald-400 font-semibold text-sm mb-4">Password updated successfully!</p>
+                  <button
+                    onClick={() => { setGateMode('login'); setResetSuccess(false); }}
+                    className="w-full py-3 bg-[#FFEB3B] text-black font-semibold text-sm rounded-lg hover:bg-[#ffd700] transition-colors"
+                  >
+                    SIGN IN NOW
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleResetPassword}>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#666666] mb-1">
+                        Email Address
+                      </label>
+                      <input
+                        type="email"
+                        value={resetEmail}
+                        onChange={(e) => { setResetEmail(e.target.value); setResetError(''); }}
+                        placeholder="you@dispensary.com"
+                        className={`w-full px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors bg-[#000000] ${
+                          resetError ? 'border-red-400' : 'border-[#A9ACAF]/20 focus:border-[#A9ACAF]'
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#666666] mb-1">
+                        New Password
+                      </label>
+                      <input
+                        type="password"
+                        value={resetNewPassword}
+                        onChange={(e) => { setResetNewPassword(e.target.value); setResetError(''); }}
+                        placeholder="At least 6 characters"
+                        className={`w-full px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors bg-[#000000] ${
+                          resetError ? 'border-red-400' : 'border-[#A9ACAF]/20 focus:border-[#A9ACAF]'
+                        }`}
+                      />
+                    </div>
+
+                    {resetError && <p className="text-red-500 text-xs mt-1">{resetError}</p>}
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full mt-5 py-3 bg-[#FFEB3B] text-black font-semibold text-sm rounded-lg hover:bg-[#ffd700] transition-colors"
+                  >
+                    RESET PASSWORD
+                  </button>
+                </form>
+              )}
+
+              <p className="text-center text-[#888888] text-xs mt-4">
+                <button onClick={() => setGateMode('login')} className="text-white font-semibold hover:underline">
+                  Back to Sign In
                 </button>
               </p>
             </div>
