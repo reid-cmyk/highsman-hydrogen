@@ -2115,9 +2115,10 @@ export default function BudtenderEducation() {
 
               {/* ── Progression Tracker ─────────────────────────────── */}
               {(() => {
-                const rookieDone = completedCourses.has('meet-ricky') && completedCourses.has('meet-highsman');
-                const startingDone = completedCourses.has('the-science') && completedCourses.has('triple-threat') && completedCourses.has('ground-game');
-                const franchiseDone = completedCourses.has('hit-sticks');
+                const rookieDone = completedCourses.has('meet-ricky');
+                const practiceDone = completedCourses.has('meet-ricky') && completedCourses.has('meet-highsman');
+                const startingDone = practiceDone && completedCourses.has('the-science') && completedCourses.has('triple-threat') && completedCourses.has('ground-game');
+                const franchiseDone = startingDone && completedCourses.has('hit-sticks');
                 const hallOfFlameDone = completedCourses.size >= COURSES.length;
                 const tiers = [
                   {
@@ -2202,7 +2203,8 @@ export default function BudtenderEducation() {
                             if (hallOfFlameDone) return 100;
                             if (franchiseDone) return 80;
                             if (startingDone) return 60;
-                            if (rookieDone) return 40;
+                            if (practiceDone) return 40;
+                            if (rookieDone) return 25;
                             return 10;
                           })()}%`,
                           background: 'linear-gradient(90deg, #c8a84b, #e0c66a)',
