@@ -588,6 +588,7 @@ interface QuizQuestion {
   q: string;
   options: string[];
   correct: number;
+  explanation?: string;
 }
 
 const COURSE_QUIZZES: Record<string, QuizQuestion[]> = {
@@ -596,46 +597,59 @@ const COURSE_QUIZZES: Record<string, QuizQuestion[]> = {
       q: 'What year did Ricky Williams win the Heisman Trophy at the University of Texas?',
       options: ['1996', '1997', '1998', '1999'],
       correct: 2,
+      explanation: 'Ricky won the Heisman Trophy in 1998, his senior season at UT.',
     },
     {
       q: 'Whose all-time rushing record did Ricky Williams break at the University of Texas?',
       options: ['Vince Young', 'Earl Campbell', 'Cedric Benson', 'Colt McCoy'],
       correct: 1,
+      explanation: 'Ricky broke Earl Campbell\'s all-time rushing record at UT. He also set 21 NCAA records and 46 UT records.',
     },
     {
       q: 'How many NCAA records did Ricky Williams set during his college career at Texas?',
       options: ['5 records', '12 records', '21 records', '46 records'],
       correct: 2,
+      explanation: 'Ricky set 21 NCAA records at Texas — the most dominant college running back of his era.',
     },
     {
       q: 'What was Ricky Williams\' rushing total when he led the entire NFL in 2002?',
       options: ['1,200 yards', '1,500 yards', '1,853 yards', '2,100 yards'],
       correct: 2,
+      explanation: 'Ricky led the entire NFL with 1,853 rushing yards in 2002 as a Miami Dolphin.',
     },
     {
       q: 'Why did Ricky Williams use cannabis during his NFL career?',
       options: [
-        'Recreationally — he openly admitted it was just for fun',
+        'Recreationally — just for fun',
         'As a tool for physical recovery and mental well-being, not rebellion',
-        'To cope with injuries that ended his career early',
-        'Because he disagreed with the NFL\'s supplement program',
+        'To cope with career-ending injuries',
+        'Because he disagreed with the NFL supplement program',
       ],
       correct: 1,
+      explanation: 'Cannabis was a recovery and wellness tool — managing the physical punishment of the NFL and shifting his mindset. Not recreation. Not rebellion. Recovery.',
     },
     {
       q: 'Approximately how many drug tests did Ricky Williams face during his NFL career?',
       options: ['About 50', 'Around 150', 'Approximately 300', 'An estimated 500'],
       correct: 3,
+      explanation: 'Ricky faced an estimated 500 drug tests — the NFL put him under extraordinary scrutiny throughout his career.',
     },
     {
       q: 'How many seasons was Ricky Williams suspended from the NFL due to cannabis use?',
       options: ['1 season', '2 seasons', '3 seasons', '4 seasons'],
       correct: 2,
+      explanation: '3 seasons — right in the prime of his career. It cost him an estimated $10 million and roughly 4,000 rushing yards.',
     },
     {
-      q: 'Approximately how much did Ricky Williams lose in salary and endorsements due to his suspensions?',
-      options: ['Around $1 million', 'Approximately $5 million', 'An estimated $10 million', 'Over $25 million'],
+      q: 'Why is Ricky\'s story important when selling Highsman?',
+      options: [
+        'Customers like celebrity stories',
+        'It explains the THC percentage',
+        'Highsman IS the story — it is his answer to everything the NFL took from him',
+        'It explains the product pricing',
+      ],
       correct: 2,
+      explanation: 'Highsman is Ricky\'s answer to everything the NFL took from him. When you sell Highsman, you are selling the comeback. The story is the pitch.',
     },
   ],
   // Meet Highsman — quiz coming once video is live
@@ -2008,6 +2022,16 @@ export default function BudtenderEducation() {
                     );
                   })}
                 </div>
+
+                {/* Explanation after answering */}
+                {quizAnswered && COURSE_QUIZZES[courseQuizActive][quizQ].explanation && (
+                  <div className="mt-4 bg-[#c8a84b]/10 border-l-[3px] border-[#c8a84b] rounded-r-xl px-4 py-3 text-sm text-[#d4d4d4] leading-relaxed">
+                    <span className="font-bold text-[#c8a84b]">
+                      {quizSelected === COURSE_QUIZZES[courseQuizActive][quizQ].correct ? 'Correct. ' : 'Not quite. '}
+                    </span>
+                    {COURSE_QUIZZES[courseQuizActive][quizQ].explanation}
+                  </div>
+                )}
               </div>
 
               {quizAnswered && (
