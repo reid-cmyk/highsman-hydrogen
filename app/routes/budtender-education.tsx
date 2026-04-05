@@ -2493,7 +2493,6 @@ export default function BudtenderEducation() {
               const rushingUnlocked = isCourseUnlocked('rushing-bonus', completedCourses);
               const allDone = completedCourses.size >= COURSES.length;
               const completionPct = Math.round((completedCourses.size / COURSES.length) * 100);
-              if (!rushingUnlocked) return null;
               return (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-3 sm:mt-4">
                   {/* Rushing Bonus Card */}
