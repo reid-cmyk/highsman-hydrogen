@@ -1252,7 +1252,7 @@ export default function BudtenderEducation() {
       ctx.fillStyle = '#2a1a00';
       ctx.font = 'bold 90px Georgia, "Times New Roman", serif';
       ctx.textAlign = 'left';
-      ctx.fillText(completionDate, W / 2 + 160, 1845);
+      ctx.fillText(completionDate, W / 2 + 460, 1845);
       ctx.textAlign = 'center';
 
       // Download as PNG via Blob
