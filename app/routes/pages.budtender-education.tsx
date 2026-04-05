@@ -2155,7 +2155,7 @@ export default function BudtenderEducation() {
                       </span>
                     </div>
                     <h3 className="text-base sm:text-lg font-bold text-white mb-1" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(1.2rem, 3vw, 1.5rem)', fontWeight: 700}}>
-                      TRAINING CAMP CERTIFICATE
+                      HALL OF FLAME CERTIFICATE
                     </h3>
                     <p className="text-[#A9ACAF] text-xs sm:text-sm mb-4">
                       {allDone ? 'Congratulations! You completed all courses.' : `Complete all ${COURSES.length} modules to earn your certificate and the ${POINTS_ALL_COMPLETE_BONUS.toLocaleString()} pt bonus.`}
