@@ -661,7 +661,48 @@ const COURSE_QUIZZES: Record<string, QuizQuestion[]> = {
       explanation: 'Highsman is Ricky\'s answer to everything the NFL took from him. When you sell Highsman, you are selling the comeback. The story is the pitch.',
     },
   ],
-  // Meet Highsman — quiz coming once video is live
+  'meet-highsman': [
+    {
+      q: 'What is Highsman\'s official tagline and brand mantra?',
+      options: ['Blaze Your Trail', 'Spark Greatness', 'Play Through the Pain', 'Champions Only'],
+      correct: 1,
+      explanation: 'SPARK GREATNESS™ is the Highsman tagline — it\'s the north star of everything the brand stands for. Every budtender interaction should embody it.',
+    },
+    {
+      q: 'How does Highsman define its brand positioning?',
+      options: [
+        'A wellness brand focused on natural healing',
+        'A stoner brand celebrating cannabis culture',
+        'A performance brand at the intersection of Sports and Cannabis',
+        'A luxury lifestyle brand for high-end consumers',
+      ],
+      correct: 2,
+      explanation: 'Highsman sits at the intersection of Sports and Cannabis — it\'s a performance brand. Not a stoner brand. Not a wellness brand. This distinction is critical to how you sell it.',
+    },
+    {
+      q: 'What is Highsman\'s brand archetype?',
+      options: ['The Rebel', 'The Explorer', 'The High Performer', 'The Healer'],
+      correct: 2,
+      explanation: 'The High Performer is Highsman\'s core archetype — confident and declarative, never arrogant. Credibly premium. Direct. That\'s the energy you bring to every customer interaction.',
+    },
+    {
+      q: 'Which of the following words is FORBIDDEN in Highsman\'s brand voice?',
+      options: ['Premium', 'Direct', 'Artisan', 'Confident'],
+      correct: 2,
+      explanation: '"Artisan," "small batch," and "crafted" are all banned from Highsman vocabulary. They sound generic and undercut the brand\'s sports × performance identity. Stick to outcome-led, declarative language.',
+    },
+    {
+      q: 'A customer seems interested. What is the correct Highsman close?',
+      options: [
+        '"Would you like to buy one?"',
+        '"Are you interested in trying it?"',
+        '"Do you want the single or the two-pack?"',
+        '"Can I help you with anything else?"',
+      ],
+      correct: 2,
+      explanation: 'Always use the assumptive close: "Do you want the single or the two-pack?" Never ask permission to sell. Highsman\'s voice is confident and direct — assume the sale.',
+    },
+  ],
   'the-science': [
     {
       q: 'At what RPM does the centrifuge spin?',
