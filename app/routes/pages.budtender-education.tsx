@@ -156,6 +156,44 @@ function clearSession() {
   try { localStorage.removeItem(SESSION_KEY); } catch {}
 }
 
+// ── Klaviyo Event Tracking ───────────────────────────────────────────────────
+function trackKlaviyoEvent(email: string, eventName: string, properties: Record<string, any>) {
+  fetch(
+    `https://a.klaviyo.com/client/events/?company_id=${KLAVIYO_PUBLIC_KEY}`,
+    {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', revision: '2024-10-15'},
+      body: JSON.stringify({
+        data: {
+          type: 'event',
+          attributes: {
+            metric: {data: {type: 'metric', attributes: {name: eventName}}},
+            profile: {data: {type: 'profile', attributes: {email}}},
+            properties,
+          },
+        },
+      }),
+    },
+  ).catch(() => {});
+}
+
+// Course order & next-course lookup for email automation
+const COURSE_ORDER = [
+  {id: 'meet-ricky', title: 'Meet Ricky', level: 'Rookie', icon: '🏈'},
+  {id: 'meet-highsman', title: 'Meet Highsman', level: 'Practice Squad', icon: '🏆'},
+  {id: 'the-science', title: 'The Science', level: 'Starting Lineup', icon: '🔬'},
+  {id: 'triple-threat', title: 'Triple Threat Pre Roll', level: 'Starting Lineup', icon: '🔥'},
+  {id: 'ground-game', title: 'Ground Game', level: 'Starting Lineup', icon: '🌿'},
+  {id: 'hit-sticks', title: 'Hit Sticks', level: 'Franchise Player', icon: '⚡'},
+  {id: 'rushing-bonus', title: 'Rushing Bonus', level: 'Final Step', icon: '🏃'},
+];
+
+function getNextCourse(completedId: string): {id: string; title: string; level: string} | null {
+  const idx = COURSE_ORDER.findIndex(c => c.id === completedId);
+  if (idx < 0 || idx >= COURSE_ORDER.length - 1) return null;
+  return COURSE_ORDER[idx + 1];
+}
+
 // ── Simple password hashing (SHA-256, client-side) ──────────────────────────
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -976,6 +1014,16 @@ export default function BudtenderEducation() {
     setErrors({});
     hashPassword(password).then((hashed) => {
       subscribeToKlaviyo(name.trim(), email.trim(), state, dispensary.trim());
+      // Track signup event for Klaviyo automation
+      trackKlaviyoEvent(email.trim(), 'Budtender Education Signup', {
+        budtender_name: name.trim(),
+        dispensary: dispensary.trim(),
+        state,
+        signup_points: POINTS_SIGNUP,
+        first_course_title: COURSE_ORDER[0].title,
+        first_course_id: COURSE_ORDER[0].id,
+        portal_url: 'https://highsman.com/pages/budtender-education',
+      });
       const sessionData = {
         name: name.trim(),
         email: email.trim(),
@@ -1032,6 +1080,31 @@ export default function BudtenderEducation() {
     }
   }
 
+  // ── Track course completion in Klaviyo ─────────────────────────────────
+  function trackCourseCompletion(courseId: string, newCompletedSet: Set<string>) {
+    const courseInfo = COURSE_ORDER.find(c => c.id === courseId);
+    if (!courseInfo || !userEmail) return;
+    const next = getNextCourse(courseId);
+    const totalCompleted = newCompletedSet.size;
+    const isAllDone = totalCompleted >= COURSES.length;
+    trackKlaviyoEvent(userEmail, 'Budtender Course Completed', {
+      course_id: courseId,
+      course_title: courseInfo.title,
+      course_level: courseInfo.level,
+      course_icon: courseInfo.icon,
+      courses_completed: totalCompleted,
+      courses_total: COURSES.length,
+      completion_pct: Math.round((totalCompleted / COURSES.length) * 100),
+      points_earned: getCoursePoints(courseId),
+      total_points: calculatePoints(newCompletedSet, COURSES.length),
+      all_courses_done: isAllDone,
+      next_course_id: next?.id || null,
+      next_course_title: next?.title || null,
+      next_course_level: next?.level || null,
+      portal_url: 'https://highsman.com/pages/budtender-education',
+    });
+  }
+
   function prevSlide() {
     if (slideIndex > 0) {
       setSlideIndex(slideIndex - 1);
@@ -1070,6 +1143,7 @@ export default function BudtenderEducation() {
       if (passed) {
         const newCompleted = new Set([...completedCourses, courseQuizActive]);
         setCompletedCourses(newCompleted);
+        trackCourseCompletion(courseQuizActive, newCompleted);
         // Points toast
         const coursePts = getCoursePoints(courseQuizActive);
         const isAllDone = newCompleted.size >= COURSES.length;
@@ -1120,6 +1194,7 @@ export default function BudtenderEducation() {
         setSurveySubmitting(false);
         const newCompleted = new Set([...completedCourses, 'rushing-bonus']);
         setCompletedCourses(newCompleted);
+        trackCourseCompletion('rushing-bonus', newCompleted);
         setActiveCourse(null);
         // Points toast
         const coursePts = getCoursePoints('rushing-bonus');
@@ -1679,6 +1754,7 @@ export default function BudtenderEducation() {
                 onClick={() => {
                   const newCompleted = new Set([...completedCourses, currentCourse.id]);
                   setCompletedCourses(newCompleted);
+                  trackCourseCompletion(currentCourse.id, newCompleted);
                   setActiveCourse(null);
                   setSlideIndex(0);
                   // Points toast
