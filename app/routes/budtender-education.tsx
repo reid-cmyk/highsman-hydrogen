@@ -1247,11 +1247,13 @@ export default function BudtenderEducation() {
       ctx.fillText(displayName, W / 2, 1340);
 
       // ── Overlay: Completion Date ──
-      // Positioned right after "Course Completion Date:"
+      // Positioned right after "Course Completion Date:" label
       const completionDate = new Date().toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'});
       ctx.fillStyle = '#2a1a00';
-      ctx.font = 'bold 100px Georgia, "Times New Roman", serif';
-      ctx.fillText(completionDate, W / 2, 1920);
+      ctx.font = 'bold 90px Georgia, "Times New Roman", serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(completionDate, W / 2 + 160, 1845);
+      ctx.textAlign = 'center';
 
       // Download as PNG via Blob
       canvas.toBlob((blob) => {
