@@ -71,10 +71,10 @@ const POINTS_SIGNUP = 200;
 const POINTS_ALL_COMPLETE_BONUS = 2000; // Hall of Flame bonus
 const POINTS_PER_DOLLAR = 100; // 100 pts = $1
 
-// Tiered by level: Rookie=200, Practice Squad=300, Starting Lineup=400 each, Franchise Player=1000, Rushing Bonus=100
+// Tiered by level: Rookie=200, Rookie(Highsman)=300, Starting Lineup=400 each, Franchise Player=1000, Rushing Bonus=100
 const COURSE_POINTS: Record<string, number> = {
   'meet-ricky': 200,        // Rookie
-  'meet-highsman': 300,     // Practice Squad
+  'meet-highsman': 300,     // Rookie (Highsman Brand Training)
   'hit-sticks': 400,        // Starting Lineup
   'triple-threat': 400,     // Starting Lineup
   'ground-game': 400,       // Starting Lineup
@@ -182,7 +182,7 @@ function trackKlaviyoEvent(email: string, eventName: string, properties: Record<
 // Course order & next-course lookup for email automation
 const COURSE_ORDER = [
   {id: 'meet-ricky', title: 'Meet Ricky', level: 'Rookie', icon: '🏈'},
-  {id: 'meet-highsman', title: 'Meet Highsman', level: 'Practice Squad', icon: '🏆'},
+  {id: 'meet-highsman', title: 'Highsman Brand Training', level: 'Rookie', icon: '🏆'},
   {id: 'the-science', title: 'The Science', level: 'Starting Lineup', icon: '🔬'},
   {id: 'triple-threat', title: 'Triple Threat Pre Roll', level: 'Starting Lineup', icon: '🔥'},
   {id: 'ground-game', title: 'Ground Game', level: 'Starting Lineup', icon: '🌿'},
@@ -217,7 +217,7 @@ interface Course {
   title: string;
   subtitle: string;
   duration: string;
-  level: 'Rookie' | 'Practice Squad' | 'Starting Lineup' | 'Franchise Player';
+  level: 'Rookie' | 'Starting Lineup' | 'Franchise Player';
   icon: string;
   color: string;
   slides: CourseSlide[];
@@ -279,19 +279,19 @@ const COURSES: Course[] = [
       },
     ],
   },
-  // ── Practice Squad ──────────────────────────────────────────────────────
+  // ── Rookie (Highsman Brand Training) ────────────────────────────────────
   {
     id: 'meet-highsman',
-    title: 'Meet Highsman',
+    title: 'Highsman Brand Training',
     subtitle: 'The brand — where we came from and what we stand for',
     duration: '8 min',
-    level: 'Practice Squad',
+    level: 'Rookie',
     icon: '🏆',
     color: '#7c3aed',
     audioSummary: '',
     slides: [
       {
-        title: 'Welcome to Meet Highsman',
+        title: 'Welcome to Highsman Brand Training',
         content:
           'This course covers the Highsman brand — our origin story, what we stand for, and how we show up in the world. A brand video is being produced to bring this to life. For now, these slides capture the key brand pillars every budtender should know.',
         keyPoints: [
@@ -2116,8 +2116,7 @@ export default function BudtenderEducation() {
               {/* ── Progression Tracker ─────────────────────────────── */}
               {(() => {
                 const rookieDone = completedCourses.has('meet-ricky');
-                const practiceDone = completedCourses.has('meet-ricky') && completedCourses.has('meet-highsman');
-                const startingDone = practiceDone && completedCourses.has('the-science') && completedCourses.has('triple-threat') && completedCourses.has('ground-game');
+                const startingDone = rookieDone && completedCourses.has('meet-highsman');
                 const franchiseDone = startingDone && completedCourses.has('hit-sticks');
                 const hallOfFlameDone = completedCourses.size >= COURSES.length;
                 const tiers = [
@@ -2202,8 +2201,7 @@ export default function BudtenderEducation() {
                           width: `${(() => {
                             if (hallOfFlameDone) return 100;
                             if (franchiseDone) return 80;
-                            if (startingDone) return 60;
-                            if (practiceDone) return 40;
+                            if (startingDone) return 50;
                             if (rookieDone) return 25;
                             return 10;
                           })()}%`,
