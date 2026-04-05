@@ -160,6 +160,15 @@ function clearSession() {
 
 // ── Klaviyo Event Tracking ───────────────────────────────────────────────────
 function trackKlaviyoEvent(email: string, eventName: string, properties: Record<string, any>) {
+  // Use Klaviyo JS SDK for real-time event processing (faster flow triggers)
+  const w = typeof window !== 'undefined' ? (window as any) : null;
+  if (w?.klaviyo?.push) {
+    // Identify the user first so the event is attributed
+    w.klaviyo.push(['identify', {email}]);
+    w.klaviyo.push(['track', eventName, properties]);
+    return;
+  }
+  // Fallback to REST API if SDK not loaded
   fetch(
     `https://a.klaviyo.com/client/events/?company_id=${KLAVIYO_PUBLIC_KEY}`,
     {
