@@ -1244,14 +1244,14 @@ export default function BudtenderEducation() {
       ctx.textAlign = 'center';
       ctx.fillStyle = '#2a1a00';
       ctx.font = 'bold 160px Georgia, "Times New Roman", serif';
-      ctx.fillText(displayName, W / 2, 1420);
+      ctx.fillText(displayName, W / 2, 1340);
 
       // ── Overlay: Completion Date ──
       // Positioned right after "Course Completion Date:"
       const completionDate = new Date().toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'});
       ctx.fillStyle = '#2a1a00';
       ctx.font = 'bold 100px Georgia, "Times New Roman", serif';
-      ctx.fillText(completionDate, W / 2, 2320);
+      ctx.fillText(completionDate, W / 2, 1920);
 
       // Download as PNG via Blob
       canvas.toBlob((blob) => {
