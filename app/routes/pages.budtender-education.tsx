@@ -103,8 +103,7 @@ const MAX_POINTS = POINTS_SIGNUP + 200 + 300 + 400 + 400 + 400 + 1000 + 100 + PO
 // ── Helper: Check if a course is unlocked based on sequential progression ─────
 function isCourseUnlocked(courseId: string, completedCourses: Set<string>): boolean {
   const courseIdx = COURSES.findIndex(c => c.id === courseId);
-  if (courseIdx <= 0) return true; // First course is always unlocked
-  // Check if all previous courses are completed
+  if (courseIdx <= 0) return true;
   for (let i = 0; i < courseIdx; i++) {
     if (!completedCourses.has(COURSES[i].id)) return false;
   }
@@ -2006,96 +2005,84 @@ export default function BudtenderEducation() {
             </div>
           </section>
 
-          {/* ── Football Field (Course Layout) ──────────────────────────────────── */}
-          <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
+          {/* ── Course Grid ──────────────────────────────────────────────── */}
+          <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
             <div className="flex items-center justify-between mb-6 sm:mb-8">
               <h2 className="text-lg sm:text-xl font-bold text-white uppercase tracking-wider" style={{fontFamily: 'Teko, sans-serif'}}>Training Courses</h2>
               <span className="text-[10px] sm:text-xs text-[#A9ACAF]">{completedCourses.size} of {COURSES.length} complete</span>
             </div>
 
-            {/* Football Field Container */}
-            <div className="relative rounded-2xl overflow-hidden border border-[#A9ACAF]/15">
-              {/* Field gradient background */}
-              <div className="absolute inset-0 bg-gradient-to-b from-[#2d5016] via-[#1f4410] to-[#1a3a0a]" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              {COURSES.filter(c => c.id !== 'rushing-bonus').map((course, idx) => {
+                const isComplete = completedCourses.has(course.id);
+                const isUnlocked = isCourseUnlocked(course.id, completedCourses);
+                return (
+                  <button
+                    key={course.id}
+                    onClick={() => isUnlocked && openCourse(course.id)}
+                    disabled={!isUnlocked}
+                    className={`text-left rounded-xl sm:rounded-2xl p-5 sm:p-6 transition-all group relative overflow-hidden ${
+                      !isUnlocked
+                        ? 'bg-[#111111] border border-[#A9ACAF]/15 cursor-not-allowed'
+                        : 'bg-[#111111] border border-[#A9ACAF]/15 hover:border-[#A9ACAF]/30 hover:bg-[#1a1a1a]'
+                    }`}
+                    style={!isUnlocked ? {filter: 'grayscale(100%)', opacity: 0.3} : undefined}
+                  >
+                    {/* Subtle top accent line */}
+                    <div className="absolute top-0 left-0 right-0 h-[2px]" style={{background: course.color, opacity: 0.5}} />
+                    {/* Lock overlay for locked courses */}
+                    {!isUnlocked && (
+                      <div className="absolute inset-0 flex items-center justify-center z-10 text-2xl">🔒</div>
+                    )}
 
-              {/* Yardline grid pattern */}
-              <div className="absolute inset-0 opacity-10">
-                {Array.from({length: 11}).map((_, i) => (
-                  <div
-                    key={`yardline-${i}`}
-                    className="absolute w-full h-px bg-white/30"
-                    style={{top: `${i * (100 / 10)}%`}}
-                  />
-                ))}
-              </div>
-
-              {/* Course nodes container */}
-              <div className="relative px-4 sm:px-8 py-8 sm:py-12">
-                <div className="flex flex-col sm:flex-row justify-between items-stretch gap-4 sm:gap-3">
-                  {COURSES.filter(c => c.id !== 'rushing-bonus').map((course, idx) => {
-                    const isComplete = completedCourses.has(course.id);
-                    const isUnlocked = isCourseUnlocked(course.id, completedCourses);
-                    const isActive = !isComplete && isUnlocked;
-                    const allPreviousComplete = idx === 0 || COURSES.slice(0, idx).every(c => completedCourses.has(c.id));
-                    const shouldShowFootball = isActive && allPreviousComplete;
-
-                    return (
-                      <div key={course.id} className="relative flex-1 flex flex-col items-center">
-                        {/* Football emoji above active course */}
-                        {shouldShowFootball && (
-                          <div className="text-2xl sm:text-3xl mb-2 animate-bounce">🏈</div>
-                        )}
-
-                        {/* Course node */}
-                        <button
-                          onClick={() => isUnlocked && openCourse(course.id)}
-                          disabled={!isUnlocked}
-                          className={`w-full sm:w-32 p-4 rounded-xl text-center transition-all relative ${
-                            isComplete
-                              ? 'bg-emerald-500/20 border border-emerald-400 cursor-pointer'
-                              : isUnlocked
-                              ? 'bg-[#111111] border border-[#A9ACAF]/30 hover:border-[#A9ACAF]/50 hover:bg-[#1a1a1a] cursor-pointer'
-                              : 'bg-[#111111] border border-[#A9ACAF]/15 cursor-not-allowed'
-                          }`}
-                          style={
-                            !isUnlocked
-                              ? {filter: 'grayscale(100%)', opacity: 0.3}
-                              : undefined
-                          }
+                    <div className="flex items-start justify-between mb-3 sm:mb-4">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <span className="text-xl sm:text-2xl">{course.icon}</span>
+                        <span
+                          className="text-[9px] sm:text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded"
+                          style={{color: course.color, background: course.color + '15'}}
                         >
-                          {/* Lock icon for locked courses */}
-                          {!isUnlocked && (
-                            <div className="absolute inset-0 flex items-center justify-center text-lg">
-                              🔒
-                            </div>
-                          )}
-
-                          <div className={!isUnlocked ? 'opacity-0' : ''}>
-                            <div className="text-lg sm:text-2xl mb-2">{course.icon}</div>
-                            <h3 className="text-xs sm:text-sm font-bold text-white mb-1 line-clamp-2">
-                              {course.title}
-                            </h3>
-                            {isComplete ? (
-                              <div className="text-[9px] sm:text-[10px] text-emerald-400 font-bold">
-                                ✓ Complete
-                              </div>
-                            ) : (
-                              <div className="text-[9px] sm:text-[10px] text-[#c8a84b] font-semibold">
-                                +{getCoursePoints(course.id)} pts
-                              </div>
-                            )}
-                          </div>
-                        </button>
-
-                        {/* Yardline separator between courses (hidden after last course) */}
-                        {idx < COURSES.filter(c => c.id !== 'rushing-bonus').length - 1 && (
-                          <div className="hidden sm:block absolute top-1/2 -right-1.5 w-3 h-0.5 bg-white/40 transform -translate-y-1/2" />
-                        )}
+                          {course.level}
+                        </span>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
+                      {isComplete ? (
+                        <span className="text-[9px] sm:text-[10px] uppercase tracking-wider font-bold text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded">
+                          Completed ✓
+                        </span>
+                      ) : (
+                        <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-[#666666]">
+                          {course.duration}
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="text-base sm:text-lg font-bold text-white mb-1 group-hover:text-[#A9ACAF] transition-colors">
+                      {course.title}
+                    </h3>
+                    <p className="text-[#A9ACAF] text-xs sm:text-sm leading-relaxed">{course.subtitle}</p>
+                    <div className="flex items-center gap-2 mt-3 sm:mt-4">
+                      <div className="text-[10px] sm:text-xs text-[#666666]">
+                        {course.videoUrl ? (COURSE_QUIZZES[course.id] ? '📹 Video + Quiz' : '📹 Video') : (COURSE_QUIZZES[course.id] ? `${course.slides.length} slides + Quiz` : `${course.slides.length} slides`)}
+                      </div>
+                      <span className="text-[#3B4B3B]">·</span>
+                      <div className="text-[10px] sm:text-xs text-[#666666]">
+                        {COURSE_QUIZZES[course.id] ? 'Quiz included' : 'Quiz coming soon'}
+                      </div>
+                      <span className="text-[#3B4B3B]">·</span>
+                      {isComplete ? (
+                        <div className="text-[10px] sm:text-xs text-emerald-400 font-semibold">+{getCoursePoints(course.id)} pts earned</div>
+                      ) : (
+                        <div className="text-[10px] sm:text-xs text-[#c8a84b] font-semibold">+{getCoursePoints(course.id)} pts</div>
+                      )}
+                    </div>
+                    {/* Progress bar */}
+                    {!isComplete && (
+                      <div className="w-full h-[2px] bg-[#111111] rounded-full mt-3 sm:mt-4">
+                        <div className="h-full rounded-full" style={{background: course.color, width: '0%'}} />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             {/* ── Rushing Bonus + Hall of Flame Tracker ──────────────────────── */}
@@ -2119,6 +2106,9 @@ export default function BudtenderEducation() {
                     }`}
                     style={!rushingUnlocked ? {filter: 'grayscale(100%)', opacity: 0.3} : undefined}
                   >
+                    {!rushingUnlocked && (
+                      <div className="absolute inset-0 flex items-center justify-center z-10 text-2xl">🔒</div>
+                    )}
                     <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#c8a84b] opacity-50" />
                     <div className="flex items-start justify-between mb-3 sm:mb-4">
                       <div className="flex items-center gap-2 sm:gap-3">
@@ -2150,48 +2140,61 @@ export default function BudtenderEducation() {
                     </div>
                   </button>
 
-                  {/* Certificate Display */}
-                  <div className={`rounded-xl sm:rounded-2xl p-5 sm:p-6 relative overflow-hidden border flex flex-col items-center justify-center min-h-80 ${allDone ? 'border-[#A9ACAF]/40 bg-gradient-to-br from-[#c8a84b]/15 to-[#151515]' : 'border-[#A9ACAF]/15 bg-[#111111]'}`}>
+                  {/* Certificate Card */}
+                  <div className={`rounded-xl sm:rounded-2xl p-5 sm:p-6 relative overflow-hidden border ${allDone ? 'border-[#c8a84b]/40 bg-gradient-to-br from-[#c8a84b]/15 to-[#151515]' : 'border-[#A9ACAF]/15 bg-[#111111]'}`}
+                    style={!allDone ? {filter: 'grayscale(100%)', opacity: 0.3} : undefined}
+                  >
                     <div className="absolute top-0 left-0 right-0 h-[2px]" style={{background: allDone ? '#c8a84b' : '#555', opacity: allDone ? 1 : 0.5}} />
+                    {!allDone && (
+                      <div className="absolute inset-0 flex items-center justify-center z-10 text-2xl">🔒</div>
+                    )}
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-xl sm:text-2xl">🏆</span>
+                      <span className={`text-[9px] sm:text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded ${allDone ? 'text-[#c8a84b] bg-[#c8a84b]/15' : 'text-[#666666] bg-[#111111]'}`}>
+                        {allDone ? 'Certificate Earned' : 'Locked'}
+                      </span>
+                    </div>
+                    <h3 className="text-base sm:text-lg font-bold text-white mb-1" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(1.2rem, 3vw, 1.5rem)', fontWeight: 700}}>
+                      TRAINING CAMP CERTIFICATE
+                    </h3>
+                    <p className="text-[#A9ACAF] text-xs sm:text-sm mb-4">
+                      {allDone ? 'Congratulations! You completed all courses.' : `Complete all ${COURSES.length} modules to earn your certificate and the ${POINTS_ALL_COMPLETE_BONUS.toLocaleString()} pt bonus.`}
+                    </p>
 
                     {allDone ? (
-                      <>
-                        {/* Certificate Image */}
+                      <div className="flex flex-col items-center gap-4">
                         <img
                           src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Budtender_Certificate.svg?v=1775352295"
-                          alt="Highsman Budtender Certificate"
-                          className="w-full max-w-xs mb-4"
+                          alt="Highsman Budtender Training Certificate"
+                          className="w-full max-w-[280px] rounded-lg border border-[#c8a84b]/30"
                         />
-                        <h3 className="text-lg sm:text-xl font-bold text-white mb-2 text-center" style={{fontFamily: 'Teko, sans-serif'}}>
-                          CERTIFICATE EARNED
-                        </h3>
-                        <p className="text-[#A9ACAF] text-xs sm:text-sm text-center mb-4">
-                          Congratulations! You've completed all courses and earned your Highsman Budtender Certificate.
-                        </p>
-                        <button
-                          onClick={() => {
-                            const link = document.createElement('a');
-                            link.href = 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Budtender_Certificate.svg?v=1775352295';
-                            link.download = 'Highsman_Budtender_Certificate.svg';
-                            document.body.appendChild(link);
-                            link.click();
-                            document.body.removeChild(link);
-                          }}
-                          className="px-6 py-2.5 text-sm bg-[#c8a84b] text-black font-bold rounded-lg hover:bg-[#d4b65c] transition-colors"
+                        <a
+                          href="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Budtender_Certificate.svg?v=1775352295"
+                          download="Highsman_Budtender_Certificate.svg"
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm uppercase tracking-wider transition-all"
+                          style={{fontFamily: 'Teko, sans-serif', background: '#FFEB3B', color: '#000'}}
                         >
                           Download Certificate
-                        </button>
-                      </>
+                        </a>
+                        <span className="text-[#c8a84b] font-bold" style={{fontFamily: 'Teko, sans-serif', fontSize: '1.3rem'}}>+{POINTS_ALL_COMPLETE_BONUS.toLocaleString()} PTS BONUS</span>
+                      </div>
                     ) : (
-                      <>
-                        <div className="text-5xl sm:text-6xl mb-4 opacity-30">📜</div>
-                        <h3 className="text-lg sm:text-xl font-bold text-white mb-2 text-center" style={{fontFamily: 'Teko, sans-serif'}}>
-                          CERTIFICATE LOCKED
-                        </h3>
-                        <p className="text-[#A9ACAF] text-xs sm:text-sm text-center">
-                          Complete all {COURSES.length} courses to earn your certificate and unlock {POINTS_ALL_COMPLETE_BONUS.toLocaleString()} bonus points.
-                        </p>
-                      </>
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="w-full max-w-[280px] h-[160px] rounded-lg border border-[#A9ACAF]/15 bg-[#0a0a0a] flex items-center justify-center">
+                          <span className="text-4xl">📜</span>
+                        </div>
+                        <div className="flex items-center gap-3 w-full">
+                          <div className="flex-1 h-2 bg-[#1a1a1a] rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-700 ease-out"
+                              style={{width: `${completionPct}%`, background: '#555'}}
+                            />
+                          </div>
+                          <span className="text-sm font-bold text-[#A9ACAF]" style={{fontFamily: 'Teko, sans-serif', fontSize: '1.1rem'}}>
+                            {completionPct}%
+                          </span>
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
