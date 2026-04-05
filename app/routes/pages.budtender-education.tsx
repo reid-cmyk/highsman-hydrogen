@@ -62,7 +62,7 @@ const RICKY_VIDEO_URL =
 const RICKY_VIDEO_2_URL =
   'https://cdn.shopify.com/videos/c/o/v/93d7bb4e46784b2691cb719857996010.mp4';
 const SCIENCE_VIDEO_URL =
-  'https://cdn.shopify.com/videos/c/o/v/591d15c90b9c44d3a1b1a603e7a31e9f.mp4';
+  'https://cdn.shopify.com/videos/c/o/v/1cc08c0fac4146038fd4b5106e564094.mp4';
 const TRIPLE_THREAT_VIDEO_URL =
   'https://cdn.shopify.com/videos/c/o/v/76404371b6444253bae19c6bb6cdd08f.mp4';
 
