@@ -1157,6 +1157,14 @@ export default function BudtenderEducation() {
     const totalCompleted = newCompletedSet.size;
     const isAllDone = totalCompleted >= COURSES.length;
     const tier = getCurrentTier(newCompletedSet);
+    // Check if tier changed (for tier_unlocked banner in email)
+    const prevSet = new Set(newCompletedSet);
+    prevSet.delete(courseId);
+    const prevTier = getCurrentTier(prevSet);
+    const tierUnlocked = tier.name !== prevTier.name;
+    // Convert points to store credit dollars
+    const coursePoints = getCoursePoints(courseId);
+    const totalPoints = calculatePoints(newCompletedSet, COURSES.length);
     trackKlaviyoEvent(userEmail, 'Budtender Course Completed', {
       course_id: courseId,
       course_title: courseInfo.title,
@@ -1165,11 +1173,14 @@ export default function BudtenderEducation() {
       courses_completed: totalCompleted,
       courses_total: COURSES.length,
       completion_pct: Math.round((totalCompleted / COURSES.length) * 100),
-      points_earned: getCoursePoints(courseId),
-      total_points: calculatePoints(newCompletedSet, COURSES.length),
+      points_earned: coursePoints,
+      total_points: totalPoints,
+      store_credit_earned: '+$' + pointsToDollars(coursePoints),
+      total_store_credit: '$' + pointsToDollars(totalPoints),
       all_courses_done: isAllDone,
       current_tier: tier.name,
       current_tier_img: tier.img,
+      tier_unlocked: tierUnlocked,
       next_course_id: next?.id || null,
       next_course_title: next?.title || null,
       next_course_level: next?.level || null,
