@@ -2065,8 +2065,8 @@ export default function BudtenderEducation() {
                           <div
                             className="relative overflow-hidden rounded-lg sm:rounded-xl transition-all duration-700"
                             style={{
-                              filter: tier.unlocked ? 'none' : 'grayscale(100%)',
-                              opacity: tier.unlocked ? 1 : 0.3,
+                              filter: tier.unlocked ? 'none' : 'grayscale(80%)',
+                              opacity: tier.unlocked ? 1 : 0.5,
                             }}
                           >
                             <img
@@ -2219,13 +2219,13 @@ export default function BudtenderEducation() {
                         ? 'bg-[#111111] border border-[#A9ACAF]/15 cursor-not-allowed'
                         : 'bg-[#111111] border border-[#A9ACAF]/15 hover:border-[#A9ACAF]/30 hover:bg-[#1a1a1a]'
                     }`}
-                    style={!isUnlocked ? {filter: 'grayscale(100%)', opacity: 0.3} : undefined}
+                    style={!isUnlocked ? {opacity: 0.55} : undefined}
                   >
                     {/* Subtle top accent line */}
                     <div className="absolute top-0 left-0 right-0 h-[2px]" style={{background: course.color, opacity: 0.5}} />
                     {/* Lock overlay for locked courses */}
                     {!isUnlocked && (
-                      <div className="absolute inset-0 flex items-center justify-center z-10 text-2xl">🔒</div>
+                      <div className="absolute inset-0 flex items-center justify-center z-10 text-2xl" style={{opacity: 1}}>🔒</div>
                     )}
 
                     <div className="flex items-start justify-between mb-3 sm:mb-4">
@@ -2297,10 +2297,10 @@ export default function BudtenderEducation() {
                         ? 'bg-[#111111] border border-[#A9ACAF]/15 cursor-not-allowed'
                         : 'bg-[#111111] border border-[#A9ACAF]/15 hover:border-[#A9ACAF]/30 hover:bg-[#1a1a1a]'
                     }`}
-                    style={!rushingUnlocked ? {filter: 'grayscale(100%)', opacity: 0.3} : undefined}
+                    style={!rushingUnlocked ? {opacity: 0.55} : undefined}
                   >
                     {!rushingUnlocked && (
-                      <div className="absolute inset-0 flex items-center justify-center z-10 text-2xl">🔒</div>
+                      <div className="absolute inset-0 flex items-center justify-center z-10 text-2xl" style={{opacity: 1}}>🔒</div>
                     )}
                     <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#c8a84b] opacity-50" />
                     <div className="flex items-start justify-between mb-3 sm:mb-4">
@@ -2335,11 +2335,11 @@ export default function BudtenderEducation() {
 
                   {/* Certificate Card */}
                   <div className={`rounded-xl sm:rounded-2xl p-5 sm:p-6 relative overflow-hidden border ${allDone ? 'border-[#c8a84b]/40 bg-gradient-to-br from-[#c8a84b]/15 to-[#151515]' : 'border-[#A9ACAF]/15 bg-[#111111]'}`}
-                    style={!allDone ? {filter: 'grayscale(100%)', opacity: 0.3} : undefined}
+                    style={!allDone ? {opacity: 0.55} : undefined}
                   >
                     <div className="absolute top-0 left-0 right-0 h-[2px]" style={{background: allDone ? '#c8a84b' : '#555', opacity: allDone ? 1 : 0.5}} />
                     {!allDone && (
-                      <div className="absolute inset-0 flex items-center justify-center z-10 text-2xl">🔒</div>
+                      <div className="absolute inset-0 flex items-center justify-center z-10 text-2xl" style={{opacity: 1}}>🔒</div>
                     )}
                     <div className="flex items-center gap-2 mb-3">
                       <span className="text-xl sm:text-2xl">🏆</span>
@@ -2348,7 +2348,7 @@ export default function BudtenderEducation() {
                       </span>
                     </div>
                     <h3 className="text-base sm:text-lg font-bold text-white mb-1" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(1.2rem, 3vw, 1.5rem)', fontWeight: 700}}>
-                      HALL OF FLAME CERTIFICATE
+                      CERTIFICATE
                     </h3>
                     <p className="text-[#A9ACAF] text-xs sm:text-sm mb-4">
                       {allDone ? 'Congratulations! You completed all courses.' : `Complete all ${COURSES.length} modules to earn your certificate and the ${POINTS_ALL_COMPLETE_BONUS.toLocaleString()} pt bonus.`}
