@@ -1138,12 +1138,25 @@ export default function BudtenderEducation() {
   }
 
   // ── Track course completion in Klaviyo ─────────────────────────────────
+  function getCurrentTier(completed: Set<string>): {name: string; img: string} {
+    const hallDone = completed.size >= COURSES.length;
+    const franchDone = completed.has('meet-ricky') && completed.has('meet-highsman') && completed.has('the-science') && completed.has('triple-threat') && completed.has('ground-game');
+    const startDone = completed.has('meet-ricky') && completed.has('meet-highsman');
+    const rookDone = completed.has('meet-ricky');
+    if (hallDone) return {name: 'Hall of Flame', img: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Budtender_Education_Hall_of_Flame.svg?v=1775343989'};
+    if (franchDone) return {name: 'Franchise Player', img: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Budtender_Education_Franchise_Player.svg?v=1775343989'};
+    if (startDone) return {name: 'Starting Lineup', img: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Budtender_Education_Starting_Lineup.svg?v=1775343990'};
+    if (rookDone) return {name: 'Rookie', img: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Budtender_Education_Rookie.svg?v=1775343989'};
+    return {name: 'Unsigned', img: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Budtender_Education_Unsigned_Image.svg?v=1775343989'};
+  }
+
   function trackCourseCompletion(courseId: string, newCompletedSet: Set<string>) {
     const courseInfo = COURSE_ORDER.find(c => c.id === courseId);
     if (!courseInfo || !userEmail) return;
     const next = getNextCourse(courseId);
     const totalCompleted = newCompletedSet.size;
     const isAllDone = totalCompleted >= COURSES.length;
+    const tier = getCurrentTier(newCompletedSet);
     trackKlaviyoEvent(userEmail, 'Budtender Course Completed', {
       course_id: courseId,
       course_title: courseInfo.title,
@@ -1155,6 +1168,8 @@ export default function BudtenderEducation() {
       points_earned: getCoursePoints(courseId),
       total_points: calculatePoints(newCompletedSet, COURSES.length),
       all_courses_done: isAllDone,
+      current_tier: tier.name,
+      current_tier_img: tier.img,
       next_course_id: next?.id || null,
       next_course_title: next?.title || null,
       next_course_level: next?.level || null,
