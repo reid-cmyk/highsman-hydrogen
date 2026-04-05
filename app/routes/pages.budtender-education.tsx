@@ -2117,7 +2117,7 @@ export default function BudtenderEducation() {
               {(() => {
                 const rookieDone = completedCourses.has('meet-ricky');
                 const startingDone = rookieDone && completedCourses.has('meet-highsman');
-                const franchiseDone = startingDone && completedCourses.has('hit-sticks');
+                const franchiseDone = startingDone && completedCourses.has('the-science') && completedCourses.has('triple-threat') && completedCourses.has('ground-game');
                 const hallOfFlameDone = completedCourses.size >= COURSES.length;
                 const tiers = [
                   {
