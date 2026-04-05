@@ -65,6 +65,8 @@ const SCIENCE_VIDEO_URL =
   'https://cdn.shopify.com/videos/c/o/v/1cc08c0fac4146038fd4b5106e564094.mp4';
 const TRIPLE_THREAT_VIDEO_URL =
   'https://cdn.shopify.com/videos/c/o/v/76404371b6444253bae19c6bb6cdd08f.mp4';
+const HIGHSMAN_BRAND_VIDEO_URL =
+  'https://cdn.shopify.com/videos/c/o/v/0a370965a6d343c0bb4215c5d57566d4.mp4';
 
 // ── Points / Rewards System ─────────────────────────────────────────────────
 const POINTS_SIGNUP = 200;
@@ -297,15 +299,16 @@ const COURSES: Course[] = [
     level: 'Rookie',
     icon: '🏆',
     color: '#7c3aed',
+    videoUrl: HIGHSMAN_BRAND_VIDEO_URL,
     audioSummary: '',
     slides: [
       {
         title: 'Welcome to Highsman Brand Training',
         content:
-          'This course covers the Highsman brand — our origin story, what we stand for, and how we show up in the world. A brand video is being produced to bring this to life. For now, these slides capture the key brand pillars every budtender should know.',
+          'This course covers the Highsman brand — our origin story, what we stand for, and how we show up in the world. Watch the brand video above, then review these key pillars every budtender should know.',
         keyPoints: [
-          'Brand video coming soon',
-          'Quiz will follow once the video is live',
+          'Watch the brand video first',
+          'Complete the quiz to finish this module',
           'Learn the brand pillars that guide everything we do',
         ],
       },
