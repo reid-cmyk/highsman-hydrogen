@@ -2562,12 +2562,12 @@ export default function BudtenderEducation() {
 
                     {allDone ? (
                       <div className="flex flex-col items-center gap-4">
-                        <div className="w-full max-w-[280px] rounded-lg border border-[#c8a84b]/30 bg-black p-4 text-center">
-                          <div className="text-[10px] uppercase tracking-[3px] text-[#c8a84b] mb-2">Highsman Budtender Training</div>
-                          <div className="text-white font-bold text-sm mb-1" style={{fontFamily: 'Teko, sans-serif', fontSize: '1.1rem'}}>CERTIFICATE OF COMPLETION</div>
-                          <div className="h-[1px] bg-[#c8a84b] w-16 mx-auto mb-2" />
-                          <div className="text-[#c8a84b] font-bold" style={{fontFamily: 'Teko, sans-serif', fontSize: '1.3rem'}}>{userFullName || userName}</div>
-                          <div className="text-[#A9ACAF] text-[10px] mt-1">HALL OF FLAME</div>
+                        <div className="w-full max-w-[280px] rounded-lg border border-[#c8a84b]/30 overflow-hidden">
+                          <img
+                            src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Budtender_Certificate.png?v=1775517640"
+                            alt="Highsman Hall of Flame Certificate"
+                            className="w-full h-auto block"
+                          />
                         </div>
                         <button
                           onClick={generateCertificate}
