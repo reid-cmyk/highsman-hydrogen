@@ -1630,12 +1630,12 @@ export default function BudtenderEducation() {
                         errors.state ? 'border-red-400 bg-red-50' : 'border-[#A9ACAF]/20 focus:border-[#A9ACAF]'
                       }`}
                     >
-                      <option value="">Select state</option>
-                      <option value="NJ">New Jersey</option>
-                      <option value="NY">New York</option>
-                      <option value="MA">Massachusetts</option>
-                      <option value="RI">Rhode Island</option>
-                      <option value="MO">Missouri</option>
+                      <option value="" style={{color: '#000'}}>Select state</option>
+                      <option value="NJ" style={{color: '#000'}}>New Jersey</option>
+                      <option value="NY" style={{color: '#000'}}>New York</option>
+                      <option value="MA" style={{color: '#000'}}>Massachusetts</option>
+                      <option value="RI" style={{color: '#000'}}>Rhode Island</option>
+                      <option value="MO" style={{color: '#000'}}>Missouri</option>
                     </select>
                     {errors.state && <p className="text-red-500 text-xs mt-1">{errors.state}</p>}
                   </div>
