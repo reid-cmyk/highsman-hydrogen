@@ -921,6 +921,7 @@ export default function BudtenderEducation() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       newErrors.email = 'Enter a valid email.';
     if (!password || password.length < 6) newErrors.password = 'Password must be at least 6 characters.';
+    if (!dispensary.trim()) newErrors.dispensary = 'Enter your dispensary name.';
     if (!state) newErrors.state = 'Select your state.';
     if (!consent) newErrors.consent = 'You must agree to continue.';
     // Check if email already registered
@@ -1284,15 +1285,18 @@ export default function BudtenderEducation() {
                   {/* Dispensary */}
                   <div>
                     <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#666666] mb-1">
-                      Dispensary Name <span className="text-[#A9ACAF] font-normal">(optional)</span>
+                      Dispensary Name
                     </label>
                     <input
                       type="text"
                       value={dispensary}
                       onChange={(e) => setDispensary(e.target.value)}
                       placeholder="Where do you work?"
-                      className="w-full px-3 py-2.5 border border-[#A9ACAF]/30 rounded-lg text-sm text-black outline-none transition-colors focus:border-[#A9ACAF]"
+                      className={`w-full px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors bg-[#000000] ${
+                        errors.dispensary ? 'border-red-400' : 'border-[#A9ACAF]/20 focus:border-[#A9ACAF]'
+                      }`}
                     />
+                    {errors.dispensary && <p className="text-red-500 text-xs mt-1">{errors.dispensary}</p>}
                   </div>
 
                   {/* Consent */}
