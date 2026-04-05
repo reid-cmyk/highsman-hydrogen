@@ -64,7 +64,7 @@ const RICKY_VIDEO_2_URL =
 const SCIENCE_VIDEO_URL =
   'https://cdn.shopify.com/videos/c/o/v/591d15c90b9c44d3a1b1a603e7a31e9f.mp4';
 const TRIPLE_THREAT_VIDEO_URL =
-  'https://cdn.shopify.com/videos/c/o/v/e73a4ecef2fb4f4f96a1792ee2911cb2.mp4';
+  'https://cdn.shopify.com/videos/c/o/v/76404371b6444253bae19c6bb6cdd08f.mp4';
 
 // ── Points / Rewards System ─────────────────────────────────────────────────
 const POINTS_SIGNUP = 200;
