@@ -1220,158 +1220,56 @@ export default function BudtenderEducation() {
     }
   }
 
-  // ── Certificate Generator (Canvas → PNG) ────────────────────────────────────
+  // ── Certificate Generator (branded PNG + name/date overlay → download) ──────
+  const CERT_TEMPLATE_URL = 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Budtender_Certificate.png?v=1775517640';
+
   function generateCertificate() {
-    const canvas = document.createElement('canvas');
-    const W = 1600;
-    const H = 1100;
-    canvas.width = W;
-    canvas.height = H;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const W = img.naturalWidth;   // 6536
+      const H = img.naturalHeight;  // 3648
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
 
-    // Background
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, W, H);
+      // Draw the branded certificate template as background
+      ctx.drawImage(img, 0, 0, W, H);
 
-    // Gold border (double line)
-    ctx.strokeStyle = '#c8a84b';
-    ctx.lineWidth = 4;
-    ctx.strokeRect(30, 30, W - 60, H - 60);
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(45, 45, W - 90, H - 90);
+      // ── Overlay: Budtender Name ──
+      // Positioned on the blank line between "THIS CERTIFIES THAT" and "has successfully completed"
+      const displayName = (userFullName || userName || 'Budtender').toUpperCase();
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#2a1a00';
+      ctx.font = 'bold 160px Georgia, "Times New Roman", serif';
+      ctx.fillText(displayName, W / 2, 1420);
 
-    // Corner accents (gold dots)
-    const corners = [[55, 55], [W - 55, 55], [55, H - 55], [W - 55, H - 55]];
-    corners.forEach(([cx, cy]) => {
-      ctx.beginPath();
-      ctx.arc(cx, cy, 5, 0, Math.PI * 2);
-      ctx.fillStyle = '#c8a84b';
-      ctx.fill();
-    });
+      // ── Overlay: Completion Date ──
+      // Positioned right after "Course Completion Date:"
+      const completionDate = new Date().toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'});
+      ctx.fillStyle = '#2a1a00';
+      ctx.font = 'bold 100px Georgia, "Times New Roman", serif';
+      ctx.fillText(completionDate, W / 2, 2320);
 
-    // Top label
-    ctx.fillStyle = '#c8a84b';
-    ctx.font = '500 16px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.letterSpacing = '4px';
-    ctx.fillText('HIGHSMAN BUDTENDER TRAINING', W / 2, 120);
-    ctx.letterSpacing = '0px';
-
-    // Main title
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 58px Arial, sans-serif';
-    ctx.fillText('CERTIFICATE OF COMPLETION', W / 2, 200);
-
-    // Divider line
-    ctx.strokeStyle = '#c8a84b';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(W / 2 - 200, 230);
-    ctx.lineTo(W / 2 + 200, 230);
-    ctx.stroke();
-
-    // "This certifies that"
-    ctx.fillStyle = '#A9ACAF';
-    ctx.font = '400 20px Arial, sans-serif';
-    ctx.fillText('This certifies that', W / 2, 300);
-
-    // User name (large, gold)
-    ctx.fillStyle = '#c8a84b';
-    ctx.font = 'bold 52px Arial, sans-serif';
-    ctx.fillText(userFullName || userName || 'Budtender', W / 2, 375);
-
-    // Underline beneath name
-    const nameWidth = ctx.measureText(userFullName || userName || 'Budtender').width;
-    ctx.strokeStyle = '#c8a84b';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(W / 2 - nameWidth / 2 - 20, 390);
-    ctx.lineTo(W / 2 + nameWidth / 2 + 20, 390);
-    ctx.stroke();
-
-    // Description text
-    ctx.fillStyle = '#A9ACAF';
-    ctx.font = '400 20px Arial, sans-serif';
-    ctx.fillText('has successfully completed the', W / 2, 445);
-
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 32px Arial, sans-serif';
-    ctx.fillText('HIGHSMAN BUDTENDER TRAINING PROGRAM', W / 2, 495);
-
-    ctx.fillStyle = '#A9ACAF';
-    ctx.font = '400 18px Arial, sans-serif';
-    ctx.fillText('and has achieved the rank of', W / 2, 545);
-
-    // Hall of Flame
-    ctx.fillStyle = '#c8a84b';
-    ctx.font = 'bold 46px Arial, sans-serif';
-    ctx.fillText('HALL OF FLAME', W / 2, 610);
-
-    // Spark Greatness
-    ctx.fillStyle = '#c8a84b';
-    ctx.font = '500 14px Arial, sans-serif';
-    ctx.letterSpacing = '6px';
-    ctx.fillText('SPARK GREATNESS™', W / 2, 665);
-    ctx.letterSpacing = '0px';
-
-    // Bottom divider
-    ctx.strokeStyle = '#c8a84b';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(W / 2 - 300, 700);
-    ctx.lineTo(W / 2 + 300, 700);
-    ctx.stroke();
-
-    // Date
-    const completionDate = new Date().toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'});
-    ctx.fillStyle = '#A9ACAF';
-    ctx.font = '400 18px Arial, sans-serif';
-    ctx.fillText('Date of Completion', W / 2 - 250, 760);
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 22px Arial, sans-serif';
-    ctx.fillText(completionDate, W / 2 - 250, 795);
-
-    // Issued by
-    ctx.fillStyle = '#A9ACAF';
-    ctx.font = '400 18px Arial, sans-serif';
-    ctx.fillText('Issued by', W / 2 + 250, 760);
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 22px Arial, sans-serif';
-    ctx.fillText('Highsman', W / 2 + 250, 795);
-
-    // Bottom tagline
-    ctx.fillStyle = '#666666';
-    ctx.font = '400 13px Arial, sans-serif';
-    ctx.letterSpacing = '2px';
-    ctx.fillText('SPORTS × CANNABIS — THE INTERSECTION OF GREATNESS', W / 2, 880);
-    ctx.letterSpacing = '0px';
-
-    // Ricky Williams signature line
-    ctx.fillStyle = '#A9ACAF';
-    ctx.font = '400 16px Arial, sans-serif';
-    ctx.fillText('Ricky Williams, Founder', W / 2, 950);
-
-    // Signature underline
-    ctx.strokeStyle = '#666666';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(W / 2 - 100, 925);
-    ctx.lineTo(W / 2 + 100, 925);
-    ctx.stroke();
-
-    // Download as PNG via Blob (prevents navigation, forces download)
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.download = `Highsman_Certificate_${(userFullName || userName || 'Budtender').replace(/\s+/g, '_')}.png`;
-      link.href = url;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    }, 'image/png');
+      // Download as PNG via Blob
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.download = `Highsman_Certificate_${(userFullName || userName || 'Budtender').replace(/\s+/g, '_')}.png`;
+        link.href = url;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, 'image/png');
+    };
+    img.onerror = () => {
+      alert('Could not load certificate template. Please try again.');
+    };
+    img.src = CERT_TEMPLATE_URL;
   }
 
   function startCourseQuiz(courseId: string) {
