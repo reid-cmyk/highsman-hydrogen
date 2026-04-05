@@ -910,6 +910,7 @@ export default function BudtenderEducation() {
   const [screen, setScreen] = useState<Screen>('loading');
   const [gateMode, setGateMode] = useState<GateMode>('login');
   const [userName, setUserName] = useState('');
+  const [userFullName, setUserFullName] = useState('');
   const [userEmail, setUserEmail] = useState('');
 
   // Gate
@@ -954,6 +955,7 @@ export default function BudtenderEducation() {
     const session = loadSession();
     if (session) {
       setUserName(session.name.split(' ')[0]);
+      setUserFullName(session.name);
       setUserEmail(session.email);
       setCompletedCourses(new Set(session.completedCourses || []));
       setScreen('portal');
@@ -1013,6 +1015,7 @@ export default function BudtenderEducation() {
         completedCourses: account.completedCourses || [],
       });
       setUserName(account.name.split(' ')[0]);
+      setUserFullName(account.name);
       setUserEmail(account.email);
       setCompletedCourses(new Set(account.completedCourses || []));
       setScreen('portal');
@@ -1116,6 +1119,7 @@ export default function BudtenderEducation() {
         expiresAt: Date.now() + SESSION_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
       });
       setUserName(name.split(' ')[0]);
+      setUserFullName(name.trim());
       setUserEmail(email.trim());
       setScreen('portal');
     });
@@ -1127,6 +1131,7 @@ export default function BudtenderEducation() {
     setScreen('gate');
     setGateMode('login');
     setUserName('');
+    setUserFullName('');
     setUserEmail('');
     setCompletedCourses(new Set());
     setActiveCourse(null);
@@ -1213,6 +1218,153 @@ export default function BudtenderEducation() {
     if (slideIndex > 0) {
       setSlideIndex(slideIndex - 1);
     }
+  }
+
+  // ── Certificate Generator (Canvas → PNG) ────────────────────────────────────
+  function generateCertificate() {
+    const canvas = document.createElement('canvas');
+    const W = 1600;
+    const H = 1100;
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Background
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, W, H);
+
+    // Gold border (double line)
+    ctx.strokeStyle = '#c8a84b';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(30, 30, W - 60, H - 60);
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(45, 45, W - 90, H - 90);
+
+    // Corner accents (gold dots)
+    const corners = [[55, 55], [W - 55, 55], [55, H - 55], [W - 55, H - 55]];
+    corners.forEach(([cx, cy]) => {
+      ctx.beginPath();
+      ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#c8a84b';
+      ctx.fill();
+    });
+
+    // Top label
+    ctx.fillStyle = '#c8a84b';
+    ctx.font = '500 16px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.letterSpacing = '4px';
+    ctx.fillText('HIGHSMAN BUDTENDER TRAINING', W / 2, 120);
+    ctx.letterSpacing = '0px';
+
+    // Main title
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 58px Arial, sans-serif';
+    ctx.fillText('CERTIFICATE OF COMPLETION', W / 2, 200);
+
+    // Divider line
+    ctx.strokeStyle = '#c8a84b';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(W / 2 - 200, 230);
+    ctx.lineTo(W / 2 + 200, 230);
+    ctx.stroke();
+
+    // "This certifies that"
+    ctx.fillStyle = '#A9ACAF';
+    ctx.font = '400 20px Arial, sans-serif';
+    ctx.fillText('This certifies that', W / 2, 300);
+
+    // User name (large, gold)
+    ctx.fillStyle = '#c8a84b';
+    ctx.font = 'bold 52px Arial, sans-serif';
+    ctx.fillText(userFullName || userName || 'Budtender', W / 2, 375);
+
+    // Underline beneath name
+    const nameWidth = ctx.measureText(userFullName || userName || 'Budtender').width;
+    ctx.strokeStyle = '#c8a84b';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(W / 2 - nameWidth / 2 - 20, 390);
+    ctx.lineTo(W / 2 + nameWidth / 2 + 20, 390);
+    ctx.stroke();
+
+    // Description text
+    ctx.fillStyle = '#A9ACAF';
+    ctx.font = '400 20px Arial, sans-serif';
+    ctx.fillText('has successfully completed the', W / 2, 445);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 32px Arial, sans-serif';
+    ctx.fillText('HIGHSMAN BUDTENDER TRAINING PROGRAM', W / 2, 495);
+
+    ctx.fillStyle = '#A9ACAF';
+    ctx.font = '400 18px Arial, sans-serif';
+    ctx.fillText('and has achieved the rank of', W / 2, 545);
+
+    // Hall of Flame
+    ctx.fillStyle = '#c8a84b';
+    ctx.font = 'bold 46px Arial, sans-serif';
+    ctx.fillText('HALL OF FLAME', W / 2, 610);
+
+    // Spark Greatness
+    ctx.fillStyle = '#c8a84b';
+    ctx.font = '500 14px Arial, sans-serif';
+    ctx.letterSpacing = '6px';
+    ctx.fillText('SPARK GREATNESS™', W / 2, 665);
+    ctx.letterSpacing = '0px';
+
+    // Bottom divider
+    ctx.strokeStyle = '#c8a84b';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(W / 2 - 300, 700);
+    ctx.lineTo(W / 2 + 300, 700);
+    ctx.stroke();
+
+    // Date
+    const completionDate = new Date().toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'});
+    ctx.fillStyle = '#A9ACAF';
+    ctx.font = '400 18px Arial, sans-serif';
+    ctx.fillText('Date of Completion', W / 2 - 250, 760);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 22px Arial, sans-serif';
+    ctx.fillText(completionDate, W / 2 - 250, 795);
+
+    // Issued by
+    ctx.fillStyle = '#A9ACAF';
+    ctx.font = '400 18px Arial, sans-serif';
+    ctx.fillText('Issued by', W / 2 + 250, 760);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 22px Arial, sans-serif';
+    ctx.fillText('Highsman', W / 2 + 250, 795);
+
+    // Bottom tagline
+    ctx.fillStyle = '#666666';
+    ctx.font = '400 13px Arial, sans-serif';
+    ctx.letterSpacing = '2px';
+    ctx.fillText('SPORTS × CANNABIS — THE INTERSECTION OF GREATNESS', W / 2, 880);
+    ctx.letterSpacing = '0px';
+
+    // Ricky Williams signature line
+    ctx.fillStyle = '#A9ACAF';
+    ctx.font = '400 16px Arial, sans-serif';
+    ctx.fillText('Ricky Williams, Founder', W / 2, 950);
+
+    // Signature underline
+    ctx.strokeStyle = '#666666';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(W / 2 - 100, 925);
+    ctx.lineTo(W / 2 + 100, 925);
+    ctx.stroke();
+
+    // Download as PNG
+    const link = document.createElement('a');
+    link.download = `Highsman_Certificate_${(userFullName || userName || 'Budtender').replace(/\s+/g, '_')}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
   }
 
   function startCourseQuiz(courseId: string) {
@@ -2505,20 +2657,20 @@ export default function BudtenderEducation() {
 
                     {allDone ? (
                       <div className="flex flex-col items-center gap-4">
-                        <img
-                          src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Budtender_Certificate.svg?v=1775352295"
-                          alt="Highsman Budtender Training Certificate"
-                          className="w-full max-w-[280px] rounded-lg border border-[#c8a84b]/30"
-                        />
-                        <a
-                          href="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Budtender_Certificate.svg?v=1775352295"
-                          download="Highsman_Budtender_Certificate.svg"
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm uppercase tracking-wider transition-all"
-                          style={{fontFamily: 'Teko, sans-serif', background: '#FFEB3B', color: '#000'}}
+                        <div className="w-full max-w-[280px] rounded-lg border border-[#c8a84b]/30 bg-black p-4 text-center">
+                          <div className="text-[10px] uppercase tracking-[3px] text-[#c8a84b] mb-2">Highsman Budtender Training</div>
+                          <div className="text-white font-bold text-sm mb-1" style={{fontFamily: 'Teko, sans-serif', fontSize: '1.1rem'}}>CERTIFICATE OF COMPLETION</div>
+                          <div className="h-[1px] bg-[#c8a84b] w-16 mx-auto mb-2" />
+                          <div className="text-[#c8a84b] font-bold" style={{fontFamily: 'Teko, sans-serif', fontSize: '1.3rem'}}>{userFullName || userName}</div>
+                          <div className="text-[#A9ACAF] text-[10px] mt-1">HALL OF FLAME</div>
+                        </div>
+                        <button
+                          onClick={generateCertificate}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm uppercase tracking-wider transition-all cursor-pointer"
+                          style={{fontFamily: 'Teko, sans-serif', background: '#FFEB3B', color: '#000', border: 'none'}}
                         >
                           Download Certificate
-                        </a>
-                        <span className="text-[#c8a84b] font-bold" style={{fontFamily: 'Teko, sans-serif', fontSize: '1.3rem'}}>+{POINTS_ALL_COMPLETE_BONUS.toLocaleString()} PTS BONUS</span>
+                        </button>
                       </div>
                     ) : (
                       <div className="flex flex-col items-center gap-3">
