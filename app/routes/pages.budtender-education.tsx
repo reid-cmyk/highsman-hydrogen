@@ -112,11 +112,12 @@ function isCourseUnlocked(courseId: string, completedCourses: Set<string>): bool
 
 // ── Session Persistence ──────────────────────────────────────────────────────
 const SESSION_KEY = 'highsman_budtender_session';
-const SESSION_EXPIRY_DAYS = 60; // 2 months
+const SESSION_EXPIRY_DAYS = 14; // 14-day auto-login
 
 interface SessionData {
   name: string;
   email: string;
+  password: string;
   state: string;
   dispensary?: string;
   completedCourses: string[];
@@ -155,27 +156,13 @@ function clearSession() {
   try { localStorage.removeItem(SESSION_KEY); } catch {}
 }
 
-// ── Google Sign-In ───────────────────────────────────────────────────────────
-const GOOGLE_CLIENT_ID = ''; // Set your Google OAuth Client ID here
-
-function loadGoogleScript(): Promise<void> {
-  return new Promise((resolve) => {
-    if (document.getElementById('google-gsi')) { resolve(); return; }
-    const script = document.createElement('script');
-    script.id = 'google-gsi';
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
-    document.head.appendChild(script);
-  });
-}
-
-function decodeJWT(token: string): Record<string, any> | null {
-  try {
-    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    return JSON.parse(atob(base64));
-  } catch { return null; }
+// ── Simple password hashing (SHA-256, client-side) ──────────────────────────
+async function hashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password + 'highsman_budtender_salt');
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 // ── Course Data ───────────────────────────────────────────────────────────────
@@ -811,8 +798,9 @@ export default function BudtenderEducation() {
   const [consent, setConsent] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
-  const [googleLoaded, setGoogleLoaded] = useState(false);
+  const [password, setPassword] = useState('');  // registration password
 
   // Portal
   const [activeCourse, setActiveCourse] = useState<string | null>(null);
@@ -831,7 +819,6 @@ export default function BudtenderEducation() {
   const [surveySubmitting, setSurveySubmitting] = useState(false);
 
   const portalRef = useRef<HTMLDivElement>(null);
-  const googleBtnRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   // ── Auto-login: check localStorage on mount ─────────────────────────────
@@ -847,40 +834,14 @@ export default function BudtenderEducation() {
     }
   }, []);
 
-  // ── Load Google Sign-In SDK ─────────────────────────────────────────────
-  useEffect(() => {
-    if (screen !== 'gate') return;
-    loadGoogleScript().then(() => {
-      setGoogleLoaded(true);
-    });
-  }, [screen]);
-
-  // ── Initialize Google button when ref + SDK are ready ───────────────────
-  useEffect(() => {
-    if (!googleLoaded || !googleBtnRef.current) return;
-    if (!GOOGLE_CLIENT_ID) return; // Skip if no client ID configured
-    const w = window as any;
-    if (!w.google?.accounts?.id) return;
-    w.google.accounts.id.initialize({
-      client_id: GOOGLE_CLIENT_ID,
-      callback: handleGoogleLogin,
-      auto_select: false,
-    });
-    w.google.accounts.id.renderButton(googleBtnRef.current, {
-      theme: 'outline',
-      size: 'large',
-      width: googleBtnRef.current.offsetWidth,
-      text: 'continue_with',
-      shape: 'rectangular',
-    });
-  }, [googleLoaded, gateMode, screen]);
-
   // ── Persist completed courses whenever they change ──────────────────────
   useEffect(() => {
     if (screen !== 'portal') return;
     const session = loadSession();
     if (session) {
-      saveSession({...session, completedCourses: [...completedCourses]});
+      const updated = {...session, completedCourses: [...completedCourses]};
+      saveSession(updated);
+      saveAccount(updated);
     }
   }, [completedCourses, screen]);
 
@@ -896,7 +857,7 @@ export default function BudtenderEducation() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [userMenuOpen]);
 
-  // ── Login with saved session (email only) ───────────────────────────────
+  // ── Login with email + password ─────────────────────────────────────────
   function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoginError('');
@@ -904,80 +865,92 @@ export default function BudtenderEducation() {
       setLoginError('Enter a valid email address.');
       return;
     }
-    // Check Klaviyo for this profile to verify they've registered before
-    fetch(
-      `https://a.klaviyo.com/client/profiles/?company_id=${KLAVIYO_PUBLIC_KEY}&filter=equals(email,"${encodeURIComponent(loginEmail.trim())}")&filter=equals(list,"${BUDTENDER_LIST_ID}")`,
-      {headers: {'revision': '2023-12-15'}}
-    ).then(() => {
-      // Klaviyo client API doesn't support profile lookup by email directly,
-      // so we trust the email and let them in — they already registered once.
-      // If they haven't registered, they won't have course progress saved.
-      const firstName = loginEmail.split('@')[0];
+    if (!loginPassword) {
+      setLoginError('Enter your password.');
+      return;
+    }
+    // Check localStorage for a matching account
+    hashPassword(loginPassword).then((hashed) => {
+      const allAccounts = getAllAccounts();
+      const account = allAccounts.find(
+        (a) => a.email.toLowerCase() === loginEmail.trim().toLowerCase() && a.password === hashed
+      );
+      if (!account) {
+        setLoginError('Invalid email or password. Please try again or create an account.');
+        return;
+      }
+      // Refresh session with 14-day expiry
       saveSession({
-        name: firstName,
-        email: loginEmail.trim(),
-        state: '',
-        completedCourses: [],
+        ...account,
+        completedCourses: account.completedCourses || [],
       });
-      setUserName(firstName);
-      setUserEmail(loginEmail.trim());
-      setScreen('portal');
-    }).catch(() => {
-      // Even on network error, let them in with email
-      const firstName = loginEmail.split('@')[0];
-      saveSession({
-        name: firstName,
-        email: loginEmail.trim(),
-        state: '',
-        completedCourses: [],
-      });
-      setUserName(firstName);
-      setUserEmail(loginEmail.trim());
+      setUserName(account.name.split(' ')[0]);
+      setUserEmail(account.email);
+      setCompletedCourses(new Set(account.completedCourses || []));
       setScreen('portal');
     });
   }
 
-  // ── Google Sign-In callback ─────────────────────────────────────────────
-  function handleGoogleLogin(response: any) {
-    const payload = decodeJWT(response.credential);
-    if (!payload) return;
-    const googleEmail = payload.email || '';
-    const googleName = payload.name || payload.given_name || googleEmail.split('@')[0];
-    // Subscribe to Klaviyo (idempotent — won't duplicate)
-    subscribeToKlaviyo(googleName, googleEmail, '');
-    saveSession({
-      name: googleName,
-      email: googleEmail,
-      state: '',
-      completedCourses: [],
-    });
-    setUserName(googleName.split(' ')[0]);
-    setUserEmail(googleEmail);
-    setScreen('portal');
+  // ── Get all registered accounts from localStorage ─────────────────────
+  function getAllAccounts(): SessionData[] {
+    try {
+      const raw = localStorage.getItem('highsman_budtender_accounts');
+      if (!raw) return [];
+      return JSON.parse(raw);
+    } catch { return []; }
   }
 
-  // ── Register (full form) ────────────────────────────────────────────────
+  function saveAccount(data: SessionData) {
+    try {
+      const accounts = getAllAccounts();
+      const idx = accounts.findIndex((a) => a.email.toLowerCase() === data.email.toLowerCase());
+      if (idx >= 0) {
+        accounts[idx] = data;
+      } else {
+        accounts.push(data);
+      }
+      localStorage.setItem('highsman_budtender_accounts', JSON.stringify(accounts));
+    } catch {}
+  }
+
+  // ── Register (full form with password) ──────────────────────────────────
   function handleGateSubmit(e: React.FormEvent) {
     e.preventDefault();
     const newErrors: Record<string, string> = {};
     if (!name.trim()) newErrors.name = 'Enter your name.';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       newErrors.email = 'Enter a valid email.';
+    if (!password || password.length < 6) newErrors.password = 'Password must be at least 6 characters.';
     if (!state) newErrors.state = 'Select your state.';
     if (!consent) newErrors.consent = 'You must agree to continue.';
+    // Check if email already registered
+    const existing = getAllAccounts().find(
+      (a) => a.email.toLowerCase() === email.trim().toLowerCase()
+    );
+    if (existing) newErrors.email = 'This email is already registered. Please sign in.';
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
     setErrors({});
-    subscribeToKlaviyo(name.trim(), email.trim(), state);
-    saveSession({
-      name: name.trim(),
-      email: email.trim(),
-      state,
-      dispensary: dispensary.trim() || undefined,
-      completedCourses: [],
+    hashPassword(password).then((hashed) => {
+      subscribeToKlaviyo(name.trim(), email.trim(), state);
+      const sessionData = {
+        name: name.trim(),
+        email: email.trim(),
+        password: hashed,
+        state,
+        dispensary: dispensary.trim() || undefined,
+        completedCourses: [] as string[],
+      };
+      saveSession(sessionData);
+      saveAccount({
+        ...sessionData,
+        completedCourses: [],
+        createdAt: Date.now(),
+        expiresAt: Date.now() + SESSION_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
+      });
+      setUserName(name.split(' ')[0]);
+      setUserEmail(email.trim());
+      setScreen('portal');
     });
-    setUserName(name.split(' ')[0]);
-    setUserEmail(email.trim());
-    setScreen('portal');
   }
 
   // ── Logout ──────────────────────────────────────────────────────────────
@@ -991,6 +964,7 @@ export default function BudtenderEducation() {
     setActiveCourse(null);
     setCourseQuizActive(null);
     setLoginEmail('');
+    setLoginPassword('');
     setLoginError('');
   }
 
@@ -1167,60 +1141,45 @@ export default function BudtenderEducation() {
           </div>
 
           {gateMode === 'login' ? (
-            /* ── LOGIN FORM (email only) ─────────────────────────────────── */
+            /* ── LOGIN FORM (email + password) ──────────────────────────── */
             <div className="bg-[#111111] border border-[#A9ACAF]/20 rounded-xl p-6 md:p-8 shadow-2xl">
               <div className="text-center mb-5">
                 <h2 className="text-lg font-bold text-white mb-1">Welcome Back</h2>
-                <p className="text-[#A9ACAF] text-xs">Sign in with your email to continue training</p>
-              </div>
-
-              {/* Google Sign-In Button */}
-              {GOOGLE_CLIENT_ID ? (
-                <div ref={googleBtnRef} className="mb-4 w-full" />
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Fallback Google button — opens Google OAuth popup when client ID is configured
-                    // For now, show a styled button that hints at Google login
-                    if (!(window as any).google?.accounts?.id) {
-                      alert('Google Sign-In will be available soon. Please use email login for now.');
-                      return;
-                    }
-                    (window as any).google.accounts.id.prompt();
-                  }}
-                  className="w-full flex items-center justify-center gap-3 py-2.5 px-4 border border-[#A9ACAF]/15 rounded-lg text-sm text-white font-medium hover:bg-[#1a1a1a] transition-colors mb-4"
-                >
-                  <svg width="18" height="18" viewBox="0 0 48 48">
-                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                  </svg>
-                  Continue with Google
-                </button>
-              )}
-
-              <div className="flex items-center gap-3 mb-4">
-                <div className="flex-1 h-px bg-[#c8a84b]/10" />
-                <span className="text-[10px] uppercase tracking-wider text-[#888888]">or</span>
-                <div className="flex-1 h-px bg-[#c8a84b]/10" />
+                <p className="text-[#A9ACAF] text-xs">Sign in to continue your training</p>
               </div>
 
               <form onSubmit={handleLogin}>
-                <div>
-                  <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#666666] mb-1">
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    value={loginEmail}
-                    onChange={(e) => { setLoginEmail(e.target.value); setLoginError(''); }}
-                    placeholder="you@dispensary.com"
-                    className={`w-full px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors bg-[#000000] ${
-                      loginError ? 'border-red-400 bg-red-50' : 'border-[#A9ACAF]/20 focus:border-[#A9ACAF]'
-                    }`}
-                  />
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#666666] mb-1">
+                      Email Address
+                    </label>
+                    <input
+                      type="email"
+                      value={loginEmail}
+                      onChange={(e) => { setLoginEmail(e.target.value); setLoginError(''); }}
+                      placeholder="you@dispensary.com"
+                      className={`w-full px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors bg-[#000000] ${
+                        loginError ? 'border-red-400' : 'border-[#A9ACAF]/20 focus:border-[#A9ACAF]'
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#666666] mb-1">
+                      Password
+                    </label>
+                    <input
+                      type="password"
+                      value={loginPassword}
+                      onChange={(e) => { setLoginPassword(e.target.value); setLoginError(''); }}
+                      placeholder="Enter your password"
+                      className={`w-full px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors bg-[#000000] ${
+                        loginError ? 'border-red-400' : 'border-[#A9ACAF]/20 focus:border-[#A9ACAF]'
+                      }`}
+                    />
+                  </div>
+
                   {loginError && <p className="text-red-500 text-xs mt-1">{loginError}</p>}
                 </div>
 
@@ -1240,40 +1199,11 @@ export default function BudtenderEducation() {
               </p>
             </div>
           ) : (
-            /* ── REGISTER FORM (full form) ───────────────────────────────── */
+            /* ── REGISTER FORM (full form with password) ─────────────────── */
             <div className="bg-[#111111] border border-[#A9ACAF]/20 rounded-xl p-6 md:p-8 shadow-2xl">
               <div className="text-center mb-5">
                 <h2 className="text-lg font-bold text-white mb-1">Create Your Account</h2>
-                <p className="text-[#A9ACAF] text-xs">Register once, then sign in instantly next time</p>
-              </div>
-
-              {/* Google Sign-In for Registration */}
-              {!GOOGLE_CLIENT_ID && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!(window as any).google?.accounts?.id) {
-                      alert('Google Sign-In will be available soon. Please register with email for now.');
-                      return;
-                    }
-                    (window as any).google.accounts.id.prompt();
-                  }}
-                  className="w-full flex items-center justify-center gap-3 py-2.5 px-4 border border-[#A9ACAF]/15 rounded-lg text-sm text-white font-medium hover:bg-[#1a1a1a] transition-colors mb-4"
-                >
-                  <svg width="18" height="18" viewBox="0 0 48 48">
-                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                  </svg>
-                  Sign up with Google
-                </button>
-              )}
-
-              <div className="flex items-center gap-3 mb-4">
-                <div className="flex-1 h-px bg-[#c8a84b]/10" />
-                <span className="text-[10px] uppercase tracking-wider text-[#888888]">or register with email</span>
-                <div className="flex-1 h-px bg-[#c8a84b]/10" />
+                <p className="text-[#A9ACAF] text-xs">Register once, then sign in instantly for 14 days</p>
               </div>
 
               <form onSubmit={handleGateSubmit}>
@@ -1310,6 +1240,23 @@ export default function BudtenderEducation() {
                       }`}
                     />
                     {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
+                  </div>
+
+                  {/* Password */}
+                  <div>
+                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#666666] mb-1">
+                      Password
+                    </label>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="At least 6 characters"
+                      className={`w-full px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors bg-[#000000] ${
+                        errors.password ? 'border-red-400' : 'border-[#A9ACAF]/20 focus:border-[#A9ACAF]'
+                      }`}
+                    />
+                    {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password}</p>}
                   </div>
 
                   {/* State */}
