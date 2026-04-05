@@ -772,11 +772,11 @@ const COURSE_QUIZZES: Record<string, QuizQuestion[]> = {
       options: [
         '"Let me show you our full menu"',
         '"1.2 grams of Triple Infused flower — flavor lasts the full smoke"',
-        '"It depends on what you are looking for"',
+        '"That depends on the use case you are looking for"',
         '"Our Hit Sticks are our most popular"',
       ],
-      correct: 1,
-      explanation: 'When someone asks for the best, Triple Threat is the answer. Lead with the specs and the experience: "1.2 grams of Triple Infused — flavor lasts the full smoke, not just the first hit."',
+      correct: 2,
+      explanation: 'Always qualify the customer first. "That depends on the use case you are looking for" opens the conversation so you can match them to the right product — Hit Sticks, Triple Threat, or Ground Game.',
     },
     {
       q: 'What is the correct upsell path across the Highsman lineup?',
@@ -794,11 +794,11 @@ const COURSE_QUIZZES: Record<string, QuizQuestion[]> = {
       options: [
         '"Would you like to buy one?"',
         '"Let me know if you have questions"',
-        '"Do you want the single or the two-pack?" / "One or two?"',
+        '"So what product type do you prefer, The Hit Stick, The 1.2g pre roll or the 7g ready to roll flower?"',
         '"I will leave you to think about it"',
       ],
       correct: 2,
-      explanation: 'Always use the assumptive close. Never ask permission to sell. "Single or the two-pack?" for Triple Threat, "One or two?" for Hit Sticks. Confident and direct.',
+      explanation: 'Always use the assumptive close. Guide them to choose between products — not whether to buy. "So what product type do you prefer, The Hit Stick, The 1.2g pre roll or the 7g ready to roll flower?" assumes the sale.',
     },
   ],
 };
