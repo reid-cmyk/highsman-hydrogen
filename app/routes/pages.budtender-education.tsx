@@ -733,11 +733,12 @@ function subscribeToKlaviyo(name: string, email: string, state: string, dispensa
     `https://a.klaviyo.com/client/subscriptions/?company_id=${KLAVIYO_PUBLIC_KEY}`,
     {
       method: 'POST',
-      headers: {'Content-Type': 'application/json', revision: '2023-12-15'},
+      headers: {'Content-Type': 'application/json', revision: '2024-10-15'},
       body: JSON.stringify({
         data: {
           type: 'subscription',
           attributes: {
+            custom_source: 'Budtender Education Portal',
             profile: {
               data: {
                 type: 'profile',
@@ -757,7 +758,14 @@ function subscribeToKlaviyo(name: string, email: string, state: string, dispensa
                 },
               },
             },
-            list_id: BUDTENDER_LIST_ID,
+          },
+          relationships: {
+            list: {
+              data: {
+                type: 'list',
+                id: BUDTENDER_LIST_ID,
+              },
+            },
           },
         },
       }),
