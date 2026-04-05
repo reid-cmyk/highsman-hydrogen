@@ -2014,24 +2014,6 @@ export default function BudtenderEducation() {
           </>
           )}
 
-          {/* Audio summary */}
-          <div className="mt-8 bg-[#111111] border border-[#A9ACAF]/15 rounded-xl p-4">
-            <div className="flex items-center gap-3">
-              <div
-                className="w-10 h-10 rounded-full flex items-center justify-center text-lg"
-                style={{background: currentCourse.color + '30'}}
-              >
-                🎧
-              </div>
-              <div className="flex-1">
-                <div className="text-white text-sm font-semibold">Audio Overview</div>
-                <div className="text-[#A9ACAF] text-xs">Listen to a summary of this course</div>
-              </div>
-              <div className="text-[#A9ACAF] text-xs px-3 py-1 bg-[#111111] rounded-full">
-                Coming Soon
-              </div>
-            </div>
-          </div>
         </div>
       ) : courseQuizActive ? (
         /* ── Course Quiz View ──────────────────────────────────────────────── */
