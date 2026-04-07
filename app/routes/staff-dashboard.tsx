@@ -142,7 +142,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     }
 
     // 2. Fetch all course completion events (include=profile ensures relationship IDs are returned)
-    const eventsUrl = `https://a.klaviyo.com/api/events/?filter=equals(metric_id,"${COURSE_COMPLETED_METRIC_ID}")&include=profile&fields[event]=event_properties,datetime,profile_id&page[size]=100&sort=-datetime`;
+    const eventsUrl = `https://a.klaviyo.com/api/events/?filter=equals(metric_id,"${COURSE_COMPLETED_METRIC_ID}")&include=profile&fields[event]=event_properties,datetime&page[size]=100&sort=-datetime`;
     const events = await fetchAllPages(eventsUrl, apiKey);
 
     // 3. Build a map of profile_id → events
