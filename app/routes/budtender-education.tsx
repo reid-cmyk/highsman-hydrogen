@@ -1135,7 +1135,7 @@ function subscribeToKlaviyo(name: string, email: string, state: string, dispensa
 async function callAction(data: Record<string, string>): Promise<any> {
   const formData = new FormData();
   for (const [key, val] of Object.entries(data)) formData.append(key, val);
-  const res = await fetch(typeof window !== 'undefined' ? window.location.pathname : '/budtender-education', {
+  const res = await fetch('/api/budtender-auth', {
     method: 'POST',
     body: formData,
   });
