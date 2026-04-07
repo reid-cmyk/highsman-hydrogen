@@ -51,7 +51,10 @@ async function klaviyoFetch(url: string, apiKey: string) {
       revision: '2024-10-15',
     },
   });
-  if (!res.ok) throw new Error(`Klaviyo API error: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Klaviyo API error: ${res.status} — ${body.slice(0, 200)}`);
+  }
   return res.json();
 }
 
@@ -123,12 +126,11 @@ export async function loader({request, context}: LoaderFunctionArgs) {
 
   try {
     // 1. Fetch all profiles on the Budtenders list
-    //    Use the list relationship endpoint with additional-fields to ensure properties are returned
-    const profilesUrl = `https://a.klaviyo.com/api/lists/${KLAVIYO_LIST_ID}/profiles/?additional-fields[profile]=properties&fields[profile]=email,first_name,last_name,organization,properties,created&page[size]=100`;
+    const profilesUrl = `https://a.klaviyo.com/api/lists/${KLAVIYO_LIST_ID}/profiles/?fields[profile]=email,first_name,last_name,organization,properties,created&page[size]=100`;
     const profiles = await fetchAllPages(profilesUrl, apiKey);
 
-    // 2. Fetch all course completion events (include profile relationship for mapping)
-    const eventsUrl = `https://a.klaviyo.com/api/events/?filter=equals(metric_id,"${COURSE_COMPLETED_METRIC_ID}")&fields[event]=event_properties,datetime&include=profile&page[size]=100&sort=-datetime`;
+    // 2. Fetch all course completion events
+    const eventsUrl = `https://a.klaviyo.com/api/events/?filter=equals(metric_id,"${COURSE_COMPLETED_METRIC_ID}")&fields[event]=event_properties,datetime&page[size]=100&sort=-datetime`;
     const events = await fetchAllPages(eventsUrl, apiKey);
 
     // 3. Build a map of profile_id → events
