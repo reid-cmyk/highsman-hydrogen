@@ -1,4 +1,4 @@
-// Social Proof Component — update content in this file when real quotes/press/partners are ready
+// Social Proof Component — update TESTIMONIALS and DISPENSARY_PARTNERS when real content is ready
 
 const TESTIMONIALS = [
   {
@@ -19,9 +19,14 @@ const TESTIMONIALS = [
 ];
 
 const PRESS = [
-  { name: "High Times", blurb: "A performance brand built different." },
-  { name: "Leafly", blurb: "Highsman sets the standard for triple-infused." },
-  { name: "Forbes", blurb: "Ricky Williams' cannabis brand is the real deal." },
+  { name: "Forbes", url: "https://www.highsman.com/inthenews/nfl-star-ricky-williams-launches-his-own-cannabis-brand-highsman" },
+  { name: "Los Angeles Times", url: "https://www.youtube.com/watch?v=DFzYb12iOog" },
+  { name: "Boardroom", url: "https://boardroom.tv/ricky-williams-highsman-cannabis/" },
+  { name: "Real Time with Bill Maher", url: "https://www.tvmaze.com/episodes/2269828/real-time-with-bill-maher-20x04-ricky-williams-vivek-ramaswamy-marianne-williamson" },
+  { name: "All The Smoke", url: "https://podcasts.apple.com/cz/podcast/ricky-williams-ep-132-all-the-smoke-full-episode/id1483638752?i=1000558186099" },
+  { name: "Barstool Sports", url: "https://www.youtube.com/watch?v=oFNQltuFPd0" },
+  { name: "Yahoo Sports", url: "https://sports.yahoo.com/rush-heisman-highsman-ricky-williams-035017375.html" },
+  { name: "Front Office Sports", url: "https://podcasts.apple.com/us/podcast/the-ricky-williams-interview/id1289046573?i=1000632736938" },
 ];
 
 const DISPENSARY_PARTNERS = [
@@ -57,13 +62,17 @@ export function SocialProof() {
         <p className="font-headline text-sm uppercase tracking-[0.4em] text-on-surface-variant text-center mb-10">
           AS SEEN IN
         </p>
-        <div className="flex flex-wrap justify-center items-center gap-12">
+        <div className="flex flex-wrap justify-center items-center gap-x-12 gap-y-6">
           {PRESS.map((p, i) => (
-            <div key={i} className="text-center">
-              <p className="font-headline text-2xl md:text-4xl font-bold uppercase text-on-surface-variant/40 tracking-widest">
-                {p.name}
-              </p>
-            </div>
+            <a
+              key={i}
+              href={p.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-headline text-xl md:text-3xl font-bold uppercase text-on-surface-variant/40 tracking-widest hover:text-on-surface-variant/70 transition-colors no-underline"
+            >
+              {p.name}
+            </a>
           ))}
         </div>
       </div>
