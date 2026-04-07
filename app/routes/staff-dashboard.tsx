@@ -141,16 +141,17 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       profiles.push(...batchProfiles);
     }
 
-    // 2. Fetch all course completion events
-    const eventsUrl = `https://a.klaviyo.com/api/events/?filter=equals(metric_id,"${COURSE_COMPLETED_METRIC_ID}")&fields[event]=event_properties,datetime&page[size]=100&sort=-datetime`;
+    // 2. Fetch all course completion events (include=profile ensures relationship IDs are returned)
+    const eventsUrl = `https://a.klaviyo.com/api/events/?filter=equals(metric_id,"${COURSE_COMPLETED_METRIC_ID}")&include=profile&fields[event]=event_properties,datetime,profile_id&page[size]=100&sort=-datetime`;
     const events = await fetchAllPages(eventsUrl, apiKey);
 
     // 3. Build a map of profile_id → events
     const eventsByProfile = new Map<string, any[]>();
     for (const ev of events) {
-      // Try multiple paths for profile ID (relationship structure varies by endpoint)
+      // Try multiple paths for profile ID
       const pid = ev.relationships?.profile?.data?.id
-        || ev.relationships?.profiles?.data?.[0]?.id;
+        || ev.relationships?.profiles?.data?.[0]?.id
+        || ev.attributes?.profile_id;
       if (!pid) continue;
       if (!eventsByProfile.has(pid)) eventsByProfile.set(pid, []);
       eventsByProfile.get(pid)!.push(ev);
@@ -421,17 +422,22 @@ function DashboardContent({budtenders, summary}: {budtenders: BudtenderRow[]; su
         {/* Per-tier counts */}
         {TIER_NAMES.map((tier) => {
           const colors = TIER_COLORS[tier];
+          const isActive = filterTier === tier;
           return (
             <div
               key={tier}
               className="rounded-xl p-4 text-center cursor-pointer transition-all hover:scale-105"
-              style={{background: colors.bg, border: `1px solid ${colors.border}`}}
+              style={{
+                background: isActive ? colors.text : colors.bg,
+                border: isActive ? `2px solid ${colors.text}` : `1px solid ${colors.border}`,
+                transform: isActive ? 'scale(1.05)' : undefined,
+              }}
               onClick={() => setFilterTier(filterTier === tier ? 'All' : tier)}
             >
-              <div className="text-[10px] uppercase tracking-widest font-bold mb-1" style={{color: colors.text}}>
+              <div className="text-[10px] uppercase tracking-widest font-bold mb-1" style={{color: isActive ? '#000' : colors.text}}>
                 {tier}
               </div>
-              <div className="text-3xl font-bold" style={{fontFamily: 'Teko, sans-serif', color: colors.text}}>
+              <div className="text-3xl font-bold" style={{fontFamily: 'Teko, sans-serif', color: isActive ? '#000' : colors.text}}>
                 {summary.tierCounts[tier] || 0}
               </div>
             </div>
