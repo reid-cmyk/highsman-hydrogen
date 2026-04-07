@@ -19,6 +19,8 @@ declare global {
     PRIVATE_STOREFRONT_API_TOKEN: string;
     PUBLIC_STORE_DOMAIN: string;
     PUBLIC_STOREFRONT_ID: string;
+    KLAVIYO_PRIVATE_KEY: string;
+    STAFF_DASHBOARD_PASSWORD: string;
   }
 }
 
