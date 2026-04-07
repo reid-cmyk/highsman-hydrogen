@@ -25,17 +25,17 @@ const TESTIMONIALS = [
 ];
 
 const PRESS = [
-  { name: "Forbes", url: "https://www.highsman.com/inthenews/nfl-star-ricky-williams-launches-his-own-cannabis-brand-highsman", domain: "forbes.com" },
-  { name: "Los Angeles Times", url: "https://www.youtube.com/watch?v=DFzYb12iOog", domain: "latimes.com" },
-  { name: "Boardroom", url: "https://boardroom.tv/ricky-williams-highsman-cannabis/", domain: "boardroom.tv" },
-  { name: "Yahoo Sports", url: "https://sports.yahoo.com/rush-heisman-highsman-ricky-williams-035017375.html", domain: "yahoo.com" },
-  { name: "Barstool Sports", url: "https://www.youtube.com/watch?v=oFNQltuFPd0", domain: "barstoolsports.com" },
-  { name: "Front Office Sports", url: "https://podcasts.apple.com/us/podcast/the-ricky-williams-interview/id1289046573?i=1000632736938", domain: "frntofficesport.com" },
-  { name: "Bill Maher", url: "https://www.tvmaze.com/episodes/2269828/real-time-with-bill-maher-20x04-ricky-williams-vivek-ramaswamy-marianne-williamson", domain: "hbo.com" },
-  { name: "All The Smoke", url: "https://podcasts.apple.com/cz/podcast/ricky-williams-ep-132-all-the-smoke-full-episode/id1483638752?i=1000558186099", domain: "showtime.com" },
+  { name: "Forbes", url: "https://www.highsman.com/inthenews/nfl-star-ricky-williams-launches-his-own-cannabis-brand-highsman", logo: "/press-logos/forbes.png" },
+  { name: "Los Angeles Times", url: "https://www.youtube.com/watch?v=DFzYb12iOog", logo: "/press-logos/latimes.png" },
+  { name: "Boardroom", url: "https://boardroom.tv/ricky-williams-highsman-cannabis/", logo: "/press-logos/boardroom.png" },
+  { name: "Yahoo Sports", url: "https://sports.yahoo.com/rush-heisman-highsman-ricky-williams-035017375.html", logo: "/press-logos/yahoo.png" },
+  { name: "Barstool Sports", url: "https://www.youtube.com/watch?v=oFNQltuFPd0", logo: "/press-logos/barstool.png" },
+  { name: "Front Office Sports", url: "https://podcasts.apple.com/us/podcast/the-ricky-williams-interview/id1289046573?i=1000632736938", logo: "/press-logos/frontofficesports.png" },
+  { name: "Bill Maher", url: "https://www.tvmaze.com/episodes/2269828/real-time-with-bill-maher-20x04-ricky-williams-vivek-ramaswamy-marianne-williamson", logo: "/press-logos/hbo.png" },
+  { name: "All The Smoke", url: "https://podcasts.apple.com/cz/podcast/ricky-williams-ep-132-all-the-smoke-full-episode/id1483638752?i=1000558186099", logo: "/press-logos/allthesmoke.png" },
 ];
 
-function PressLogo({ name, url, domain }: { name: string; url: string; domain: string }) {
+function PressLogo({ name, url, logo }: { name: string; url: string; logo: string }) {
   const [imgFailed, setImgFailed] = useState(false);
   return (
     <a
@@ -47,7 +47,7 @@ function PressLogo({ name, url, domain }: { name: string; url: string; domain: s
     >
       {!imgFailed ? (
         <img
-          src={`https://logo.clearbit.com/${domain}`}
+          src={logo}
           alt={name}
           className="h-7 md:h-9 w-auto object-contain"
           style={{ filter: 'brightness(0) invert(1)' }}
@@ -122,7 +122,7 @@ export function SocialProof() {
         </p>
         <div className="flex flex-wrap justify-center items-center gap-x-14 gap-y-8">
           {PRESS.map((p, i) => (
-            <PressLogo key={i} name={p.name} url={p.url} domain={p.domain} />
+            <PressLogo key={i} name={p.name} url={p.url} logo={p.logo} />
           ))}
         </div>
       </div>
