@@ -1,6 +1,7 @@
 import type {MetaFunction} from '@shopify/remix-oxygen';
 import {Link} from '@remix-run/react';
 import {IMAGES} from '~/lib/images';
+import {SocialProof} from '~/components/SocialProof';
 
 export const meta: MetaFunction = () => {
   return [{title: 'HIGHSMAN | Ground Game - 7G Flower'}];
@@ -20,6 +21,14 @@ export default function GroundGame() {
 
         {/* Main Content Area */}
         <div className="md:col-span-6 flex flex-col justify-center px-8 md:px-16 py-12 z-10">
+          <div className="mb-4 flex flex-wrap gap-2">
+            <span className="bg-surface-container-highest font-headline text-sm px-3 py-1 tracking-widest uppercase text-on-surface-variant border border-outline-variant/30">
+              ROLL YOUR OWN
+            </span>
+            <span className="bg-primary text-on-primary font-headline text-sm px-3 py-1 tracking-widest uppercase font-bold">
+              7G YOUR FORMAT
+            </span>
+          </div>
           <div className="mb-4 flex flex-wrap gap-2">
             <span className="bg-primary text-on-primary font-headline text-xl px-4 py-1 font-bold tracking-widest">
               7G READY TO ROLL
@@ -115,26 +124,26 @@ export default function GroundGame() {
             </div>
           </div>
 
-          {/* Stat Card 2: Strain Profile */}
+          {/* Stat Card 2: Sensory Profile */}
           <div className="bg-surface-container-highest p-12">
             <h4 className="font-headline text-2xl uppercase tracking-[0.3em] mb-8 text-on-surface-variant">
-              STRAIN PROFILE
+              FLAVOR PROFILE
             </h4>
             <div className="space-y-6">
               {[
-                {name: 'LIMONENE', value: '1.2%'},
-                {name: 'MYRCENE', value: '0.8%'},
-                {name: 'CARYOPHYLLENE', value: '0.5%'},
-              ].map((terp) => (
+                {sense: 'AROMA', desc: 'Bright citrus. Fresh earth.'},
+                {sense: 'EFFECT', desc: 'Grounding. Relaxing. Clear.'},
+                {sense: 'FINISH', desc: 'Spice-forward. Complex. Lasting.'},
+              ].map((item) => (
                 <div
-                  key={terp.name}
-                  className="flex justify-between items-end border-b border-outline-variant/30 pb-2"
+                  key={item.sense}
+                  className="border-b border-outline-variant/30 pb-4"
                 >
-                  <span className="font-headline text-2xl uppercase">
-                    {terp.name}
+                  <span className="font-headline text-xs uppercase tracking-[0.3em] text-on-surface-variant block mb-1">
+                    {item.sense}
                   </span>
-                  <span className="font-headline text-3xl font-bold">
-                    {terp.value}
+                  <span className="font-headline text-2xl font-bold uppercase">
+                    {item.desc}
                   </span>
                 </div>
               ))}
@@ -165,6 +174,9 @@ export default function GroundGame() {
           </div>
         </div>
       </section>
+
+      {/* ===== SOCIAL PROOF ===== */}
+      <SocialProof />
 
       {/* ===== FULL-WIDTH MARQUEE STATEMENT ===== */}
       <section className="py-32 bg-surface text-center overflow-hidden border-y border-outline-variant/10">

@@ -1,6 +1,7 @@
 import type {MetaFunction} from '@shopify/remix-oxygen';
 import {Link} from '@remix-run/react';
 import {IMAGES} from '~/lib/images';
+import {SocialProof} from '~/components/SocialProof';
 
 export const meta: MetaFunction = () => {
   return [{title: 'HIGHSMAN | Hit Sticks'}];
@@ -25,7 +26,15 @@ export default function HitSticks() {
 
         {/* Product Copy */}
         <div className="w-full md:w-1/2 z-10 flex flex-col items-start text-left">
-          <span className="uppercase tracking-[0.3em] text-on-surface-variant font-medium text-sm mb-4">
+          <div className="flex flex-wrap gap-2 mb-4">
+            <span className="bg-surface-container-highest font-headline text-sm px-3 py-1 tracking-widest uppercase text-on-surface-variant border border-outline-variant/30">
+              ON THE GO
+            </span>
+            <span className="bg-primary text-on-primary font-headline text-sm px-3 py-1 tracking-widest uppercase font-bold">
+              0.5G PERSONAL DOSE
+            </span>
+          </div>
+          <span className="uppercase tracking-[0.3em] text-on-surface-variant font-medium text-sm mb-4 block">
             PERSONAL PERFORMANCE GRADE
           </span>
           <h1 className="font-headline text-5xl md:text-9xl font-bold uppercase leading-[0.85] mb-6">
@@ -43,7 +52,7 @@ export default function HitSticks() {
               FIND A STORE
             </Link>
             <Link to="/our-strains" className="border border-outline-variant px-8 py-4 font-headline text-2xl font-semibold uppercase text-primary hover:bg-surface-container-highest transition-all inline-block text-center no-underline">
-              LEARN MORE
+              EXPLORE STRAINS
             </Link>
           </div>
 
@@ -221,6 +230,9 @@ export default function HitSticks() {
           </div>
         </div>
       </section>
+
+      {/* ===== SOCIAL PROOF ===== */}
+      <SocialProof />
 
       {/* ===== RETAIL DISCOVERY ===== */}
       <section className="bg-surface-container-low py-24">

@@ -1,6 +1,7 @@
 import type {MetaFunction} from '@shopify/remix-oxygen';
 import {Link} from '@remix-run/react';
 import {IMAGES} from '~/lib/images';
+import {SocialProof} from '~/components/SocialProof';
 
 export const meta: MetaFunction = () => {
   return [{title: 'HIGHSMAN | 1.2G Triple Infused Pre-Rolls'}];
@@ -22,8 +23,16 @@ export default function PreRolls() {
         </div>
         <div className="md:col-span-5 flex flex-col justify-center p-8 md:p-16 space-y-8 bg-surface-container-low order-1 md:order-2">
           <div className="space-y-2">
+            <div className="flex flex-wrap gap-2 mb-3">
+              <span className="bg-surface-container-highest font-headline text-sm px-3 py-1 tracking-widest uppercase text-on-surface-variant border border-outline-variant/30">
+                SHARE THE SESSION
+              </span>
+              <span className="bg-primary text-on-primary font-headline text-sm px-3 py-1 tracking-widest uppercase font-bold">
+                1.2G SOCIAL FORMAT
+              </span>
+            </div>
             <span className="font-headline text-primary text-2xl tracking-[0.3em] uppercase">
-              Product Profile
+              Triple Infused Pre-Rolls
             </span>
             <h1 className="font-headline text-4xl md:text-8xl leading-[0.85] uppercase font-bold text-primary">
               1.2G TRIPLE INFUSED PRE-ROLLS
@@ -218,6 +227,9 @@ export default function PreRolls() {
           </div>
         </div>
       </section>
+
+      {/* ===== SOCIAL PROOF ===== */}
+      <SocialProof />
 
       {/* ===== CTA ===== */}
       <section className="bg-primary text-on-primary py-32 px-8 text-center relative overflow-hidden">
