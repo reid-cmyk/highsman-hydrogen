@@ -34,9 +34,12 @@ export default function PreRolls() {
             <span className="font-headline text-primary text-2xl tracking-[0.3em] uppercase">
               Triple Infused Pre-Rolls
             </span>
-            <h1 className="font-headline text-4xl md:text-8xl leading-[0.85] uppercase font-bold text-primary">
+            <h1 className="font-headline text-4xl md:text-8xl leading-[0.85] uppercase font-bold text-primary mb-3">
               1.2G TRIPLE INFUSED PRE-ROLLS
             </h1>
+            <p className="font-headline text-xs uppercase tracking-[0.4em] text-on-surface-variant/50">
+              BY RICKY WILLIAMS
+            </p>
           </div>
           <div className="space-y-4">
             <p className="text-on-surface-variant text-lg max-w-md leading-relaxed">

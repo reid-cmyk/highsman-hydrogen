@@ -37,11 +37,14 @@ export default function HitSticks() {
           <span className="uppercase tracking-[0.3em] text-on-surface-variant font-medium text-sm mb-4 block">
             PERSONAL PERFORMANCE GRADE
           </span>
-          <h1 className="font-headline text-5xl md:text-9xl font-bold uppercase leading-[0.85] mb-6">
+          <h1 className="font-headline text-5xl md:text-9xl font-bold uppercase leading-[0.85] mb-3">
             HIT
             <br />
             STICK
           </h1>
+          <p className="font-headline text-xs uppercase tracking-[0.4em] text-on-surface-variant/50 mb-8">
+            BY RICKY WILLIAMS
+          </p>
           <p className="font-body text-on-surface-variant max-w-md mb-8 leading-relaxed">
             A portable and disposable cross between a Pre Roll and a Chillum.
             Designed for elite performance, this is pure flower experience

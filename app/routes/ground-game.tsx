@@ -37,10 +37,13 @@ export default function GroundGame() {
               BEST VALUE PER GRAM
             </span>
           </div>
-          <h1 className="font-headline text-6xl md:text-[120px] leading-[0.85] font-bold uppercase mb-6 tracking-tighter">
+          <h1 className="font-headline text-6xl md:text-[120px] leading-[0.85] font-bold uppercase mb-3 tracking-tighter">
             GROUND <br />
             GAME
           </h1>
+          <p className="font-headline text-xs uppercase tracking-[0.4em] text-on-surface-variant/50 mb-8">
+            BY RICKY WILLIAMS
+          </p>
           <p className="font-body text-xl text-on-surface-variant max-w-md mb-12 leading-relaxed">
             Premium indoor-grown flower, pre-ground for the ultimate
             convenience. No trim, no shake&mdash;just pure, high-potency flower
