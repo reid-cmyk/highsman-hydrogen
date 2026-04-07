@@ -1,20 +1,24 @@
-// Social Proof Component — update TESTIMONIALS and DISPENSARY_PARTNERS when real content is ready
+const RATINGS = [
+  { product: "Blueberry Blitz Hit Stick", stars: 5.0, count: 11 },
+  { product: "Cake Quake Hit Stick", stars: 4.0, count: 8 },
+];
 
 const TESTIMONIALS = [
   {
-    quote: "The Hit Stick goes everywhere with me. Clean, discreet, hits like a full session.",
-    name: "Marcus T.",
-    location: "Los Angeles, CA",
+    quote: "Very happy with purchase and definitely will be ordering from them again.",
+    attribution: "Cake Quake Hit Stick customer",
   },
   {
-    quote: "Best pre-roll I've had. The triple infusion is real — you can taste the difference.",
-    name: "Jordan K.",
-    location: "Denver, CO",
+    quote: "This one is one of my favorite and best tasting.",
+    attribution: "Blueberry Blitz Hit Stick customer",
   },
   {
-    quote: "Ground Game is the move. Same quality, I pack my own. Value per gram is unmatched.",
-    name: "Darius M.",
-    location: "Houston, TX",
+    quote: "Smokes very smooth. 9/10 for me.",
+    attribution: "Hit Stick customer",
+  },
+  {
+    quote: "Definitely recommend this one.",
+    attribution: "Hit Stick customer",
   },
 ];
 
@@ -29,9 +33,17 @@ const PRESS = [
   { name: "Front Office Sports", url: "https://podcasts.apple.com/us/podcast/the-ricky-williams-interview/id1289046573?i=1000632736938" },
 ];
 
-const DISPENSARY_PARTNERS = [
-  "MedMen", "Cookies", "Harvest House", "Planet 13", "Curaleaf",
-];
+function StarRating({ stars }: { stars: number }) {
+  return (
+    <span className="inline-flex gap-0.5">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <svg key={n} className={`w-4 h-4 ${n <= stars ? 'text-primary' : 'text-outline-variant/30'}`} fill="currentColor" viewBox="0 0 20 20">
+          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+        </svg>
+      ))}
+    </span>
+  );
+}
 
 export function SocialProof() {
   return (
@@ -39,19 +51,36 @@ export function SocialProof() {
 
       {/* Testimonials */}
       <div>
-        <h2 className="font-headline text-3xl md:text-5xl font-bold uppercase mb-12 text-center tracking-tight">
-          WHAT THEY'RE SAYING
+        <h2 className="font-headline text-3xl md:text-5xl font-bold uppercase mb-4 text-center tracking-tight">
+          LOVED BY CANNABIS CONSUMERS
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <p className="font-body text-on-surface-variant text-center text-sm uppercase tracking-widest mb-10">
+          Real reviews. Real smokers. Real love.
+        </p>
+
+        {/* Ratings strip */}
+        <div className="flex flex-wrap justify-center gap-8 mb-12">
+          {RATINGS.map((r, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <StarRating stars={r.stars} />
+              <span className="font-body text-sm text-on-surface-variant">
+                <span className="font-bold text-on-surface">{r.stars.toFixed(1)}</span>
+                {' '}({r.count} ratings) — {r.product}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Quote grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {TESTIMONIALS.map((t, i) => (
             <div key={i} className="bg-surface p-10 flex flex-col justify-between border-t-4 border-primary">
               <p className="font-body text-on-surface-variant text-lg leading-relaxed mb-8">
                 &ldquo;{t.quote}&rdquo;
               </p>
-              <div>
-                <p className="font-headline text-xl uppercase font-bold">{t.name}</p>
-                <p className="font-body text-xs uppercase tracking-widest text-on-surface-variant">{t.location}</p>
-              </div>
+              <p className="font-headline text-sm uppercase tracking-widest text-on-surface-variant/60">
+                — {t.attribution}
+              </p>
             </div>
           ))}
         </div>
@@ -73,23 +102,6 @@ export function SocialProof() {
             >
               {p.name}
             </a>
-          ))}
-        </div>
-      </div>
-
-      {/* Dispensary Partners */}
-      <div className="border-t border-outline-variant/20 pt-16">
-        <p className="font-headline text-sm uppercase tracking-[0.4em] text-on-surface-variant text-center mb-10">
-          AVAILABLE AT
-        </p>
-        <div className="flex flex-wrap justify-center items-center gap-8">
-          {DISPENSARY_PARTNERS.map((name, i) => (
-            <span
-              key={i}
-              className="font-headline text-xl uppercase tracking-widest text-on-surface-variant/50 border border-outline-variant/20 px-6 py-2"
-            >
-              {name}
-            </span>
           ))}
         </div>
       </div>
