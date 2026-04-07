@@ -58,7 +58,7 @@ export const IMAGES = {
 
   // ===== APPAREL PRODUCT IMAGES =====
   varsityJacket:
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuDhtuYGSLhfzZmJvCJYQ2RYWKAjTT7Dh56JpYdxrWMJlhFWYv8JkCq7J_QhYxp0OA3OUPFCq_w_elGe6XhFxK_PhrPHZRvUJIiTD9Hsccqn8j70ZYgGADTOEf7bLwuwlQTmhU51wRJU93q-GiJ-qKUnS4Yq9UKMGe7bEfSePcFdu-UcDrC1wigQZ3uoxBU8rIcPYZoGe7QUydaCOZtafHI5q9uB-5lLG9OBlV149Ig9P8ramDEWS-AyHEjzMbsT90CTVAXKLWFcFqmk',
+    'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Letterman-Varsity-Jacket-01_1.png?v=1775594409',
   sidelineHoodie:
     'https://lh3.googleusercontent.com/aida-public/AB6AXuBxoGUmn4KH34vy3Xv8f_xCLLaxZtsul7Fqq4aJyZMvEbmblESf17O89ugC0KbB6GSERijysxHom6-moi1I2Jz9gWDPD15llFFs1l2PsYSQANRuiq1b3KcMKpLjl0AXVJfI-VVxbPpqn7E2uPVSnx-VosyagCVBYlLHilXs9ZNRzIzznGGkRKMYus5pG4QNgrJ0fB2nSPO5E8ExGM1A-Cu222wnc7sKyxV5pnPhOFEmxq9V-J6P5gJu-0zgpEGQ7vF5XhCTMBh7YHej',
   gridironJoggers:
