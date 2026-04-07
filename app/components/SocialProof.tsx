@@ -50,8 +50,8 @@ function PressLogo({ name, url, logo }: { name: string; url: string; logo: strin
         <img
           src={logo}
           alt={name}
-          className="h-7 md:h-9 w-auto object-contain"
-          style={{ filter: 'brightness(0) invert(1)' }}
+          className="h-7 md:h-9 object-contain"
+          style={{ filter: 'brightness(0) invert(1)', width: 'auto', maxWidth: '160px' }}
           onError={() => setImgFailed(true)}
         />
       ) : (
