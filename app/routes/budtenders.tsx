@@ -209,7 +209,7 @@ export default function Budtenders() {
                   <span className="font-label text-[9px] tracking-[0.3em] uppercase" style={{color: 'rgba(245,225,0,0.5)'}}>Game Day &middot; 2026</span>
                   <div className="h-px flex-1" style={{background: 'rgba(245,225,0,0.3)'}} />
                 </div>
-                <img src={`${CDN}Game_Day_Prize_Pic.svg?v=1775597075`} alt="Champions Box with game day tickets" className="w-full" style={{maxHeight: '360px', objectFit: 'contain'}} />
+                <img src={`${CDN}Budtenders_Prize_Image_football_giveaway.png?v=1775599035`} alt="Football game day tickets — Eagles and Giants" className="w-full" style={{maxHeight: '360px', objectFit: 'contain'}} />
                 <div className="flex items-center gap-4 mt-6">
                   <div className="h-px flex-1" style={{background: 'rgba(245,225,0,0.3)'}} />
                   <span className="font-label text-[9px] tracking-[0.3em] uppercase" style={{color: 'rgba(245,225,0,0.5)'}}>Highsman &middot; NJ</span>
