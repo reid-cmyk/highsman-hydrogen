@@ -1,4 +1,6 @@
-import type {MetaFunction} from '@shopify/remix-oxygen';
+import type {MetaFunction, LoaderFunctionArgs, ActionFunctionArgs} from '@shopify/remix-oxygen';
+import {json} from '@shopify/remix-oxygen';
+import {useLoaderData} from '@remix-run/react';
 import {useState, useEffect, useRef, useCallback} from 'react';
 
 export const meta: MetaFunction = () => {
@@ -7,6 +9,266 @@ export const meta: MetaFunction = () => {
     {name: 'robots', content: 'noindex, nofollow'},
   ];
 };
+
+// ── Server-side Auth Constants ───────────────────────────────────────────────
+const KLAVIYO_LIST_ID_SERVER = 'WBSrLZ';
+const AUTH_COOKIE_NAME = 'budtender_auth';
+const AUTH_COOKIE_MAX_AGE = 14 * 24 * 60 * 60; // 14 days
+
+// ── Server-side password hashing (SHA-256) ──────────────────────────────────
+async function serverHashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password + 'highsman_budtender_salt');
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ── Klaviyo server-side helpers ─────────────────────────────────────────────
+async function klaviyoServerFetch(url: string, apiKey: string, options?: RequestInit) {
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      Authorization: `Klaviyo-API-Key ${apiKey}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      revision: '2024-10-15',
+      ...(options?.headers || {}),
+    },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Klaviyo API ${res.status}: ${body.slice(0, 300)}`);
+  }
+  return res.json();
+}
+
+async function findProfileByEmail(email: string, apiKey: string) {
+  const url = `https://a.klaviyo.com/api/profiles/?filter=equals(email,"${encodeURIComponent(email)}")&fields[profile]=email,first_name,last_name,organization,properties,created`;
+  const data = await klaviyoServerFetch(url, apiKey);
+  return data.data?.[0] || null;
+}
+
+// ── Loader: Check auth cookie, return profile data from Klaviyo ────────────
+export async function loader({request, context}: LoaderFunctionArgs) {
+  const cookie = request.headers.get('Cookie') || '';
+  const match = cookie.match(new RegExp(`${AUTH_COOKIE_NAME}=([^;]+)`));
+  if (!match) {
+    return json({authenticated: false, profile: null});
+  }
+
+  try {
+    const authData = JSON.parse(decodeURIComponent(match[1]));
+    const apiKey = context.env.KLAVIYO_PRIVATE_KEY;
+    if (!apiKey || !authData.email) {
+      return json({authenticated: false, profile: null});
+    }
+
+    const profile = await findProfileByEmail(authData.email, apiKey);
+    if (!profile) {
+      // Profile gone from Klaviyo — clear cookie
+      return json({authenticated: false, profile: null}, {
+        headers: {'Set-Cookie': `${AUTH_COOKIE_NAME}=; Path=/budtender-education; HttpOnly; Secure; SameSite=Lax; Max-Age=0`},
+      });
+    }
+
+    const attrs = profile.attributes || {};
+    const props = attrs.properties || {};
+    return json({
+      authenticated: true,
+      profile: {
+        id: profile.id,
+        email: attrs.email,
+        name: `${attrs.first_name || ''} ${attrs.last_name || ''}`.trim(),
+        firstName: attrs.first_name || '',
+        state: props.budtender_state || '',
+        dispensary: props.dispensary_name || attrs.organization || '',
+        completedCourses: props.completed_courses || [],
+      },
+    });
+  } catch {
+    return json({authenticated: false, profile: null});
+  }
+}
+
+// ── Action: Handle login, register, reset, course-complete, logout ─────────
+export async function action({request, context}: ActionFunctionArgs) {
+  const formData = await request.formData();
+  const intent = formData.get('intent') as string;
+  const apiKey = context.env.KLAVIYO_PRIVATE_KEY;
+
+  if (!apiKey) {
+    return json({ok: false, error: 'Server configuration error.'}, {status: 500});
+  }
+
+  // ── LOGIN ────────────────────────────────────────────────────────────────
+  if (intent === 'login') {
+    const email = (formData.get('email') as string || '').trim().toLowerCase();
+    const password = formData.get('password') as string || '';
+    if (!email || !password) return json({ok: false, error: 'Email and password required.'});
+
+    const profile = await findProfileByEmail(email, apiKey).catch(() => null);
+    if (!profile) return json({ok: false, error: 'No account found. Please create an account first.'});
+
+    const props = profile.attributes?.properties || {};
+    const storedHash = props.budtender_password;
+    if (!storedHash) return json({ok: false, error: 'No password set. Please use "Forgot password" to set one.'});
+
+    const hashed = await serverHashPassword(password);
+    if (hashed !== storedHash) return json({ok: false, error: 'Invalid email or password.'});
+
+    const cookieValue = encodeURIComponent(JSON.stringify({email, profileId: profile.id}));
+    return json({ok: true}, {
+      headers: {
+        'Set-Cookie': `${AUTH_COOKIE_NAME}=${cookieValue}; Path=/budtender-education; HttpOnly; Secure; SameSite=Lax; Max-Age=${AUTH_COOKIE_MAX_AGE}`,
+      },
+    });
+  }
+
+  // ── REGISTER ─────────────────────────────────────────────────────────────
+  if (intent === 'register') {
+    const name = (formData.get('name') as string || '').trim();
+    const email = (formData.get('email') as string || '').trim().toLowerCase();
+    const password = formData.get('password') as string || '';
+    const state = formData.get('state') as string || '';
+    const dispensary = formData.get('dispensary') as string || '';
+
+    if (!name || !email || !password || !state) {
+      return json({ok: false, error: 'All fields required.'});
+    }
+
+    // Check if already registered (has password in Klaviyo)
+    const existing = await findProfileByEmail(email, apiKey).catch(() => null);
+    if (existing?.attributes?.properties?.budtender_password) {
+      return json({ok: false, error: 'This email is already registered. Please sign in.'});
+    }
+
+    const hashed = await serverHashPassword(password);
+    const [firstName, ...rest] = name.split(' ');
+    const lastName = rest.join(' ');
+
+    // Create or update profile in Klaviyo with password + properties
+    const profilePayload: any = {
+      data: {
+        type: 'profile',
+        attributes: {
+          email,
+          first_name: firstName,
+          last_name: lastName,
+          organization: dispensary,
+          properties: {
+            budtender_state: state,
+            dispensary_name: dispensary,
+            is_budtender: true,
+            budtender_education_signup: true,
+            budtender_password: hashed,
+            completed_courses: [],
+            consent_date: new Date().toISOString(),
+          },
+        },
+      },
+    };
+
+    let profileId: string;
+    if (existing) {
+      // Update existing profile
+      profilePayload.data.id = existing.id;
+      await klaviyoServerFetch(`https://a.klaviyo.com/api/profiles/${existing.id}/`, apiKey, {
+        method: 'PATCH',
+        body: JSON.stringify(profilePayload),
+      });
+      profileId = existing.id;
+    } else {
+      // Create new profile
+      const created = await klaviyoServerFetch('https://a.klaviyo.com/api/profiles/', apiKey, {
+        method: 'POST',
+        body: JSON.stringify(profilePayload),
+      });
+      profileId = created.data.id;
+    }
+
+    // Add to budtenders list
+    await klaviyoServerFetch(`https://a.klaviyo.com/api/lists/${KLAVIYO_LIST_ID_SERVER}/relationships/profiles/`, apiKey, {
+      method: 'POST',
+      body: JSON.stringify({data: [{type: 'profile', id: profileId}]}),
+    }).catch(() => {}); // Don't fail if already on list
+
+    const cookieValue = encodeURIComponent(JSON.stringify({email, profileId}));
+    return json({ok: true}, {
+      headers: {
+        'Set-Cookie': `${AUTH_COOKIE_NAME}=${cookieValue}; Path=/budtender-education; HttpOnly; Secure; SameSite=Lax; Max-Age=${AUTH_COOKIE_MAX_AGE}`,
+      },
+    });
+  }
+
+  // ── RESET PASSWORD ───────────────────────────────────────────────────────
+  if (intent === 'reset') {
+    const email = (formData.get('email') as string || '').trim().toLowerCase();
+    const password = formData.get('password') as string || '';
+    if (!email || !password) return json({ok: false, error: 'Email and new password required.'});
+
+    const profile = await findProfileByEmail(email, apiKey).catch(() => null);
+    if (!profile) return json({ok: false, error: 'No account found with that email. Please create an account first.'});
+
+    const hashed = await serverHashPassword(password);
+    await klaviyoServerFetch(`https://a.klaviyo.com/api/profiles/${profile.id}/`, apiKey, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        data: {
+          type: 'profile',
+          id: profile.id,
+          attributes: {
+            properties: {budtender_password: hashed},
+          },
+        },
+      }),
+    });
+
+    return json({ok: true});
+  }
+
+  // ── COMPLETE COURSE ──────────────────────────────────────────────────────
+  if (intent === 'complete-course') {
+    const email = (formData.get('email') as string || '').trim().toLowerCase();
+    const courseId = formData.get('courseId') as string || '';
+    if (!email || !courseId) return json({ok: false, error: 'Missing data.'});
+
+    const profile = await findProfileByEmail(email, apiKey).catch(() => null);
+    if (!profile) return json({ok: false, error: 'Profile not found.'});
+
+    const props = profile.attributes?.properties || {};
+    const currentCourses: string[] = props.completed_courses || [];
+    if (!currentCourses.includes(courseId)) {
+      currentCourses.push(courseId);
+    }
+
+    await klaviyoServerFetch(`https://a.klaviyo.com/api/profiles/${profile.id}/`, apiKey, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        data: {
+          type: 'profile',
+          id: profile.id,
+          attributes: {
+            properties: {completed_courses: currentCourses},
+          },
+        },
+      }),
+    });
+
+    return json({ok: true, completedCourses: currentCourses});
+  }
+
+  // ── LOGOUT ───────────────────────────────────────────────────────────────
+  if (intent === 'logout') {
+    return json({ok: true}, {
+      headers: {
+        'Set-Cookie': `${AUTH_COOKIE_NAME}=; Path=/budtender-education; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
+      },
+    });
+  }
+
+  return json({ok: false, error: 'Unknown action.'}, {status: 400});
+}
 
 // ── Load Teko font ──────────────────────────────────────────────────────────
 function useTekoFont() {
@@ -141,51 +403,8 @@ function isCourseUnlocked(courseId: string, completedCourses: Set<string>): bool
   return true;
 }
 
-// ── Session Persistence ──────────────────────────────────────────────────────
-const SESSION_KEY = 'highsman_budtender_session';
-const SESSION_EXPIRY_DAYS = 14; // 14-day auto-login
-
-interface SessionData {
-  name: string;
-  email: string;
-  password: string;
-  state: string;
-  dispensary?: string;
-  completedCourses: string[];
-  createdAt: number;
-  expiresAt: number;
-}
-
-function saveSession(data: Omit<SessionData, 'createdAt' | 'expiresAt'> & Partial<Pick<SessionData, 'createdAt'>>) {
-  try {
-    const now = Date.now();
-    const session: SessionData = {
-      ...data,
-      createdAt: data.createdAt || now,
-      expiresAt: now + SESSION_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
-    };
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  } catch {}
-}
-
-function loadSession(): SessionData | null {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    const session: SessionData = JSON.parse(raw);
-    if (Date.now() > session.expiresAt) {
-      localStorage.removeItem(SESSION_KEY);
-      return null;
-    }
-    return session;
-  } catch {
-    return null;
-  }
-}
-
-function clearSession() {
-  try { localStorage.removeItem(SESSION_KEY); } catch {}
-}
+// ── Session types (used by component state) ─────────────────────────────────
+// Auth is now server-side via Klaviyo + cookies. No more localStorage.
 
 // ── Klaviyo Event Tracking ───────────────────────────────────────────────────
 function trackKlaviyoEvent(email: string, eventName: string, properties: Record<string, any>) {
@@ -232,14 +451,7 @@ function getNextCourse(completedId: string): {id: string; title: string; level: 
   return COURSE_ORDER[idx + 1];
 }
 
-// ── Simple password hashing (SHA-256, client-side) ──────────────────────────
-async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password + 'highsman_budtender_salt');
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
+// Password hashing is now server-side only (in the action handler above)
 
 // ── Course Data ───────────────────────────────────────────────────────────────
 interface CourseSlide {
@@ -912,6 +1124,14 @@ function subscribeToKlaviyo(name: string, email: string, state: string, dispensa
   ).catch(() => {});
 }
 
+// ── Server action helper (client-side) ───────────────────────────────────────
+async function callAction(data: Record<string, string>): Promise<any> {
+  const formData = new FormData();
+  for (const [key, val] of Object.entries(data)) formData.append(key, val);
+  const res = await fetch('/budtender-education', {method: 'POST', body: formData});
+  return res.json();
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 type Screen = 'loading' | 'gate' | 'portal';
 type GateMode = 'login' | 'register' | 'reset';
@@ -933,6 +1153,8 @@ export default function BudtenderEducation() {
     document.head.appendChild(style);
     return () => { style.remove(); };
   }, []);
+
+  const loaderData = useLoaderData<typeof loader>();
 
   const [screen, setScreen] = useState<Screen>('loading');
   const [gateMode, setGateMode] = useState<GateMode>('login');
@@ -956,6 +1178,7 @@ export default function BudtenderEducation() {
   const [resetNewPassword, setResetNewPassword] = useState('');
   const [resetError, setResetError] = useState('');
   const [resetSuccess, setResetSuccess] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   // Portal
   const [activeCourse, setActiveCourse] = useState<string | null>(null);
@@ -978,30 +1201,19 @@ export default function BudtenderEducation() {
   const portalRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  // ── Auto-login: check localStorage on mount ─────────────────────────────
+  // ── Initialize from server loader data on mount ─────────────────────────
   useEffect(() => {
-    const session = loadSession();
-    if (session) {
-      setUserName(session.name.split(' ')[0]);
-      setUserFullName(session.name);
-      setUserEmail(session.email);
-      setCompletedCourses(new Set(session.completedCourses || []));
+    if ((loaderData as any)?.authenticated && (loaderData as any)?.profile) {
+      const p = (loaderData as any).profile;
+      setUserName(p.firstName || p.name?.split(' ')[0] || '');
+      setUserFullName(p.name || '');
+      setUserEmail(p.email || '');
+      setCompletedCourses(new Set(p.completedCourses || []));
       setScreen('portal');
     } else {
       setScreen('gate');
     }
   }, []);
-
-  // ── Persist completed courses whenever they change ──────────────────────
-  useEffect(() => {
-    if (screen !== 'portal') return;
-    const session = loadSession();
-    if (session) {
-      const updated = {...session, completedCourses: [...completedCourses]};
-      saveSession(updated);
-      saveAccount(updated);
-    }
-  }, [completedCourses, screen]);
 
   // ── Close user menu on outside click ────────────────────────────────────
   useEffect(() => {
@@ -1015,7 +1227,7 @@ export default function BudtenderEducation() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [userMenuOpen]);
 
-  // ── Login with email + password ─────────────────────────────────────────
+  // ── Login with email + password (server-side via Klaviyo) ───────────────
   function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoginError('');
@@ -1027,52 +1239,21 @@ export default function BudtenderEducation() {
       setLoginError('Enter your password.');
       return;
     }
-    // Check localStorage for a matching account
-    hashPassword(loginPassword).then((hashed) => {
-      const allAccounts = getAllAccounts();
-      const account = allAccounts.find(
-        (a) => a.email.toLowerCase() === loginEmail.trim().toLowerCase() && a.password === hashed
-      );
-      if (!account) {
-        setLoginError('Invalid email or password. Please try again or create an account.');
-        return;
-      }
-      // Refresh session with 14-day expiry
-      saveSession({
-        ...account,
-        completedCourses: account.completedCourses || [],
-      });
-      setUserName(account.name.split(' ')[0]);
-      setUserFullName(account.name);
-      setUserEmail(account.email);
-      setCompletedCourses(new Set(account.completedCourses || []));
-      setScreen('portal');
-    });
+    setSubmitting(true);
+    callAction({intent: 'login', email: loginEmail.trim(), password: loginPassword})
+      .then((res) => {
+        if (!res.ok) {
+          setLoginError(res.error || 'Login failed. Please try again.');
+          return;
+        }
+        // Reload page — loader will pick up the auth cookie and return profile data
+        window.location.reload();
+      })
+      .catch(() => setLoginError('Network error. Please try again.'))
+      .finally(() => setSubmitting(false));
   }
 
-  // ── Get all registered accounts from localStorage ─────────────────────
-  function getAllAccounts(): SessionData[] {
-    try {
-      const raw = localStorage.getItem('highsman_budtender_accounts');
-      if (!raw) return [];
-      return JSON.parse(raw);
-    } catch { return []; }
-  }
-
-  function saveAccount(data: SessionData) {
-    try {
-      const accounts = getAllAccounts();
-      const idx = accounts.findIndex((a) => a.email.toLowerCase() === data.email.toLowerCase());
-      if (idx >= 0) {
-        accounts[idx] = data;
-      } else {
-        accounts.push(data);
-      }
-      localStorage.setItem('highsman_budtender_accounts', JSON.stringify(accounts));
-    } catch {}
-  }
-
-  // ── Reset Password ─────────────────────────────────────────────────────
+  // ── Reset Password (server-side via Klaviyo) ───────────────────────────
   function handleResetPassword(e: React.FormEvent) {
     e.preventDefault();
     setResetError('');
@@ -1085,23 +1266,21 @@ export default function BudtenderEducation() {
       setResetError('New password must be at least 6 characters.');
       return;
     }
-    const accounts = getAllAccounts();
-    const idx = accounts.findIndex(
-      (a) => a.email.toLowerCase() === resetEmail.trim().toLowerCase()
-    );
-    if (idx < 0) {
-      setResetError('No account found with that email. Please create an account first.');
-      return;
-    }
-    hashPassword(resetNewPassword).then((hashed) => {
-      accounts[idx].password = hashed;
-      localStorage.setItem('highsman_budtender_accounts', JSON.stringify(accounts));
-      setResetSuccess(true);
-      setResetNewPassword('');
-    });
+    setSubmitting(true);
+    callAction({intent: 'reset', email: resetEmail.trim(), password: resetNewPassword})
+      .then((res) => {
+        if (!res.ok) {
+          setResetError(res.error || 'Reset failed. Please try again.');
+          return;
+        }
+        setResetSuccess(true);
+        setResetNewPassword('');
+      })
+      .catch(() => setResetError('Network error. Please try again.'))
+      .finally(() => setSubmitting(false));
   }
 
-  // ── Register (full form with password) ──────────────────────────────────
+  // ── Register (server-side via Klaviyo) ───────────────────────────────────
   function handleGateSubmit(e: React.FormEvent) {
     e.preventDefault();
     const newErrors: Record<string, string> = {};
@@ -1113,61 +1292,47 @@ export default function BudtenderEducation() {
     if (!resolvedDispensary) newErrors.dispensary = dispensary === '__other__' ? 'Enter your dispensary name.' : 'Select your dispensary.';
     if (!state) newErrors.state = 'Select your state.';
     if (!consent) newErrors.consent = 'You must agree to continue.';
-    // Check if email already registered
-    const existing = getAllAccounts().find(
-      (a) => a.email.toLowerCase() === email.trim().toLowerCase()
-    );
-    if (existing) newErrors.email = 'This email is already registered. Please sign in.';
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
     setErrors({});
-    hashPassword(password).then((hashed) => {
-      subscribeToKlaviyo(name.trim(), email.trim(), state, resolvedDispensary);
-      // Track signup event for Klaviyo automation
-      trackKlaviyoEvent(email.trim(), 'Budtender Education Signup', {
-        budtender_name: name.trim(),
-        dispensary: resolvedDispensary,
-        state,
-        signup_points: POINTS_SIGNUP,
-        first_course_title: COURSE_ORDER[0].title,
-        first_course_id: COURSE_ORDER[0].id,
-        portal_url: 'https://highsman.com/pages/budtender-education',
-      });
-      const sessionData = {
-        name: name.trim(),
-        email: email.trim(),
-        password: hashed,
-        state,
-        dispensary: resolvedDispensary || undefined,
-        completedCourses: [] as string[],
-      };
-      saveSession(sessionData);
-      saveAccount({
-        ...sessionData,
-        completedCourses: [],
-        createdAt: Date.now(),
-        expiresAt: Date.now() + SESSION_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
-      });
-      setUserName(name.split(' ')[0]);
-      setUserFullName(name.trim());
-      setUserEmail(email.trim());
-      setScreen('portal');
-    });
+    setSubmitting(true);
+    callAction({
+      intent: 'register',
+      name: name.trim(),
+      email: email.trim(),
+      password,
+      state,
+      dispensary: resolvedDispensary,
+    })
+      .then((res) => {
+        if (!res.ok) {
+          setErrors({email: res.error || 'Registration failed.'});
+          return;
+        }
+        // Track signup event for Klaviyo automation (client-side for real-time flow triggers)
+        trackKlaviyoEvent(email.trim(), 'Budtender Education Signup', {
+          budtender_name: name.trim(),
+          dispensary: resolvedDispensary,
+          state,
+          signup_points: POINTS_SIGNUP,
+          first_course_title: COURSE_ORDER[0].title,
+          first_course_id: COURSE_ORDER[0].id,
+          portal_url: 'https://highsman.com/pages/budtender-education',
+        });
+        // Reload — loader will read the auth cookie
+        window.location.reload();
+      })
+      .catch(() => setErrors({email: 'Network error. Please try again.'}))
+      .finally(() => setSubmitting(false));
   }
 
-  // ── Logout ──────────────────────────────────────────────────────────────
+  // ── Logout (server-side — clears cookie) ────────────────────────────────
   function handleLogout() {
-    clearSession();
-    setScreen('gate');
-    setGateMode('login');
-    setUserName('');
-    setUserFullName('');
-    setUserEmail('');
-    setCompletedCourses(new Set());
-    setActiveCourse(null);
-    setCourseQuizActive(null);
-    setLoginEmail('');
-    setLoginPassword('');
-    setLoginError('');
+    callAction({intent: 'logout'}).then(() => {
+      window.location.reload();
+    }).catch(() => {
+      // Fallback: just reload anyway
+      window.location.reload();
+    });
   }
 
   function openCourse(id: string) {
@@ -1208,16 +1373,19 @@ export default function BudtenderEducation() {
   function trackCourseCompletion(courseId: string, newCompletedSet: Set<string>) {
     const courseInfo = COURSE_ORDER.find(c => c.id === courseId);
     if (!courseInfo || !userEmail) return;
+
+    // 1. Sync completed course to Klaviyo profile (server-side, persistent)
+    callAction({intent: 'complete-course', email: userEmail, courseId}).catch(() => {});
+
+    // 2. Track event for email automation (client-side for real-time flow triggers)
     const next = getNextCourse(courseId);
     const totalCompleted = newCompletedSet.size;
     const isAllDone = totalCompleted >= COURSES.length;
     const tier = getCurrentTier(newCompletedSet);
-    // Check if tier changed (for tier_unlocked banner in email)
     const prevSet = new Set(newCompletedSet);
     prevSet.delete(courseId);
     const prevTier = getCurrentTier(prevSet);
     const tierUnlocked = tier.name !== prevTier.name;
-    // Convert points to store credit dollars
     const coursePoints = getCoursePoints(courseId);
     const totalPoints = calculatePoints(newCompletedSet, COURSES.length);
     trackKlaviyoEvent(userEmail, 'Budtender Course Completed', {
@@ -1498,9 +1666,10 @@ export default function BudtenderEducation() {
 
                 <button
                   type="submit"
-                  className="w-full mt-5 py-3 bg-[#FFEB3B] text-black font-semibold text-sm rounded-lg hover:bg-[#ffd700] transition-colors"
+                  disabled={submitting}
+                  className="w-full mt-5 py-3 bg-[#FFEB3B] text-black font-semibold text-sm rounded-lg hover:bg-[#ffd700] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  SIGN IN
+                  {submitting ? 'SIGNING IN...' : 'SIGN IN'}
                 </button>
               </form>
 
@@ -1573,9 +1742,10 @@ export default function BudtenderEducation() {
 
                   <button
                     type="submit"
-                    className="w-full mt-5 py-3 bg-[#FFEB3B] text-black font-semibold text-sm rounded-lg hover:bg-[#ffd700] transition-colors"
+                    disabled={submitting}
+                    className="w-full mt-5 py-3 bg-[#FFEB3B] text-black font-semibold text-sm rounded-lg hover:bg-[#ffd700] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    RESET PASSWORD
+                    {submitting ? 'RESETTING...' : 'RESET PASSWORD'}
                   </button>
                 </form>
               )}
@@ -1737,9 +1907,10 @@ export default function BudtenderEducation() {
 
                 <button
                   type="submit"
-                  className="w-full mt-6 py-3 bg-[#FFEB3B] text-black font-semibold text-sm rounded-lg hover:bg-[#ffd700] transition-colors"
+                  disabled={submitting}
+                  className="w-full mt-6 py-3 bg-[#FFEB3B] text-black font-semibold text-sm rounded-lg hover:bg-[#ffd700] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  CREATE ACCOUNT
+                  {submitting ? 'CREATING ACCOUNT...' : 'CREATE ACCOUNT'}
                 </button>
               </form>
 
