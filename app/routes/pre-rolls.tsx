@@ -44,7 +44,7 @@ export default function PreRolls() {
           </div>
           <div className="flex flex-col gap-4 pt-4">
             <Link to="/#store-locator" className="bg-primary text-on-primary px-6 py-3 md:px-10 md:py-5 font-headline text-xl md:text-3xl uppercase font-semibold flex items-center justify-between group hover:bg-primary-container transition-all">
-              FIND NEAR YOU
+              FIND A STORE
               <span className="material-symbols-outlined group-hover:translate-x-2 transition-transform">
                 location_on
               </span>
@@ -201,7 +201,7 @@ export default function PreRolls() {
           <p className="text-on-surface-variant text-lg leading-relaxed">
             Every Highsman Triple Infused pre roll is lab-tested for purity and
             potency. We use zero trim, zero shake. Only hand-selected whole
-            flower and artisanal concentrates. Now with 20% more content.
+            flower and precision-engineered concentrates. Now with 20% more content.
           </p>
           <div className="flex flex-wrap gap-4">
             {['NO TRIM', 'NO SHAKE', 'WHOLE FLOWER'].map((tag) => (

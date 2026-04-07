@@ -25,7 +25,7 @@ export default function GroundGame() {
               7G READY TO ROLL
             </span>
             <span className="border-2 border-primary text-primary font-headline text-xl px-4 py-1 font-bold tracking-widest uppercase">
-              BUDGET FRIENDLY
+              BEST VALUE PER GRAM
             </span>
           </div>
           <h1 className="font-headline text-6xl md:text-[120px] leading-[0.85] font-bold uppercase mb-6 tracking-tighter">
@@ -45,7 +45,7 @@ export default function GroundGame() {
             </div>
             <div className="flex gap-4">
               <Link to="/#store-locator" className="bg-primary text-on-primary font-headline text-2xl font-bold uppercase px-12 py-4 hover:bg-primary-container transition-all flex items-center gap-3 group">
-                FIND NEAR YOU
+                FIND A STORE
                 <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">
                   location_on
                 </span>
