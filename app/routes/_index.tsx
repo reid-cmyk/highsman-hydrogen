@@ -2,6 +2,7 @@ import {useEffect} from 'react';
 import {Link} from '@remix-run/react'
 import type {MetaFunction} from '@shopify/remix-oxygen';
 import {IMAGES} from '~/lib/images';
+import {SocialProof} from '~/components/SocialProof';
 
 export const meta: MetaFunction = () => {
   return [{title: 'HIGHSMAN | Spark Greatness'}];
@@ -58,6 +59,20 @@ export default function Homepage() {
           <p className="font-body text-sm md:text-xl mt-8 max-w-xl text-on-surface-variant uppercase tracking-[0.2em] leading-tight">
             Premium cannabis for the high-performance lifestyle. We live at the intersection of cannabis and sports.
           </p>
+          <div className="flex flex-wrap gap-4 mt-10">
+            <Link
+              to="/#store-locator"
+              className="bg-primary text-on-primary px-8 py-4 font-headline text-xl md:text-2xl font-bold uppercase hover:bg-primary-container transition-all inline-block no-underline"
+            >
+              FIND A STORE
+            </Link>
+            <Link
+              to="/hit-sticks"
+              className="border-2 border-white text-white px-8 py-4 font-headline text-xl md:text-2xl font-bold uppercase hover:bg-white hover:text-black transition-all inline-block no-underline"
+            >
+              EXPLORE PRODUCTS
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -138,9 +153,9 @@ export default function Homepage() {
               </p>
               <Link
                 to="/hit-sticks"
-                className="mt-8 bg-white text-black px-6 py-3 md:px-12 md:py-4 font-headline text-lg md:text-2xl font-bold uppercase inline-block"
+                className="mt-8 bg-white text-black px-6 py-3 md:px-12 md:py-4 font-headline text-lg md:text-2xl font-bold uppercase inline-block no-underline"
               >
-                EXPLORE GEAR
+                SHOP HIT STICK
               </Link>
             </div>
           </div>
@@ -155,7 +170,7 @@ export default function Homepage() {
             <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors duration-500" />
             <div className="relative z-10">
               <span className="font-headline text-4xl border-b-2 border-primary pb-2 uppercase text-primary italic font-bold">
-                20% Larger Free
+                20% MORE FLOWER
               </span>
               <h2 className="font-headline text-4xl md:text-7xl font-bold uppercase leading-tight mt-6 mb-4">
                 1.2G PRE ROLLS
@@ -166,9 +181,9 @@ export default function Homepage() {
               </p>
               <Link
                 to="/pre-rolls"
-                className="font-headline text-3xl font-bold uppercase underline decoration-4 underline-offset-8"
+                className="font-headline text-3xl font-bold uppercase underline decoration-4 underline-offset-8 no-underline border-b-4 border-white pb-1"
               >
-                VIEW THE LINEUP
+                SHOP PRE-ROLLS
               </Link>
             </div>
           </div>
@@ -200,15 +215,18 @@ export default function Homepage() {
               <div className="flex flex-col items-end gap-6">
                 <Link
                   to="/ground-game"
-                  className="bg-primary text-on-primary px-8 py-4 md:px-20 md:py-8 font-headline text-xl md:text-4xl font-bold uppercase hover:bg-white hover:text-black transition-all relative z-10"
+                  className="bg-primary text-on-primary px-8 py-4 md:px-20 md:py-8 font-headline text-xl md:text-4xl font-bold uppercase hover:bg-white hover:text-black transition-all relative z-10 no-underline"
                 >
-                  7G BAG
+                  SHOP GROUND GAME
                 </Link>
               </div>
             </div>
           </div>
         </div>
       </section>
+
+      {/* ===== SOCIAL PROOF ===== */}
+      <SocialProof />
 
       {/* ===== APPAREL COLLECTION ===== */}
       <section className="relative h-[80vh] flex items-center overflow-hidden">
@@ -265,9 +283,14 @@ export default function Homepage() {
               Ricky Williams created Highsman to empower elite performers to
               reach their peak state through premium cannabis.
             </p>
-            <button className="border-2 border-primary text-primary px-6 py-3 md:px-12 md:py-4 font-headline text-lg md:text-2xl font-bold uppercase hover:bg-white hover:text-black transition-all">
-              READ THE STORY
-            </button>
+            <a
+              href="https://cdn.shopify.com/videos/c/o/v/7b8854ab03ef40ce8c27d83e4b35589e.mp4"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="border-2 border-primary text-primary px-6 py-3 md:px-12 md:py-4 font-headline text-lg md:text-2xl font-bold uppercase hover:bg-white hover:text-black transition-all inline-block no-underline"
+            >
+              WATCH THE STORY
+            </a>
           </div>
         </div>
       </section>
@@ -277,7 +300,7 @@ export default function Homepage() {
         <div className="container mx-auto px-4 md:px-12">
           <div className="text-center mb-10">
             <h2 className="font-headline text-4xl md:text-8xl font-black uppercase tracking-tighter mb-4">
-              Follow Us On Insta
+              FOLLOW THE MOVEMENT
             </h2>
             <a
               href="https://www.instagram.com/highsman"
@@ -285,7 +308,7 @@ export default function Homepage() {
               rel="noopener noreferrer"
               className="font-body text-on-surface-variant uppercase tracking-widest text-sm hover:text-primary transition-colors"
             >
-              @highsman
+              @HIGHSMAN
             </a>
           </div>
           {/* LightWidget Instagram Feed */}
