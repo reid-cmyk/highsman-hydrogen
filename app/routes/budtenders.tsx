@@ -127,7 +127,7 @@ export default function Budtenders() {
               <div className="mt-10 md:mt-0 md:pl-12 flex flex-col gap-6 justify-center">
                 <div className="bg-surface-container-lowest border border-outline-variant/20 overflow-hidden">
                   <div className="px-3 pt-3"><span className="font-label text-[9px] tracking-[0.3em] uppercase text-on-surface-variant">Champions Box</span></div>
-                  <img src={`${CDN}Game_Day_Prize_Pic.svg?v=1775597075`} alt="Highsman Champions Box" className="w-full" style={{maxHeight: '220px', objectFit: 'contain', padding: '8px'}} />
+                  <img src={`${CDN}Game_Day_Prize_Pic.svg?v=1775597075`} alt="Highsman Champions Box" className="w-full" style={{maxHeight: '340px', objectFit: 'contain', padding: '12px'}} />
                 </div>
                 <div className="bg-surface-container-lowest border border-outline-variant/20 overflow-hidden">
                   <div className="px-3 pt-3"><span className="font-label text-[9px] tracking-[0.3em] uppercase text-on-surface-variant">Varsity Jacket</span></div>
@@ -144,7 +144,7 @@ export default function Budtenders() {
                 <span className="inline-block font-label text-[10px] tracking-[0.36em] uppercase px-3 py-1.5 mb-6" style={{background: '#C0C0C0', color: '#000'}}>Second Place</span>
                 <h3 className="font-headline text-[clamp(30px,4vw,44px)] uppercase leading-[0.9] text-on-surface mb-6">Champions Box</h3>
                 <div className="border border-outline-variant/20 bg-surface-container-lowest mb-6">
-                  <img src={`${CDN}Game_Day_Prize_Pic.svg?v=1775597075`} alt="Champions Box" className="w-full" style={{maxHeight: '160px', objectFit: 'contain', padding: '8px'}} />
+                  <img src={`${CDN}Game_Day_Prize_Pic.svg?v=1775597075`} alt="Champions Box" className="w-full" style={{maxHeight: '260px', objectFit: 'contain', padding: '12px'}} />
                 </div>
                 <ul className="space-y-2.5">
                   {PRIZE_ITEMS_SECOND.map((item) => (
@@ -209,7 +209,7 @@ export default function Budtenders() {
                   <span className="font-label text-[9px] tracking-[0.3em] uppercase" style={{color: 'rgba(245,225,0,0.5)'}}>Game Day &middot; 2026</span>
                   <div className="h-px flex-1" style={{background: 'rgba(245,225,0,0.3)'}} />
                 </div>
-                <img src={`${CDN}Budtenders_Prize_Image_football_giveaway.png?v=1775599035`} alt="Football game day tickets — Eagles and Giants" className="w-full" style={{maxHeight: '360px', objectFit: 'contain'}} />
+                <img src={`${CDN}Budtenders_Prize_Image_football_giveaway_9028f72e-b1c6-4cdb-a8b3-556663907532.png?v=1775599444`} alt="Football game day tickets — Eagles and Giants" className="w-full" style={{maxHeight: '360px', objectFit: 'contain'}} />
                 <div className="flex items-center gap-4 mt-6">
                   <div className="h-px flex-1" style={{background: 'rgba(245,225,0,0.3)'}} />
                   <span className="font-label text-[9px] tracking-[0.3em] uppercase" style={{color: 'rgba(245,225,0,0.5)'}}>Highsman &middot; NJ</span>
