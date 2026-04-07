@@ -70,6 +70,33 @@ const HIGHSMAN_BRAND_VIDEO_URL =
 const PRODUCT_VIDEO_URL =
   'https://cdn.shopify.com/videos/c/o/v/2258a7eb83fb4868b504da29efbbdf4e.mp4';
 
+// ── Dispensary Directory (by state) ─────────────────────────────────────────
+const DISPENSARIES_BY_STATE: Record<string, string[]> = {
+  NJ: [
+    'BLK BRN',
+    'BluLight Cannabis - Woodbury Heights',
+    'Conservatory Cannabis Company',
+    'Doobiez',
+    'Eastern Green Dispensary',
+    'Evergreen Nature\'s Remedy',
+    'High Street - Hackettstown',
+    'Indigo',
+    'J&J Dispensary',
+    'Ohm Theory',
+    'Premo',
+    'SilverLeaf Wellness',
+    'Simply Pure - Trenton',
+    'The Canna Bar',
+    'The Social Leaf',
+    'Uma Flowers - Morristown',
+    'Valley Wellness',
+  ],
+  NY: [],
+  MA: [],
+  RI: [],
+  MO: [],
+};
+
 // ── Points / Rewards System ─────────────────────────────────────────────────
 const POINTS_SIGNUP = 200;           // Unsigned → 200 pts on signup
 const POINTS_ALL_COMPLETE_BONUS = 0; // No separate bonus — points sum to 5000
@@ -918,6 +945,7 @@ export default function BudtenderEducation() {
   const [email, setEmail] = useState('');
   const [state, setState] = useState('');
   const [dispensary, setDispensary] = useState('');
+  const [dispensaryOther, setDispensaryOther] = useState('');
   const [consent, setConsent] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loginEmail, setLoginEmail] = useState('');
@@ -1081,7 +1109,8 @@ export default function BudtenderEducation() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       newErrors.email = 'Enter a valid email.';
     if (!password || password.length < 6) newErrors.password = 'Password must be at least 6 characters.';
-    if (!dispensary.trim()) newErrors.dispensary = 'Enter your dispensary name.';
+    const resolvedDispensary = dispensary === '__other__' ? dispensaryOther.trim() : dispensary.trim();
+    if (!resolvedDispensary) newErrors.dispensary = dispensary === '__other__' ? 'Enter your dispensary name.' : 'Select your dispensary.';
     if (!state) newErrors.state = 'Select your state.';
     if (!consent) newErrors.consent = 'You must agree to continue.';
     // Check if email already registered
@@ -1092,11 +1121,11 @@ export default function BudtenderEducation() {
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
     setErrors({});
     hashPassword(password).then((hashed) => {
-      subscribeToKlaviyo(name.trim(), email.trim(), state, dispensary.trim());
+      subscribeToKlaviyo(name.trim(), email.trim(), state, resolvedDispensary);
       // Track signup event for Klaviyo automation
       trackKlaviyoEvent(email.trim(), 'Budtender Education Signup', {
         budtender_name: name.trim(),
-        dispensary: dispensary.trim(),
+        dispensary: resolvedDispensary,
         state,
         signup_points: POINTS_SIGNUP,
         first_course_title: COURSE_ORDER[0].title,
@@ -1108,7 +1137,7 @@ export default function BudtenderEducation() {
         email: email.trim(),
         password: hashed,
         state,
-        dispensary: dispensary.trim() || undefined,
+        dispensary: resolvedDispensary || undefined,
         completedCourses: [] as string[],
       };
       saveSession(sessionData);
@@ -1625,7 +1654,7 @@ export default function BudtenderEducation() {
                     </label>
                     <select
                       value={state}
-                      onChange={(e) => setState(e.target.value)}
+                      onChange={(e) => { setState(e.target.value); setDispensary(''); setDispensaryOther(''); }}
                       className={`w-full px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors ${
                         errors.state ? 'border-red-400 bg-red-50' : 'border-[#A9ACAF]/20 focus:border-[#A9ACAF]'
                       }`}
@@ -1645,15 +1674,45 @@ export default function BudtenderEducation() {
                     <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#666666] mb-1">
                       Dispensary Name
                     </label>
-                    <input
-                      type="text"
-                      value={dispensary}
-                      onChange={(e) => setDispensary(e.target.value)}
-                      placeholder="Where do you work?"
-                      className={`w-full px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors bg-[#000000] ${
-                        errors.dispensary ? 'border-red-400' : 'border-[#A9ACAF]/20 focus:border-[#A9ACAF]'
-                      }`}
-                    />
+                    {state && (DISPENSARIES_BY_STATE[state]?.length ?? 0) > 0 ? (
+                      <>
+                        <select
+                          value={dispensary}
+                          onChange={(e) => {
+                            setDispensary(e.target.value);
+                            if (e.target.value !== '__other__') setDispensaryOther('');
+                          }}
+                          className={`w-full px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors bg-[#000000] ${
+                            errors.dispensary ? 'border-red-400' : 'border-[#A9ACAF]/20 focus:border-[#A9ACAF]'
+                          }`}
+                        >
+                          <option value="" style={{color: '#000'}}>Select your dispensary</option>
+                          {DISPENSARIES_BY_STATE[state].map((d) => (
+                            <option key={d} value={d} style={{color: '#000'}}>{d}</option>
+                          ))}
+                          <option value="__other__" style={{color: '#000'}}>Other (not listed)</option>
+                        </select>
+                        {dispensary === '__other__' && (
+                          <input
+                            type="text"
+                            value={dispensaryOther}
+                            onChange={(e) => setDispensaryOther(e.target.value)}
+                            placeholder="Enter your dispensary name"
+                            className="w-full mt-2 px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors bg-[#000000] border-[#A9ACAF]/20 focus:border-[#A9ACAF]"
+                          />
+                        )}
+                      </>
+                    ) : (
+                      <input
+                        type="text"
+                        value={dispensary}
+                        onChange={(e) => setDispensary(e.target.value)}
+                        placeholder="Where do you work?"
+                        className={`w-full px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors bg-[#000000] ${
+                          errors.dispensary ? 'border-red-400' : 'border-[#A9ACAF]/20 focus:border-[#A9ACAF]'
+                        }`}
+                      />
+                    )}
                     {errors.dispensary && <p className="text-red-500 text-xs mt-1">{errors.dispensary}</p>}
                   </div>
 
