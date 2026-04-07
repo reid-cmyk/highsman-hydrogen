@@ -1,14 +1,16 @@
 /**
- * Centralized image URLs from the original Stitch design.
- * All images are hosted on Google's CDN (lh3.googleusercontent.com).
+ * Centralized image URLs — all served from Shopify CDN or local public/ folder.
  */
 
 export const IMAGES = {
   // ===== HERO IMAGES =====
+  // TODO: Upload real lifestyle hero shot to Shopify and replace this URL
   heroHomepage:
     'https://lh3.googleusercontent.com/aida-public/AB6AXuBetz8geObCxumRbGiZbw22dQgcPNofMCMbb8Rgmz1iNb6GxvwwBpF5HueZWfGql2GrFt6UkKwY5ZX9raKuGHmbnhL-3mj1xc9n8jElE4lne6dB7WnxsmLp1fzSSdH-Ba6ahCDlheAlITYeiduChHmrSBhjBesbTYrv9-YuBmDxiPkrPPQODqRUrcddgpyFaBgX1mb3fU5vmgoSOIjJRSL9-TodikQXqY6xvtke_rNIakhvsNWRniQrScHm7cgouGbe359OgfAoKQHP',
+  // TODO: Upload real apparel hero shot to Shopify and replace this URL
   apparelHero:
     'https://lh3.googleusercontent.com/aida-public/AB6AXuAAI53mcfgAJRSmvxhUVvxhtwJ0njTii7rG7hmk0GAQDJ3JgrWUvvQcfOF78pVqXgfABvi6WZwvJlr_KzjwSCE1t2ReN7SuoW8wZWTx_audh6t1AKFZuoHQa8FUrh31d3jbPA87r3ObRVUFPKoptN5L-QNWDrxtK2PJ4a0zlfLCpLAdxg0Sissw29QjRYcWm9Y5Cj1NOWvZhHNxbKDLxTkapTqiPzxviHsbgk8PFPnlzK0hFsYzXIfjoVa9jmCFeNWsahGh8eD7l7n1',
+  // TODO: Upload real strains hero shot to Shopify and replace this URL
   strainsHero:
     'https://lh3.googleusercontent.com/aida-public/AB6AXuDPMl2-h3tEN1596ptXYKtG1fNlNp5QPMpqGUVHXomr5BLLmgAtfCiAQJ4lub3R3wx8zUS9DC4wgVBJ3T37CpVX38YYBuYcRKPmte9hNQyb4EV-bt0_RfbACcn8erFtbi1IMY1JflHBLNmScRCHToUkVt3WKwlRMtm1_PJApNcESGR2_tXT8XBWFmlD6OriOw9Up74nDGz6oQ1iLzail3tKmb8ECSYZWafobis_pGTpKDQTOO29NumW3_voDBldzeQUif0tsI0UHI6H',
   hitStickHero:
@@ -29,6 +31,7 @@ export const IMAGES = {
     '/tripleInfusedIcon.jpeg',
 
   // ===== LIFESTYLE / EDITORIAL =====
+  // TODO: Upload real lifestyle photos to Shopify and replace these URLs
   apparelLifestyle:
     'https://lh3.googleusercontent.com/aida-public/AB6AXuBUF8vz-NTCIU6Ho9RpIohIxbguR9dH3raE55Ay8Bm0uHTOIsD3ArnwVvAyHOepaua6m_JWA3Xm8AAGI787Dlm4c283IPUXSkTB0JmR6bHtZdPE6vuTElmLVG2c38VIryvIPy8nGgqJBMtLUJYtqvzHrlpIdB3C97JqFJV1MhORJJFA1noA2NFj7FksZxw4KJMJ9-yOE0IbyZKHADJ_71wAo51VX0dfQ7jJxDYhKl4nHjXsfwZdq7-_O1GoU16h7MP-SrOiXCJvS-_k',
   apparelLifestyle2:
@@ -39,12 +42,14 @@ export const IMAGES = {
     '/strains-banner.jpeg',
 
   // ===== MACRO / DETAIL =====
+  // TODO: Upload real macro shots to Shopify and replace these URLs
   concentrateMacro:
     'https://lh3.googleusercontent.com/aida-public/AB6AXuD9d8Vd1AGbJRLhh8hs2n4nRRfGMrZ_PeUqSAbvYo3JzTublJQq_k0xWvqqHHeXO4QDnyWZP7Fv_ldmYb9dnwp6CQPorMyv_4EiW2UWuNMiSzttxKg6YqZOmJlawbpnu4d-fJF0qZtLrC4l_0qO_XFx6-MYFEQ8Zq78C3qX29s9jiCskhxaWGa2wA4tsODLkn99tCJ0Y87fR7KSLBLW54y0M1SiiBH-6aS8rlejwVciM4ev3SE3iXt2t0IOzd4zop7iUrTlftNqh7bk',
   cannabisMacro:
     'https://lh3.googleusercontent.com/aida-public/AB6AXuDP_lRtFN5pT2sy783kc_2BzK_kGHnZOwu3hjKPlaH-nMKNwbWCBtgJXiErjGRDf2tn3oiwbo97nL4fVNR-Yg9MKT38g_BcrZVwh-m4llZ0iECccMDKmzLRk0rdREEDj4W0mvPDmrySLp2-TA0l8D6z-aZwH7viFHHYJELdYHXyN1Ty8BJ__94-5ig5ec1E3D8h_fPdtI3Vf5BuHkisayYUh2wJ0hLpON1pWYmnxLEYpl2GvtgQsv3eKZCPHRnqjU6nZWRWGD27B4uz',
 
   // ===== STRAIN IMAGES =====
+  // TODO: Upload real strain photos to Shopify and replace these URLs
   strainMango:
     'https://lh3.googleusercontent.com/aida-public/AB6AXuDpFAOx4NKJp-J24y1CsorYEwuiRDXbC_Xg1TrkRvfMs6H8YRFggn0MI6GVIfDc-D7UjZUi4FTz4nfPbaLt3smU8hq8ZU-VoPuxrGadgu5HbtNMMjV0yoZXTjJyPJ44alEyQWzSRvrAxtgpydzVkiv29LEs8qFuxzUONxZzaoXtjTaxoLyRm2Kqi_QkDjwePwkOYPAsLaYqMiAY_KEFCsj63fiDsK4asV8E8GUnO2QKIVJ36WN77TEx1jwfmVkVfKPA0RL8FmTpysZR',
   strainBlueberry:
@@ -59,16 +64,20 @@ export const IMAGES = {
   // ===== APPAREL PRODUCT IMAGES =====
   varsityJacket:
     'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Letterman-Varsity-Jacket-01_1.png?v=1775594409',
+  // TODO: Upload sideline hoodie photo to Shopify and replace this URL
   sidelineHoodie:
     'https://lh3.googleusercontent.com/aida-public/AB6AXuBxoGUmn4KH34vy3Xv8f_xCLLaxZtsul7Fqq4aJyZMvEbmblESf17O89ugC0KbB6GSERijysxHom6-moi1I2Jz9gWDPD15llFFs1l2PsYSQANRuiq1b3KcMKpLjl0AXVJfI-VVxbPpqn7E2uPVSnx-VosyagCVBYlLHilXs9ZNRzIzznGGkRKMYus5pG4QNgrJ0fB2nSPO5E8ExGM1A-Cu222wnc7sKyxV5pnPhOFEmxq9V-J6P5gJu-0zgpEGQ7vF5XhCTMBh7YHej',
+  // TODO: Upload gridiron joggers photo to Shopify and replace this URL
   gridironJoggers:
     'https://lh3.googleusercontent.com/aida-public/AB6AXuAcNY9zhgQ3KorpSw8hQKRwABym8Zxu8GyPx92UbZ6UH0uR9POr3mcB4ljezMrSEct-2UltTzFb85tFPFFQLWo7v8vlBVzBozIBxNqiIb7JZXM85YIFZfrUGXEne0tIdGMT1ebjRqmKS8G7d02yVg4rHTPuPT0vM0f8qfdAv2mJg8Vga98Rg3o_zdA65yzZZfPyhEnzUWIXoN2BlcGIPfSSIj8OGcHBDrspLrBrpklfW-LTRrJ4wmK6XO4l4OnZAImAd2fcx6eG-H2r',
+  // TODO: Upload box logo tee photo to Shopify and replace this URL
   boxLogoTee:
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuBZyHgUYPbEXVz_Jd_3UQa7OaKbDfGAyXCDxsdvtf4arTS9Po5Y6prOegARHxf4elVZE9NxOpEEZsOEYPb4tVG93shDfFU_l9F-HOynGAs87ZuG6KkYE6rBYJy275trTjlISLv2h79JEZOfO_pyizYAiFsmFYMGa77W7o6rzMK4fFKhQJm-fEoKyO9bamZ-Opc34bmK8od_7RCZHw7Vb-yxgKQ7wD9w7BXnhZ9Zb57cxdSZHk7nK3b_4Q30LMMOkrIKwhEXVJvbtFH9',
+    'https://lh3.googleusercontent.com/aida-public/AB6AXuBZyHgUYPbEXVz_Jd_3UQa7OaKbDfGAyXCDxsdvtf4arTS9Po5Y6prOegARHxf4elVZE9NxOpEEZsOEYPb4tVG93shDfFU_l9F-HOynGAs87ZuG6KkYE6rBYJy275trTjlISLv2h79JEZOfO_pyizYAiFsmFYMGa77W7o6rzMK4fFKFrp6wOc34bmK8od_7RCZHw7Vb-yxgKQ7wD9w7BXnhZ9Zb57cxdSZHk7nK3b_4Q30LMMOkrIKwhEXVJvbtFH9',
+  // TODO: Upload off-season beanie photo to Shopify and replace this URL
   offSeasonBeanie:
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuD1625NNkenXGvZxBjA37oHJZmudZT5DMoZLm_G2pA5PD78EsXcFE4aacWrN3YZBbfy8rpFRZwTgtDMlNv0ACheyfjpmZAitRxPngsSL24FUUDGn2bVmqNWOtC6316faynLCj0ey_KZvEWNHJm5gAJgwh5dShyCHgp18KO5L-8ks2zPUIRNCZk9BqgQeKBOL7QfeuENapLXD1aAaSCV3OEgTs_83QDe_QzqqlzDtLWruREyw_5zZG3jvoXEfK7T1A-q0hnrK5YSGG-Q',
+    'https://lh3.googleusercontent.com/aida-public/AB6AXuD1625NNkenXGvZxBjA37oHJZmudZT5DMoZLm_G2pA5PD78EsXcFE4aacWrN3YZBbfy8rpFRZwTgtDMlNv0ACheyfjpmZAitRxPngsSL24FUUDGn2bVmqNWOtC6316faynLCj0ey_KZvEWNHJm5gAJgwh5dShyCHgp18KO5L-8ks2zPUIRNCZk9BqgQeKBOL7QfeuENapLXD1aaSCV3OEgTs_83QDe_QzqqlzDtLWruREyw_5zZG3jvoXEfK7T1A-q0hnrK5YSGG-Q',
   performanceSocks:
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuBgZqhDlAzpn1dmAw8CQ3rWs0gl0AL2z_rto4VHww70PtKGRupFx0FlyiWHDwedbsYZUErTlj6g1HmLSb_wtPDK4y2JBsbQZvw9cU3gyHRC00OmHhQIAuVdL2xAffCxWMtJSNyRA1DfeqjsiqWwDh3hgptITtC3lEqRcLHPEG3vMvjHuxdtsV5f6EVoGUcRO8EcLclWixdRx2mx1X5kllkp3fJULqWWhzWRtRZsAAIgiy7xn3RKPS8xBY_9JkNJv9rjvbFPaCOekXW1',
+    'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/SocksBlack01.png?v=1774574632',
 
   // ===== INFUSION IMAGES =====
   thcaDiamonds:
@@ -81,8 +90,18 @@ export const IMAGES = {
   // ===== LOGOS =====
   highsmanLogo:
     '/highsmanLogo.png',
+  highsmanLogoWhite:
+    'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Logo_White.png?v=1775594430',
   sparkGreatnessLogoBlack:
-    '/HM_SparkGreatness_Black.png',
+    'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/HM_SparkGreatness_Black.png?v=1775594430',
   sparkGreatnessLogoWhite:
-    '/HM_SparkGreatness_White.png',
+    'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Spark_Greatness_White.png?v=1775594430',
+
+  // ===== BUDTENDER CHAMPIONSHIP =====
+  budtenderPrizes:
+    'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Game_Day_Prize_Pic.svg?v=1775597075',
+  budtenderTrainingHero:
+    'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Budtender_Training_Camp_Hero_Banner.png?v=1775339073',
+  budtenderTrainingLogo:
+    'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Budtender_Training_Camp_Logo.svg?v=1775335713',
 } as const;
