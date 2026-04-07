@@ -68,7 +68,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     if (!profile) {
       // Profile gone from Klaviyo — clear cookie
       return json({authenticated: false, profile: null}, {
-        headers: {'Set-Cookie': `${AUTH_COOKIE_NAME}=; Path=/budtender-education; HttpOnly; Secure; SameSite=Lax; Max-Age=0`},
+        headers: {'Set-Cookie': `${AUTH_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`},
       });
     }
 
@@ -101,6 +101,8 @@ export async function action({request, context}: ActionFunctionArgs) {
     return json({ok: false, error: 'Server configuration error.'}, {status: 500});
   }
 
+  try {
+
   // ── LOGIN ────────────────────────────────────────────────────────────────
   if (intent === 'login') {
     const email = (formData.get('email') as string || '').trim().toLowerCase();
@@ -120,7 +122,7 @@ export async function action({request, context}: ActionFunctionArgs) {
     const cookieValue = encodeURIComponent(JSON.stringify({email, profileId: profile.id}));
     return json({ok: true}, {
       headers: {
-        'Set-Cookie': `${AUTH_COOKIE_NAME}=${cookieValue}; Path=/budtender-education; HttpOnly; Secure; SameSite=Lax; Max-Age=${AUTH_COOKIE_MAX_AGE}`,
+        'Set-Cookie': `${AUTH_COOKIE_NAME}=${cookieValue}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${AUTH_COOKIE_MAX_AGE}`,
       },
     });
   }
@@ -196,7 +198,7 @@ export async function action({request, context}: ActionFunctionArgs) {
     const cookieValue = encodeURIComponent(JSON.stringify({email, profileId}));
     return json({ok: true}, {
       headers: {
-        'Set-Cookie': `${AUTH_COOKIE_NAME}=${cookieValue}; Path=/budtender-education; HttpOnly; Secure; SameSite=Lax; Max-Age=${AUTH_COOKIE_MAX_AGE}`,
+        'Set-Cookie': `${AUTH_COOKIE_NAME}=${cookieValue}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${AUTH_COOKIE_MAX_AGE}`,
       },
     });
   }
@@ -262,12 +264,17 @@ export async function action({request, context}: ActionFunctionArgs) {
   if (intent === 'logout') {
     return json({ok: true}, {
       headers: {
-        'Set-Cookie': `${AUTH_COOKIE_NAME}=; Path=/budtender-education; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
+        'Set-Cookie': `${AUTH_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
       },
     });
   }
 
   return json({ok: false, error: 'Unknown action.'}, {status: 400});
+
+  } catch (err: any) {
+    console.error('Budtender action error:', err);
+    return json({ok: false, error: err?.message || 'Server error. Please try again.'}, {status: 500});
+  }
 }
 
 // ── Load Teko font ──────────────────────────────────────────────────────────
@@ -1128,8 +1135,17 @@ function subscribeToKlaviyo(name: string, email: string, state: string, dispensa
 async function callAction(data: Record<string, string>): Promise<any> {
   const formData = new FormData();
   for (const [key, val] of Object.entries(data)) formData.append(key, val);
-  const res = await fetch('/budtender-education', {method: 'POST', body: formData});
-  return res.json();
+  const res = await fetch(typeof window !== 'undefined' ? window.location.pathname : '/budtender-education', {
+    method: 'POST',
+    body: formData,
+  });
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    console.error('Action response not JSON:', res.status, text.slice(0, 200));
+    return {ok: false, error: `Server error (${res.status}). Please try again.`};
+  }
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
