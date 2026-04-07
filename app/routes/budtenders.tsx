@@ -193,7 +193,7 @@ export default function Budtenders() {
       {/* PRIZE IMAGE SHOWCASE */}
       <div className="bg-surface-container-low border-t border-b border-outline-variant/20">
         <img
-          src="/budtenderPrizes.png"
+          src="/NJ%20Budtender%20Comp%20Prizes.png"
           alt="The Highsman Champions Box"
           className="w-full max-w-4xl mx-auto block"
         />
@@ -213,7 +213,7 @@ export default function Budtenders() {
           </h2>
           <div className="mb-10 overflow-hidden" style={{maxHeight: '380px'}}>
             <img
-              src="/budtenderPrizes.png"
+              src="/NJ%20Budtender%20Comp%20Prizes.png"
               alt="Win a trip for 2 to a Giants or Eagles game"
               className="w-full max-w-2xl mx-auto object-cover object-top"
               style={{objectPosition: 'top'}}
