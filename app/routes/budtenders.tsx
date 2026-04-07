@@ -4,11 +4,11 @@ import {IMAGES} from '~/lib/images';
 
 export const meta: MetaFunction = () => {
   return [
-    {title: 'HIGHSMAN | Budtender Championship — NJ Launch May 2026'},
+    {title: 'HIGHSMAN | Budtender Championship â NJ Launch May 2026'},
     {
       name: 'description',
       content:
-        'The Highsman Budtender Championship. Sell Ground Game and Triple Threat in NJ from May 7 – June 7 and win the Champions Box, Varsity Jacket, and game day tickets.',
+        'The Highsman Budtender Championship. Sell Ground Game and Triple Threat in NJ from May 7 â June 7 and win the Champions Box, Varsity Jacket, and game day tickets.',
     },
   ];
 };
@@ -33,18 +33,18 @@ const PRIZE_ITEMS_SECOND = [
 const HOW_STEPS = [
   {
     num: '01',
-    title: 'May 7 – June 7',
-    body: 'Move Ground Game and Triple Threat at your NJ store throughout the competition window. Every unit counts toward your ranking.',
+    title: 'May 7 â June 7',
+    body: 'Move Ground Game and Triple Threat at your NJ store. Every unit counts toward your ranking.',
   },
   {
     num: '02',
-    title: 'Managers Report',
-    body: 'At the end of June 7th, store managers report top performers directly to the Highsman team. No tracking app. No forms.',
+    title: 'Top Performers Win',
+    body: 'Store managers report top sellers at close of June 7. No tracking app. No forms. Just results.',
   },
   {
     num: '03',
     title: 'Prizes Ship',
-    body: "Winners are announced and prizes ship directly to the store. Champions don't wait long.",
+    body: "Champions are announced. Prizes ship direct to the store. Champions don't wait.",
   },
 ];
 
@@ -53,216 +53,554 @@ const CDN = 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/';
 export default function Budtenders() {
   return (
     <>
-      {/* HERO */}
-      <section className="bg-surface-container-lowest min-h-[80vh] flex flex-col justify-end pb-20 pt-36 px-6 md:px-16 relative overflow-hidden border-b border-outline-variant/20">
-        <div className="absolute top-0 left-0 right-0 h-1 bg-primary" />
-        <div className="relative z-10 max-w-5xl">
-          <p className="font-label text-xs tracking-[0.32em] uppercase text-on-surface-variant mb-6">
-            NJ Launch &middot; May 7 – June 7, 2026 &middot; Budtender Championship
-          </p>
-          <h1 className="font-headline text-[clamp(80px,14vw,148px)] leading-[0.82] uppercase tracking-tight text-on-surface mb-8">
-            Today Is<br />
-            <span className="text-primary">Game Day.</span>
+      {/* âââ HERO ââââââââââââââââââââââââââââââââââââââââââââââââââââ */}
+      <section
+        className="relative min-h-screen flex flex-col justify-end overflow-hidden"
+        style={{background: '#000'}}
+      >
+        {/* Background training hero image */}
+        <img
+          src={`${CDN}Budtender_Training_Camp_Hero_Banner.png?v=1775339073`}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{opacity: 0.3, objectPosition: 'center top'}}
+        />
+        {/* Gradient over image bottom */}
+        <div
+          className="absolute inset-0"
+          style={{background: 'linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.7) 60%, #000 100%)'}}
+        />
+        {/* Yellow top bar */}
+        <div className="absolute top-0 left-0 right-0 h-1" style={{background: '#F5E100'}} />
+
+        {/* Logo bar */}
+        <div className="absolute top-0 left-0 right-0 px-8 md:px-16 pt-7 flex items-center justify-between z-20">
+          <img
+            src={`${CDN}Highsman_Logo_White.png?v=1775594430`}
+            alt="Highsman"
+            className="h-8 md:h-9"
+          />
+          <span
+            className="font-label text-[10px] tracking-[0.3em] uppercase hidden md:block"
+            style={{color: 'rgba(255,255,255,0.4)'}}
+          >
+            NJ Launch &middot; May 7 â June 7, 2026
+          </span>
+        </div>
+
+        {/* Jersey number watermark */}
+        <div
+          className="absolute right-0 bottom-0 pointer-events-none select-none leading-none"
+          aria-hidden="true"
+          style={{
+            fontFamily: 'Teko, sans-serif',
+            fontSize: 'clamp(280px, 45vw, 580px)',
+            lineHeight: 0.85,
+            color: 'rgba(245,225,0,0.06)',
+            letterSpacing: '-0.04em',
+          }}
+        >
+          34
+        </div>
+
+        {/* Hero content */}
+        <div className="relative z-10 px-8 md:px-16 pb-20 md:pb-28 max-w-6xl">
+          <div
+            className="inline-block font-label text-[10px] tracking-[0.4em] uppercase px-4 py-2 mb-8"
+            style={{background: '#F5E100', color: '#000'}}
+          >
+            Budtender Championship &middot; NJ Only
+          </div>
+          <h1
+            className="font-headline uppercase tracking-tight mb-8"
+            style={{
+              fontSize: 'clamp(72px, 14vw, 160px)',
+              lineHeight: 0.84,
+              color: '#fff',
+            }}
+          >
+            Today Is
+            <br />
+            <span style={{color: '#F5E100'}}>Game Day.</span>
           </h1>
-          <p className="font-body text-xl md:text-2xl text-on-surface-variant max-w-2xl leading-relaxed mb-10">
-            <strong className="text-on-surface font-semibold">Ground Game and Triple Threat are live in New Jersey.</strong>{' '}
-            The floor is yours. We&apos;re rewarding everyone who performs.
+          <p
+            className="font-body text-lg md:text-xl leading-relaxed mb-10 max-w-2xl"
+            style={{color: 'rgba(255,255,255,0.7)'}}
+          >
+            <strong style={{color: '#fff'}}>Ground Game and Triple Threat are live in NJ.</strong>{' '}
+            Sell the most May 7 â June 7. Walk away with the Champions Box, the Varsity Jacket, and seats at the game.
           </p>
-          <div className="flex flex-wrap gap-3">
-            <span className="bg-primary px-5 py-2.5 font-headline text-sm uppercase tracking-[0.12em] text-on-primary">
-              May 7 – June 7 &middot; NJ Only
-            </span>
-            <span className="bg-surface-container border border-outline-variant/30 px-5 py-2.5 font-headline text-sm uppercase tracking-[0.12em] text-on-surface">
-              Ground Game — 7g Flower
-            </span>
-            <span className="bg-surface-container border border-outline-variant/30 px-5 py-2.5 font-headline text-sm uppercase tracking-[0.12em] text-on-surface">
-              Triple Threat — 1.2g Pre-Rolls
-            </span>
+          <div className="flex flex-wrap gap-4">
+            <a
+              href="#prizes"
+              className="font-headline text-sm uppercase tracking-[0.18em] px-8 py-4 transition-opacity hover:opacity-80"
+              style={{background: '#F5E100', color: '#000'}}
+            >
+              See the Prizes
+            </a>
+            <a
+              href="mailto:budtenders@highsman.com"
+              className="font-headline text-sm uppercase tracking-[0.18em] px-8 py-4 border transition-colors hover:bg-white hover:text-black"
+              style={{borderColor: 'rgba(255,255,255,0.3)', color: '#fff'}}
+            >
+              Contact the Team
+            </a>
           </div>
         </div>
       </section>
 
-      {/* INTRO BAND */}
-      <div className="bg-surface-container py-10 px-6 md:px-16 border-b border-outline-variant/20">
-        <p className="font-body text-lg text-on-surface-variant max-w-4xl leading-relaxed">
-          We&apos;re running the{' '}
-          <strong className="text-on-surface font-semibold">Highsman Budtender Championship</strong>{' '}
-          across every NJ store from{' '}
-          <strong className="text-on-surface font-semibold">May 7th through June 7th</strong>. Sell the most. Walk away with something{' '}
-          <strong className="text-on-surface font-semibold">built for champions</strong>.
-        </p>
+      {/* âââ MANIFESTO BAND ââââââââââââââââââââââââââââââââââââââââââ */}
+      <div style={{background: '#F5E100', borderBottom: '1px solid rgba(0,0,0,0.08)'}}>
+        <div className="max-w-6xl mx-auto px-8 md:px-16 py-5 flex flex-wrap items-center justify-between gap-4">
+          <p
+            className="font-headline text-sm md:text-base uppercase tracking-[0.1em]"
+            style={{color: '#000'}}
+          >
+            Behavior beats knowledge. Speed beats perfection.{' '}
+            <strong style={{letterSpacing: '0.05em'}}>Volume beats hesitation.</strong>
+          </p>
+          <img
+            src={`${CDN}HM_SparkGreatness_Black.png?v=1775594430`}
+            alt="Spark Greatnessâ¢"
+            className="h-5 opacity-40"
+          />
+        </div>
       </div>
 
-      {/* PRIZES */}
-      <section className="bg-surface-container-lowest py-24 px-6 md:px-16">
-        <div className="max-w-6xl mx-auto">
-          <div className="mb-12">
-            <p className="font-label text-xs tracking-[0.32em] uppercase text-on-surface-variant mb-3">Top 3 Performers Win</p>
-            <h2 className="font-headline text-[clamp(56px,9vw,96px)] leading-[0.86] uppercase tracking-tight text-on-surface">The Prizes</h2>
+      {/* âââ PRIZES ââââââââââââââââââââââââââââââââââââââââââââââââââ */}
+      <section id="prizes" style={{background: '#0a0a0a'}}>
+        <div className="max-w-6xl mx-auto px-8 md:px-16 pt-24 pb-6">
+          <div className="flex items-end justify-between mb-14 flex-wrap gap-4">
+            <div>
+              <p
+                className="font-label text-[10px] tracking-[0.4em] uppercase mb-4"
+                style={{color: 'rgba(255,255,255,0.35)'}}
+              >
+                Top 3 Performers Win
+              </p>
+              <h2
+                className="font-headline uppercase tracking-tight"
+                style={{fontSize: 'clamp(60px,10vw,108px)', lineHeiiht: 0.86, color: '#fff'}}
+              >
+                The Prizes
+              </h2>
+            </div>
+            <span
+              className="font-label text-[10px] tracking-[0.3em] uppercase"
+              style={{color: 'rgba(255,255,255,0.25)'}}
+            >
+              May 7 â June 7 &middot; NJ
+            </span>
+          </div>
+        </div>
+
+        {/* ââ 1ST PLACE ââ */}
+        <div
+          className="relative overflow-hidden"
+          style={{borderTop: '3px solid #F5E100', borderBottom: '1px solid rgba(255,255,255,0.06)'}}
+        >
+          {/* Watermark */}
+          <div
+            className="absolute right-0 top-0 bottom-0 flex items-center pointer-events-none select-none"
+            aria-hidden="true"
+            style={{
+              fontFamily: 'Teko, sans-serif',
+              fontSize: 'clamp(180px,32vw,400px)',
+              lineHeight: 1,
+              color: 'rgba(245,225,0,0.04)',
+              letterSpacing: '-0.04em',
+              paddingRight: '2vw',
+            }}
+          >
+            01
           </div>
 
-          {/* 1st Prize */}
-          <div className="relative overflow-hidden mb-4 bg-surface-container" style={{borderTop: '3px solid #F5E100'}}>
-            <div className="absolute right-0 top-0 bottom-0 items-center pr-8 pointer-events-none select-none hidden md:flex" aria-hidden="true">
-              <span className="font-headline leading-none uppercase" style={{fontSize: '28vw', color: 'rgba(255,255,255,0.03)', lineHeight: 1}}>01</span>
-            </div>
-            <div className="relative z-10 p-8 md:p-12 md:grid md:grid-cols-[1fr_420px] md:gap-0">
-              <div className="md:pr-12 md:border-r md:border-outline-variant/20">
-                <span className="inline-block font-label text-[10px] tracking-[0.36em] uppercase px-3 py-1.5 mb-8" style={{background: '#F5E100', color: '#000'}}>First Place</span>
-                <h3 className="font-headline text-[clamp(40px,6vw,68px)] uppercase leading-[0.88] mb-10" style={{color: '#F5E100'}}>
-                  Champions Box<br />
-                  <span className="text-on-surface">+ Varsity Jacket</span>
+          <div className="max-w-6xl mx-auto px-8 md:px-16 py-16 md:py-20 relative z-10">
+            <div className="md:grid md:grid-cols-[1fr_440px] items-start">
+              {/* Left */}
+              <div className="md:pr-16 md:border-r" style={{borderColor: 'rgba(255,255,255,0.07)'}}>
+                <div
+                  className="inline-block font-label text-[10px] tracking-[0.4em] uppercase px-3 py-1.5 mb-8"
+                  style={{background: '#F5E100', color: '#000'}}
+                >
+                  First Place
+                </div>
+                <h3
+                  className="font-headline uppercase tracking-tight mb-10"
+                  style={{fontSize: 'clamp(44px,6vw,76px)', lineHeight: 0.87, color: '#fff'}}
+                >
+                  <span style={{color: '#F5E100'}}>Champions Box</span>
+                  <br />+ Varsity Jacket
                 </h3>
-                <ul className="space-y-4 mb-8">
+                <ul className="space-y-4 mb-10">
                   {PRIZE_ITEMS_FIRST.map(({label, bold}) => (
-                    <li key={label} className="flex items-start gap-3 font-body text-base">
-                      <span className="flex-shrink-0 w-4 h-4 mt-0.5 flex items-center justify-center border" style={{borderColor: '#F5E100'}}>
-                        <span className="block w-1.5 h-1.5" style={{background: '#F5E100'}} />
+                    <li key={label} className="flex items-center gap-4 font-body">
+                      <span
+                        className="flex-shrink-0 w-1.5 h-1.5"
+                        style={{background: bold ? '#F5E100' : 'rgba(255,255,255,0.2)'}}
+                      />
+                      <span
+                        className="text-base leading-tight"
+                        style={{
+                          color: bold ? '#fff' : 'rgba(255,255,255,0.5)',
+                          fontWeight: bold ? 600 : 400,
+                        }}
+                      >
+                        {label}
                       </span>
-                      <span className={bold ? 'text-on-surface font-semibold' : 'text-on-surface-variant'}>{label}</span>
                     </li>
                   ))}
                 </ul>
               </div>
-              <div className="mt-10 md:mt-0 md:pl-12 flex flex-col gap-6 justify-center">
-                <div className="bg-surface-container-lowest border border-outline-variant/20 overflow-hidden">
-                  <div className="px-3 pt-3"><span className="font-label text-[9px] tracking-[0.3em] uppercase text-on-surface-variant">Champions Box</span></div>
-                  <img src={`${CDN}Game_Day_Prize_Pic.svg?v=1775597075`} alt="Highsman Champions Box" className="w-full" style={{maxHeight: '340px', objectFit: 'contain', padding: '12px'}} />
+
+              {/* Right: images */}
+              <div className="mt-12 md:mt-0 md:pl-16 flex flex-col gap-5">
+                <div>
+                  <p
+                    className="font-label text-[9px] tracking-[0.3em] uppercase mb-2"
+                    style={{color: 'rgba(255,255,255,0.3)'}}
+                  >
+                    Champions Box
+                  </p>
+                  <div style={{background: '#111', border: '1px solid rgba(245,225,0,0.15)'}}>
+                    <img
+                      src={`${CDN}Game_Day_Prize_Pic.svg?v=1775597075`}
+                      alt="Highsman Champions Box â all prize contents"
+                      className="w-full"
+                      style={{maxHeight: '340px', objectFit: 'contain', padding: '16px'}}
+                    />
+                  </div>
                 </div>
-                <div className="bg-surface-container-lowest border border-outline-variant/20 overflow-hidden">
-                  <div className="px-3 pt-3"><span className="font-label text-[9px] tracking-[0.3em] uppercase text-on-surface-variant">Varsity Jacket</span></div>
-                  <img src={IMAGES.varsityJacket} alt="Highsman Varsity Jacket" className="w-full" style={{maxHeight: '200px', objectFit: 'contain', padding: '8px'}} />
+                <div>
+                  <p
+                    className="font-label text-[9px] tracking-[0.3em] uppercase mb-2"
+                    style={{color: 'rgba(255,255,255,0.3)'}}
+                  >
+                    Varsity Jacket
+                  </p>
+                  <div style={{background: '#111', border: '1px solid rgba(255,255,255,0.06)'}}>
+                    <img
+                      src={`${CDN}Highsman_Letterman-Varsity-Jacket-01_1.png?v=1775594409`}
+                      alt="Highsman Varsity Jacket"
+                      className="w-full"
+                      style={{maxHeight: '220px', objectFit: 'contain', padding: '16px'}}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* 2nd & 3rd */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-surface-container border-t-2 border-t-[#C0C0C0]">
-              <div className="p-8">
-                <span className="inline-block font-label text-[10px] tracking-[0.36em] uppercase px-3 py-1.5 mb-6" style={{background: '#C0C0C0', color: '#000'}}>Second Place</span>
-                <h3 className="font-headline text-[clamp(30px,4vw,44px)] uppercase leading-[0.9] text-on-surface mb-6">Champions Box</h3>
-                <div className="border border-outline-variant/20 bg-surface-container-lowest mb-6">
-                  <img src={`${CDN}Game_Day_Prize_Pic.svg?v=1775597075`} alt="Champions Box" className="w-full" style={{maxHeight: '260px', objectFit: 'contain', padding: '12px'}} />
-                </div>
-                <ul className="space-y-2.5">
-                  {PRIZE_ITEMS_SECOND.map((item) => (
-                    <li key={item} className="flex items-start gap-3 font-body text-sm text-on-surface-variant">
-                      <span className="flex-shrink-0 w-3.5 h-3.5 mt-0.5 flex items-center justify-center border border-on-surface-variant/30"><span className="block w-1 h-1 bg-on-surface-variant/40" /></span>
-                      {item}
-                    </li>
-                  ))}
-                </ul>
+        {/* ââ 2ND & 3RD PLACE ââ */}
+        <div className="max-w-6xl mx-auto px-8 md:px-16 py-px">
+          <div
+            className="grid grid-cols-1 md:grid-cols-2"
+            style={{gap: '1px', background: 'rgba(255,255,255,0.06)'}}
+          >
+            {/* 2nd */}
+            <div className="relative overflow-hidden p-10 md:p-12" style={{background: '#0a0a0a'}}>
+              <div
+                className="absolute right-4 top-2 font-headline leading-none pointer-events-none select-none"
+                aria-hidden="true"
+                style={{fontSize: '130px', color: 'rgba(192,192,192,0.05)'}}
+              >
+                02
               </div>
+              <div
+                className="inline-block font-label text-[10px] tracking-[0.4em] uppercase px-3 py-1.5 mb-6"
+                style={{background: '#C0C0C0', color: '#000'}}
+              >
+                Second Place
+              </div>
+              <h3
+                className="font-headline uppercase tracking-tight mb-8 text-white"
+                style={{fontSize: 'clamp(34px,4vw,52px)', lineHeight: 0.88}}
+              >
+                Champions Box
+              </h3>
+              <div
+                className="overflow-hidden mb-8"
+                style={{background: '#111', border: '1px solid rgba(192,192,192,0.1)'}}
+              >
+                <img
+                  src={`${CDN}Game_Day_Prize_Pic.svg?v=1775597075`}
+                  alt="Champions Box"
+                  className="w-full"
+                  style={{maxHeight: '260px', objectFit: 'contain', padding: '12px'}}
+                />
+              </div>
+              <ul className="space-y-2.5">
+                {PRIZE_ITEMS_SECOND.map((item) => (
+                  <li
+                    key={item}
+                    className="flex items-center gap-3 font-body text-sm"
+                    style={{color: 'rgba(255,255,255,0.45)'}}
+                  >
+                    <span
+                      className="flex-shrink-0 w-1 h-1"
+                      style={{background: 'rgba(192,192,192,0.4)'}}
+                    />
+                    {item}
+                  </li>
+                ))}
+              </ul>
             </div>
-            <div className="bg-surface-container" style={{borderTop: '2px solid #CD7F32'}}>
-              <div className="p-8">
-                <span className="inline-block font-label text-[10px] tracking-[0.36em] uppercase px-3 py-1.5 mb-6" style={{background: '#CD7F32', color: '#000'}}>Third Place</span>
-                <h3 className="font-headline text-[clamp(30px,4vw,44px)] uppercase leading-[0.9] text-on-surface mb-6">Varsity Jacket</h3>
-                <div className="border border-outline-variant/20 bg-surface-container-lowest mb-6">
-                  <img src={IMAGES.varsityJacket} alt="Highsman Varsity Jacket" className="w-full" style={{maxHeight: '200px', objectFit: 'contain', padding: '8px'}} />
-                </div>
-                <ul className="space-y-2.5">
-                  {['Custom Highsman Letterman Jacket', 'Wear the brand on the floor'].map((item) => (
-                    <li key={item} className="flex items-start gap-3 font-body text-sm text-on-surface-variant">
-                      <span className="flex-shrink-0 w-3.5 h-3.5 mt-0.5 flex items-center justify-center border border-on-surface-variant/30"><span className="block w-1 h-1 bg-on-surface-variant/40" /></span>
-                      {item}
-                    </li>
-                  ))}
-                </ul>
+
+            {/* 3rd */}
+            <div className="relative overflow-hidden p-10 md:p-12" style={{background: '#0a0a0a'}}>
+              <div
+                className="absolute right-4 top-2 font-headline leading-none pointer-events-none select-none"
+                aria-hidden="true"
+                style={{fontSize: '130px', color: 'rgba(205,127,50,0.05)'}}
+              >
+                03
               </div>
+              <div
+                className="inline-block font-label text-[10px] tracking-[0.4em] uppercase px-3 py-1.5 mb-6"
+                style={{background: '#CD7F32', color: '#000'}}
+              >
+                Third Place
+              </div>
+              <h3
+                className="font-headline uppercase tracking-tight mb-8 text-white"
+                style={{fontSize: 'clamp(34px,4vw,52px)', lineHeight: 0.88}}
+              >
+                Varsity Jacket
+              </h3>
+              <div
+                className="overflow-hidden mb-8"
+                style={{background: '#111', border: '1px solid rgba(205,127,50,0.1)'}}
+              >
+                <img
+                  src={`${CDN}Highsman_Letterman-Varsity-Jacket-01_1.png?v=1775594409`}
+                  alt="Highsman Varsity Jacket"
+                  className="w-full"
+                  style={{maxHeight: '260px', objectFit: 'contain', padding: '16px'}}
+                />
+              </div>
+              <ul className="space-y-2.5">
+                {['Custom Highsman Letterman Jacket', 'Wear the brand on the floor.'].map((item) => (
+                  <li
+                    key={item}
+                    className="flex items-center gap-3 font-body text-sm"
+                    style={{color: 'rgba(255,255,255,0.45)'}}
+                  >
+                    <span
+                      className="flex-shrink-0 w-1 h-1"
+                      style={{background: 'rgba(205,127,50,0.5)'}}
+                    />
+                    {item}
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         </div>
       </section>
 
-      {/* GAME DAY BONUS */}
+      {/* âââ GAME DAY TICKETS ââââââââââââââââââââââââââââââââââââââââ */}
       <section style={{background: '#F5E100'}}>
         <div className="max-w-6xl mx-auto">
           <div className="md:grid md:grid-cols-2">
-            <div className="px-8 md:px-16 py-20 flex flex-col justify-center">
-              <p className="font-label text-[10px] tracking-[0.36em] uppercase mb-6" style={{color: 'rgba(0,0,0,0.45)'}}>Bonus Prize &middot; 5 Chances to Win</p>
-              <h2 className="font-headline text-[clamp(52px,8vw,96px)] uppercase leading-[0.84] tracking-tight mb-8" style={{color: '#000'}}>
-                Win<br />Game Day<br />Tickets
+
+            {/* Left: copy */}
+            <div
+              className="px-8 md:px-16 py-20 md:py-24 flex flex-col justify-center"
+              style={{borderRight: '1px solid rgba(0,0,0,0.1)'}}
+            >
+              <div
+                className="inline-block font-label text-[10px] tracking-[0.4em] uppercase px-3 py-1.5 mb-8 self-start"
+                style={{background: '#000', color: '#F5E100'}}
+              >
+                Bonus Prize &middot; 5 Chances to Win
+              </div>
+              <h2
+                className="font-headline uppercase tracking-tight mb-8"
+                style={{fontSize: 'clamp(60px,9vw,112px)', lineHeight: 0.82, color: '#000'}}
+              >
+                Win
+                <br />
+                Game Day
+                <br />
+                Tickets
               </h2>
-              <p className="font-body text-base leading-relaxed mb-8" style={{color: 'rgba(0,0,0,0.7)', maxWidth: '400px'}}>
-                <strong style={{color: '#000'}}>5 Champions Boxes include tickets for two</strong>{' '}
-                to an Eagles or Giants game with the Highsman team. Game day with us — on us.
+              <p
+                className="font-body text-lg leading-relaxed mb-10 max-w-sm"
+                style={{color: 'rgba(0,0,0,0.65)'}}
+              >
+                <strong style={{color: '#000'}}>5 Champions Boxes include two tickets</strong>{' '}
+                to an Eagles or Giants game â with the Highsman team. Game day with us. On us.
               </p>
-              <div className="flex flex-col gap-3 mb-10">
-                <div className="flex items-center gap-3">
-                  <span className="font-headline text-2xl">🏈</span>
-                  <span className="font-headline text-sm uppercase tracking-widest" style={{color: '#000'}}>Philadelphia Eagles</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-headline text-2xl">🏈</span>
-                  <span className="font-headline text-sm uppercase tracking-widest" style={{color: '#000'}}>New York Giants</span>
-                </div>
+              <div
+                className="flex flex-col gap-3 pt-6"
+                style={{borderTop: '1px solid rgba(0,0,0,0.12)'}}
+              >
+                {['Philadelphia Eagles', 'New York Giants'].map((team) => (
+                  <span
+                    key={team}
+                    className="font-headline text-xs uppercase tracking-[0.22em]"
+                    style={{color: 'rgba(0,0,0,0.55)'}}
+                  >
+                    ð {team}
+                  </span>
+                ))}
               </div>
-              <span className="inline-block font-headline text-xs uppercase tracking-[0.22em] px-5 py-3 self-start" style={{background: '#000', color: '#F5E100'}}>Competition May 7 – June 7</span>
             </div>
-            <div className="flex items-stretch" style={{background: '#000'}}>
-              <div className="w-full p-8 md:p-10 flex flex-col justify-center">
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="h-px flex-1" style={{background: 'rgba(245,225,0,0.3)'}} />
-                  <span className="font-label text-[9px] tracking-[0.3em] uppercase" style={{color: 'rgba(245,225,0,0.5)'}}>Game Day &middot; 2026</span>
-                  <div className="h-px flex-1" style={{background: 'rgba(245,225,0,0.3)'}} />
-                </div>
-                <img src={`${CDN}Budtenders_Prize_Image_football_giveaway_9028f72e-b1c6-4cdb-a8b3-556663907532.png?v=1775599444`} alt="Football game day tickets — Eagles and Giants" className="w-full" style={{maxHeight: '360px', objectFit: 'contain'}} />
-                <div className="flex items-center gap-4 mt-6">
-                  <div className="h-px flex-1" style={{background: 'rgba(245,225,0,0.3)'}} />
-                  <span className="font-label text-[9px] tracking-[0.3em] uppercase" style={{color: 'rgba(245,225,0,0.5)'}}>Highsman &middot; NJ</span>
-                  <div className="h-px flex-1" style={{background: 'rgba(245,225,0,0.3)'}} />
-                </div>
+
+            {/* Right: photo in black frame */}
+            <div
+              className="flex flex-col justify-center relative overflow-hidden"
+              style={{background: '#000', minHeight: '440px'}}
+            >
+              <div className="flex items-center gap-4 px-10 pt-8">
+                <div className="h-px flex-1" style={{background: 'rgba(245,225,0,0.15)'}} />
+                <span
+                  className="font-label text-[9px] tracking-[0.3em] uppercase"
+                  style={{color: 'rgba(245,225,0,0.4)'}}
+                >
+                  Game Day &middot; 2026
+                </span>
+                <div className="h-px flex-1" style={{background: 'rgba(245,225,0,0.15)'}} />
               </div>
+              <img
+                src={`${CDN}Budtenders_Prize_Image_football_giveaway_9028f72e-b1c6-4cdb-a8b3-556663907532.png?v=1775599444`}
+                alt="Football game day tickets â Eagles and Giants with Highsman"
+                className="w-full"
+                style={{maxHeight: '400px', objectFit: 'contain', padding: '24px 32px'}}
+              />
+              <div className="flex items-center gap-4 px-10 pb-8">
+                <div className="h-px flex-1" style={{background: 'rgba(245,225,0,0.15)'}} />
+                <span
+                  className="font-label text-[9px] tracking-[0.3em] uppercase"
+                  style={{color: 'rgba(245,225,0,0.4)'}}
+                >
+                  Highsman &middot; NJ
+                </span>
+                <div className="h-px flex-1" style={{background: 'rgba(245,225,0,0.15)'}} />
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* âââ HOW IT WORKS ââââââââââââââââââââââââââââââââââââââââââââ */}
+      <section style={{background: '#fff'}}>
+        <div className="max-w-6xl mx-auto px-8 md:px-16 py-24">
+          <div className="md:grid md:grid-cols-[260px_1fr] md:gap-20 items-start">
+
+            {/* Left: sticky label */}
+            <div className="mb-16 md:mb-0 md:sticky md:top-24">
+              <p
+                className="font-label text-[10px] tracking-[0.4em] uppercase mb-4"
+                style={{color: 'rgba(0,0,0,0.35)'}}
+              >
+                No tracking. No app.
+              </p>
+              <h2
+                className="font-headline uppercase tracking-tight"
+                style={{fontSize: 'clamp(48px,7vw,80px)', lineHeight: 0.86, color: '#000'}}
+              >
+                How It
+                <br />
+                Works
+              </h2>
+            </div>
+
+            {/* Right: steps */}
+            <div>
+              {HOW_STEPS.map(({num, title, body}, i) => (
+                <div
+                  key={num}
+                  className="flex items-start gap-8 py-10"
+                  style={{
+                    borderTop: '1px solid rgba(0,0,0,0.1)',
+                    borderBottom: i === HOW_STEPS.length - 1 ? '1px solid rgba(0,0,0,0.1)' : 'none',
+                  }}
+                >
+                  <span
+                    className="font-headline flex-shrink-0 leading-none"
+                    style={{fontSize: '72px', color: 'rgba(0,0,0,0.07)'}}
+                  >
+                    {num}
+                  </span>
+                  <div>
+                    <h3
+                      className="font-headline text-2xl md:text-3xl uppercase tracking-wider mb-3"
+                      style={{color: '#000'}}
+                    >
+                      {title}
+                    </h3>
+                    <p className="font-body text-base leading-relaxed" style={{color: 'rgba(0,0,0,0.55)'}}>
+                      {body}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </section>
 
-      {/* HOW IT WORKS */}
-      <section className="bg-surface-container py-24 px-6 md:px-16 border-t border-b border-outline-variant/20">
-        <div className="max-w-5xl mx-auto">
-          <div className="mb-16 text-center">
-            <p className="font-label text-xs tracking-[0.32em] uppercase text-on-surface-variant mb-3">No tracking. No app.</p>
-            <h2 className="font-headline text-[clamp(52px,9vw,88px)] leading-[0.88] uppercase tracking-tight text-on-surface">How It Works</h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border border-outline-variant/20">
-            {HOW_STEPS.map(({num, title, body}, i) => (
-              <div key={num} className={`p-10 ${i < 2 ? 'md:border-r border-b md:border-b-0 border-outline-variant/20' : ''}`}>
-                <div className="font-headline leading-none mb-6" style={{fontSize: '72px', color: 'rgba(255,255,255,0.07)'}}>{num}</div>
-                <h3 className="font-headline text-2xl uppercase tracking-wider text-on-surface mb-4">{title}</h3>
-                <p className="font-body text-sm text-on-surface-variant leading-relaxed">{body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* âââ REFERRAL ââââââââââââââââââââââââââââââââââââââââââââââââ */}
+      <section style={{background: '#0a0a0a', borderTop: '1px solid rgba(255,255,255,0.05)'}}>
+        <div className="max-w-6xl mx-auto px-8 md:px-16 py-24 md:grid md:grid-cols-2 md:gap-20 items-center">
 
-      {/* REFERRAL */}
-      <section className="bg-surface-container-lowest py-24 px-6 md:px-16">
-        <div className="max-w-6xl mx-auto md:grid md:grid-cols-2 md:gap-16 items-center">
+          {/* Left */}
           <div>
-            <p className="font-label text-xs tracking-[0.32em] uppercase text-on-surface-variant mb-4">Know a Great Budtender?</p>
-            <h2 className="font-headline text-[clamp(44px,7vw,76px)] leading-[0.88] uppercase tracking-tight text-on-surface mb-6">
-              Refer Them.<br /><span className="text-primary">Win a Jacket.</span>
+            <p
+              className="font-label text-[10px] tracking-[0.4em] uppercase mb-5"
+              style={{color: 'rgba(255,255,255,0.35)'}}
+            >
+              Know a closer?
+            </p>
+            <h2
+              className="font-headline uppercase tracking-tight mb-6"
+              style={{fontSize: 'clamp(44px,7vw,76px)', lineHeight: 0.87, color: '#fff'}}
+            >
+              Refer Them.
+              <br />
+              <span style={{color: '#F5E100'}}>Win a Jacket.</span>
             </h2>
-            <p className="font-body text-base text-on-surface-variant leading-relaxed max-w-md">
-              Every budtender you refer earns you{' '}
-              <strong className="text-on-surface font-semibold">one entry into our monthly draw</strong>. One winner every month takes home a Varsity Jacket.
+            <p className="font-body text-base leading-relaxed max-w-md" style={{color: 'rgba(255,255,255,0.5)'}}>
+              Every budtender you refer who joins the Highsman team earns you{' '}
+              <strong style={{color: '#fff'}}>one entry into our monthly draw</strong>
+              . One winner per month. One Varsity Jacket. No cap on entries.
             </p>
           </div>
+
+          {/* Right: CTA card */}
           <div className="mt-10 md:mt-0">
-            <div className="border border-outline-variant/30 bg-surface-container p-8">
-              <div className="flex items-start gap-4 mb-8">
-                <img src={IMAGES.varsityJacket} alt="Highsman Varsity Jacket" className="w-20 h-20 flex-shrink-0" style={{objectFit: 'contain', background: '#111'}} />
+            <div
+              className="p-8"
+              style={{background: '#111', border: '1px solid rgba(255,255,255,0.07)'}}
+            >
+              <div className="flex items-start gap-5 mb-8">
+                <img
+                  src={`${CDN}Highsman_Letterman-Varsity-Jacket-01_1.png?v=1775594409`}
+                  alt="Highsman Varsity Jacket"
+                  className="w-20 h-20 flex-shrink-0"
+                  style={{objectFit: 'contain', background: '#1a1a1a'}}
+                />
                 <div>
-                  <h4 className="font-headline text-2xl uppercase tracking-wider text-on-surface mb-1">Monthly Jacket Draw</h4>
-                  <p className="font-body text-sm text-on-surface-variant">Each referral = one entry. No cap.</p>
+                  <h4
+                    className="font-headline text-2xl uppercase tracking-wider mb-1"
+                    style={{color: '#fff'}}
+                  >
+                    Monthly Jacket Draw
+                  </h4>
+                  <p className="font-body text-sm" style={{color: 'rgba(255,255,255,0.4)'}}>
+                    Each referral = one entry. No cap.
+                  </p>
                 </div>
               </div>
-              <a href="mailto:budtenders@highsman.com?subject=Referral" className="block w-full bg-primary text-on-primary font-headline text-base uppercase tracking-widest px-8 py-4 hover:opacity-90 transition-opacity text-center">
+              <a
+                href="mailto:budtenders@highsman.com?subject=Referral"
+                className="block w-full font-headline text-sm uppercase tracking-[0.18em] px-8 py-4 text-center transition-opacity hover:opacity-85"
+                style={{background: '#F5E100', color: '#000'}}
+              >
                 Refer a Budtender
               </a>
             </div>
@@ -270,46 +608,92 @@ export default function Budtenders() {
         </div>
       </section>
 
-      {/* RICKY SIGN-OFF */}
-      <section style={{background: '#000'}}>
-        <div className="max-w-6xl mx-auto px-6 md:px-16 py-20">
-          <div className="md:grid md:grid-cols-[auto_1fr] md:gap-14 items-center">
-            <img src={IMAGES.rickyWilliams} alt="Ricky Williams — Highsman Co-Founder" className="w-28 h-28 object-cover mb-8 md:mb-0 flex-shrink-0" />
-            <div>
-              <blockquote className="font-headline text-[clamp(24px,3.8vw,44px)] uppercase leading-[1.05] tracking-tight mb-6" style={{color: '#fff'}}>
-                &ldquo;Let&apos;s have a legendary launch.{' '}
-                <span style={{color: '#F5E100'}}>You&apos;re the reason this works</span>{' '}
-                — and we don&apos;t take that lightly.&rdquo;
-              </blockquote>
-              <p className="font-label text-xs tracking-[0.22em] uppercase" style={{color: 'rgba(255,255,255,0.45)'}}>
-                <strong style={{color: '#fff'}}>Ricky Williams</strong> — Highsman Co-Founder
-              </p>
-            </div>
+      {/* âââ RICKY SIGN-OFF ââââââââââââââââââââââââââââââââââââââââââ */}
+      <section style={{background: '#000', borderTop: '3px solid #F5E100'}}>
+        <div className="max-w-6xl mx-auto px-8 md:px-16 py-24 md:grid md:grid-cols-[auto_1fr] md:gap-16 items-center">
+          <img
+            src={IMAGES.rickyWilliams}
+            alt="Ricky Williams â Highsman Co-Founder"
+            className="w-24 h-24 md:w-36 md:h-36 object-cover mb-10 md:mb-0 flex-shrink-0"
+            style={{objectFit: 'cover', filter: 'grayscale(15%)'}}
+          />
+          <div>
+            <blockquote
+              className="font-headline uppercase tracking-tight mb-6"
+              style={{fontSize: 'clamp(28px,4.5vw,56px)', lineHeight: 1.0, color: '#fff'}}
+            >
+              &ldquo;Let&apos;s have a legendary launch.{' '}
+              <span style={{color: '#F5E100'}}>
+                You&apos;re the reason this works
+              </span>{' '}
+              â and we don&apos;t take that lightly.&rdquo;
+            </blockquote>
+            <p
+              className="font-label text-[10px] tracking-[0.28em] uppercase"
+              style={{color: 'rgba(255,255,255,0.4)'}}
+            >
+              <strong style={{color: '#fff', letterSpacing: '0.08em'}}>Ricky Williams</strong>{' '}
+              â Co-Founder, Highsman &middot; #34 &middot; The Highsman
+            </p>
           </div>
         </div>
       </section>
 
-      {/* CONTACT */}
-      <section className="bg-surface-container py-20 px-6 md:px-16 border-t border-outline-variant/20 text-center">
-        <div className="max-w-2xl mx-auto">
-          <h2 className="font-headline text-[clamp(36px,6vw,58px)] uppercase leading-[0.9] tracking-tight text-on-surface mb-4">
-            Questions?<br /><span className="text-primary">We&apos;re Here.</span>
+      {/* âââ CONTACT âââââââââââââââââââââââââââââââââââââââââââââââââ */}
+      <section style={{background: '#F5E100'}}>
+        <div className="max-w-4xl mx-auto px-8 md:px-16 py-20 text-center">
+          <h2
+            className="font-headline uppercase tracking-tight mb-5"
+            style={{fontSize: 'clamp(44px,8vw,80px)', lineHeight: 0.86, color: '#000'}}
+          >
+            Questions?
+            <br />
+            We&apos;re Here.
           </h2>
-          <p className="font-body text-base text-on-surface-variant mb-10">
+          <p className="font-body text-base mb-10" style={{color: 'rgba(0,0,0,0.6)'}}>
             Reach the Highsman team at{' '}
-            <a href="mailto:budtenders@highsman.com" className="text-primary hover:underline font-semibold">budtenders@highsman.com</a>
+            <a
+              href="mailto:budtenders@highsman.com"
+              className="font-semibold underline"
+              style={{color: '#000'}}
+            >
+              budtenders@highsman.com
+            </a>
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
-            <a href="mailto:budtenders@highsman.com" className="bg-primary text-on-primary font-headline text-base uppercase tracking-widest px-8 py-4 hover:opacity-90 transition-opacity">Email the Team</a>
-            <Link to="/#store-locator" className="border border-outline-variant/50 text-on-surface font-headline text-base uppercase tracking-widest px-8 py-4 hover:bg-surface-container-highest transition-colors">Find Your Store</Link>
+            <a
+              href="mailto:budtenders@highsman.com"
+              className="font-headline text-sm uppercase tracking-[0.18em] px-8 py-4 transition-opacity hover:opacity-85"
+              style={{background: '#000', color: '#F5E100'}}
+            >
+              Email the Team
+            </a>
+            <Link
+              to="/#store-locator"
+              className="font-headline text-sm uppercase tracking-[0.18em] px-8 py-4 border transition-colors hover:bg-black hover:text-white"
+              style={{borderColor: 'rgba(0,0,0,0.25)', color: '#000'}}
+            >
+              Find Your Store
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* FOOTER */}
-      <div className="bg-surface-container-lowest py-12 px-6 text-center border-t border-outline-variant/20">
-        <img src={IMAGES.sparkGreatnessLogoWhite} alt="Spark Greatness™" className="h-7 mx-auto mb-3 opacity-60" />
-        <p className="font-label text-xs tracking-[0.2em] uppercase text-on-surface-variant">© 2026 Highsman. All rights reserved.</p>
+      {/* âââ FOOTER MARK âââââââââââââââââââââââââââââââââââââââââââââ */}
+      <div style={{background: '#000', borderTop: '1px solid rgba(255,255,255,0.06)'}}>
+        <div className="max-w-6xl mx-auto px-8 md:px-16 py-10 flex items-center justify-between flex-wrap gap-4">
+          <img
+            src={`${CDN}Spark_Greatness_White.png?v=1775594430`}
+            alt="Spark Greatnessâ¢"
+            className="h-5 opacity-40"
+          />
+          <p
+            className="font-label text-[10px] tracking-[0.2em] uppercase"
+            style={{color: 'rgba(255,255,255,0.25)'}}
+          >
+            &copy; 2026 Highsman. All rights reserved.
+          </p>
+        </div>
       </div>
     </>
   );
