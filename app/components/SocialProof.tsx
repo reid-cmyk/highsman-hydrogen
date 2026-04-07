@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 const RATINGS = [
   { product: "Blueberry Blitz Hit Stick", stars: 5.0, count: 11 },
   { product: "Cake Quake Hit Stick", stars: 4.0, count: 8 },
@@ -23,15 +25,42 @@ const TESTIMONIALS = [
 ];
 
 const PRESS = [
-  { name: "Forbes", url: "https://www.highsman.com/inthenews/nfl-star-ricky-williams-launches-his-own-cannabis-brand-highsman" },
-  { name: "Los Angeles Times", url: "https://www.youtube.com/watch?v=DFzYb12iOog" },
-  { name: "Boardroom", url: "https://boardroom.tv/ricky-williams-highsman-cannabis/" },
-  { name: "Real Time with Bill Maher", url: "https://www.tvmaze.com/episodes/2269828/real-time-with-bill-maher-20x04-ricky-williams-vivek-ramaswamy-marianne-williamson" },
-  { name: "All The Smoke", url: "https://podcasts.apple.com/cz/podcast/ricky-williams-ep-132-all-the-smoke-full-episode/id1483638752?i=1000558186099" },
-  { name: "Barstool Sports", url: "https://www.youtube.com/watch?v=oFNQltuFPd0" },
-  { name: "Yahoo Sports", url: "https://sports.yahoo.com/rush-heisman-highsman-ricky-williams-035017375.html" },
-  { name: "Front Office Sports", url: "https://podcasts.apple.com/us/podcast/the-ricky-williams-interview/id1289046573?i=1000632736938" },
+  { name: "Forbes", url: "https://www.highsman.com/inthenews/nfl-star-ricky-williams-launches-his-own-cannabis-brand-highsman", domain: "forbes.com" },
+  { name: "Los Angeles Times", url: "https://www.youtube.com/watch?v=DFzYb12iOog", domain: "latimes.com" },
+  { name: "Boardroom", url: "https://boardroom.tv/ricky-williams-highsman-cannabis/", domain: "boardroom.tv" },
+  { name: "Yahoo Sports", url: "https://sports.yahoo.com/rush-heisman-highsman-ricky-williams-035017375.html", domain: "yahoo.com" },
+  { name: "Barstool Sports", url: "https://www.youtube.com/watch?v=oFNQltuFPd0", domain: "barstoolsports.com" },
+  { name: "Front Office Sports", url: "https://podcasts.apple.com/us/podcast/the-ricky-williams-interview/id1289046573?i=1000632736938", domain: "frntofficesport.com" },
+  { name: "Bill Maher", url: "https://www.tvmaze.com/episodes/2269828/real-time-with-bill-maher-20x04-ricky-williams-vivek-ramaswamy-marianne-williamson", domain: "hbo.com" },
+  { name: "All The Smoke", url: "https://podcasts.apple.com/cz/podcast/ricky-williams-ep-132-all-the-smoke-full-episode/id1483638752?i=1000558186099", domain: "showtime.com" },
 ];
+
+function PressLogo({ name, url, domain }: { name: string; url: string; domain: string }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center justify-center opacity-30 hover:opacity-60 transition-opacity no-underline"
+      title={name}
+    >
+      {!imgFailed ? (
+        <img
+          src={`https://logo.clearbit.com/${domain}`}
+          alt={name}
+          className="h-7 md:h-9 w-auto object-contain"
+          style={{ filter: 'brightness(0) invert(1)' }}
+          onError={() => setImgFailed(true)}
+        />
+      ) : (
+        <span className="font-headline text-lg md:text-2xl font-bold uppercase tracking-widest text-on-surface-variant">
+          {name}
+        </span>
+      )}
+    </a>
+  );
+}
 
 function StarRating({ stars }: { stars: number }) {
   return (
@@ -91,17 +120,9 @@ export function SocialProof() {
         <p className="font-headline text-sm uppercase tracking-[0.4em] text-on-surface-variant text-center mb-10">
           AS SEEN IN
         </p>
-        <div className="flex flex-wrap justify-center items-center gap-x-12 gap-y-6">
+        <div className="flex flex-wrap justify-center items-center gap-x-14 gap-y-8">
           {PRESS.map((p, i) => (
-            <a
-              key={i}
-              href={p.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-headline text-xl md:text-3xl font-bold uppercase text-on-surface-variant/40 tracking-widest hover:text-on-surface-variant/70 transition-colors no-underline"
-            >
-              {p.name}
-            </a>
+            <PressLogo key={i} name={p.name} url={p.url} domain={p.domain} />
           ))}
         </div>
       </div>
