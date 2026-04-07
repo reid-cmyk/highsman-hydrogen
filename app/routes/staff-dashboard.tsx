@@ -125,9 +125,21 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   }
 
   try {
-    // 1. Fetch all profiles on the Budtenders list
-    const profilesUrl = `https://a.klaviyo.com/api/lists/${KLAVIYO_LIST_ID}/profiles/?fields[profile]=email,first_name,last_name,organization,properties,created&page[size]=100`;
-    const profiles = await fetchAllPages(profilesUrl, apiKey);
+    // 1a. Fetch profile IDs from the list (relationship endpoint)
+    const idsUrl = `https://a.klaviyo.com/api/lists/${KLAVIYO_LIST_ID}/relationships/profiles/?page[size]=100`;
+    const idRecords = await fetchAllPages(idsUrl, apiKey);
+    const profileIds = idRecords.map((r: any) => r.id).filter(Boolean);
+
+    // 1b. Fetch full profiles in batches (direct endpoint returns properties)
+    const profiles: any[] = [];
+    const BATCH = 50;
+    for (let i = 0; i < profileIds.length; i += BATCH) {
+      const batch = profileIds.slice(i, i + BATCH);
+      const idFilter = batch.map((id: string) => `"${id}"`).join(',');
+      const profilesUrl = `https://a.klaviyo.com/api/profiles/?filter=any(id,[${idFilter}])&fields[profile]=email,first_name,last_name,organization,properties,location,created&page[size]=100`;
+      const batchProfiles = await fetchAllPages(profilesUrl, apiKey);
+      profiles.push(...batchProfiles);
+    }
 
     // 2. Fetch all course completion events
     const eventsUrl = `https://a.klaviyo.com/api/events/?filter=equals(metric_id,"${COURSE_COMPLETED_METRIC_ID}")&fields[event]=event_properties,datetime&page[size]=100&sort=-datetime`;
