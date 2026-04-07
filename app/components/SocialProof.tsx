@@ -25,18 +25,19 @@ const TESTIMONIALS = [
 ];
 
 const PRESS = [
-  { name: "Forbes", url: "https://www.highsman.com/inthenews/nfl-star-ricky-williams-launches-his-own-cannabis-brand-highsman", logo: "/press-logos/forbes.png" },
-  { name: "Los Angeles Times", url: "https://www.youtube.com/watch?v=DFzYb12iOog", logo: "/press-logos/latimes.png" },
-  { name: "Boardroom", url: "https://boardroom.tv/ricky-williams-highsman-cannabis/", logo: "/press-logos/boardroom.png" },
-  { name: "Yahoo Sports", url: "https://sports.yahoo.com/rush-heisman-highsman-ricky-williams-035017375.html", logo: "/press-logos/yahoo.png" },
-  { name: "Barstool Sports", url: "https://www.youtube.com/watch?v=oFNQltuFPd0", logo: "/press-logos/barstool.png" },
-  { name: "Front Office Sports", url: "https://podcasts.apple.com/us/podcast/the-ricky-williams-interview/id1289046573?i=1000632736938", logo: "/press-logos/frontofficesports.png" },
-  { name: "Bill Maher", url: "https://www.tvmaze.com/episodes/2269828/real-time-with-bill-maher-20x04-ricky-williams-vivek-ramaswamy-marianne-williamson", logo: "/press-logos/hbo.png" },
-  { name: "All The Smoke", url: "https://podcasts.apple.com/cz/podcast/ricky-williams-ep-132-all-the-smoke-full-episode/id1483638752?i=1000558186099", logo: "/press-logos/allthesmoke.png" },
+  { name: "Forbes", url: "https://www.highsman.com/inthenews/nfl-star-ricky-williams-launches-his-own-cannabis-brand-highsman", logo: "https://upload.wikimedia.org/wikipedia/commons/d/db/Forbes_logo.svg" },
+  { name: "Los Angeles Times", url: "https://www.youtube.com/watch?v=DFzYb12iOog", logo: "https://upload.wikimedia.org/wikipedia/commons/1/18/Los_Angeles_Times_logo.svg" },
+  { name: "Yahoo Sports", url: "https://sports.yahoo.com/rush-heisman-highsman-ricky-williams-035017375.html", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Yahoo_Sports_New_Logo.png/400px-Yahoo_Sports_New_Logo.png" },
+  { name: "Barstool Sports", url: "https://www.youtube.com/watch?v=oFNQltuFPd0", logo: "https://upload.wikimedia.org/wikipedia/en/thumb/4/43/Barstool_Sports_logo.png/400px-Barstool_Sports_logo.png" },
+  { name: "Real Time with Bill Maher", url: "https://www.tvmaze.com/episodes/2269828/real-time-with-bill-maher-20x04-ricky-williams-vivek-ramaswamy-marianne-williamson", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7c/Real_Time_with_Bill_Maher.svg/400px-Real_Time_with_Bill_Maher.svg.png" },
+  { name: "Boardroom", url: "https://boardroom.tv/ricky-williams-highsman-cannabis/", logo: null },
+  { name: "Front Office Sports", url: "https://podcasts.apple.com/us/podcast/the-ricky-williams-interview/id1289046573?i=1000632736938", logo: null },
+  { name: "All The Smoke", url: "https://podcasts.apple.com/cz/podcast/ricky-williams-ep-132-all-the-smoke-full-episode/id1483638752?i=1000558186099", logo: null },
 ];
 
-function PressLogo({ name, url, logo }: { name: string; url: string; logo: string }) {
+function PressLogo({ name, url, logo }: { name: string; url: string; logo: string | null }) {
   const [imgFailed, setImgFailed] = useState(false);
+  const showLogo = logo && !imgFailed;
   return (
     <a
       href={url}
@@ -45,7 +46,7 @@ function PressLogo({ name, url, logo }: { name: string; url: string; logo: strin
       className="flex items-center justify-center opacity-30 hover:opacity-60 transition-opacity no-underline"
       title={name}
     >
-      {!imgFailed ? (
+      {showLogo ? (
         <img
           src={logo}
           alt={name}
@@ -54,7 +55,7 @@ function PressLogo({ name, url, logo }: { name: string; url: string; logo: strin
           onError={() => setImgFailed(true)}
         />
       ) : (
-        <span className="font-headline text-lg md:text-2xl font-bold uppercase tracking-widest text-on-surface-variant">
+        <span className="font-headline text-base md:text-xl font-bold uppercase tracking-widest text-on-surface-variant">
           {name}
         </span>
       )}
