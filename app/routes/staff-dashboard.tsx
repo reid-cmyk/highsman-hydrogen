@@ -123,17 +123,20 @@ export async function loader({request, context}: LoaderFunctionArgs) {
 
   try {
     // 1. Fetch all profiles on the Budtenders list
-    const profilesUrl = `https://a.klaviyo.com/api/lists/${KLAVIYO_LIST_ID}/profiles/?fields[profile]=email,first_name,last_name,properties,created&page[size]=100`;
+    //    Use the list relationship endpoint with additional-fields to ensure properties are returned
+    const profilesUrl = `https://a.klaviyo.com/api/lists/${KLAVIYO_LIST_ID}/profiles/?additional-fields[profile]=properties&fields[profile]=email,first_name,last_name,organization,properties,created&page[size]=100`;
     const profiles = await fetchAllPages(profilesUrl, apiKey);
 
-    // 2. Fetch all course completion events
-    const eventsUrl = `https://a.klaviyo.com/api/events/?filter=equals(metric_id,"${COURSE_COMPLETED_METRIC_ID}")&fields[event]=event_properties,datetime&page[size]=100&sort=-datetime`;
+    // 2. Fetch all course completion events (include profile relationship for mapping)
+    const eventsUrl = `https://a.klaviyo.com/api/events/?filter=equals(metric_id,"${COURSE_COMPLETED_METRIC_ID}")&fields[event]=event_properties,datetime&include=profile&page[size]=100&sort=-datetime`;
     const events = await fetchAllPages(eventsUrl, apiKey);
 
     // 3. Build a map of profile_id → events
     const eventsByProfile = new Map<string, any[]>();
     for (const ev of events) {
-      const pid = ev.relationships?.profile?.data?.id;
+      // Try multiple paths for profile ID (relationship structure varies by endpoint)
+      const pid = ev.relationships?.profile?.data?.id
+        || ev.relationships?.profiles?.data?.[0]?.id;
       if (!pid) continue;
       if (!eventsByProfile.has(pid)) eventsByProfile.set(pid, []);
       eventsByProfile.get(pid)!.push(ev);
@@ -144,7 +147,9 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     const budtenders: BudtenderRow[] = profiles.map((p: any) => {
       const pid = p.id;
       const attrs = p.attributes || {};
+      // Properties may be under attrs.properties or directly on attrs depending on API response format
       const props = attrs.properties || {};
+
       const profileEvents = eventsByProfile.get(pid) || [];
 
       // Determine completed courses from events
@@ -152,7 +157,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       let lastActivityDate = attrs.created || now.toISOString();
 
       for (const ev of profileEvents) {
-        const ep = ev.attributes?.eventProperties || {};
+        // Klaviyo raw API uses snake_case: event_properties (not eventProperties)
+        const ep = ev.attributes?.event_properties || ev.attributes?.eventProperties || {};
         if (ep.course_id) completedCourseIds.add(ep.course_id);
         const dt = ev.attributes?.datetime;
         if (dt && dt > lastActivityDate) lastActivityDate = dt;
@@ -160,7 +166,6 @@ export async function loader({request, context}: LoaderFunctionArgs) {
 
       // If they have events, use the most recent one's datetime
       if (profileEvents.length > 0) {
-        // Events are sorted -datetime, so first is most recent
         const mostRecent = profileEvents[0]?.attributes?.datetime;
         if (mostRecent) lastActivityDate = mostRecent;
       }
@@ -169,13 +174,18 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       const lastDate = new Date(lastActivityDate);
       const daysSince = daysBetween(lastDate, now);
 
+      // State: check multiple possible field names
+      const stateVal = props.budtender_state || props.state || attrs.location?.region || '';
+      // Dispensary: check multiple possible field names
+      const dispVal = props.dispensary_name || attrs.organization || '';
+
       return {
         profileId: pid,
         firstName: attrs.first_name || '',
         lastName: attrs.last_name || '',
         email: attrs.email || '',
-        dispensary: props.dispensary_name || '',
-        state: props.budtender_state || '',
+        dispensary: dispVal,
+        state: stateVal,
         currentTier: tier,
         coursesCompleted: completedCourseIds.size,
         lastActivityDate: lastActivityDate,
@@ -192,6 +202,14 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       tierCounts[b.currentTier] = (tierCounts[b.currentTier] || 0) + 1;
     }
 
+    // 6. State and dispensary breakdowns
+    const stateCounts: Record<string, number> = {};
+    const dispensaryCounts: Record<string, number> = {};
+    for (const b of budtenders) {
+      if (b.state) stateCounts[b.state] = (stateCounts[b.state] || 0) + 1;
+      if (b.dispensary) dispensaryCounts[b.dispensary] = (dispensaryCounts[b.dispensary] || 0) + 1;
+    }
+
     // Sort by days since activity descending (most stale first)
     budtenders.sort((a, b) => b.daysSinceLastActivity - a.daysSinceLastActivity);
 
@@ -201,6 +219,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       summary: {
         total: profiles.length,
         tierCounts,
+        stateCounts,
+        dispensaryCounts,
         avgDaysSinceActivity: budtenders.length
           ? Math.round(budtenders.reduce((s, b) => s + b.daysSinceLastActivity, 0) / budtenders.length)
           : 0,
@@ -348,10 +368,23 @@ const TIER_COLORS: Record<string, {bg: string; border: string; text: string}> = 
 // ── Dashboard Content ───────────────────────────────────────────────────────
 function DashboardContent({budtenders, summary}: {budtenders: BudtenderRow[]; summary: any}) {
   const [filterTier, setFilterTier] = useState<string>('All');
+  const [filterState, setFilterState] = useState<string>('All');
+  const [filterDispensary, setFilterDispensary] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Unique states and dispensaries for filter dropdowns
+  const states = Array.from(new Set(budtenders.map((b: BudtenderRow) => b.state).filter(Boolean))).sort();
+  const dispensaries = Array.from(new Set(
+    budtenders
+      .filter((b: BudtenderRow) => filterState === 'All' || b.state === filterState)
+      .map((b: BudtenderRow) => b.dispensary)
+      .filter(Boolean)
+  )).sort();
 
   const filtered = budtenders.filter((b: BudtenderRow) => {
     if (filterTier !== 'All' && b.currentTier !== filterTier) return false;
+    if (filterState !== 'All' && b.state !== filterState) return false;
+    if (filterDispensary !== 'All' && b.dispensary !== filterDispensary) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const fullName = `${b.firstName} ${b.lastName}`.toLowerCase();
@@ -360,10 +393,12 @@ function DashboardContent({budtenders, summary}: {budtenders: BudtenderRow[]; su
     return true;
   });
 
+  const STATE_LABELS: Record<string, string> = {NJ: 'New Jersey', NY: 'New York', MA: 'Massachusetts', RI: 'Rhode Island', MO: 'Missouri'};
+
   return (
     <>
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
         {/* Total */}
         <div className="bg-[#111] border border-[#A9ACAF]/15 rounded-xl p-4 text-center">
           <div className="text-[10px] uppercase tracking-widest text-[#666] font-bold mb-1">Total Enrolled</div>
@@ -390,6 +425,57 @@ function DashboardContent({budtenders, summary}: {budtenders: BudtenderRow[]; su
         })}
       </div>
 
+      {/* State + Dispensary Breakdown */}
+      {Object.keys(summary.stateCounts || {}).length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
+          {/* By State */}
+          <div className="bg-[#111] border border-[#A9ACAF]/15 rounded-xl p-4">
+            <div className="text-[10px] uppercase tracking-widest text-[#666] font-bold mb-3">By State</div>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(summary.stateCounts as Record<string, number>)
+                .sort(([,a], [,b]) => (b as number) - (a as number))
+                .map(([st, count]) => (
+                  <button
+                    key={st}
+                    onClick={() => { setFilterState(filterState === st ? 'All' : st); setFilterDispensary('All'); }}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                    style={{
+                      background: filterState === st ? '#c8a84b' : 'rgba(169,172,175,0.08)',
+                      color: filterState === st ? '#000' : '#A9ACAF',
+                      border: filterState === st ? '1px solid #c8a84b' : '1px solid rgba(169,172,175,0.15)',
+                    }}
+                  >
+                    {STATE_LABELS[st] || st} ({count as number})
+                  </button>
+                ))}
+            </div>
+          </div>
+          {/* Top Dispensaries */}
+          <div className="bg-[#111] border border-[#A9ACAF]/15 rounded-xl p-4">
+            <div className="text-[10px] uppercase tracking-widest text-[#666] font-bold mb-3">Top Dispensaries</div>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(summary.dispensaryCounts as Record<string, number>)
+                .sort(([,a], [,b]) => (b as number) - (a as number))
+                .slice(0, 12)
+                .map(([disp, count]) => (
+                  <button
+                    key={disp}
+                    onClick={() => setFilterDispensary(filterDispensary === disp ? 'All' : disp)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                    style={{
+                      background: filterDispensary === disp ? '#c8a84b' : 'rgba(169,172,175,0.08)',
+                      color: filterDispensary === disp ? '#000' : '#A9ACAF',
+                      border: filterDispensary === disp ? '1px solid #c8a84b' : '1px solid rgba(169,172,175,0.15)',
+                    }}
+                  >
+                    {disp} ({count as number})
+                  </button>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filter bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
         <input
@@ -399,6 +485,22 @@ function DashboardContent({budtenders, summary}: {budtenders: BudtenderRow[]; su
           onChange={(e) => setSearchQuery(e.target.value)}
           className="flex-1 w-full sm:w-auto px-4 py-2 border border-[#A9ACAF]/20 rounded-lg text-white bg-[#111] text-sm outline-none focus:border-[#c8a84b] transition-colors"
         />
+        <select
+          value={filterState}
+          onChange={(e) => { setFilterState(e.target.value); setFilterDispensary('All'); }}
+          className="px-3 py-2 rounded-lg text-sm bg-[#111] text-[#A9ACAF] border border-[#A9ACAF]/20 outline-none focus:border-[#c8a84b] cursor-pointer"
+        >
+          <option value="All">All States</option>
+          {states.map((s) => <option key={s} value={s}>{STATE_LABELS[s] || s}</option>)}
+        </select>
+        <select
+          value={filterDispensary}
+          onChange={(e) => setFilterDispensary(e.target.value)}
+          className="px-3 py-2 rounded-lg text-sm bg-[#111] text-[#A9ACAF] border border-[#A9ACAF]/20 outline-none focus:border-[#c8a84b] cursor-pointer max-w-[200px]"
+        >
+          <option value="All">All Dispensaries</option>
+          {dispensaries.map((d) => <option key={d} value={d}>{d}</option>)}
+        </select>
         <div className="flex flex-wrap gap-2">
           {['All', ...TIER_NAMES].map((tier) => (
             <button
@@ -419,10 +521,20 @@ function DashboardContent({budtenders, summary}: {budtenders: BudtenderRow[]; su
         </div>
       </div>
 
-      {/* Results count */}
+      {/* Active filters + Results count */}
       <div className="text-[#666] text-xs mb-3 uppercase tracking-wider">
         Showing {filtered.length} of {budtenders.length} budtenders
         {filterTier !== 'All' && <span className="text-[#c8a84b]"> — {filterTier}</span>}
+        {filterState !== 'All' && <span className="text-[#c8a84b]"> — {STATE_LABELS[filterState] || filterState}</span>}
+        {filterDispensary !== 'All' && <span className="text-[#c8a84b]"> — {filterDispensary}</span>}
+        {(filterState !== 'All' || filterDispensary !== 'All' || filterTier !== 'All') && (
+          <button
+            onClick={() => { setFilterTier('All'); setFilterState('All'); setFilterDispensary('All'); setSearchQuery(''); }}
+            className="ml-2 text-red-400 hover:text-red-300 cursor-pointer"
+          >
+            Clear all
+          </button>
+        )}
       </div>
 
       {/* Table */}
