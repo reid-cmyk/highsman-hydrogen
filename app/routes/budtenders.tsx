@@ -4,11 +4,11 @@ import {IMAGES} from '~/lib/images';
 
 export const meta: MetaFunction = () => {
   return [
-    {title: 'HIGHSMAN | Budtender Championship â NJ Launch May 2026'},
+    {title: 'HIGHSMAN | Budtender Championship \u2014 NJ Launch May 2026'},
     {
       name: 'description',
       content:
-        'The Highsman Budtender Championship. Sell Ground Game and Triple Threat in NJ from May 7 â June 7 and win the Champions Box, Varsity Jacket, and game day tickets.',
+        'The Highsman Budtender Championship. Sell Ground Game and Triple Threat in NJ from May 7 \u2013 June 7 and win the Champions Box, Varsity Jacket, and game day tickets.',
     },
   ];
 };
@@ -33,7 +33,7 @@ const PRIZE_ITEMS_SECOND = [
 const HOW_STEPS = [
   {
     num: '01',
-    title: 'May 7 â June 7',
+    title: 'May 7 \u2013 June 7',
     body: 'Move Ground Game and Triple Threat at your NJ store. Every unit counts toward your ranking.',
   },
   {
@@ -53,7 +53,7 @@ const CDN = 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/';
 export default function Budtenders() {
   return (
     <>
-      {/* âââ HERO ââââââââââââââââââââââââââââââââââââââââââââââââââââ */}
+      {/* ─── HERO ──────────────────────────────────────────────────── */}
       <section
         className="relative min-h-screen flex flex-col justify-end overflow-hidden"
         style={{background: '#000'}}
@@ -85,7 +85,7 @@ export default function Budtenders() {
             className="font-label text-[10px] tracking-[0.3em] uppercase hidden md:block"
             style={{color: 'rgba(255,255,255,0.4)'}}
           >
-            NJ Launch &middot; May 7 â June 7, 2026
+            NJ Launch &middot; May 7 &ndash; June 7, 2026
           </span>
         </div>
 
@@ -129,7 +129,7 @@ export default function Budtenders() {
             style={{color: 'rgba(255,255,255,0.7)'}}
           >
             <strong style={{color: '#fff'}}>Ground Game and Triple Threat are live in NJ.</strong>{' '}
-            Sell the most May 7 â June 7. Walk away with the Champions Box, the Varsity Jacket, and seats at the game.
+            Sell the most May 7 &ndash; June 7. Walk away with the Champions Box, the Varsity Jacket, and seats at the game.
           </p>
           <div className="flex flex-wrap gap-4">
             <a
@@ -150,7 +150,7 @@ export default function Budtenders() {
         </div>
       </section>
 
-      {/* âââ MANIFESTO BAND ââââââââââââââââââââââââââââââââââââââââââ */}
+      {/* ─── MANIFESTO BAND ────────────────────────────────────────── */}
       <div style={{background: '#F5E100', borderBottom: '1px solid rgba(0,0,0,0.08)'}}>
         <div className="max-w-6xl mx-auto px-8 md:px-16 py-5 flex flex-wrap items-center justify-between gap-4">
           <p
@@ -162,13 +162,13 @@ export default function Budtenders() {
           </p>
           <img
             src={`${CDN}HM_SparkGreatness_Black.png?v=1775594430`}
-            alt="Spark Greatnessâ¢"
+            alt="Spark Greatness™"
             className="h-5 opacity-40"
           />
         </div>
       </div>
 
-      {/* âââ PRIZES ââââââââââââââââââââââââââââââââââââââââââââââââââ */}
+      {/* ─── PRIZES ────────────────────────────────────────────────── */}
       <section id="prizes" style={{background: '#0a0a0a'}}>
         <div className="max-w-6xl mx-auto px-8 md:px-16 pt-24 pb-6">
           <div className="flex items-end justify-between mb-14 flex-wrap gap-4">
@@ -181,7 +181,7 @@ export default function Budtenders() {
               </p>
               <h2
                 className="font-headline uppercase tracking-tight"
-                style={{fontSize: 'clamp(60px,10vw,108px)', lineHeiiht: 0.86, color: '#fff'}}
+                style={{fontSize: 'clamp(60px,10vw,108px)', lineHeight: 0.86, color: '#fff'}}
               >
                 The Prizes
               </h2>
@@ -190,12 +190,12 @@ export default function Budtenders() {
               className="font-label text-[10px] tracking-[0.3em] uppercase"
               style={{color: 'rgba(255,255,255,0.25)'}}
             >
-              May 7 â June 7 &middot; NJ
+              May 7 &ndash; June 7 &middot; NJ
             </span>
           </div>
         </div>
 
-        {/* ââ 1ST PLACE ââ */}
+        {/* ── 1ST PLACE ── */}
         <div
           className="relative overflow-hidden"
           style={{borderTop: '3px solid #F5E100', borderBottom: '1px solid rgba(255,255,255,0.06)'}}
@@ -266,7 +266,7 @@ export default function Budtenders() {
                   <div style={{background: '#111', border: '1px solid rgba(245,225,0,0.15)'}}>
                     <img
                       src={`${CDN}Game_Day_Prize_Pic.svg?v=1775597075`}
-                      alt="Highsman Champions Box â all prize contents"
+                      alt="Highsman Champions Box — all prize contents"
                       className="w-full"
                       style={{maxHeight: '340px', objectFit: 'contain', padding: '16px'}}
                     />
@@ -275,11 +275,11 @@ export default function Budtenders() {
                 <div>
                   <p
                     className="font-label text-[9px] tracking-[0.3em] uppercase mb-2"
-                    style={{color: 'rgba(255,255,255,0.3)'}}
+                    style={{color: 'rgba(255,255,255,0.3)'}�
                   >
                     Varsity Jacket
                   </p>
-                  <div style={{background: '#111', border: '1px solid rgba(255,255,255,0.06)'}}>
+                  <div style={{background: '#111', border: '1px solid rgba(255,255,255,0.06)'}�>
                     <img
                       src={`${CDN}Highsman_Letterman-Varsity-Jacket-01_1.png?v=1775594409`}
                       alt="Highsman Varsity Jacket"
@@ -293,7 +293,7 @@ export default function Budtenders() {
           </div>
         </div>
 
-        {/* ââ 2ND & 3RD PLACE ââ */}
+        {/* ── 2ND & 3RD PLACE ── */}
         <div className="max-w-6xl mx-auto px-8 md:px-16 py-px">
           <div
             className="grid grid-cols-1 md:grid-cols-2"
@@ -304,7 +304,7 @@ export default function Budtenders() {
               <div
                 className="absolute right-4 top-2 font-headline leading-none pointer-events-none select-none"
                 aria-hidden="true"
-                style={{fontSize: '130px', color: 'rgba(192,192,192,0.05)'}}
+                style={{fontSize: '130px', color: 'rgba(192,192,192,0.05)'}�
               >
                 02
               </div>
@@ -328,7 +328,7 @@ export default function Budtenders() {
                   src={`${CDN}Game_Day_Prize_Pic.svg?v=1775597075`}
                   alt="Champions Box"
                   className="w-full"
-                  style={{maxHeight: '260px', objectFit: 'contain', padding: '12px'}}
+                  style={{maxHeight: '260px', objectFit: 'contain', padding: '12px'}�
                 />
               </div>
               <ul className="space-y-2.5">
@@ -336,7 +336,7 @@ export default function Budtenders() {
                   <li
                     key={item}
                     className="flex items-center gap-3 font-body text-sm"
-                    style={{color: 'rgba(255,255,255,0.45)'}}
+                    style={{color: 'rgba(255,255,255,0.45)'}�
                   >
                     <span
                       className="flex-shrink-0 w-1 h-1"
@@ -400,7 +400,7 @@ export default function Budtenders() {
         </div>
       </section>
 
-      {/* âââ GAME DAY TICKETS ââââââââââââââââââââââââââââââââââââââââ */}
+      {/* ─── GAME DAY TICKETS ──────────────────────────────────────── */}
       <section style={{background: '#F5E100'}}>
         <div className="max-w-6xl mx-auto">
           <div className="md:grid md:grid-cols-2">
@@ -431,7 +431,7 @@ export default function Budtenders() {
                 style={{color: 'rgba(0,0,0,0.65)'}}
               >
                 <strong style={{color: '#000'}}>5 Champions Boxes include two tickets</strong>{' '}
-                to an Eagles or Giants game â with the Highsman team. Game day with us. On us.
+                to an Eagles or Giants game — with the Highsman team. Game day with us. On us.
               </p>
               <div
                 className="flex flex-col gap-3 pt-6"
@@ -443,7 +443,7 @@ export default function Budtenders() {
                     className="font-headline text-xs uppercase tracking-[0.22em]"
                     style={{color: 'rgba(0,0,0,0.55)'}}
                   >
-                    ð {team}
+                     🏈 {team}
                   </span>
                 ))}
               </div>
@@ -466,7 +466,7 @@ export default function Budtenders() {
               </div>
               <img
                 src={`${CDN}Budtenders_Prize_Image_football_giveaway_9028f72e-b1c6-4cdb-a8b3-556663907532.png?v=1775599444`}
-                alt="Football game day tickets â Eagles and Giants with Highsman"
+                alt="Football game day tickets — Eagles and Giants with Highsman"
                 className="w-full"
                 style={{maxHeight: '400px', objectFit: 'contain', padding: '24px 32px'}}
               />
@@ -486,7 +486,7 @@ export default function Budtenders() {
         </div>
       </section>
 
-      {/* âââ HOW IT WORKS ââââââââââââââââââââââââââââââââââââââââââââ */}
+      {/* ── HOW IT WORKS ──────────────────────────────────────────── */}
       <section style={{background: '#fff'}}>
         <div className="max-w-6xl mx-auto px-8 md:px-16 py-24">
           <div className="md:grid md:grid-cols-[260px_1fr] md:gap-20 items-start">
@@ -544,7 +544,7 @@ export default function Budtenders() {
         </div>
       </section>
 
-      {/* âââ REFERRAL ââââââââââââââââââââââââââââââââââââââââââââââââ */}
+      {/* ─── REFERRAL ──────────────────────────────────────────────── */}
       <section style={{background: '#0a0a0a', borderTop: '1px solid rgba(255,255,255,0.05)'}}>
         <div className="max-w-6xl mx-auto px-8 md:px-16 py-24 md:grid md:grid-cols-2 md:gap-20 items-center">
 
@@ -554,7 +554,7 @@ export default function Budtenders() {
               className="font-label text-[10px] tracking-[0.4em] uppercase mb-5"
               style={{color: 'rgba(255,255,255,0.35)'}}
             >
-              Know a closer?
+              Know a budtender?
             </p>
             <h2
               className="font-headline uppercase tracking-tight mb-6"
@@ -565,9 +565,11 @@ export default function Budtenders() {
               <span style={{color: '#F5E100'}}>Win a Jacket.</span>
             </h2>
             <p className="font-body text-base leading-relaxed max-w-md" style={{color: 'rgba(255,255,255,0.5)'}}>
-              Every budtender you refer who joins the Highsman team earns you{' '}
-              <strong style={{color: '#fff'}}>one entry into our monthly draw</strong>
-              . One winner per month. One Varsity Jacket. No cap on entries.
+              Know a budtender who should be repping Highsman? Refer them to the{' '}
+              <strong style={{color: '#fff'}}>Highsman Budtender Education Training Camp</strong>
+              {'. '}Every budtender you refer who completes the Training Camp enters you into a draw to win one of{' '}
+              <strong style={{color: '#fff'}}>10 Highsman Varsity Jackets</strong>
+              . No cap on entries.
             </p>
           </div>
 
@@ -589,10 +591,10 @@ export default function Budtenders() {
                     className="font-headline text-2xl uppercase tracking-wider mb-1"
                     style={{color: '#fff'}}
                   >
-                    Monthly Jacket Draw
+                    Training Camp Draw
                   </h4>
                   <p className="font-body text-sm" style={{color: 'rgba(255,255,255,0.4)'}}>
-                    Each referral = one entry. No cap.
+                    10 jackets. Each Training Camp referral = one entry.
                   </p>
                 </div>
               </div>
@@ -608,12 +610,12 @@ export default function Budtenders() {
         </div>
       </section>
 
-      {/* âââ RICKY SIGN-OFF ââââââââââââââââââââââââââââââââââââââââââ */}
+      {/* ─── RICKY SIGN-OFF ────────────────────────────────────────── */}
       <section style={{background: '#000', borderTop: '3px solid #F5E100'}}>
         <div className="max-w-6xl mx-auto px-8 md:px-16 py-24 md:grid md:grid-cols-[auto_1fr] md:gap-16 items-center">
           <img
             src={IMAGES.rickyWilliams}
-            alt="Ricky Williams â Highsman Co-Founder"
+            alt="Ricky Williams — Highsman Co-Founder"
             className="w-24 h-24 md:w-36 md:h-36 object-cover mb-10 md:mb-0 flex-shrink-0"
             style={{objectFit: 'cover', filter: 'grayscale(15%)'}}
           />
@@ -626,20 +628,20 @@ export default function Budtenders() {
               <span style={{color: '#F5E100'}}>
                 You&apos;re the reason this works
               </span>{' '}
-              â and we don&apos;t take that lightly.&rdquo;
+              — and we don&apos;t take that lightly.&rdquo;
             </blockquote>
             <p
               className="font-label text-[10px] tracking-[0.28em] uppercase"
               style={{color: 'rgba(255,255,255,0.4)'}}
             >
               <strong style={{color: '#fff', letterSpacing: '0.08em'}}>Ricky Williams</strong>{' '}
-              â Co-Founder, Highsman &middot; #34 &middot; The Highsman
+              — Co-Founder, Highsman &middot; #34 &middot; The Highsman
             </p>
           </div>
         </div>
       </section>
 
-      {/* âââ CONTACT âââââââââââââââââââââââââââââââââââââââââââââââââ */}
+      {/* ─── CONTACT ───────────────────────────────────────────────── */}
       <section style={{background: '#F5E100'}}>
         <div className="max-w-4xl mx-auto px-8 md:px-16 py-20 text-center">
           <h2
@@ -679,12 +681,12 @@ export default function Budtenders() {
         </div>
       </section>
 
-      {/* âââ FOOTER MARK âââââââââââââââââââââââââââââââââââââââââââââ */}
+      {/* ─── FOOTER MARK ───────────────────────────────────────────── */}
       <div style={{background: '#000', borderTop: '1px solid rgba(255,255,255,0.06)'}}>
         <div className="max-w-6xl mx-auto px-8 md:px-16 py-10 flex items-center justify-between flex-wrap gap-4">
           <img
             src={`${CDN}Spark_Greatness_White.png?v=1775594430`}
-            alt="Spark Greatnessâ¢"
+            alt="Spark Greatness™"
             className="h-5 opacity-40"
           />
           <p
