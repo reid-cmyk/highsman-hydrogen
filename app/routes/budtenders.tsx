@@ -393,11 +393,11 @@ export default function Budtenders() {
                 <div>
                   <p
                     className="font-label text-[9px] tracking-[0.3em] uppercase mb-2"
-                    style={{color: 'rgba(255,255,255,0.3)'}�
+                    style={{color: 'rgba(255,255,255,0.3)'}}
                   >
                     Varsity Jacket
                   </p>
-                  <div style={{background: '#111', border: '1px solid rgba(255,255,255,0.06)'}�>
+                  <div style={{background: '#111', border: '1px solid rgba(255,255,255,0.06)'}}>
                     <img
                       src={`${CDN}Highsman_Letterman-Varsity-Jacket-01_1.png?v=1775594409`}
                       alt="Highsman Varsity Jacket"
@@ -422,7 +422,7 @@ export default function Budtenders() {
               <div
                 className="absolute right-4 top-2 font-headline leading-none pointer-events-none select-none"
                 aria-hidden="true"
-                style={{fontSize: '130px', color: 'rgba(192,192,192,0.05)'}�
+                style={{fontSize: '130px', color: 'rgba(192,192,192,0.05)'}}
               >
                 02
               </div>
@@ -446,7 +446,7 @@ export default function Budtenders() {
                   src={`${CDN}Game_Day_Prize_Pic.svg?v=1775597075`}
                   alt="Champions Box"
                   className="w-full"
-                  style={{maxHeight: '260px', objectFit: 'contain', padding: '12px'}�
+                  style={{maxHeight: '260px', objectFit: 'contain', padding: '12px'}}
                 />
               </div>
               <ul className="space-y-2.5">
@@ -454,7 +454,7 @@ export default function Budtenders() {
                   <li
                     key={item}
                     className="flex items-center gap-3 font-body text-sm"
-                    style={{color: 'rgba(255,255,255,0.45)'}�
+                    style={{color: 'rgba(255,255,255,0.45)'}}
                   >
                     <span
                       className="flex-shrink-0 w-1 h-1"
