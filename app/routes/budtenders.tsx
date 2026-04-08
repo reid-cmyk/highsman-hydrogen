@@ -174,7 +174,7 @@ export default function Budtenders() {
       {/* ─── HERO BANNER IMAGE ─────────────────────────────────────── */}
       <section className="w-full" style={{background: '#000'}}>
         <img
-          src="/budtender-hero-banner.png"
+          src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/1775612050955.png?v=1775615127"
           alt="Highsman Budtender — Budtenders Only"
           className="w-full h-auto block"
         />
