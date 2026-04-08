@@ -10,7 +10,7 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-// ── Constants ────────────────────────────────────────────────────────────────
+// ââ Constants ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 const KLAVIYO_LIST_ID = 'WBSrLZ';
 const COURSE_COMPLETED_METRIC_ID = 'UwTaBd';
 const SIGNUP_METRIC_ID = 'Uir9Fc';
@@ -25,7 +25,7 @@ const COURSE_ORDER = [
 
 const TIER_NAMES = ['Unsigned', 'Rookie', 'Starting Lineup', 'Franchise Player', 'Hall of Flame'];
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ââ Helpers ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function computeTier(completedCourses: Set<string>): string {
   const allDone = completedCourses.size >= COURSE_ORDER.length;
   const franchDone = completedCourses.has('meet-ricky') && completedCourses.has('meet-highsman') && completedCourses.has('the-science');
@@ -42,7 +42,7 @@ function daysBetween(d1: Date, d2: Date): number {
   return Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-// ── Klaviyo API fetch helper ────────────────────────────────────────────────
+// ââ Klaviyo API fetch helper ââââââââââââââââââââââââââââââââââââââââââââââââ
 async function klaviyoFetch(url: string, apiKey: string) {
   const res = await fetch(url, {
     headers: {
@@ -53,7 +53,7 @@ async function klaviyoFetch(url: string, apiKey: string) {
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`Klaviyo API error: ${res.status} — ${body.slice(0, 200)}`);
+    throw new Error(`Klaviyo API error: ${res.status} â ${body.slice(0, 200)}`);
   }
   return res.json();
 }
@@ -69,7 +69,7 @@ async function fetchAllPages(baseUrl: string, apiKey: string) {
   return results;
 }
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ââ Types ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 type BudtenderRow = {
   profileId: string;
   firstName: string;
@@ -83,9 +83,11 @@ type BudtenderRow = {
   daysSinceLastActivity: number;
   signupDate: string;
   completedCourseIds: string[];
+  referralCount: number;
+  lastReferralDate: string;
 };
 
-// ── Action (password check) ─────────────────────────────────────────────────
+// ââ Action (password check) âââââââââââââââââââââââââââââââââââââââââââââââââ
 export async function action({request, context}: ActionFunctionArgs) {
   const formData = await request.formData();
   const password = formData.get('password') as string;
@@ -105,7 +107,7 @@ export async function action({request, context}: ActionFunctionArgs) {
   return json({authenticated: false, error: 'Incorrect password'});
 }
 
-// ── Loader ──────────────────────────────────────────────────────────────────
+// ââ Loader ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 export async function loader({request, context}: LoaderFunctionArgs) {
   // Check auth cookie
   const cookie = request.headers.get('Cookie') || '';
@@ -145,7 +147,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     const eventsUrl = `https://a.klaviyo.com/api/events/?filter=equals(metric_id,"${COURSE_COMPLETED_METRIC_ID}")&include=profile&fields[event]=event_properties,datetime&page[size]=100&sort=-datetime`;
     const events = await fetchAllPages(eventsUrl, apiKey);
 
-    // 3. Build a map of profile_id → events
+    // 3. Build a map of profile_id â events
     const eventsByProfile = new Map<string, any[]>();
     for (const ev of events) {
       // Try multiple paths for profile ID
@@ -207,6 +209,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         daysSinceLastActivity: daysSince,
         signupDate: attrs.created || '',
         completedCourseIds: Array.from(completedCourseIds),
+        referralCount: props.referral_count || 0,
+        lastReferralDate: props.last_referral_date || '',
       };
     });
 
@@ -225,6 +229,10 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       if (b.dispensary) dispensaryCounts[b.dispensary] = (dispensaryCounts[b.dispensary] || 0) + 1;
     }
 
+    // Referral stats
+    const totalReferrals = budtenders.reduce((s: number, b: BudtenderRow) => s + b.referralCount, 0);
+    const budtendersWithReferrals = budtenders.filter((b: BudtenderRow) => b.referralCount > 0).length;
+
     // Sort by days since activity descending (most stale first)
     budtenders.sort((a, b) => b.daysSinceLastActivity - a.daysSinceLastActivity);
 
@@ -239,6 +247,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         avgDaysSinceActivity: budtenders.length
           ? Math.round(budtenders.reduce((s, b) => s + b.daysSinceLastActivity, 0) / budtenders.length)
           : 0,
+        totalReferrals,
+        budtendersWithReferrals,
       },
     });
   } catch (err: any) {
@@ -251,7 +261,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   }
 }
 
-// ── Component ───────────────────────────────────────────────────────────────
+// ââ Component âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 export default function StaffDashboard() {
   const loaderData = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
@@ -299,7 +309,7 @@ export default function StaffDashboard() {
   );
 }
 
-// ── Login Screen ────────────────────────────────────────────────────────────
+// ââ Login Screen ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function LoginScreen({error}: {error?: string | null}) {
   return (
     <div className="min-h-screen bg-[#000000] flex items-center justify-center px-4">
@@ -341,7 +351,7 @@ function LoginScreen({error}: {error?: string | null}) {
   );
 }
 
-// ── Shell ────────────────────────────────────────────────────────────────────
+// ââ Shell ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function Shell({children}: {children: React.ReactNode}) {
   return (
     <div className="min-h-screen bg-[#000000] text-white">
@@ -361,7 +371,7 @@ function Shell({children}: {children: React.ReactNode}) {
               >
                 BUDTENDER TRAINING DASHBOARD
               </h1>
-              <p className="text-[#A9ACAF] text-xs uppercase tracking-widest">Internal — Staff Only</p>
+              <p className="text-[#A9ACAF] text-xs uppercase tracking-widest">Internal â Staff Only</p>
             </div>
           </div>
         </div>
@@ -371,7 +381,7 @@ function Shell({children}: {children: React.ReactNode}) {
   );
 }
 
-// ── Tier Colors ─────────────────────────────────────────────────────────────
+// ââ Tier Colors âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 const TIER_COLORS: Record<string, {bg: string; border: string; text: string}> = {
   Unsigned: {bg: 'rgba(169,172,175,0.08)', border: 'rgba(169,172,175,0.2)', text: '#A9ACAF'},
   Rookie: {bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.3)', text: '#3B82F6'},
@@ -380,7 +390,7 @@ const TIER_COLORS: Record<string, {bg: string; border: string; text: string}> = 
   'Hall of Flame': {bg: 'rgba(200,168,75,0.12)', border: 'rgba(200,168,75,0.4)', text: '#c8a84b'},
 };
 
-// ── Dashboard Content ───────────────────────────────────────────────────────
+// ââ Dashboard Content âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function DashboardContent({budtenders, summary}: {budtenders: BudtenderRow[]; summary: any}) {
   const [filterTier, setFilterTier] = useState<string>('All');
   const [filterState, setFilterState] = useState<string>('All');
@@ -397,13 +407,15 @@ function DashboardContent({budtenders, summary}: {budtenders: BudtenderRow[]; su
   )).sort();
 
   const filtered = budtenders.filter((b: BudtenderRow) => {
-    if (filterTier !== 'All' && b.currentTier !== filterTier) return false;
-    if (filterState !== 'All' && b.state !== filterState) return false;
-    if (filterDispensary !== 'All' && b.dispensary !== filterDispensary) return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const fullName = `${b.firstName} ${b.lastName}`.toLowerCase();
-      return fullName.includes(q) || b.email.toLowerCase().includes(q) || b.dispensary.toLowerCase().includes(q);
+    if (filterTier !== 'All' && (b.currentTier || 'Unsigned') !== filterTier) return false;
+    if (filterState !== 'All' && (b.state || '') !== filterState) return false;
+    if (filterDispensary !== 'All' && (b.dispensary || '') !== filterDispensary) return false;
+    if (searchQuery && searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      const fullName = `${b.firstName || ''} ${b.lastName || ''}`.toLowerCase();
+      const email = (b.email || '').toLowerCase();
+      const dispensary = (b.dispensary || '').toLowerCase();
+      return fullName.includes(q) || email.includes(q) || dispensary.includes(q);
     }
     return true;
   });
@@ -413,11 +425,17 @@ function DashboardContent({budtenders, summary}: {budtenders: BudtenderRow[]; su
   return (
     <>
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 mb-6">
         {/* Total */}
         <div className="bg-[#111] border border-[#A9ACAF]/15 rounded-xl p-4 text-center">
           <div className="text-[10px] uppercase tracking-widest text-[#666] font-bold mb-1">Total Enrolled</div>
           <div className="text-3xl font-bold text-white" style={{fontFamily: 'Teko, sans-serif'}}>{summary.total}</div>
+        </div>
+        {/* Referrals */}
+        <div className="bg-[#111] border border-[#A9ACAF]/15 rounded-xl p-4 text-center">
+          <div className="text-[10px] uppercase tracking-widest text-[#666] font-bold mb-1">Referrals</div>
+          <div className="text-3xl font-bold text-[#22C55E]" style={{fontFamily: 'Teko, sans-serif'}}>{summary.totalReferrals || 0}</div>
+          <div className="text-[10px] text-[#666]">{summary.budtendersWithReferrals || 0} referrers</div>
         </div>
         {/* Per-tier counts */}
         {TIER_NAMES.map((tier) => {
@@ -544,9 +562,9 @@ function DashboardContent({budtenders, summary}: {budtenders: BudtenderRow[]; su
       {/* Active filters + Results count */}
       <div className="text-[#666] text-xs mb-3 uppercase tracking-wider">
         Showing {filtered.length} of {budtenders.length} budtenders
-        {filterTier !== 'All' && <span className="text-[#c8a84b]"> — {filterTier}</span>}
-        {filterState !== 'All' && <span className="text-[#c8a84b]"> — {STATE_LABELS[filterState] || filterState}</span>}
-        {filterDispensary !== 'All' && <span className="text-[#c8a84b]"> — {filterDispensary}</span>}
+        {filterTier !== 'All' && <span className="text-[#c8a84b]"> â {filterTier}</span>}
+        {filterState !== 'All' && <span className="text-[#c8a84b]"> â {STATE_LABELS[filterState] || filterState}</span>}
+        {filterDispensary !== 'All' && <span className="text-[#c8a84b]"> â {filterDispensary}</span>}
         {(filterState !== 'All' || filterDispensary !== 'All' || filterTier !== 'All') && (
           <button
             onClick={() => { setFilterTier('All'); setFilterState('All'); setFilterDispensary('All'); setSearchQuery(''); }}
@@ -567,6 +585,7 @@ function DashboardContent({budtenders, summary}: {budtenders: BudtenderRow[]; su
               <th className="text-left px-4 py-3 text-[10px] uppercase tracking-widest text-[#666] font-bold hidden md:table-cell">State</th>
               <th className="text-left px-4 py-3 text-[10px] uppercase tracking-widest text-[#666] font-bold">Current Tier</th>
               <th className="text-center px-4 py-3 text-[10px] uppercase tracking-widest text-[#666] font-bold">Courses</th>
+              <th className="text-center px-4 py-3 text-[10px] uppercase tracking-widest text-[#666] font-bold hidden sm:table-cell">Referrals</th>
               <th className="text-center px-4 py-3 text-[10px] uppercase tracking-widest text-[#666] font-bold">Days Stale</th>
               <th className="text-left px-4 py-3 text-[10px] uppercase tracking-widest text-[#666] font-bold hidden lg:table-cell">Last Activity</th>
             </tr>
@@ -588,8 +607,8 @@ function DashboardContent({budtenders, summary}: {budtenders: BudtenderRow[]; su
                     <div className="text-[#666] text-xs sm:hidden">{b.dispensary}</div>
                     <div className="text-[#555] text-xs">{b.email}</div>
                   </td>
-                  <td className="px-4 py-3 text-[#A9ACAF] hidden sm:table-cell">{b.dispensary || '—'}</td>
-                  <td className="px-4 py-3 text-[#A9ACAF] hidden md:table-cell">{b.state || '—'}</td>
+                  <td className="px-4 py-3 text-[#A9ACAF] hidden sm:table-cell">{b.dispensary || 'â'}</td>
+                  <td className="px-4 py-3 text-[#A9ACAF] hidden md:table-cell">{b.state || 'â'}</td>
                   <td className="px-4 py-3">
                     <span
                       className="inline-block px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider"
@@ -604,6 +623,19 @@ function DashboardContent({budtenders, summary}: {budtenders: BudtenderRow[]; su
                     </span>
                     <span className="text-[#666]">/{COURSE_ORDER.length}</span>
                   </td>
+                  <td className="px-4 py-3 text-center hidden sm:table-cell">
+                    {b.referralCount > 0 ? (
+                      <span
+                        className="inline-block px-2 py-0.5 rounded text-xs font-bold"
+                        style={{background: 'rgba(34,197,94,0.15)', color: '#22C55E'}}
+                        title={b.lastReferralDate ? `Last: ${new Date(b.lastReferralDate).toLocaleDateString('en-US', {month: 'short', day: 'numeric'})}` : ''}
+                      >
+                        {b.referralCount}
+                      </span>
+                    ) : (
+                      <span className="text-[#444]">â</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-center">
                     <span
                       className="inline-block px-2 py-0.5 rounded text-xs font-bold"
@@ -612,18 +644,18 @@ function DashboardContent({budtenders, summary}: {budtenders: BudtenderRow[]; su
                         color: staleDanger ? '#EF4444' : staleWarning ? '#EAB308' : '#22C55E',
                       }}
                     >
-                      {b.currentTier === 'Hall of Flame' ? '✓' : `${b.daysSinceLastActivity}d`}
+                      {b.currentTier === 'Hall of Flame' ? 'â' : `${b.daysSinceLastActivity}d`}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-[#666] text-xs hidden lg:table-cell">
-                    {b.lastActivityDate ? new Date(b.lastActivityDate).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}) : '—'}
+                    {b.lastActivityDate ? new Date(b.lastActivityDate).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}) : 'â'}
                   </td>
                 </tr>
               );
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-[#666]">
+                <td colSpan={8} className="px-4 py-12 text-center text-[#666]">
                   No budtenders found matching your filters.
                 </td>
               </tr>
@@ -647,7 +679,7 @@ function DashboardContent({budtenders, summary}: {budtenders: BudtenderRow[]; su
                   key={b.profileId}
                   className="inline-block px-2 py-1 rounded text-xs bg-red-500/10 text-red-400 border border-red-500/20"
                 >
-                  {b.firstName} {b.lastName} — {b.daysSinceLastActivity}d at {b.currentTier}
+                  {b.firstName} {b.lastName} â {b.daysSinceLastActivity}d at {b.currentTier}
                 </span>
               ))}
           </div>
