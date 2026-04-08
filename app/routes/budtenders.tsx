@@ -100,7 +100,7 @@ export default function Budtenders() {
     <>
       {/* ─── TOP BANNER IMAGE ──────────────────────────────────────────────── */}
       <section className="w-full" style={{background: '#000'}}>
-        <img src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/1775612050955.png?v=1775615127" alt="Highsman Budtender — Budtenders Only" className="w-full h-auto block" />
+        <img src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Budtenders_Only_Banner.png?v=1775671726" alt="Highsman Budtender — Budtenders Only" className="w-full h-auto block" />
       </section>
 
       {/* ─── HERO ───────────────────────────────────────────────────────────── */}
