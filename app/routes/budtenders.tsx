@@ -171,6 +171,15 @@ function ReferralForm() {
 export default function Budtenders() {
   return (
     <>
+      {/* ─── HERO BANNER IMAGE ─────────────────────────────────────── */}
+      <section className="w-full" style={{background: '#000'}}>
+        <img
+          src="/budtender-hero-banner.png"
+          alt="Highsman Budtender — Budtenders Only"
+          className="w-full h-auto block"
+        />
+      </section>
+
       {/* ─── HERO ──────────────────────────────────────────────────── */}
       <section
         className="relative min-h-screen flex flex-col justify-end overflow-hidden"
