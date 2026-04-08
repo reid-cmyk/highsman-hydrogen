@@ -1,5 +1,6 @@
 import type {MetaFunction} from '@shopify/remix-oxygen';
-import {Link} from '@remix-run/react';
+import {useState} from 'react';
+import {Link, useFetcher} from '@remix-run/react';
 import {IMAGES} from '~/lib/images';
 
 export const meta: MetaFunction = () => {
@@ -49,6 +50,123 @@ const HOW_STEPS = [
 ];
 
 const CDN = 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/';
+
+/* ─── Referral Form Component ─────────────────── */
+function ReferralForm() {
+  const fetcher = useFetcher();
+  const [submitted, setSubmitted] = useState(false);
+  const isSubmitting = fetcher.state !== 'idle';
+  const data = fetcher.data as {success?: boolean; message?: string; error?: string} | undefined;
+
+  if (data?.success && !submitted) setSubmitted(true);
+
+  return (
+    <div
+      className="p-8"
+      style={{background: '#111', border: '1px solid rgba(255,255,255,0.07)'}}
+    >
+      {submitted ? (
+        <div className="text-center py-8">
+          <div
+            className="font-headline text-3xl uppercase tracking-wider mb-4"
+            style={{color: '#F5E100'}}
+          >
+            Referral Sent!
+          </div>
+          <p className="font-body text-base" style={{color: 'rgba(255,255,255,0.6)'}}>
+            {data?.message || 'They will receive an invite to Training Camp.'}
+          </p>
+          <button
+            type="button"
+            onClick={() => setSubmitted(false)}
+            className="mt-6 font-headline text-xs uppercase tracking-[0.18em] px-6 py-3 transition-opacity hover:opacity-85"
+            style={{background: 'rgba(255,255,255,0.08)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)'}}
+          >
+            Refer Another
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-start gap-5 mb-6">
+            <img
+              src={`${CDN}Highsman_Letterman-Varsity-Jacket-01_1.png?v=1775594409`}
+              alt="Highsman Varsity Jacket"
+              className="w-16 h-16 flex-shrink-0"
+              style={{objectFit: 'contain', background: '#1a1a1a'}}
+            />
+            <div>
+              <h4
+                className="font-headline text-xl uppercase tracking-wider mb-1"
+                style={{color: '#fff'}}
+              >
+                Training Camp Draw
+              </h4>
+              <p className="font-body text-xs" style={{color: 'rgba(255,255,255,0.4)'}}>
+                10 jackets. Each referral = one entry.
+              </p>
+            </div>
+          </div>
+
+          {data?.error && (
+            <div
+              className="font-body text-sm mb-4 px-4 py-3"
+              style={{background: 'rgba(220,38,38,0.1)', color: '#f87171', border: '1px solid rgba(220,38,38,0.2)'}}
+            >
+              {data.error}
+            </div>
+          )}
+
+          <fetcher.Form method="post" action="/api/budtender-referral" className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                name="referrerName"
+                type="text"
+                placeholder="Your name"
+                required
+                className="font-body text-sm px-4 py-3 w-full outline-none"
+                style={{background: '#1a1a1a', color: '#fff', border: '1px solid rgba(255,255,255,0.1)'}}
+              />
+              <input
+                name="referrerEmail"
+                type="email"
+                placeholder="Your email"
+                required
+                className="font-body text-sm px-4 py-3 w-full outline-none"
+                style={{background: '#1a1a1a', color: '#fff', border: '1px solid rgba(255,255,255,0.1)'}}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                name="budtenderName"
+                type="text"
+                placeholder="Budtender's name"
+                required
+                className="font-body text-sm px-4 py-3 w-full outline-none"
+                style={{background: '#1a1a1a', color: '#fff', border: '1px solid rgba(255,255,255,0.1)'}}
+              />
+              <input
+                name="budtenderEmail"
+                type="email"
+                placeholder="Budtender's email"
+                required
+                className="font-body text-sm px-4 py-3 w-full outline-none"
+                style={{background: '#1a1a1a', color: '#fff', border: '1px solid rgba(255,255,255,0.1)'}}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="block w-full font-headline text-sm uppercase tracking-[0.18em] px-8 py-4 text-center transition-opacity hover:opacity-85 disabled:opacity-50"
+              style={{background: '#F5E100', color: '#000'}}
+            >
+              {isSubmitting ? 'Sending...' : 'Refer a Budtender'}
+            </button>
+          </fetcher.Form>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function Budtenders() {
   return (
@@ -573,39 +691,9 @@ export default function Budtenders() {
             </p>
           </div>
 
-          {/* Right: CTA card */}
+          {/* Right: Referral Form */}
           <div className="mt-10 md:mt-0">
-            <div
-              className="p-8"
-              style={{background: '#111', border: '1px solid rgba(255,255,255,0.07)'}}
-            >
-              <div className="flex items-start gap-5 mb-8">
-                <img
-                  src={`${CDN}Highsman_Letterman-Varsity-Jacket-01_1.png?v=1775594409`}
-                  alt="Highsman Varsity Jacket"
-                  className="w-20 h-20 flex-shrink-0"
-                  style={{objectFit: 'contain', background: '#1a1a1a'}}
-                />
-                <div>
-                  <h4
-                    className="font-headline text-2xl uppercase tracking-wider mb-1"
-                    style={{color: '#fff'}}
-                  >
-                    Training Camp Draw
-                  </h4>
-                  <p className="font-body text-sm" style={{color: 'rgba(255,255,255,0.4)'}}>
-                    10 jackets. Each Training Camp referral = one entry.
-                  </p>
-                </div>
-              </div>
-              <a
-                href="mailto:budtenders@highsman.com?subject=Referral"
-                className="block w-full font-headline text-sm uppercase tracking-[0.18em] px-8 py-4 text-center transition-opacity hover:opacity-85"
-                style={{background: '#F5E100', color: '#000'}}
-              >
-                Refer a Budtender
-              </a>
-            </div>
+            <ReferralForm />
           </div>
         </div>
       </section>
