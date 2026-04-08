@@ -337,7 +337,7 @@ const TRIPLE_THREAT_VIDEO_URL =
 const HIGHSMAN_BRAND_VIDEO_URL =
   'https://cdn.shopify.com/videos/c/o/v/0a370965a6d343c0bb4215c5d57566d4.mp4';
 const PRODUCT_VIDEO_URL =
-  'https://cdn.shopify.com/videos/c/o/v/2258a7eb83fb4868b504da29efbbdf4e.mp4';
+  'https://cdn.shopify.com/videos/c/o/v/37574c4664604ce2b661b83e83ecb1db.mp4';
 
 // ── Dispensary Directory (by state) ─────────────────────────────────────────
 const DISPENSARIES_BY_STATE: Record<string, string[]> = {
@@ -957,94 +957,84 @@ const COURSE_QUIZZES: Record<string, QuizQuestion[]> = {
   ],
   'product-training': [
     {
-      q: 'What is the weight of a Triple Threat pre-roll?',
-      options: ['0.5 grams', '0.75 grams', '1.0 grams', '1.2 grams'],
-      correct: 3,
-      explanation: 'Triple Threat is 1.2 grams — 20% more than the industry standard 1.0g pre-roll. That extra weight is a key selling point.',
-    },
-    {
-      q: 'How much flower is in a Ground Game pouch?',
-      options: ['3.5 grams', '5 grams', '7 grams', '14 grams'],
-      correct: 2,
-      explanation: 'Ground Game is 7 grams of Triple Infused flower — the highest-value SKU in the Highsman lineup with the highest repeat purchase rate.',
-    },
-    {
-      q: 'What size is a Hit Stick?',
-      options: ['0.25 grams', '0.5 grams', '0.75 grams', '1.0 grams'],
+      q: 'How many hits does the 0.5g Hit Stick provide before it is tossed?',
+      options: ['3–5', '6–10', '10–15', '15–20'],
       correct: 1,
-      explanation: 'Hit Sticks are 0.5 grams — half pre-roll, half chillum. The compact, grab-and-go entry point to the Highsman lineup.',
+      explanation: 'The Hit Stick delivers 6–10 hits before you toss it — a quick, no-commitment session with full Triple Infused quality.',
     },
     {
-      q: 'What is the primary benefit of the Triple Threat\'s built-in glass tip?',
+      q: 'How is the Hit Stick designed to be used?',
       options: [
-        'It keeps the pre-roll from unraveling',
-        'It makes the pre-roll look more premium on the shelf',
-        'It filters out THC for a milder experience',
-        'Unrestricted airflow and a cooler, smoother pull',
+        'Spark the black paper stem and inhale from the ceramic bowl',
+        'Spark the white ceramic bowl and inhale from the black paper stem',
+        'Empty the flower from the stick to roll it',
+        'Attach it to a standard battery',
       ],
-      correct: 3,
-      explanation: 'The glass tip provides unrestricted airflow and a cooler, smoother pull — a premium feature that sets Triple Threat apart from standard pre-rolls.',
+      correct: 1,
+      explanation: 'Spark the white ceramic bowl and inhale from the black paper stem. It is half pre-roll, half chillum — no battery, no setup.',
     },
     {
-      q: 'A customer says "I roll my own." Which product do you recommend?',
-      options: ['Hit Sticks', 'Triple Threat', 'Ground Game', 'Any of the above'],
+      q: 'How much more flower does the Highsman 1.2g Pre-Roll offer compared to a standard 1g pre-roll?',
+      options: ['10 percent more', '15 percent more', '20 percent more', '25 percent more'],
       correct: 2,
-      explanation: 'Ground Game is built for the roll-your-own crowd. "Same Triple Infusion, you roll it your way." 7 grams of flower for daily consumers.',
+      explanation: 'The 1.2g Pre-Roll packs 20% more flower than the industry-standard 1g — a key selling point for customers looking for more value.',
     },
     {
-      q: 'A first-time customer wants to try Highsman but is not ready to commit. What do you recommend?',
+      q: 'What feature provides the 1.2g Pre-Roll with clean, unrestricted airflow?',
+      options: ['A built-in glass tip', 'A ceramic filter', 'A paper crutch', 'A hollow stem'],
+      correct: 0,
+      explanation: 'The built-in glass tip delivers unrestricted airflow and a cooler, smoother pull — a premium feature that sets the 1.2g Pre-Roll apart.',
+    },
+    {
+      q: 'What is the primary benefit of the 7g Ground Game product?',
       options: [
-        'Triple Threat — always lead with the flagship',
-        'Ground Game — best value per gram',
-        'Hit Sticks — low commitment, same premium quality',
-        'Tell them to come back when they are ready',
+        'It comes pre-packed in disposable bowls',
+        'It provides maximum versatility to roll, pack, or use a bong right out of the pouch',
+        'It is designed only for edible infusions',
+        'It requires grinding before use',
       ],
-      correct: 2,
-      explanation: 'Hit Sticks are the gateway product — low price, low commitment, same Triple Infusion quality. Once they try it, upsell to Triple Threat or Ground Game next visit.',
+      correct: 1,
+      explanation: 'Ground Game gives you 7g of Triple Infused flower ready to roll, pack, or use a bong — maximum versatility for daily consumers who like it their way.',
     },
     {
-      q: 'Why does the Triple Threat burn differently than a standard infused pre-roll?',
+      q: 'What three components make up Highsman\'s triple-infused foundation across these products?',
       options: [
-        'It uses a slower-burning wrap',
-        'The THC content is lower, producing less harsh smoke',
-        'Concentrates are spun into the flower — not coated on the outside',
-        'It contains CBD that counteracts harshness',
+        'Distillate, Kief, and Hash Rosin',
+        'THCA Diamonds, Live Resin, and High Terpene Extract',
+        'Shatter, Wax, and Bubble Hash',
+        'Live Rosin, Terp Sauce, and Distillate',
       ],
-      correct: 2,
-      explanation: 'The centrifuge spins concentrates INTO the microstructure of the flower at 10,000 RPM. Standard infused pre-rolls just coat the outside, which causes harsh spots and uneven burn.',
+      correct: 1,
+      explanation: 'THCA Diamonds, Live Resin, and High Terpene Extract (HTE) are centrifuge-infused into the flower\'s microstructure — creating a potent, flavorful, hash-like experience.',
     },
     {
-      q: 'A customer asks "what is your best?" How do you respond?',
-      options: [
-        '"Let me show you our full menu"',
-        '"1.2 grams of Triple Infused flower — flavor lasts the full smoke"',
-        '"That depends on the use case you are looking for"',
-        '"Our Hit Sticks are our most popular"',
-      ],
-      correct: 2,
-      explanation: 'Always qualify the customer first. "That depends on the use case you are looking for" opens the conversation so you can match them to the right product — Hit Sticks, Triple Threat, or Ground Game.',
+      q: 'Which of the following is one of the five core Highsman strains classified as a Sativa?',
+      options: ['Gridiron Grape', 'Blueberry Blitz', 'Cake Quake', 'Touchdown Tango Mango'],
+      correct: 0,
+      explanation: 'Gridiron Grape is Highsman\'s Sativa — delivering focused energy with bold grape and citrus notes. Perfect for daytime sessions.',
     },
     {
-      q: 'What is the correct upsell path across the Highsman lineup?',
-      options: [
-        'Ground Game → Triple Threat → Hit Sticks',
-        'Triple Threat → Hit Sticks → Ground Game',
-        'Hit Sticks → Triple Threat → Ground Game',
-        'Any order works — there is no preferred path',
-      ],
+      q: 'If a customer is looking for serene, full-body relaxation with a sweet vanilla and creamy frosting flavor, which Indica strain should you recommend?',
+      options: ['Wavy Watermelon', 'Touchdown Tango Mango', 'Cake Quake', 'Blueberry Blitz'],
       correct: 2,
-      explanation: 'The upsell path is Hit Sticks → Triple Threat → Ground Game. Start with the gateway, move to the flagship, then lock them in as a daily consumer with the flower.',
+      explanation: 'Cake Quake is the Indica pick — sweet vanilla and creamy frosting flavor with deep, full-body relaxation for unwinding at the end of the day.',
     },
     {
-      q: 'What close should you always use when selling Highsman products?',
-      options: [
-        '"Would you like to buy one?"',
-        '"Let me know if you have questions"',
-        '"So what product type do you prefer, The Hit Stick, The 1.2g pre roll or the 7g ready to roll flower?"',
-        '"I will leave you to think about it"',
-      ],
+      q: 'Which of these core strains is classified as a Hybrid?',
+      options: ['Cake Quake', 'Wavy Watermelon', 'Touchdown Tango Mango', 'Gridiron Grape'],
       correct: 2,
-      explanation: 'Always use the assumptive close. Guide them to choose between products — not whether to buy. "So what product type do you prefer, The Hit Stick, The 1.2g pre roll or the 7g ready to roll flower?" assumes the sale.',
+      explanation: 'Touchdown Tango Mango is Highsman\'s Hybrid — a balanced blend of tropical mango flavor with both uplifting and relaxing effects.',
+    },
+    {
+      q: 'What is the core product philosophy that budtenders should explain to customers?',
+      options: [
+        'Each product format uses a completely different infusion process and has different effects',
+        'Highsman uses the same triple-infused foundation and five recognizable strains across multiple product formats to fit different use occasions',
+        'The available strains change randomly depending on the product format',
+        'Customers must learn complex strain science to find the right product',
+      ],
+      correct: 1,
+      explanation: 'One foundation, five strains, three formats. Highsman keeps it simple — same Triple Infusion across Hit Sticks, Pre-Rolls, and Ground Game so customers always know what they are getting.',
     },
   ],
 };
