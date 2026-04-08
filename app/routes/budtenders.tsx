@@ -98,17 +98,25 @@ function ReferralForm() {
 export default function Budtenders() {
   return (
     <>
+      {/* ─── TOP BANNER IMAGE ──────────────────────────────────────────────── */}
+      <section className="w-full" style={{background: '#000'}}>
+        <img src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/1775612050955.png?v=1775615127" alt="Highsman Budtender — Budtenders Only" className="w-full h-auto block" />
+      </section>
+
       {/* ─── HERO ───────────────────────────────────────────────────────────── */}
       <section className="relative min-h-screen flex flex-col justify-end overflow-hidden" style={{background: '#000'}}>
-        <img src={`${CDN}Budtender_Training_Camp_Hero_Banner.png?v=1775339073`} alt="" aria-hidden="true" className="absolute inset-0 w-full h-full object-cover" style={{opacity: 0.3, objectPosition: 'center top'}} />
+        {/* Gradient overlay */}
         <div className="absolute inset-0" style={{background: 'linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.7) 60%, #000 100%)'}} />
+        {/* Yellow top bar */}
         <div className="absolute top-0 left-0 right-0 h-1" style={{background: '#F5E100'}} />
+        {/* Logo bar */}
         <div className="absolute top-0 left-0 right-0 px-8 md:px-16 pt-7 flex items-center justify-between z-20">
           <img src={`${CDN}Highsman_Logo_White.png?v=1775594430`} alt="Highsman" className="h-8 md:h-9" />
           <span className="font-label text-[10px] tracking-[0.3em] uppercase hidden md:block" style={{color: 'rgba(255,255,255,0.4)'}}>
             NJ Launch &middot; May 7 &ndash; June 7, 2026
           </span>
         </div>
+        {/* Jersey number watermark */}
         <div className="absolute right-0 bottom-0 pointer-events-none select-none leading-none" aria-hidden="true" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(280px, 45vw, 580px)', lineHeight: 0.85, color: 'rgba(245,225,0,0.06)', letterSpacing: '-0.04em'}}>34</div>
         {/* Hero content */}
         <div className="relative z-10 px-8 md:px-16 pb-20 md:pb-28 max-w-6xl">
@@ -140,8 +148,7 @@ export default function Budtenders() {
           </div>
         </div>
       </section>
-
-      {/* ─── MANIFESTO BAND */}
+{/* ─── MANIFESTO BAND */}
       <div style={{background: '#F5E100', borderBottom: '1px solid rgba(0,0,0,0.08)'}}>
         <div className="max-w-6xl mx-auto px-8 md:px-16 py-5 flex flex-wrap items-center justify-between gap-4">
           <p className="font-headline text-sm md:text-base uppercase tracking-[0.1em]" style={{color: '#000'}}>
