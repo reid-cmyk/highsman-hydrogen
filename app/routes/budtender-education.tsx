@@ -2257,7 +2257,7 @@ export default function BudtenderEducation() {
             {(() => {
               const hasVideos = !!currentCourse.videoUrl || (currentCourse.videoUrls && currentCourse.videoUrls.length > 0);
               const hasQuiz = !!COURSE_QUIZZES[currentCourse.id];
-              const videoGateActive = hasVideos && ((currentCourse.videoUrls && videosWatched.size < currentCourse.videoUrls.length) || (currentCourse.videoUrl && !singleVideoWatched));
+              const videoGateActive = hasVideos && ((currentCourse.videoUrls && currentCourse.videoUrls.length > 0 && videosWatched.size < currentCourse.videoUrls.length) || (!currentCourse.videoUrls && currentCourse.videoUrl && !singleVideoWatched));
 
               const steps: {label: string; active: boolean; completed: boolean; num: number}[] = [];
               let stepNum = 1;
@@ -2304,7 +2304,7 @@ export default function BudtenderEducation() {
           </div>
 
           {/* Gate: if videos not yet watched, show gate message */}
-          {(currentCourse.videoUrls && currentCourse.videoUrls.length > 1 && videosWatched.size < currentCourse.videoUrls.length) || (currentCourse.videoUrl && !singleVideoWatched) ? (
+          {(currentCourse.videoUrls && currentCourse.videoUrls.length > 1 && videosWatched.size < currentCourse.videoUrls.length) || (!currentCourse.videoUrls && currentCourse.videoUrl && !singleVideoWatched) ? (
             <div className="bg-[#111111] border border-[#A9ACAF]/15 rounded-xl sm:rounded-2xl p-6 sm:p-8 text-center mb-5 sm:mb-6">
               <div className="text-3xl mb-3">🎬</div>
               <h3 className="text-white font-bold text-base sm:text-lg mb-2">{currentCourse.videoUrls && currentCourse.videoUrls.length > 1 ? 'Watch Both Videos to Continue' : 'Watch the Video to Continue'}</h3>
