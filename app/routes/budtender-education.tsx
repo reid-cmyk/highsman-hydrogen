@@ -1224,7 +1224,7 @@ function CelebrationOverlay() {
         );
       })}
       
-      <div className="absolute text-center z-10" style={{opacity: 0, animation: 'fadeInText 0.5s ease-out 0.5s forwards'}}>
+      <div className="absolute text-center z-10" style={{opacity: 0, animation: 'fadeInText 0.5s ease-out 0.5s forwards', top: '60%', transform: 'translateY(-50%)'}}>
         <style>{`
           @keyframes fadeInText {
             to { opacity: 1; }
