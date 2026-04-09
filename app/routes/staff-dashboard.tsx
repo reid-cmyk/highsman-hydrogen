@@ -1,7 +1,7 @@
 import type {LoaderFunctionArgs, ActionFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
 import {useLoaderData, useActionData, Form} from '@remix-run/react';
 import {json} from '@shopify/remix-oxygen';
-import {useState, useEffect} from 'react';
+import {useState, useEffect, useMemo} from 'react';
 
 export const meta: MetaFunction = () => {
   return [
@@ -161,7 +161,11 @@ export async function loader({request, context}: LoaderFunctionArgs) {
 
     // 4. Build budtender rows
     const now = new Date();
-    const budtenders: BudtenderRow[] = profiles.map((p: any) => {
+    const registeredProfiles = profiles.filter((p: any) => {
+    const rProps = p.attributes?.properties || {};
+    return !!(rProps.budtender_education_signup) || !!(rProps.budtender_password);
+  });
+  const budtenders: BudtenderRow[] = registeredProfiles.map((p: any) => {
       const pid = p.id;
       const attrs = p.attributes || {};
       // Properties may be under attrs.properties or directly on attrs depending on API response format
@@ -240,7 +244,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       authenticated: true,
       budtenders,
       summary: {
-        total: profiles.length,
+        total: registeredProfiles.length,
         tierCounts,
         stateCounts,
         dispensaryCounts,
@@ -406,7 +410,7 @@ function DashboardContent({budtenders, summary}: {budtenders: BudtenderRow[]; su
       .filter(Boolean)
   )).sort();
 
-  const filtered = budtenders.filter((b: BudtenderRow) => {
+  const filtered = useMemo(() => budtenders.filter((b: BudtenderRow) => {
     if (filterTier !== 'All' && (b.currentTier || 'Unsigned') !== filterTier) return false;
     if (filterState !== 'All' && (b.state || '') !== filterState) return false;
     if (filterDispensary !== 'All' && (b.dispensary || '') !== filterDispensary) return false;
@@ -418,7 +422,7 @@ function DashboardContent({budtenders, summary}: {budtenders: BudtenderRow[]; su
       return fullName.includes(q) || email.includes(q) || dispensary.includes(q);
     }
     return true;
-  });
+  }), [budtenders, filterTier, filterState, filterDispensary, searchQuery]);
 
   const STATE_LABELS: Record<string, string> = {NJ: 'New Jersey', NY: 'New York', MA: 'Massachusetts', RI: 'Rhode Island', MO: 'Missouri'};
 
