@@ -1443,6 +1443,25 @@ export default function BudtenderEducation() {
     });
   }
 
+  // ── Browser back-button support ──────────────────────────────────────────
+  useEffect(() => {
+    function handlePopState(e: PopStateEvent) {
+      const state = e.state;
+      if (state?.view === 'course') {
+        // Went back from quiz to course
+        setCourseQuizActive(null);
+        setQuizComplete(false);
+      } else {
+        // Went back to portal (or no state = initial page)
+        setActiveCourse(null);
+        setCourseQuizActive(null);
+        setQuizComplete(false);
+      }
+    }
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   function openCourse(id: string) {
     setActiveCourse(id);
     setSlideIndex(0);
@@ -1453,6 +1472,7 @@ export default function BudtenderEducation() {
     setSingleVideoWatched(false);
     setQuizWrongTopics([]);
     setShowCelebration(false);
+    window.history.pushState({view: 'course', courseId: id}, '', window.location.pathname);
     window.scrollTo({top: 0, behavior: 'smooth'});
   }
 
@@ -1460,6 +1480,10 @@ export default function BudtenderEducation() {
     setActiveCourse(null);
     setCourseQuizActive(null);
     setQuizComplete(false);
+    // Go back in history to match the portal state
+    if (window.history.state?.view) {
+      window.history.back();
+    }
   }
 
   function nextSlide(course: Course) {
@@ -1589,6 +1613,7 @@ export default function BudtenderEducation() {
     setQuizSelected(null);
     setQuizScore(0);
     setQuizComplete(false);
+    window.history.pushState({view: 'quiz', courseId}, '', window.location.pathname);
   }
 
   function selectQuizAnswer(idx: number) {
@@ -2444,7 +2469,7 @@ export default function BudtenderEducation() {
         /* ── Course Quiz View ──────────────────────────────────────────────── */
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           <button
-            onClick={() => { setCourseQuizActive(null); setQuizComplete(false); }}
+            onClick={() => { setCourseQuizActive(null); setQuizComplete(false); if (window.history.state?.view === "quiz") window.history.back(); }}
             className="text-[#A9ACAF] text-xs sm:text-sm hover:text-white transition-colors mb-5 sm:mb-6 flex items-center gap-2"
           >
             ← Back to course
