@@ -1,7 +1,7 @@
 import type {MetaFunction, LoaderFunctionArgs, ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {useLoaderData} from '@remix-run/react';
-import {useState, useEffect, useRef, useCallback} from 'react';
+import React, {useState, useEffect, useRef, useCallback} from 'react';
 
 export const meta: MetaFunction = () => {
   return [
@@ -1142,6 +1142,104 @@ async function callAction(data: Record<string, string>): Promise<any> {
 type Screen = 'loading' | 'gate' | 'portal';
 type GateMode = 'login' | 'register' | 'reset';
 
+
+// ── Celebration Overlay Component ────────────────────────────────────────────
+function CelebrationOverlay() {
+  const celebrationRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      if (celebrationRef.current) {
+        celebrationRef.current.style.opacity = '0';
+      }
+    }, 2800);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const logos = Array.from({length: 18}, (_, i) => ({
+    id: i,
+    isH: i % 2 === 0,
+    delay: Math.random() * 0.4,
+    rotation: Math.random() * 360,
+    scale: 0.3 + Math.random() * 0.7,
+    opacity: 0.3 + Math.random() * 0.6,
+  }));
+
+  return (
+    <div
+      ref={celebrationRef}
+      className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none transition-opacity duration-300"
+      style={{background: 'radial-gradient(circle at center, rgba(200,168,75,0.2) 0%, transparent 70%)'}}
+    >
+      <style>{`
+        @keyframes explode {
+          0% {
+            transform: translate(0, 0) rotate(0deg) scale(0);
+            opacity: 0;
+          }
+          10% {
+            opacity: var(--final-opacity);
+          }
+          90% {
+            opacity: var(--final-opacity);
+          }
+          100% {
+            transform: translate(var(--tx), var(--ty)) rotate(var(--rotation)) scale(var(--scale));
+            opacity: 0;
+          }
+        }
+        .explosion-logo {
+          animation: explode 3s ease-out forwards;
+        }
+      `}</style>
+      
+      {logos.map((logo) => {
+        const angle = (logo.id / logos.length) * Math.PI * 2;
+        const distance = 250 + Math.random() * 150;
+        const tx = Math.cos(angle) * distance;
+        const ty = Math.sin(angle) * distance;
+        
+        return (
+          <div
+            key={logo.id}
+            className="explosion-logo absolute"
+            style={{
+              left: '50%',
+              top: '50%',
+              marginLeft: '-20px',
+              marginTop: '-20px',
+              '--tx': `${tx}px`,
+              '--ty': `${ty}px`,
+              '--rotation': `${logo.rotation}deg`,
+              '--scale': logo.scale,
+              '--final-opacity': logo.opacity,
+            } as React.CSSProperties}
+          >
+            <img
+              src={logo.isH ? 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/H_logo_3.png?v=1775594430' : 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Spark_Greatness_White.png?v=1775594430'}
+              alt="celebration"
+              className="w-10 h-10"
+            />
+          </div>
+        );
+      })}
+      
+      <div className="absolute text-center z-10" style={{opacity: 0, animation: 'fadeInText 0.5s ease-out 0.5s forwards'}}>
+        <style>{`
+          @keyframes fadeInText {
+            to { opacity: 1; }
+          }
+        `}</style>
+        <div className="text-3xl sm:text-5xl font-bold text-[#c8a84b]" style={{fontFamily: 'Teko, sans-serif', letterSpacing: '0.1em'}}>
+          SPARK GREATNESS
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+
 export default function BudtenderEducation() {
   // Hide site header & footer so this page feels like its own app
   useHideThemeChrome();
@@ -1203,6 +1301,10 @@ export default function BudtenderEducation() {
   const [surveySubmitting, setSurveySubmitting] = useState(false);
   const [videoStep, setVideoStep] = useState(0); // tracks which video in a multi-video course
   const [videosWatched, setVideosWatched] = useState<Set<number>>(new Set()); // tracks which videos have ended
+  const [singleVideoWatched, setSingleVideoWatched] = useState(false); // gate for single-video courses
+  const [quizWrongTopics, setQuizWrongTopics] = useState<string[]>([]); // track wrong answer topics for failed quiz
+  const [showCelebration, setShowCelebration] = useState(false); // celebration animation overlay
+  const [courseProgress, setCourseProgress] = useState<Record<string, {slidesViewed: number; videoWatched: boolean}>>({}); // track partial progress per course
 
   const portalRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -1348,6 +1450,9 @@ export default function BudtenderEducation() {
     setQuizComplete(false);
     setVideoStep(0);
     setVideosWatched(new Set());
+    setSingleVideoWatched(false);
+    setQuizWrongTopics([]);
+    setShowCelebration(false);
     window.scrollTo({top: 0, behavior: 'smooth'});
   }
 
@@ -1493,6 +1598,11 @@ export default function BudtenderEducation() {
     const questions = COURSE_QUIZZES[courseQuizActive];
     if (idx === questions[quizQ].correct) {
       setQuizScore(quizScore + 1);
+    } else {
+      // Track the slide title that this question relates to (approximate mapping)
+      const slideIndex = Math.min(Math.floor(quizQ / 2), currentCourse?.slides.length ? currentCourse.slides.length - 1 : 0);
+      const slideTitle = currentCourse?.slides[slideIndex]?.title || questions[quizQ].q;
+      setQuizWrongTopics([...quizWrongTopics, slideTitle]);
     }
   }
 
@@ -1507,6 +1617,8 @@ export default function BudtenderEducation() {
       setQuizComplete(true);
       const passed = (quizScore + (quizSelected === questions[quizQ].correct ? 1 : 0)) >= Math.ceil(questions.length * 0.7);
       if (passed) {
+        setShowCelebration(true);
+        setTimeout(() => setShowCelebration(false), 3200);
         const newCompleted = new Set([...completedCourses, courseQuizActive]);
         setCompletedCourses(newCompleted);
         trackCourseCompletion(courseQuizActive, newCompleted);
@@ -1942,6 +2054,7 @@ export default function BudtenderEducation() {
 
   return (
     <div ref={portalRef} className="min-h-screen bg-[#000000]">
+      {showCelebration && <CelebrationOverlay />}
       {/* ── Sub-Header (thin progress bar below global nav) ────────────── */}
       <div className="bg-[#081510] border-b border-[#A9ACAF]/15">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2 flex items-center justify-between">
@@ -2027,7 +2140,7 @@ export default function BudtenderEducation() {
               className="px-8 py-3 bg-[#FFEB3B] text-black font-bold text-sm rounded-xl hover:bg-[#ffd700] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               style={{fontFamily: 'Teko, sans-serif', fontSize: '1.25rem', letterSpacing: '0.05em'}}
             >
-              {surveySubmitting ? 'Submitting...' : 'SUBMIT & EARN 100 PTS 🏃'}
+              {surveySubmitting ? 'Submitting...' : 'SUBMIT & EARN 2,000 PTS 🏃'}
             </button>
           </div>
         </div>
@@ -2121,6 +2234,7 @@ export default function BudtenderEducation() {
                   preload="metadata"
                   className="w-full aspect-video bg-black"
                   poster=""
+                  onEnded={() => setSingleVideoWatched(true)}
                 >
                   <source src={currentCourse.videoUrl} type="video/mp4" />
                   Your browser does not support the video tag.
@@ -2138,39 +2252,114 @@ export default function BudtenderEducation() {
             </div>
           ) : null}
 
-          {/* Gate: if multi-video course, require all videos watched before showing slides */}
-          {currentCourse.videoUrls && currentCourse.videoUrls.length > 1 && videosWatched.size < currentCourse.videoUrls.length ? (
+          {/* ─ Step Tracker (always visible during course) ─ */}
+          <div className="mb-6 sm:mb-8 flex items-center justify-center gap-2 sm:gap-4">
+            {(() => {
+              const hasVideos = !!currentCourse.videoUrl || (currentCourse.videoUrls && currentCourse.videoUrls.length > 0);
+              const hasQuiz = !!COURSE_QUIZZES[currentCourse.id];
+              const videoGateActive = hasVideos && ((currentCourse.videoUrls && videosWatched.size < currentCourse.videoUrls.length) || (currentCourse.videoUrl && !singleVideoWatched));
+
+              const steps: {label: string; active: boolean; completed: boolean; num: number}[] = [];
+              let stepNum = 1;
+              if (hasVideos) {
+                steps.push({label: 'WATCH VIDEO' + (currentCourse.videoUrls && currentCourse.videoUrls.length > 1 ? 'S' : ''), active: videoGateActive, completed: !videoGateActive, num: stepNum});
+                stepNum++;
+              }
+              steps.push({label: 'KEY TAKEAWAYS', active: !videoGateActive, completed: false, num: stepNum});
+              stepNum++;
+              if (hasQuiz) {
+                steps.push({label: 'TAKE QUIZ', active: false, completed: false, num: stepNum});
+              } else {
+                steps.push({label: 'COMPLETE', active: false, completed: false, num: stepNum});
+              }
+
+              return (
+                <div className="flex items-center justify-center gap-2 sm:gap-3 w-full flex-wrap">
+                  {steps.map((step, i) => (
+                    <React.Fragment key={i}>
+                      <div className="flex flex-col items-center gap-1 sm:gap-2">
+                        <div
+                          className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold transition-all"
+                          style={{
+                            background: step.active ? currentCourse.color : step.completed ? '#166534' : '#222',
+                            color: step.active ? '#000' : step.completed ? '#4ade80' : '#666',
+                            borderWidth: '2px',
+                            borderColor: step.active ? currentCourse.color : step.completed ? '#166534' : '#333',
+                          }}
+                        >
+                          {step.completed ? '✓' : step.num}
+                        </div>
+                        <span className="text-[9px] sm:text-[10px] uppercase tracking-widest font-semibold" style={{color: step.active ? currentCourse.color : step.completed ? '#4ade80' : '#666', whiteSpace: 'nowrap'}}>
+                          {step.label}
+                        </span>
+                      </div>
+                      {i < steps.length - 1 && (
+                        <div className="h-[2px] w-6 sm:w-10 rounded-full" style={{background: step.completed ? '#166534' : '#333', marginBottom: '24px'}} />
+                      )}
+                    </React.Fragment>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Gate: if videos not yet watched, show gate message */}
+          {(currentCourse.videoUrls && currentCourse.videoUrls.length > 1 && videosWatched.size < currentCourse.videoUrls.length) || (currentCourse.videoUrl && !singleVideoWatched) ? (
             <div className="bg-[#111111] border border-[#A9ACAF]/15 rounded-xl sm:rounded-2xl p-6 sm:p-8 text-center mb-5 sm:mb-6">
               <div className="text-3xl mb-3">🎬</div>
-              <h3 className="text-white font-bold text-base sm:text-lg mb-2">Watch Both Videos to Continue</h3>
+              <h3 className="text-white font-bold text-base sm:text-lg mb-2">{currentCourse.videoUrls && currentCourse.videoUrls.length > 1 ? 'Watch Both Videos to Continue' : 'Watch the Video to Continue'}</h3>
               <p className="text-[#A9ACAF] text-xs sm:text-sm mb-4">
-                Complete video {videosWatched.size + 1} of {currentCourse.videoUrls.length} to unlock the key takeaways and quiz.
+                {currentCourse.videoUrls && currentCourse.videoUrls.length > 1
+                  ? `Complete video ${videosWatched.size + 1} of ${currentCourse.videoUrls.length} to unlock the key takeaways and quiz.`
+                  : 'Complete the video above to unlock the key takeaways and quiz.'}
               </p>
-              <div className="flex justify-center gap-2">
-                {currentCourse.videoUrls.map((v, i) => (
-                  <div key={i} className="flex items-center gap-1.5 text-xs">
-                    <span style={{color: videosWatched.has(i) ? '#4ade80' : '#A9ACAF'}}>
-                      {videosWatched.has(i) ? '✓' : '○'}
-                    </span>
-                    <span className="text-[#A9ACAF]">{v.label}</span>
-                  </div>
-                ))}
-              </div>
+              {currentCourse.videoUrls && currentCourse.videoUrls.length > 1 && (
+                <div className="flex justify-center gap-2">
+                  {currentCourse.videoUrls.map((v, i) => (
+                    <div key={i} className="flex items-center gap-1.5 text-xs">
+                      <span style={{color: videosWatched.has(i) ? '#4ade80' : '#A9ACAF'}}>
+                        {videosWatched.has(i) ? '✓' : '○'}
+                      </span>
+                      <span className="text-[#A9ACAF]">{v.label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
           <>
-          {/* Slide progress */}
-          <div className="flex gap-1 mb-5 sm:mb-6">
-            {currentCourse.slides.map((_, i) => (
-              <div
-                key={i}
-                className="h-1 rounded-full flex-1 transition-all duration-300"
-                style={{
-                  background: i <= slideIndex ? currentCourse.color : 'rgba(255,255,255,0.08)',
-                }}
-              />
-            ))}
+
+          {/* Slide progress with label and clickable segments */}
+          <div className="mb-5 sm:mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] sm:text-xs uppercase tracking-widest text-[#A9ACAF] font-semibold">
+                Key Takeaway {slideIndex + 1} of {currentCourse.slides.length}
+              </span>
+            </div>
+            <div className="flex gap-1">
+              {currentCourse.slides.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => { if (i <= slideIndex) setSlideIndex(i); }}
+                  className="h-1 rounded-full flex-1 transition-all duration-300 hover:h-1.5 cursor-pointer"
+                  style={{
+                    background: i <= slideIndex ? currentCourse.color : 'rgba(255,255,255,0.08)',
+                    opacity: i <= slideIndex ? 1 : 0.6,
+                  }}
+                  title={i <= slideIndex ? `Go to slide ${i + 1}` : `Slide ${i + 1} (locked)`}
+                  disabled={i > slideIndex}
+                />
+              ))}
+            </div>
           </div>
+
+          {/* Quiz-coming indicator */}
+          {slideIndex === currentCourse.slides.length - 2 && COURSE_QUIZZES[currentCourse.id] && (
+            <div className="mb-5 sm:mb-6 px-4 py-3 bg-amber-900/20 border border-amber-700/30 rounded-lg text-[12px] text-amber-300 flex items-center gap-2">
+              <span>📝</span>
+              <span>Quiz after next slide</span>
+            </div>
+          )}
 
           {/* Slide content */}
           <div className="bg-[#111111] border border-[#A9ACAF]/15 rounded-xl sm:rounded-2xl p-5 sm:p-6 md:p-10 mb-5 sm:mb-6">
@@ -2198,8 +2387,8 @@ export default function BudtenderEducation() {
             )}
           </div>
 
-          {/* Slide navigation */}
-          <div className="flex items-center justify-between gap-3">
+          {/* Slide navigation - sticky on mobile */}
+          <div className="flex items-center justify-between gap-3 sticky bottom-0 bg-[#000000] p-4 -m-4 border-t border-[#A9ACAF]/10 sm:relative sm:bg-transparent sm:p-0 sm:m-0 sm:border-0">
             <button
               onClick={prevSlide}
               disabled={slideIndex === 0}
@@ -2695,7 +2884,15 @@ export default function BudtenderEducation() {
                     {/* Progress bar */}
                     {!isComplete && (
                       <div className="w-full h-[2px] bg-[#111111] rounded-full mt-3 sm:mt-4">
-                        <div className="h-full rounded-full" style={{background: course.color, width: '0%'}} />
+                        <div 
+                          className="h-full rounded-full transition-all duration-300" 
+                          style={{
+                            background: course.color, 
+                            width: `${courseProgress[course.id] 
+                              ? Math.round((courseProgress[course.id].slidesViewed / (course.slides?.length || 1)) * 100) 
+                              : 0}%`
+                          }} 
+                        />
                       </div>
                     )}
                   </button>
