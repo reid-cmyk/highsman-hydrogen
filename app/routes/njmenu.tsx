@@ -52,10 +52,18 @@ const STRAIN_IMAGE_KEY: Record<string, string> = {
 
 type ImageType = 'PreRoll_Menu' | 'Pouch' | 'HitStickSingle';
 
+// Exact filenames for the Hit Stick Singles product shots in Shopify
+const HIT_STICK_SINGLE_KEY: Record<string, string> = {
+  'Wavey Watermelon': 'Wavy_Watermelon',
+  'Gridiron Grape': 'Gridiron_Grape',
+  'Blueberry Blitz': 'Blueberry_Blitz',
+  'Touchdown Tango Mango': 'Touchdown_Tango_Mango',
+  'Cake Quake': 'Cake_Quake',
+};
+
 function strainImage(strainName: string, imageType: ImageType): string {
   if (imageType === 'HitStickSingle') {
-    // New per-strain product shots: Hit_Stick_Menu_Image_-_Strain_Name.png
-    const key = strainName.replace(/ /g, '_');
+    const key = HIT_STICK_SINGLE_KEY[strainName] || strainName.replace(/ /g, '_');
     return `${CDN}/Hit_Stick_Menu_Image_-_${key}.png`;
   }
   const key = STRAIN_IMAGE_KEY[strainName] || 'Watermelon';
