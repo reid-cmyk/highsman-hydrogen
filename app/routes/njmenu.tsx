@@ -201,6 +201,68 @@ const STRAIN_TYPE_COLORS: Record<StrainType, string> = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// BUDTENDER SAMPLE RULES
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface SampleRule {
+  id: string;
+  productId: string;
+  label: string;         // display name
+  unit: string;          // what the sample is (e.g. "Hit Stick Single")
+  every: number;         // 1 sample per N cases
+  color: string;
+  icon: string;
+}
+
+const SAMPLE_RULES: SampleRule[] = [
+  {
+    id: 'sample-hit-stick-single',
+    productId: 'hit-sticks-single',
+    label: 'Hit Stick Single',
+    unit: '1 single unit per case',
+    every: 1,
+    color: BRAND.gold,
+    icon: 'local_fire_department',
+  },
+  {
+    id: 'sample-power-pack',
+    productId: 'hit-sticks-5pack',
+    label: 'Hit Stick Individual',
+    unit: '1 individual unit per Power Pack case',
+    every: 1,
+    color: BRAND.gold,
+    icon: 'local_fire_department',
+  },
+  {
+    id: 'sample-fly-high-tin',
+    productId: 'fly-high-tins',
+    label: 'Hit Stick Individual (Fly High Tin)',
+    unit: '1 individual unit per Tin case',
+    every: 1,
+    color: '#FF6B35',
+    icon: 'workspace_premium',
+  },
+  {
+    id: 'sample-triple-threat',
+    productId: 'triple-threat',
+    label: 'Triple Threat Pre-Roll',
+    unit: '1 sample per 2 cases',
+    every: 2,
+    color: BRAND.purple,
+    icon: 'sports_mma',
+  },
+  {
+    id: 'sample-ground-game',
+    productId: 'ground-game',
+    label: 'Ground Game Bag',
+    unit: '1 sample per 4 cases',
+    every: 4,
+    color: BRAND.green,
+    icon: 'grass',
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
 // CART STATE TYPES
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -239,6 +301,7 @@ export default function NJMenu() {
     'hit-sticks-single',
   );
   const [orderNote, setOrderNote] = useState('');
+  const [sampleStrains, setSampleStrains] = useState<Record<string, string>>({});
   const cartRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -303,6 +366,22 @@ export default function NJMenu() {
     }, 0);
   }, [cartItems]);
 
+  // Compute earned budtender samples from cart
+  const earnedSamples = useMemo(() => {
+    return SAMPLE_RULES.map((rule) => {
+      const totalCases = cartItems
+        .filter((i) => i.productId === rule.productId)
+        .reduce((sum, i) => sum + i.cases, 0);
+      const qty = Math.floor(totalCases / rule.every);
+      return {...rule, qty};
+    }).filter((s) => s.qty > 0);
+  }, [cartItems]);
+
+  const totalSamples = useMemo(
+    () => earnedSamples.reduce((sum, s) => sum + s.qty, 0),
+    [earnedSamples],
+  );
+
   // Build mailto order
   const buildOrderEmail = useCallback(() => {
     const lines: string[] = [
@@ -336,6 +415,18 @@ export default function NJMenu() {
     lines.push('═══════════════════════════════════════');
     lines.push(`ESTIMATED TOTAL: ${formatCurrency(total)}`);
     lines.push('');
+
+    // Budtender samples
+    if (earnedSamples.length > 0) {
+      lines.push('───────────────────────────────────────');
+      lines.push('FREE BUDTENDER SAMPLES INCLUDED:');
+      earnedSamples.forEach((s) => {
+        const strain = sampleStrains[s.id] || 'STRAIN TBD';
+        lines.push(`  • ${s.qty}x ${s.label} — ${strain}`);
+      });
+      lines.push('');
+    }
+
     if (orderNote.trim()) {
       lines.push(`NOTE: ${orderNote.trim()}`);
       lines.push('');
@@ -347,7 +438,7 @@ export default function NJMenu() {
     );
     const body = encodeURIComponent(lines.join('\n'));
     return `mailto:marketing@highsman.com?subject=${subject}&body=${body}`;
-  }, [cartItems, orderNote]);
+  }, [cartItems, orderNote, earnedSamples, sampleStrains]);
 
   // Download menu as text
   const downloadMenu = useCallback(() => {
@@ -1137,6 +1228,155 @@ export default function NJMenu() {
                     );
                   })}
                 </div>
+
+                {/* ── Budtender Samples ────────────────────────────── */}
+                {earnedSamples.length > 0 && (
+                  <div className="mb-6">
+                    {/* Header */}
+                    <div
+                      className="flex items-center justify-between px-5 py-3 mb-0"
+                      style={{
+                        background: 'linear-gradient(135deg, #0d2b0d 0%, #1a1a0a 100%)',
+                        border: `1px solid #4CAF5060`,
+                        borderBottom: 'none',
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span
+                          className="material-symbols-outlined text-2xl"
+                          style={{color: '#4CAF50'}}
+                        >
+                          redeem
+                        </span>
+                        <div>
+                          <p
+                            className="font-headline text-base font-bold uppercase tracking-widest"
+                            style={{color: '#4CAF50'}}
+                          >
+                            Free Budtender Samples
+                          </p>
+                          <p className="text-xs" style={{color: BRAND.textMuted}}>
+                            Auto-earned from your order — choose strains below
+                          </p>
+                        </div>
+                      </div>
+                      <span
+                        className="font-headline text-sm font-bold px-3 py-1 uppercase tracking-wider"
+                        style={{
+                          background: '#4CAF5020',
+                          color: '#4CAF50',
+                          border: '1px solid #4CAF5040',
+                        }}
+                      >
+                        {totalSamples} free unit{totalSamples !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+
+                    {/* Sample rows */}
+                    <div
+                      style={{
+                        border: `1px solid #4CAF5040`,
+                        background: BRAND.surfaceHigh,
+                      }}
+                    >
+                      {earnedSamples.map((sample, idx) => (
+                        <div
+                          key={sample.id}
+                          className="flex items-center justify-between px-5 py-4"
+                          style={{
+                            borderBottom:
+                              idx < earnedSamples.length - 1
+                                ? `1px solid ${BRAND.border}`
+                                : 'none',
+                          }}
+                        >
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <span
+                              className="material-symbols-outlined text-xl flex-shrink-0"
+                              style={{color: sample.color}}
+                            >
+                              {sample.icon}
+                            </span>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span
+                                  className="font-headline text-sm font-bold uppercase"
+                                  style={{color: '#fff'}}
+                                >
+                                  {sample.qty}× {sample.label}
+                                </span>
+                                <span
+                                  className="font-headline text-xs font-bold px-2 py-0.5 uppercase tracking-wider"
+                                  style={{
+                                    background: '#4CAF5020',
+                                    color: '#4CAF50',
+                                    border: '1px solid #4CAF5040',
+                                  }}
+                                >
+                                  FREE
+                                </span>
+                              </div>
+                              <p
+                                className="text-xs mt-0.5"
+                                style={{color: BRAND.textMuted}}
+                              >
+                                {sample.unit}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Strain selector */}
+                          <div className="flex-shrink-0 ml-4">
+                            <select
+                              value={sampleStrains[sample.id] ?? ''}
+                              onChange={(e) =>
+                                setSampleStrains((prev) => ({
+                                  ...prev,
+                                  [sample.id]: e.target.value,
+                                }))
+                              }
+                              className="font-headline text-xs font-bold uppercase tracking-wide px-3 py-2 cursor-pointer"
+                              style={{
+                                background: BRAND.surface,
+                                border: `1px solid ${
+                                  sampleStrains[sample.id]
+                                    ? sample.color + '80'
+                                    : BRAND.border
+                                }`,
+                                color: sampleStrains[sample.id]
+                                  ? '#fff'
+                                  : BRAND.textMuted,
+                                outline: 'none',
+                                minWidth: '180px',
+                              }}
+                            >
+                              <option value="">— Choose Strain —</option>
+                              {STRAINS.map((s) => (
+                                <option key={s.name} value={s.name}>
+                                  {s.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Footer nudge */}
+                      {earnedSamples.some((s) => !sampleStrains[s.id]) && (
+                        <div
+                          className="px-5 py-2.5 text-xs"
+                          style={{
+                            background: '#0d1a0d',
+                            borderTop: `1px solid #4CAF5030`,
+                            color: BRAND.textMuted,
+                          }}
+                        >
+                          ↑ Select a strain for each sample — they'll be included in your order email
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Order Note */}
                 <div className="mb-5">
