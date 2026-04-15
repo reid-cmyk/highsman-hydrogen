@@ -776,7 +776,7 @@ export default function NJMenu() {
                             className="strain-row grid gap-3 items-center px-4 py-4 transition-colors"
                             style={{
                               gridTemplateColumns:
-                                '56px minmax(160px,2fr) 80px 60px 1fr',
+                                '148px minmax(160px,2fr) 80px 60px 1fr',
                               borderBottom: `1px solid ${BRAND.border}`,
                               background:
                                 cases > 0
