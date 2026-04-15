@@ -755,7 +755,7 @@ export default function NJMenu() {
                       <div
                         className="grid gap-2 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest"
                         style={{
-                          gridTemplateColumns: '104px minmax(160px,2fr) 80px 60px 1fr',
+                          gridTemplateColumns: '148px minmax(160px,2fr) 80px 60px 1fr',
                           color: BRAND.textMuted,
                           borderBottom: `1px solid ${BRAND.border}`,
                         }}
@@ -791,8 +791,8 @@ export default function NJMenu() {
                                 alt={`${product.name} ${strain.name}`}
                                 className="strain-img"
                                 style={{
-                                  width: 88,
-                                  height: 88,
+                                  width: 132,
+                                  height: 132,
                                   objectFit: 'contain',
                                   background: 'transparent',
                                 }}
