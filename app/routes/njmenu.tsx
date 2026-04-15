@@ -34,6 +34,28 @@ const BRAND = {
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
+// IMAGE CDN
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CDN = 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files';
+
+// Maps strain name → image filename key
+const STRAIN_IMAGE_KEY: Record<string, string> = {
+  'Wavey Watermelon': 'Watermelon',
+  'Gridiron Grape': 'Grape',
+  'Blueberry Blitz': 'Blueberry',
+  'Touchdown Tango Mango': 'Mango',
+  'Cake Quake': 'Quake',
+};
+
+type ImageType = 'PreRoll_Menu' | 'Pouch';
+
+function strainImage(strainName: string, imageType: ImageType): string {
+  const key = STRAIN_IMAGE_KEY[strainName] || 'Watermelon';
+  return `${CDN}/Highsman_${imageType}_${key}.png`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PRODUCT DATA
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -57,6 +79,7 @@ interface ProductLine {
   rrp: number;
   color: string;
   icon: string;
+  imageType: ImageType;
   strains: Strain[];
   discount?: {label: string; percent: number}; // optional active discount
 }
@@ -82,6 +105,7 @@ const PRODUCT_LINES: ProductLine[] = [
     rrp: 13.99,
     color: BRAND.gold,
     icon: 'local_fire_department',
+    imageType: 'PreRoll_Menu' as ImageType,
     strains: STRAINS,
   },
   {
@@ -96,6 +120,7 @@ const PRODUCT_LINES: ProductLine[] = [
     rrp: 59.99,
     color: BRAND.gold,
     icon: 'local_fire_department',
+    imageType: 'Pouch' as ImageType,
     strains: STRAINS,
   },
   {
@@ -110,6 +135,7 @@ const PRODUCT_LINES: ProductLine[] = [
     rrp: 29.0,
     color: BRAND.purple,
     icon: 'sports_mma',
+    imageType: 'PreRoll_Menu' as ImageType,
     strains: STRAINS,
   },
   {
@@ -124,6 +150,7 @@ const PRODUCT_LINES: ProductLine[] = [
     rrp: 90.0,
     color: BRAND.green,
     icon: 'grass',
+    imageType: 'Pouch' as ImageType,
     strains: STRAINS,
   },
 ];
@@ -718,11 +745,12 @@ export default function NJMenu() {
                       <div
                         className="grid gap-2 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest"
                         style={{
-                          gridTemplateColumns: 'minmax(160px,2fr) 80px 60px 1fr',
+                          gridTemplateColumns: '56px minmax(160px,2fr) 80px 60px 1fr',
                           color: BRAND.textMuted,
                           borderBottom: `1px solid ${BRAND.border}`,
                         }}
                       >
+                        <span></span>
                         <span>Strain</span>
                         <span>Type</span>
                         <span>THC</span>
@@ -738,7 +766,7 @@ export default function NJMenu() {
                             className="strain-row grid gap-2 items-center px-4 py-3 transition-colors"
                             style={{
                               gridTemplateColumns:
-                                'minmax(160px,2fr) 80px 60px 1fr',
+                                '56px minmax(160px,2fr) 80px 60px 1fr',
                               borderBottom: `1px solid ${BRAND.border}`,
                               background:
                                 cases > 0
@@ -746,6 +774,21 @@ export default function NJMenu() {
                                   : 'transparent',
                             }}
                           >
+                            {/* Product image */}
+                            <div className="flex items-center justify-center">
+                              <img
+                                src={strainImage(strain.name, product.imageType)}
+                                alt={`${product.name} ${strain.name}`}
+                                className="rounded"
+                                style={{
+                                  width: 48,
+                                  height: 48,
+                                  objectFit: 'cover',
+                                  background: BRAND.surfaceContainer,
+                                }}
+                                loading="lazy"
+                              />
+                            </div>
                             {/* Strain name */}
                             <div className="flex items-center gap-2">
                               <span
