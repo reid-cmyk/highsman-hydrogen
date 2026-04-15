@@ -50,9 +50,14 @@ const STRAIN_IMAGE_KEY: Record<string, string> = {
   'Cake Quake': 'Quake',
 };
 
-type ImageType = 'PreRoll_Menu' | 'Pouch';
+type ImageType = 'PreRoll_Menu' | 'Pouch' | 'HitStickSingle';
 
 function strainImage(strainName: string, imageType: ImageType): string {
+  if (imageType === 'HitStickSingle') {
+    // New per-strain product shots: Hit_Stick_Menu_Image_-_Strain_Name.png
+    const key = strainName.replace(/ /g, '_');
+    return `${CDN}/Hit_Stick_Menu_Image_-_${key}.png`;
+  }
   const key = STRAIN_IMAGE_KEY[strainName] || 'Watermelon';
   return `${CDN}/Highsman_${imageType}_${key}.png`;
 }
@@ -107,7 +112,7 @@ const PRODUCT_LINES: ProductLine[] = [
     rrp: 13.99,
     color: BRAND.gold,
     icon: 'local_fire_department',
-    imageType: 'PreRoll_Menu' as ImageType,
+    imageType: 'HitStickSingle' as ImageType,
     strains: STRAINS,
   },
   {
