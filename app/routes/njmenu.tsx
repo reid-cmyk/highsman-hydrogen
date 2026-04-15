@@ -95,6 +95,8 @@ interface ProductLine {
   color: string;
   icon: string;
   imageType: ImageType;
+  fixedImageUrl?: string; // single image used for all strains in this line
+  thcDisplay?: string;    // overrides per-strain THC (e.g. "50%+")
   strains: Strain[];
   discount?: {label: string; percent: number}; // optional active discount
 }
@@ -121,12 +123,13 @@ const PRODUCT_LINES: ProductLine[] = [
     color: BRAND.gold,
     icon: 'local_fire_department',
     imageType: 'HitStickSingle' as ImageType,
+    thcDisplay: '50%+',
     strains: STRAINS,
   },
   {
     id: 'hit-sticks-5pack',
     name: 'Hit Sticks',
-    subtitle: '5-Pack',
+    subtitle: 'Power Packs',
     weight: '2.5g (5 x 0.5g)',
     format: 'Infused Mini Pre-Roll 5-Pack',
     caseSize: 6,
@@ -136,6 +139,25 @@ const PRODUCT_LINES: ProductLine[] = [
     color: BRAND.gold,
     icon: 'local_fire_department',
     imageType: 'Pouch' as ImageType,
+    fixedImageUrl: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Untitled_design_9.png',
+    thcDisplay: '50%+',
+    strains: STRAINS,
+  },
+  {
+    id: 'fly-high-tins',
+    name: 'Fly High Tins',
+    subtitle: 'Limited Edition',
+    weight: '2.5g (5 x 0.5g)',
+    format: 'Limited Edition Tin 5-Pack',
+    caseSize: 6,
+    wholesale: 30.0,
+    casePrice: 180.0,
+    rrp: 59.99,
+    color: '#FF6B35',
+    icon: 'workspace_premium',
+    imageType: 'Pouch' as ImageType,
+    fixedImageUrl: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Untitled_design_10.png',
+    thcDisplay: '50%+',
     strains: STRAINS,
   },
   {
@@ -151,6 +173,7 @@ const PRODUCT_LINES: ProductLine[] = [
     color: BRAND.purple,
     icon: 'sports_mma',
     imageType: 'PreRoll_Menu' as ImageType,
+    thcDisplay: '45%+',
     strains: STRAINS,
   },
   {
@@ -166,6 +189,7 @@ const PRODUCT_LINES: ProductLine[] = [
     color: BRAND.green,
     icon: 'grass',
     imageType: 'Pouch' as ImageType,
+    thcDisplay: '40%+',
     strains: STRAINS,
   },
 ];
@@ -357,7 +381,7 @@ export default function NJMenu() {
       product.strains.forEach((s) => {
         const name = s.name.padEnd(30);
         const type = s.type.padEnd(10);
-        lines.push(`  ${name}${type}${s.thc}`);
+        lines.push(`  ${name}${type}${product.thcDisplay ?? s.thc}`);
       });
       lines.push('');
     });
@@ -533,9 +557,9 @@ export default function NJMenu() {
               style={{background: BRAND.border}}
             >
               {[
-                {num: '4', label: 'Product Lines'},
+                {num: '5', label: 'Product Lines'},
                 {num: '5', label: 'Strains'},
-                {num: '20', label: 'Total SKUs'},
+                {num: '25', label: 'Total SKUs'},
                 {
                   num: '$7',
                   label: 'Starting Wholesale',
@@ -800,7 +824,7 @@ export default function NJMenu() {
                             {/* Product image */}
                             <div className="flex items-center justify-center">
                               <img
-                                src={strainImage(strain.name, product.imageType)}
+                                src={product.fixedImageUrl ?? strainImage(strain.name, product.imageType)}
                                 alt={`${product.name} ${strain.name}`}
                                 className="strain-img"
                                 style={{
@@ -837,7 +861,7 @@ export default function NJMenu() {
                             </span>
                             {/* THC */}
                             <span className="text-sm" style={{color: BRAND.textMuted}}>
-                              {strain.thc}
+                              {product.thcDisplay ?? strain.thc}
                             </span>
                             {/* Qty Stepper */}
                             <div className="flex items-center justify-end gap-1">
