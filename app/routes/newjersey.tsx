@@ -28,7 +28,7 @@ interface AssetItem {
 
 const NJ_IMAGES = {
   // ── Hero product tiles ─────────────────────────────────────────────────────
-  hitSticksHero:     '',                        // TODO: add IMAGES.hitStick once confirmed
+  hitSticksHero: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Hit_Sticks_Dancing.png?v=1776280215',
   groundGameHero:    IMAGES.groundGameProduct,  // ✓ exists
   tripleThreatsHero: IMAGES.preRollsLineup,     // ✓ exists
 
