@@ -219,6 +219,8 @@ const AD_SIZES = [
 // Meta
 // ─────────────────────────────────────────────────────────────────────────────
 
+export const handle = {hideHeader: true, hideFooter: true};
+
 export const meta: MetaFunction = () => {
   return [{title: 'HIGHSMAN | NJ Retail Partner Resources'}];
 };

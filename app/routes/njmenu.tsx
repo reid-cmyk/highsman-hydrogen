@@ -6,6 +6,8 @@ import {Link} from '@remix-run/react';
 // META
 // ─────────────────────────────────────────────────────────────────────────────
 
+export const handle = {hideHeader: true, hideFooter: true};
+
 export const meta: MetaFunction = () => [
   {title: 'NJ Wholesale Menu | Highsman'},
   {
@@ -387,8 +389,16 @@ export default function NJMenu() {
         .nj-menu input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         .nj-menu input[type="number"] { -moz-appearance: textfield; }
 
-        .nj-menu .strain-row:hover { background: rgba(255,255,255,0.04); }
+        .nj-menu .strain-row:hover { background: rgba(255,255,255,0.06); }
+        .nj-menu .strain-row { transition: background 0.15s ease; }
         .nj-menu .product-section { transition: all 0.3s ease; }
+
+        .nj-menu .strain-img {
+          border-radius: 8px;
+          transition: transform 0.2s ease;
+          filter: drop-shadow(0 2px 8px rgba(0,0,0,0.4));
+        }
+        .nj-menu .strain-row:hover .strain-img { transform: scale(1.05); }
 
         @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .slide-up { animation: slideUp 0.3s ease-out; }
@@ -745,7 +755,7 @@ export default function NJMenu() {
                       <div
                         className="grid gap-2 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest"
                         style={{
-                          gridTemplateColumns: '56px minmax(160px,2fr) 80px 60px 1fr',
+                          gridTemplateColumns: '104px minmax(160px,2fr) 80px 60px 1fr',
                           color: BRAND.textMuted,
                           borderBottom: `1px solid ${BRAND.border}`,
                         }}
@@ -763,7 +773,7 @@ export default function NJMenu() {
                         return (
                           <div
                             key={strain.name}
-                            className="strain-row grid gap-2 items-center px-4 py-3 transition-colors"
+                            className="strain-row grid gap-3 items-center px-4 py-4 transition-colors"
                             style={{
                               gridTemplateColumns:
                                 '56px minmax(160px,2fr) 80px 60px 1fr',
@@ -779,12 +789,12 @@ export default function NJMenu() {
                               <img
                                 src={strainImage(strain.name, product.imageType)}
                                 alt={`${product.name} ${strain.name}`}
-                                className="rounded"
+                                className="strain-img"
                                 style={{
-                                  width: 48,
-                                  height: 48,
-                                  objectFit: 'cover',
-                                  background: BRAND.surfaceContainer,
+                                  width: 88,
+                                  height: 88,
+                                  objectFit: 'contain',
+                                  background: 'transparent',
                                 }}
                                 loading="lazy"
                               />
@@ -798,13 +808,13 @@ export default function NJMenu() {
                                     STRAIN_TYPE_COLORS[strain.type],
                                 }}
                               />
-                              <span className="font-semibold text-sm text-white">
+                              <span className="font-headline font-bold text-base text-white uppercase tracking-wide">
                                 {strain.name}
                               </span>
                             </div>
                             {/* Type */}
                             <span
-                              className="text-xs font-semibold px-2 py-0.5 rounded inline-block text-center"
+                              className="text-xs font-bold px-2.5 py-1 rounded inline-block text-center uppercase tracking-wider"
                               style={{
                                 background: `${STRAIN_TYPE_COLORS[strain.type]}20`,
                                 color: STRAIN_TYPE_COLORS[strain.type],
