@@ -2,21 +2,21 @@ import {useState, useRef, useCallback, useMemo} from 'react';
 import type {MetaFunction} from '@shopify/remix-oxygen';
 import {Link} from '@remix-run/react';
 
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────────────────
 // META
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const meta: MetaFunction = () => [
   {title: 'NJ Wholesale Menu | Highsman'},
   {
     description:
-      'New Jersey wholesale menu â Hit Sticks, Triple Threat Pre-Rolls, and Ground Game. Order direct from Highsman.',
+      'New Jersey wholesale menu — Hit Sticks, Triple Threat Pre-Rolls, and Ground Game. Order direct from Highsman.',
   },
 ];
 
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────────────────
 // BRAND TOKENS
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────────────────
 
 const BRAND = {
   black: '#000000',
@@ -33,9 +33,9 @@ const BRAND = {
   textMuted: 'rgba(255,255,255,0.55)',
 } as const;
 
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────────────────
 // PRODUCT DATA
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────────────────
 
 type StrainType = 'Sativa' | 'Hybrid' | 'Indica';
 
@@ -134,9 +134,9 @@ const STRAIN_TYPE_COLORS: Record<StrainType, string> = {
   Indica: '#8B5CF6',
 };
 
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────────────────
 // CART STATE TYPES
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface CartItem {
   productId: string;
@@ -144,9 +144,9 @@ interface CartItem {
   cases: number;
 }
 
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────────────────
 
 function formatCurrency(n: number): string {
   return n.toLocaleString('en-US', {style: 'currency', currency: 'USD'});
@@ -161,9 +161,9 @@ function cartKey(productId: string, strainName: string): string {
   return `${productId}__${strainName}`;
 }
 
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENT
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function NJMenu() {
   const [cart, setCart] = useState<Record<string, CartItem>>({});
@@ -241,7 +241,7 @@ export default function NJMenu() {
   const buildOrderEmail = useCallback(() => {
     const lines: string[] = [
       'NEW JERSEY WHOLESALE ORDER',
-      'âââââââââââââââââââââââââââââââââââââââ',
+      '═══════════════════════════════════════',
       '',
     ];
 
@@ -253,21 +253,21 @@ export default function NJMenu() {
       const lineTotal = unitPrice * item.cases;
       total += lineTotal;
       lines.push(
-        `${product.name} ${product.subtitle} â ${item.strainName}`,
+        `${product.name} ${product.subtitle} — ${item.strainName}`,
       );
       lines.push(
-        `  ${item.cases} case${item.cases > 1 ? 's' : ''} Ã ${formatCurrency(unitPrice)}/case = ${formatCurrency(lineTotal)}`,
+        `  ${item.cases} case${item.cases > 1 ? 's' : ''} × ${formatCurrency(unitPrice)}/case = ${formatCurrency(lineTotal)}`,
       );
       lines.push(
         `  (${item.cases * product.caseSize} units @ ${formatCurrency(applyDiscount(product.wholesale, product.discount))}/unit)`,
       );
       if (product.discount) {
-        lines.push(`  ð° ${product.discount.label} applied`);
+        lines.push(`  💰 ${product.discount.label} applied`);
       }
       lines.push('');
     });
 
-    lines.push('âââââââââââââââââââââââââââââââââââââââ');
+    lines.push('═══════════════════════════════════════');
     lines.push(`ESTIMATED TOTAL: ${formatCurrency(total)}`);
     lines.push('');
     if (orderNote.trim()) {
@@ -277,7 +277,7 @@ export default function NJMenu() {
     lines.push('Please confirm availability and delivery timeline.');
 
     const subject = encodeURIComponent(
-      `Highsman NJ Wholesale Order â ${new Date().toLocaleDateString()}`,
+      `Highsman NJ Wholesale Order — ${new Date().toLocaleDateString()}`,
     );
     const body = encodeURIComponent(lines.join('\n'));
     return `mailto:marketing@highsman.com?subject=${subject}&body=${body}`;
@@ -286,10 +286,10 @@ export default function NJMenu() {
   // Download menu as text
   const downloadMenu = useCallback(() => {
     const lines: string[] = [
-      'âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ',
-      'â           HIGHSMAN â NEW JERSEY WHOLESALE MENU              â',
-      'â                     Spark Greatnessâ¢                        â',
-      'âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ',
+      '╔═══════════════════════════════════════════════════════════════╗',
+      '║           HIGHSMAN — NEW JERSEY WHOLESALE MENU              ║',
+      '║                     Spark Greatness™                        ║',
+      '╚═══════════════════════════════════════════════════════════════╝',
       '',
       `Generated: ${new Date().toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'})}`,
       'Contact: marketing@highsman.com',
@@ -297,21 +297,21 @@ export default function NJMenu() {
     ];
 
     PRODUCT_LINES.forEach((product) => {
-      lines.push('â'.repeat(63));
+      lines.push('━'.repeat(63));
       lines.push(
-        `${product.name.toUpperCase()} ${product.subtitle.toUpperCase()} â ${product.weight} ${product.format}`,
+        `${product.name.toUpperCase()} ${product.subtitle.toUpperCase()} — ${product.weight} ${product.format}`,
       );
       lines.push(
         `Case Size: ${product.caseSize} units | Wholesale: ${formatCurrency(product.wholesale)}/unit | Case: ${formatCurrency(product.casePrice)} | RRP: ${formatCurrency(product.rrp)}`,
       );
       if (product.discount) {
-        lines.push(`ð¥ ${product.discount.label}: ${product.discount.percent}% OFF`);
+        lines.push(`🔥 ${product.discount.label}: ${product.discount.percent}% OFF`);
       }
       lines.push('');
       lines.push(
         '  Strain                       Type      THC%',
       );
-      lines.push('  ' + 'â'.repeat(50));
+      lines.push('  ' + '─'.repeat(50));
       product.strains.forEach((s) => {
         const name = s.name.padEnd(30);
         const type = s.type.padEnd(10);
@@ -320,12 +320,12 @@ export default function NJMenu() {
       lines.push('');
     });
 
-    lines.push('â'.repeat(63));
+    lines.push('━'.repeat(63));
     lines.push('');
     lines.push('To place an order, email marketing@highsman.com');
     lines.push('or visit highsman.com/njmenu');
     lines.push('');
-    lines.push('Â© Highsman Inc. All rights reserved.');
+    lines.push('© Highsman Inc. All rights reserved.');
 
     const blob = new Blob([lines.join('\n')], {type: 'text/plain'});
     const url = URL.createObjectURL(blob);
@@ -343,7 +343,7 @@ export default function NJMenu() {
 
   return (
     <>
-      {/* ââ Global Styles ââââââââââââââââââââââââââââââââââââââââââââââââââââ */}
+      {/* ── Global Styles ──────────────────────────────────────────────────── */}
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -378,7 +378,7 @@ export default function NJMenu() {
       />
 
       <div className="nj-menu">
-        {/* ââ Top Bar ââââââââââââââââââââââââââââââââââââââââââââââââââââââ */}
+        {/* ── Top Bar ────────────────────────────────────────────────────── */}
         <div
           style={{background: BRAND.gold, color: BRAND.black}}
           className="flex items-center justify-between px-5 py-2 font-headline text-[13px] font-bold tracking-[0.15em] uppercase"
@@ -406,7 +406,7 @@ export default function NJMenu() {
           </a>
         </div>
 
-        {/* ââ Hero âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ */}
+        {/* ── Hero ───────────────────────────────────────────────────────── */}
         <section
           style={{background: BRAND.surface, borderBottom: `1px solid ${BRAND.border}`}}
           className="px-6 md:px-12 py-12 md:py-20"
@@ -520,7 +520,7 @@ export default function NJMenu() {
           </div>
         </section>
 
-        {/* ââ Product Lines ââââââââââââââââââââââââââââââââââââââââââââââââ */}
+        {/* ── Product Lines ──────────────────────────────────────────────── */}
         <div ref={menuRef} className="max-w-6xl mx-auto px-4 md:px-8 py-10">
           {/* Quick-nav pills */}
           <div className="flex flex-wrap gap-2 mb-8">
@@ -571,7 +571,7 @@ export default function NJMenu() {
                   background: BRAND.surface,
                 }}
               >
-                {/* Product Header â always visible */}
+                {/* Product Header — always visible */}
                 <button
                   onClick={() =>
                     setExpandedProduct(isExpanded ? null : product.id)
@@ -857,11 +857,11 @@ export default function NJMenu() {
                           onClick={() =>
                             product.strains.forEach((s) => {
                               const existing = getCasesForItem(
-                                              product.id,
-                                              s.name,
-                                            );
-                                            if (existing === 0)
-                                              setCases(product.id, s.name, 1);
+                                product.id,
+                                s.name,
+                              );
+                              if (existing === 0)
+                                setCases(product.id, s.name, 1);
                             })
                           }
                           className="flex items-center gap-1 font-headline text-xs font-bold uppercase tracking-wider px-3 py-1.5 transition-all hover:opacity-80 cursor-pointer"
@@ -879,13 +879,13 @@ export default function NJMenu() {
                       </div>
                     </div>
                   </div>
-                }
+                )}
               </section>
             );
           })}
         </div>
 
-        {/* ââ Order Summary / Cart ââââââââââââââââââââââââââââââââââââââââââ */}
+        {/* ── Order Summary / Cart ────────────────────────────────────────── */}
         <div
           ref={cartRef}
           className="max-w-6xl mx-auto px-4 md:px-8 pb-32"
@@ -1117,7 +1117,7 @@ export default function NJMenu() {
           </div>
         </div>
 
-        {/* ââ Sticky Bottom Bar ââââââââââââââââââââââââââââââââââââââââââââ */}
+        {/* ── Sticky Bottom Bar ──────────────────────────────────────────── */}
         {cartCount > 0 && !showCart && (
           <div
             className="fixed bottom-0 left-0 right-0 z-50 slide-up"
@@ -1166,7 +1166,7 @@ export default function NJMenu() {
           </div>
         )}
 
-        {/* ââ Footer âââââââââââââââââââââââââââââââââââââââââââââââââââââââ */}
+        {/* ── Footer ─────────────────────────────────────────────────────── */}
         <footer
           className="px-6 md:px-12 py-10 text-center"
           style={{
@@ -1199,7 +1199,7 @@ export default function NJMenu() {
           </p>
         </footer>
 
-        {/* ââ Toast ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ */}
+        {/* ── Toast ──────────────────────────────────────────────────────── */}
         {toast && (
           <div
             className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] fade-in flex items-center gap-2 px-5 py-3 shadow-lg"
