@@ -1,6 +1,6 @@
 import {useState, useRef, useCallback, useMemo, useEffect} from 'react';
 import type {MetaFunction} from '@shopify/remix-oxygen';
-import {Link} from '@remix-run/react';
+import {Link, useFetcher} from '@remix-run/react';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // META
@@ -386,6 +386,45 @@ export default function NJMenu() {
     return () => { style.remove(); };
   }, []);
 
+  // ── Account / Shop Identification ──────────────────────────────────────────
+  const accountFetcher = useFetcher<{accounts: Array<{id: string; name: string; city: string | null; phone: string | null}>}>();
+  const [accountQuery, setAccountQuery] = useState('');
+  const [selectedAccount, setSelectedAccount] = useState<{id: string; name: string; city: string | null; phone: string | null} | null>(null);
+  const [showAccountDropdown, setShowAccountDropdown] = useState(false);
+  const accountInputRef = useRef<HTMLInputElement>(null);
+  const accountDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Debounced search — fetch from /api/accounts as user types
+  useEffect(() => {
+    if (accountQuery.length < 2 || selectedAccount) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      accountFetcher.load(`/api/accounts?q=${encodeURIComponent(accountQuery)}`);
+      setShowAccountDropdown(true);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [accountQuery, selectedAccount]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        accountDropdownRef.current &&
+        !accountDropdownRef.current.contains(e.target as Node) &&
+        accountInputRef.current &&
+        !accountInputRef.current.contains(e.target as Node)
+      ) {
+        setShowAccountDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const accountResults = accountFetcher.data?.accounts || [];
+
+  // ── Cart & Order State ───────────────────────────────────────────────────
   const [cart, setCart] = useState<Record<string, CartItem>>({});
   const [showCart, setShowCart] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -482,6 +521,15 @@ export default function NJMenu() {
       '',
     ];
 
+    // Include account/shop info if selected
+    if (selectedAccount) {
+      lines.push(`DISPENSARY: ${selectedAccount.name}`);
+      if (selectedAccount.city) lines.push(`LOCATION: ${selectedAccount.city}, NJ`);
+      if (selectedAccount.phone) lines.push(`PHONE: ${selectedAccount.phone}`);
+      lines.push(`ZOHO ID: ${selectedAccount.id}`);
+      lines.push('');
+    }
+
     let total = 0;
     cartItems.forEach((item) => {
       const product = PRODUCT_LINES.find((p) => p.id === item.productId);
@@ -529,12 +577,13 @@ export default function NJMenu() {
     }
     lines.push('Please confirm availability and delivery timeline.');
 
+    const shopName = selectedAccount?.name || 'Unknown Shop';
     const subject = encodeURIComponent(
-      `Highsman NJ Wholesale Order — ${new Date().toLocaleDateString()}`,
+      `Highsman NJ Order — ${shopName} — ${new Date().toLocaleDateString()}`,
     );
     const body = encodeURIComponent(lines.join('\n'));
     return `mailto:njsales@highsman.com?subject=${subject}&body=${body}`;
-  }, [cartItems, orderNote, earnedSamples, sampleStrains]);
+  }, [cartItems, orderNote, earnedSamples, sampleStrains, selectedAccount]);
 
   const getCasesForItem = (productId: string, strainName: string): number => {
     return cart[cartKey(productId, strainName)]?.cases ?? 0;
@@ -709,6 +758,163 @@ export default function NJMenu() {
           {/* Divider line */}
           <div style={{height: 1, background: 'rgba(255,255,255,0.08)'}} />
         </header>
+
+        {/* ── Account / Shop Identification ─────────────────────────────── */}
+        <div className="max-w-5xl mx-auto px-6 md:px-10 pt-12 md:pt-16">
+          <div
+            className="relative"
+            style={{
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 8,
+              padding: '24px 28px',
+            }}
+          >
+            <label
+              className="font-body text-xs font-600 tracking-[0.2em] uppercase mb-3 block"
+              style={{color: BRAND.gold}}
+              htmlFor="account-search"
+            >
+              Your Dispensary
+            </label>
+
+            {selectedAccount ? (
+              /* ── Selected state ─────────────────────────────────────── */
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="font-headline text-xl md:text-2xl font-600 uppercase tracking-wide" style={{color: '#fff'}}>
+                    {selectedAccount.name}
+                  </p>
+                  <p className="font-body text-sm mt-1" style={{color: 'rgba(255,255,255,0.55)'}}>
+                    {[selectedAccount.city && `${selectedAccount.city}, NJ`, selectedAccount.phone].filter(Boolean).join(' · ')}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedAccount(null);
+                    setAccountQuery('');
+                    setTimeout(() => accountInputRef.current?.focus(), 50);
+                  }}
+                  className="font-body text-xs font-600 uppercase tracking-[0.15em] px-4 py-2 cursor-pointer transition-opacity hover:opacity-80"
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    color: 'rgba(255,255,255,0.6)',
+                    borderRadius: 4,
+                  }}
+                >
+                  Change
+                </button>
+              </div>
+            ) : (
+              /* ── Search state ───────────────────────────────────────── */
+              <div className="relative">
+                <input
+                  ref={accountInputRef}
+                  id="account-search"
+                  type="text"
+                  value={accountQuery}
+                  onChange={(e) => {
+                    setAccountQuery(e.target.value);
+                    if (e.target.value.length < 2) setShowAccountDropdown(false);
+                  }}
+                  onFocus={() => {
+                    if (accountResults.length > 0) setShowAccountDropdown(true);
+                  }}
+                  placeholder="Start typing your dispensary name…"
+                  autoComplete="off"
+                  className="w-full font-body text-base md:text-lg"
+                  style={{
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: 6,
+                    padding: '14px 16px',
+                    color: '#fff',
+                    outline: 'none',
+                  }}
+                />
+                {accountFetcher.state === 'loading' && (
+                  <div
+                    className="absolute right-4 top-1/2 -translate-y-1/2 font-body text-xs"
+                    style={{color: 'rgba(255,255,255,0.4)'}}
+                  >
+                    Searching…
+                  </div>
+                )}
+
+                {/* ── Dropdown results ────────────────────────────────── */}
+                {showAccountDropdown && accountResults.length > 0 && (
+                  <div
+                    ref={accountDropdownRef}
+                    className="absolute left-0 right-0 z-50 mt-2 overflow-hidden"
+                    style={{
+                      background: '#1A1A1A',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      borderRadius: 6,
+                      maxHeight: 280,
+                      overflowY: 'auto',
+                    }}
+                  >
+                    {accountResults.map((acct) => (
+                      <button
+                        key={acct.id}
+                        onClick={() => {
+                          setSelectedAccount(acct);
+                          setAccountQuery(acct.name);
+                          setShowAccountDropdown(false);
+                        }}
+                        className="w-full text-left px-4 py-3 cursor-pointer transition-colors"
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          borderBottom: '1px solid rgba(255,255,255,0.06)',
+                          color: '#fff',
+                        }}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLButtonElement).style.background = 'rgba(245,228,0,0.08)';
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                        }}
+                      >
+                        <span className="font-body text-sm font-600">{acct.name}</span>
+                        {acct.city && (
+                          <span className="font-body text-xs ml-2" style={{color: 'rgba(255,255,255,0.45)'}}>
+                            {acct.city}, NJ
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* No results message */}
+                {showAccountDropdown && accountQuery.length >= 2 && accountFetcher.state === 'idle' && accountResults.length === 0 && (
+                  <div
+                    className="absolute left-0 right-0 z-50 mt-2 px-4 py-3 font-body text-sm"
+                    style={{
+                      background: '#1A1A1A',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      borderRadius: 6,
+                      color: 'rgba(255,255,255,0.5)',
+                    }}
+                  >
+                    No dispensary found — try a different name or{' '}
+                    <a href="mailto:njsales@highsman.com" className="underline" style={{color: BRAND.gold}}>
+                      email the team
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!selectedAccount && (
+              <p className="font-body text-xs mt-3" style={{color: 'rgba(255,255,255,0.35)'}}>
+                Select your shop so we can attach your account to this order.
+              </p>
+            )}
+          </div>
+        </div>
 
         {/* ── Product Lines ──────────────────────────────────────────────── */}
         <div ref={menuRef} className="max-w-5xl mx-auto px-6 md:px-10 py-16 md:py-24">
@@ -1104,12 +1310,22 @@ export default function NJMenu() {
                   <span className="font-headline text-4xl font-700" style={{color: BRAND.gold}}>{formatCurrency(cartTotal)}</span>
                 </div>
 
+                {!selectedAccount && (
+                  <div
+                    className="flex items-center gap-3 mb-4 px-4 py-3"
+                    style={{background: 'rgba(245,228,0,0.08)', border: '1px solid rgba(245,228,0,0.25)', borderRadius: 6}}
+                  >
+                    <span className="font-body text-sm" style={{color: BRAND.gold}}>
+                      ⚠ Select your dispensary above so we can attach your account to this order.
+                    </span>
+                  </div>
+                )}
                 <a
                   href={buildOrderEmail()}
                   className="block font-headline text-lg font-600 uppercase tracking-[0.15em] py-5 w-full text-center transition-opacity hover:opacity-90"
                   style={{background: BRAND.gold, color: '#000'}}
                 >
-                  Send Order to Highsman
+                  Send Order{selectedAccount ? ` — ${selectedAccount.name}` : ' to Highsman'}
                 </a>
                 <p className="font-body text-xs text-center mt-4" style={{color: 'rgba(255,255,255,0.55)'}}>
                   Opens your email client with the order pre-filled. Your rep will confirm.

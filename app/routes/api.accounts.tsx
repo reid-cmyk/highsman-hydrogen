@@ -1,0 +1,131 @@
+import type {LoaderFunctionArgs} from '@shopify/remix-oxygen';
+import {json} from '@shopify/remix-oxygen';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Zoho CRM Account Search — Server-side API Route
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/accounts?q=garfield
+// Returns matching NJ dispensary accounts from Zoho CRM.
+// Keeps Zoho OAuth credentials server-side (never exposed to browser).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// In-memory token cache (per worker instance)
+let cachedAccessToken: string | null = null;
+let tokenExpiresAt = 0;
+
+/** Exchange a refresh token for a fresh Zoho access token. */
+async function getAccessToken(env: {
+  ZOHO_CLIENT_ID: string;
+  ZOHO_CLIENT_SECRET: string;
+  ZOHO_REFRESH_TOKEN: string;
+}): Promise<string> {
+  const now = Date.now();
+  if (cachedAccessToken && now < tokenExpiresAt) return cachedAccessToken;
+
+  const res = await fetch('https://accounts.zoho.com/oauth/v2/token', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: env.ZOHO_CLIENT_ID,
+      client_secret: env.ZOHO_CLIENT_SECRET,
+      refresh_token: env.ZOHO_REFRESH_TOKEN,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Zoho token refresh failed (${res.status}): ${text.slice(0, 300)}`);
+  }
+
+  const data = await res.json();
+  cachedAccessToken = data.access_token;
+  // Zoho tokens last 1 hour — cache for 55 minutes to be safe
+  tokenExpiresAt = now + 55 * 60 * 1000;
+  return cachedAccessToken!;
+}
+
+/** Search Zoho CRM Accounts by name (NJ only). */
+async function searchAccounts(
+  query: string,
+  accessToken: string,
+): Promise<Array<{id: string; name: string; city: string | null; phone: string | null}>> {
+  // Use Zoho's searchRecords with word search + NJ state filter
+  const url = new URL('https://www.zohoapis.com/crm/v7/Accounts/search');
+  url.searchParams.set('criteria', `((Account_Name:starts_with:${query})and(Billing_State:equals:NJ))`);
+  url.searchParams.set('fields', 'Account_Name,Billing_City,Billing_State,Phone');
+  url.searchParams.set('per_page', '15');
+
+  const res = await fetch(url.toString(), {
+    headers: {
+      Authorization: `Zoho-oauthtoken ${accessToken}`,
+    },
+  });
+
+  // 204 = no results
+  if (res.status === 204) return [];
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Zoho search failed (${res.status}): ${text.slice(0, 300)}`);
+  }
+
+  const data = await res.json();
+  return (data.data || []).map((acct: any) => ({
+    id: acct.id,
+    name: acct.Account_Name,
+    city: acct.Billing_City || null,
+    phone: acct.Phone || null,
+  }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Loader (GET /api/accounts?q=...)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function loader({request, context}: LoaderFunctionArgs) {
+  const url = new URL(request.url);
+  const query = (url.searchParams.get('q') || '').trim();
+
+  // Require at least 2 characters
+  if (query.length < 2) {
+    return json({accounts: []}, {
+      headers: {'Cache-Control': 'no-store'},
+    });
+  }
+
+  const env = context.env as any;
+  const clientId = env.ZOHO_CLIENT_ID;
+  const clientSecret = env.ZOHO_CLIENT_SECRET;
+  const refreshToken = env.ZOHO_REFRESH_TOKEN;
+
+  // If Zoho credentials aren't set, return empty (graceful degradation)
+  if (!clientId || !clientSecret || !refreshToken) {
+    console.warn('[api/accounts] Zoho CRM credentials not configured — returning empty results');
+    return json({accounts: [], error: 'CRM not configured'}, {
+      status: 200,
+      headers: {'Cache-Control': 'no-store'},
+    });
+  }
+
+  try {
+    const accessToken = await getAccessToken({
+      ZOHO_CLIENT_ID: clientId,
+      ZOHO_CLIENT_SECRET: clientSecret,
+      ZOHO_REFRESH_TOKEN: refreshToken,
+    });
+
+    const accounts = await searchAccounts(query, accessToken);
+    return json({accounts}, {
+      headers: {
+        'Cache-Control': 'public, max-age=300', // cache 5 min
+      },
+    });
+  } catch (err: any) {
+    console.error('[api/accounts] Error:', err.message);
+    return json({accounts: [], error: 'Search unavailable'}, {
+      status: 200, // don't break the UI — degrade gracefully
+      headers: {'Cache-Control': 'no-store'},
+    });
+  }
+}
