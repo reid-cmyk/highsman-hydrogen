@@ -32,7 +32,7 @@ const BRAND = {
   surfaceHigh: '#1A1A1A',
   surfaceContainer: '#222222',
   border: 'rgba(169,172,175,0.20)',
-  textMuted: 'rgba(255,255,255,0.55)',
+  textMuted: 'rgba(255,255,255,0.6)',
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -547,6 +547,9 @@ export default function NJMenu() {
 
         .nj-menu a { text-decoration: none; }
 
+        .nj-menu select { -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23ffffff' d='M1.41 0L6 4.58 10.59 0 12 1.41l-6 6-6-6z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; }
+        .nj-menu select option { background: #1A1A1A; color: #fff; padding: 8px 12px; }
+
         .nj-menu .strain-row { transition: background 0.15s ease; }
         .nj-menu .strain-row:hover { background: rgba(255,255,255,0.03); }
 
@@ -587,14 +590,14 @@ export default function NJMenu() {
           <Link
             to="/wholesale"
             className="font-body text-xs font-600 tracking-[0.12em] uppercase"
-            style={{color: 'rgba(255,255,255,0.5)'}}
+            style={{color: 'rgba(255,255,255,0.65)'}}
           >
             &larr; Wholesale Portal
           </Link>
           <a
             href="mailto:njsales@highsman.com"
             className="font-body text-xs font-600 tracking-[0.12em] uppercase"
-            style={{color: 'rgba(255,255,255,0.5)'}}
+            style={{color: 'rgba(255,255,255,0.65)'}}
           >
             njsales@highsman.com
           </a>
@@ -675,7 +678,7 @@ export default function NJMenu() {
           {/* Section label */}
           <p
             className="font-body text-xs font-600 tracking-[0.25em] uppercase mb-16"
-            style={{color: 'rgba(255,255,255,0.35)'}}
+            style={{color: 'rgba(255,255,255,0.6)'}}
           >
             Product Catalog &mdash; {PRODUCT_LINES.length} Lines &middot; {PRODUCT_LINES.reduce((n, p) => n + p.strains.length, 0)} SKUs
           </p>
@@ -713,7 +716,7 @@ export default function NJMenu() {
                     <h2 className="font-headline font-600 uppercase leading-[0.9] tracking-tight" style={{fontSize: 'clamp(28px, 5vw, 48px)'}}>
                       {product.name} <span style={{color: BRAND.gold}}>{product.subtitle}</span>
                     </h2>
-                    <p className="font-body text-sm mt-2" style={{color: 'rgba(255,255,255,0.4)'}}>
+                    <p className="font-body text-sm mt-2" style={{color: 'rgba(255,255,255,0.6)'}}>
                       {product.weight} &middot; {product.format} &middot; Case of {product.caseSize}
                     </p>
                   </div>
@@ -724,17 +727,17 @@ export default function NJMenu() {
                       <span className="font-headline text-3xl font-600 block leading-none" style={{color: '#fff'}}>
                         {formatCurrency(discountedWholesale)}
                       </span>
-                      <span className="font-body text-xs" style={{color: 'rgba(255,255,255,0.35)'}}>per unit wholesale</span>
+                      <span className="font-body text-xs" style={{color: 'rgba(255,255,255,0.6)'}}>per unit wholesale</span>
                     </div>
                     <div className="text-right">
                       <span className="font-headline text-3xl font-600 block leading-none" style={{color: BRAND.gold}}>
                         {marginPct}%
                       </span>
-                      <span className="font-body text-xs" style={{color: 'rgba(255,255,255,0.35)'}}>retail margin</span>
+                      <span className="font-body text-xs" style={{color: 'rgba(255,255,255,0.6)'}}>retail margin</span>
                     </div>
                     <span
                       className="font-headline text-2xl font-300 transition-transform"
-                      style={{color: 'rgba(255,255,255,0.3)', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s ease'}}
+                      style={{color: 'rgba(255,255,255,0.55)', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s ease'}}
                     >
                       &#8964;
                     </span>
@@ -753,7 +756,7 @@ export default function NJMenu() {
                         {l: 'Margin', v: `${marginPct}%`, gold: true},
                       ].map((d) => (
                         <div key={d.l} className="flex items-baseline gap-2">
-                          <span className="font-body text-xs font-500 uppercase tracking-[0.15em]" style={{color: 'rgba(255,255,255,0.3)'}}>{d.l}</span>
+                          <span className="font-body text-xs font-500 uppercase tracking-[0.15em]" style={{color: 'rgba(255,255,255,0.55)'}}>{d.l}</span>
                           <span className="font-headline text-lg font-600" style={{color: (d as any).gold ? BRAND.gold : '#fff'}}>{d.v}</span>
                         </div>
                       ))}
@@ -771,11 +774,11 @@ export default function NJMenu() {
 
                     {/* Quick order — subtle */}
                     <div className="flex items-center gap-3 mb-6 pl-0 md:pl-[120px]">
-                      <span className="font-body text-xs font-500 tracking-[0.15em] uppercase" style={{color: 'rgba(255,255,255,0.3)'}}>Quick</span>
+                      <span className="font-body text-xs font-500 tracking-[0.15em] uppercase" style={{color: 'rgba(255,255,255,0.55)'}}>Quick</span>
                       <button
                         onClick={() => product.strains.forEach((s) => { if (getCasesForItem(product.id, s.name) > 0) updateCart(product.id, s.name, -1); })}
                         className="font-headline text-xs font-600 uppercase tracking-[0.1em] px-4 py-2 cursor-pointer transition-opacity hover:opacity-70"
-                        style={{background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.5)'}}
+                        style={{background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.65)'}}
                       >
                         −1 Each
                       </button>
@@ -791,7 +794,7 @@ export default function NJMenu() {
                     {/* Strain table header */}
                     <div
                       className="hidden md:grid items-center gap-4 px-0 md:pl-[120px] pb-3 mb-0 font-body text-[10px] font-600 tracking-[0.2em] uppercase"
-                      style={{color: 'rgba(255,255,255,0.25)', gridTemplateColumns: '1fr 80px 70px 56px 120px'}}
+                      style={{color: 'rgba(255,255,255,0.65)', gridTemplateColumns: '1fr 80px 70px 56px 120px'}}
                     >
                       <span>Strain</span>
                       <span>Type</span>
@@ -851,7 +854,7 @@ export default function NJMenu() {
                                 )}
                               </div>
                               {/* Type */}
-                              <span className="font-body text-xs font-500 uppercase tracking-wider" style={{color: 'rgba(255,255,255,0.5)'}}>
+                              <span className="font-body text-xs font-500 uppercase tracking-wider" style={{color: 'rgba(255,255,255,0.65)'}}>
                                 {strain.type}
                               </span>
                               {/* THC */}
@@ -859,7 +862,7 @@ export default function NJMenu() {
                                 {product.thcDisplay ?? strain.thc}
                               </span>
                               {/* SKU */}
-                              <span className="font-body text-[10px] tracking-wider" style={{color: 'rgba(255,255,255,0.25)', fontFamily: 'monospace, monospace'}}>
+                              <span className="font-body text-[10px] tracking-wider" style={{color: 'rgba(255,255,255,0.65)', fontFamily: 'monospace, monospace'}}>
                                 {strain.sku ? strain.sku.split('-').pop() : '—'}
                               </span>
                               {/* Stepper */}
@@ -870,7 +873,7 @@ export default function NJMenu() {
                                   className="stepper-btn"
                                   style={{
                                     background: cases > 0 ? 'rgba(255,255,255,0.08)' : 'transparent',
-                                    color: cases > 0 ? '#fff' : 'rgba(255,255,255,0.15)',
+                                    color: cases > 0 ? '#fff' : 'rgba(255,255,255,0.35)',
                                     cursor: cases > 0 ? 'pointer' : 'default',
                                   }}
                                 >
@@ -907,13 +910,13 @@ export default function NJMenu() {
                             <div className="flex md:hidden flex-1 items-center justify-between min-w-0">
                               <div className="min-w-0">
                                 <span className="font-headline font-600 text-lg text-white uppercase leading-none block truncate">{strain.name}</span>
-                                <span className="font-body text-xs block mt-0.5" style={{color: 'rgba(255,255,255,0.4)'}}>
+                                <span className="font-body text-xs block mt-0.5" style={{color: 'rgba(255,255,255,0.6)'}}>
                                   {strain.type} &middot; {product.thcDisplay ?? strain.thc}
                                 </span>
                               </div>
                               <div className="flex items-center gap-0 flex-shrink-0 ml-3">
                                 <button onClick={() => updateCart(product.id, strain.name, -1)} disabled={cases === 0}
-                                  className="stepper-btn" style={{background: cases > 0 ? 'rgba(255,255,255,0.08)' : 'transparent', color: cases > 0 ? '#fff' : 'rgba(255,255,255,0.15)', width: 32, height: 32, fontSize: 16}}>−</button>
+                                  className="stepper-btn" style={{background: cases > 0 ? 'rgba(255,255,255,0.08)' : 'transparent', color: cases > 0 ? '#fff' : 'rgba(255,255,255,0.35)', width: 32, height: 32, fontSize: 16}}>−</button>
                                 <input type="number" min={0} value={cases}
                                   onChange={(e) => setCases(product.id, strain.name, parseInt(e.target.value, 10) || 0)}
                                   className="font-headline text-sm font-600 text-center"
@@ -945,14 +948,14 @@ export default function NJMenu() {
                 Your Order
               </h2>
               <div className="flex items-center gap-6">
-                <span className="font-body text-sm" style={{color: 'rgba(255,255,255,0.4)'}}>
+                <span className="font-body text-sm" style={{color: 'rgba(255,255,255,0.6)'}}>
                   {cartCount} case{cartCount !== 1 ? 's' : ''}
                 </span>
                 {cartCount > 0 && (
                   <button
                     onClick={clearCart}
                     className="font-body text-xs font-500 tracking-[0.1em] uppercase cursor-pointer hover:opacity-70 transition-opacity"
-                    style={{background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.3)'}}
+                    style={{background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.55)'}}
                   >
                     Clear
                   </button>
@@ -962,7 +965,7 @@ export default function NJMenu() {
 
             {cartCount === 0 ? (
               <div className="py-16 text-center">
-                <p className="font-body text-base" style={{color: 'rgba(255,255,255,0.3)'}}>
+                <p className="font-body text-base" style={{color: 'rgba(255,255,255,0.55)'}}>
                   No items yet. Select quantities from the catalog above.
                 </p>
               </div>
@@ -982,7 +985,7 @@ export default function NJMenu() {
                       >
                         <div className="flex-1 min-w-0">
                           <p className="font-body text-sm font-600">{product.name} {product.subtitle}</p>
-                          <p className="font-body text-xs" style={{color: 'rgba(255,255,255,0.4)'}}>{item.strainName}</p>
+                          <p className="font-body text-xs" style={{color: 'rgba(255,255,255,0.6)'}}>{item.strainName}</p>
                         </div>
                         <div className="flex items-center gap-5 flex-shrink-0">
                           <div className="flex items-center gap-0">
@@ -997,7 +1000,7 @@ export default function NJMenu() {
                           </span>
                           <button onClick={() => setCases(item.productId, item.strainName, 0)}
                             className="cursor-pointer font-body text-lg leading-none hover:opacity-60 transition-opacity"
-                            style={{background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.25)'}}>
+                            style={{background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.65)'}}>
                             &times;
                           </button>
                         </div>
@@ -1013,7 +1016,7 @@ export default function NJMenu() {
                       <p className="font-headline text-xl font-600 uppercase tracking-tight">
                         Budtender Samples <span style={{color: BRAND.gold}}>Included</span>
                       </p>
-                      <span className="font-body text-xs font-500" style={{color: 'rgba(255,255,255,0.35)'}}>
+                      <span className="font-body text-xs font-500" style={{color: 'rgba(255,255,255,0.6)'}}>
                         {totalSamples} free unit{totalSamples !== 1 ? 's' : ''}
                       </span>
                     </div>
@@ -1021,17 +1024,17 @@ export default function NJMenu() {
                       <div key={sample.id} className="flex items-center justify-between py-3" style={{borderBottom: '1px solid rgba(255,255,255,0.04)'}}>
                         <div>
                           <span className="font-body text-sm font-600">{sample.qty}&times; {sample.label}</span>
-                          <span className="font-body text-xs ml-2" style={{color: 'rgba(255,255,255,0.3)'}}>{sample.unit}</span>
+                          <span className="font-body text-xs ml-2" style={{color: 'rgba(255,255,255,0.55)'}}>{sample.unit}</span>
                         </div>
                         <select
                           value={sampleStrains[sample.id] ?? ''}
                           onChange={(e) => setSampleStrains((prev) => ({...prev, [sample.id]: e.target.value}))}
-                          className="font-body text-xs font-500 px-3 py-2 cursor-pointer"
+                          className="font-body text-sm font-500 px-3 py-2.5 cursor-pointer"
                           style={{
-                            background: 'rgba(255,255,255,0.04)',
-                            border: sampleStrains[sample.id] ? `1px solid ${BRAND.gold}60` : '1px solid rgba(255,255,255,0.08)',
-                            color: sampleStrains[sample.id] ? '#fff' : 'rgba(255,255,255,0.4)',
-                            outline: 'none', minWidth: 160,
+                            background: '#1A1A1A',
+                            border: sampleStrains[sample.id] ? `1px solid ${BRAND.gold}` : '1px solid rgba(255,255,255,0.15)',
+                            color: sampleStrains[sample.id] ? '#fff' : 'rgba(255,255,255,0.6)',
+                            outline: 'none', minWidth: 180, borderRadius: 0,
                           }}
                         >
                           <option value="">Choose strain</option>
@@ -1044,7 +1047,7 @@ export default function NJMenu() {
 
                 {/* Note */}
                 <div className="mb-8">
-                  <label className="font-body text-xs font-500 tracking-[0.15em] uppercase block mb-2" style={{color: 'rgba(255,255,255,0.3)'}}>
+                  <label className="font-body text-xs font-500 tracking-[0.15em] uppercase block mb-2" style={{color: 'rgba(255,255,255,0.55)'}}>
                     Order Note
                   </label>
                   <textarea
@@ -1070,7 +1073,7 @@ export default function NJMenu() {
                 >
                   Send Order to Highsman
                 </a>
-                <p className="font-body text-xs text-center mt-4" style={{color: 'rgba(255,255,255,0.3)'}}>
+                <p className="font-body text-xs text-center mt-4" style={{color: 'rgba(255,255,255,0.55)'}}>
                   Opens your email client with the order pre-filled. Your rep will confirm.
                 </p>
               </>
@@ -1107,10 +1110,10 @@ export default function NJMenu() {
             alt="Spark Greatness™"
             style={{height: 24, width: 'auto', margin: '0 auto 20px', display: 'block', opacity: 0.6}}
           />
-          <p className="font-body text-sm mb-2" style={{color: 'rgba(255,255,255,0.35)'}}>
-            <a href="mailto:njsales@highsman.com" style={{color: 'rgba(255,255,255,0.5)'}}>njsales@highsman.com</a>
+          <p className="font-body text-sm mb-2" style={{color: 'rgba(255,255,255,0.6)'}}>
+            <a href="mailto:njsales@highsman.com" style={{color: 'rgba(255,255,255,0.65)'}}>njsales@highsman.com</a>
           </p>
-          <p className="font-body text-xs" style={{color: 'rgba(255,255,255,0.2)'}}>
+          <p className="font-body text-xs" style={{color: 'rgba(255,255,255,0.45)'}}>
             &copy; {new Date().getFullYear()} Highsman Inc. All rights reserved. Prices subject to change.
           </p>
         </footer>
