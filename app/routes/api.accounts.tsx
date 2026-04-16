@@ -108,6 +108,7 @@ async function createAccountWithContact(
       data: [
         {
           Account_Name: data.dispensaryName,
+          Account_State: data.state || 'NJ',
           Phone: data.phone || null,
           Billing_Street: data.street || null,
           Billing_City: data.city || null,
