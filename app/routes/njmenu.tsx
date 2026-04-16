@@ -369,6 +369,175 @@ function cartKey(productId: string, strainName: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// NJ DISPENSARY DIRECTORY (from Zoho CRM — instant client-side search)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const NJ_DISPENSARIES: Array<{id: string; name: string; city: string | null; phone: string | null}> = [
+  {id:'6699615000001563114',name:'A21 Dispensary',city:'Scotch Plains',phone:'8482195891'},
+  {id:'6699615000001563115',name:'Altitude Cannabis - Toms River',city:'Toms River',phone:'8482237265'},
+  {id:'6699615000001563116',name:'Andover Cannabis',city:'Andover',phone:'4016174470'},
+  {id:'6699615000001563117',name:'Aunt Mary\'s',city:'Flemington',phone:'9082570421'},
+  {id:'6699615000013803047',name:'Authorized Dealer',city:'North Bergen',phone:'201.303.2999'},
+  {id:'6699615000013433003',name:'Authorized Dealer - Jersey City',city:'Jersey City',phone:'(201) 293-5668'},
+  {id:'6699615000013433004',name:'Authorized Dealer - North Bergen',city:'North Bergen',phone:'(201) 293-5668'},
+  {id:'6699615000013433005',name:'Authorized Dealer - Willingboro',city:'Willingboro',phone:'(609) 781-1956'},
+  {id:'6699615000005120038',name:'A-Z Supply',city:'Bloomfield',phone:null},
+  {id:'6699615000002149001',name:'Benedict\'s Supply',city:'Jersey City',phone:null},
+  {id:'6699615000006512141',name:'Beyond Hello',city:'Little Ferry',phone:null},
+  {id:'6699615000001563118',name:'Bleachers - Somerset',city:'Somerset',phone:'8482522083'},
+  {id:'6699615000011217064',name:'BLKBRN Dispensary',city:'Highland Park',phone:'8482021963'},
+  {id:'6699615000001563119',name:'Bloc Dispensary',city:null,phone:'6093697913'},
+  {id:'6699615000001563120',name:'Bloc - Ewing',city:'Ewing',phone:'6093697913'},
+  {id:'6699615000001563121',name:'Bloc - Somerset',city:'Somerset',phone:'6093697913'},
+  {id:'6699615000001563122',name:'Bloc - Waretown',city:'Ocean Township',phone:'6093697913'},
+  {id:'6699615000001745725',name:'BluLight Cannabis',city:'Woodbury Heights',phone:'8562214000'},
+  {id:'6699615000001745726',name:'BluLight Cannabis - Woodbury Heights',city:'Woodbury Heights',phone:'8562214000'},
+  {id:'6699615000001745727',name:'BluLight Cannabis - Gloucester City',city:'Gloucester City',phone:'8562214000'},
+  {id:'6699615000005592720',name:'Botera NJ - Harrison',city:'Harrison',phone:null},
+  {id:'6699615000001563123',name:'Botera NJ (Union)',city:'Union',phone:'2076180417'},
+  {id:'6699615000005923033',name:'Bridge City Collective',city:'Somerset',phone:null},
+  {id:'6699615000001745728',name:'Bud 2 Bloom',city:'Netcong',phone:'8627460420'},
+  {id:'6699615000005592671',name:'Bud City NJ',city:'Newton',phone:'(973) 440-5945'},
+  {id:'6699615000001745729',name:'Bud It Up LLC',city:'Englishtown',phone:'8482339344'},
+  {id:'6699615000001745730',name:'Buddy\'s Dispensary',city:'Andover',phone:'9734405577'},
+  {id:'6699615000006903019',name:'Budzooka',city:'Elizabeth',phone:'(908) 380-2414'},
+  {id:'6699615000001745731',name:'Canna Bar',city:'Matawan',phone:'7326298278'},
+  {id:'6699615000001563124',name:'Cannabist',city:null,phone:'8568345244'},
+  {id:'6699615000001563125',name:'Cannabist - Deptford',city:'Deptford',phone:'8568345244'},
+  {id:'6699615000001563126',name:'Cannabist - Vineland',city:'Vineland',phone:'6099821929'},
+  {id:'6699615000008070220',name:'Cannaboy Treehouse',city:'South Orange',phone:'973 302-9020'},
+  {id:'6699615000001745732',name:'Cannabis Clubhouse',city:'Sussex',phone:'8623516021'},
+  {id:'6699615000005120758',name:'CannaVibes',city:'Elmwood Park',phone:'(201) 292-4489'},
+  {id:'6699615000001563127',name:'Canopy Crossroad - Red Bank',city:'Red Bank',phone:'7324385880'},
+  {id:'6699615000008070526',name:'Casa Verde Wellness',city:'Dover',phone:'(973) 343-2322'},
+  {id:'6699615000001563128',name:'Castaway Cannabis',city:'Delanco',phone:'8565443029'},
+  {id:'6699615000014277035',name:'Citi Roots LLC',city:'Kingston',phone:'(609) 924-4585'},
+  {id:'6699615000001563129',name:'Conservatory Cannabis Co',city:'Egg Harbor Township',phone:'3027571923'},
+  {id:'6699615000001563130',name:'Cottonmouth Dispensary - Runnemede',city:'Runnemede',phone:'8565357368'},
+  {id:'6699615000001563131',name:'Curaleaf New Jersey',city:null,phone:'6094002455'},
+  {id:'6699615000001563132',name:'Curaleaf - Bordentown',city:'Bordentown',phone:'6094002455'},
+  {id:'6699615000001563133',name:'Curaleaf - Edgewater Park',city:'Edgewater Park',phone:'6092327690'},
+  {id:'6699615000001912018',name:'Dank Poet',city:'Washington',phone:'9084509900'},
+  {id:'6699615000013625005',name:'Do-Canna',city:'Maplewood',phone:'(973) 327-2027'},
+  {id:'6699615000001563134',name:'Doobiez',city:'West Milford',phone:'9735064166'},
+  {id:'6699615000001563135',name:'Earth and Ivy',city:'New Brunswick',phone:'6198611296'},
+  {id:'6699615000001745733',name:'Eastern Green',city:'Voorhees Township',phone:'8562053257'},
+  {id:'6699615000001563136',name:'Elevated by the Cannabosslady',city:'Maplewood',phone:'9174165455'},
+  {id:'6699615000001563137',name:'Enlighten Health and Wellness LLC',city:'Marlton',phone:'8564494332'},
+  {id:'6699615000001563138',name:'Evolve - Bordentown',city:'Bordentown',phone:'9732291171'},
+  {id:'6699615000001563139',name:'Feels of Green',city:'Newton',phone:'9734443079'},
+  {id:'6699615000013586001',name:'4TwentySomewhere',city:'Hewitt',phone:'(973) 506-4503'},
+  {id:'6699615000011822234',name:'Fresh - Eatontown',city:'Eatontown',phone:'(732) 440-7702'},
+  {id:'6699615000014357116',name:'G2 Dispensary',city:'Rockaway',phone:'9735922708'},
+  {id:'6699615000005676085',name:'Garfield Gardens',city:'Garfield',phone:'(973) 755-5420'},
+  {id:'6699615000001563140',name:'Ginger Hale Dispensary',city:'Oaklyn',phone:'6094714180'},
+  {id:'6699615000001745735',name:'Got Your Six of New Jersey',city:'Princeton',phone:'7324442060'},
+  {id:'6699615000012499485',name:'GW Leaf DBA Indoor Treez (New Jersey)',city:'Fort Lee',phone:'2014292284'},
+  {id:'6699615000001745736',name:'Gynsyng',city:'Merchantville',phone:'9082750385'},
+  {id:'6699615000001563141',name:'Hackettstown Dispensary',city:'Hackettstown',phone:'9088870080'},
+  {id:'6699615000013144001',name:'Happy Leaf',city:'Somerdale',phone:'(856) 545-7024'},
+  {id:'6699615000001563142',name:'Hashery LLC - Hackensack',city:'Hackensack',phone:'9089478590'},
+  {id:'6699615000001563143',name:'Hashstoria - Newark',city:'Newark',phone:'8623212436'},
+  {id:'6699615000007595079',name:'Hazy Harvest',city:'Jersey City',phone:'(551) 359-9161'},
+  {id:'6699615000001563144',name:'Healing Side - Atlantic City',city:'Atlantic City',phone:'3477683096'},
+  {id:'6699615000001745737',name:'Hello High',city:'Hammonton',phone:'6095674444'},
+  {id:'6699615000006835349',name:'Herb\'s Premium Dispensary',city:'Somerset',phone:'7325228893'},
+  {id:'6699615000001563145',name:'High Profile',city:null,phone:'5089309876'},
+  {id:'6699615000001563146',name:'High Profile - Lakehurst',city:'Lakehurst',phone:'5089309876'},
+  {id:'6699615000001563147',name:'High Profile - Somerdale',city:'Somerdale',phone:'5089309876'},
+  {id:'6699615000001563148',name:'High Street - Hackettstown',city:'Hackettstown',phone:'5089309876'},
+  {id:'6699615000005120365',name:'High Rollers Dispensary',city:'Atlantic City',phone:'(609) 246-6823'},
+  {id:'6699615000001563149',name:'Holistic Re-Leaf',city:'Rockaway',phone:'9734536645'},
+  {id:'6699615000011602752',name:'Holistic Solutions',city:'Waterford',phone:'(267) 230-1230'},
+  {id:'6699615000002151085',name:'Honey Grove',city:'Clementon',phone:'8565043138'},
+  {id:'6699615000001745739',name:'HoneyGrove',city:'Clementon',phone:'8565043138'},
+  {id:'6699615000001745738',name:'Honey Buzz Farms',city:'Atlantic City',phone:'6099575658'},
+  {id:'6699615000002149029',name:'Honey Stash',city:'Metuchen',phone:null},
+  {id:'6699615000001993083',name:'The Honorable Plant',city:'Highlands',phone:'7323346545'},
+  {id:'6699615000013467002',name:'HudHaus',city:'North Bergen',phone:'(877) 483-4287'},
+  {id:'6699615000012730092',name:'Illicit Gardens - Secaucus NJ',city:'Secaucus',phone:'(732) 714-4037'},
+  {id:'6699615000001563150',name:'Indigo Dispensary',city:'Brooklawn',phone:'6099201818'},
+  {id:'6699615000008618046',name:'J & J Cannabis Dispensary',city:'Oak Ridge',phone:'(973) 200-0705'},
+  {id:'6699615000011822472',name:'Jane\'s Joint',city:'Gibbsboro',phone:'(856) 433-4482'},
+  {id:'6699615000001563151',name:'Jersey Meds',city:'Pennington',phone:'8564657728'},
+  {id:'6699615000001563152',name:'Jersey Roots Dispensary',city:'West Milford',phone:'2013139721'},
+  {id:'6699615000001563153',name:'Joyleaf Recreational Weed Dispensary - Roselle',city:'Roselle',phone:'8335695323'},
+  {id:'6699615000001563154',name:'Kind Kush',city:'Rockaway',phone:'2013165708'},
+  {id:'6699615000005120800',name:'La Vida Gardens',city:'Belleville',phone:'(973) 259-6736'},
+  {id:'6699615000013636003',name:'Liberty Cannabis - North Brunswick',city:'North Brunswick',phone:'(848) 800-4795'},
+  {id:'6699615000013625004',name:'Liberty Cannabis - Secaucus',city:'Secaucus',phone:'(201) 431-4781'},
+  {id:'6699615000001563155',name:'Mass Grown - Mount Holly',city:'Mount Holly',phone:'6095564476'},
+  {id:'6699615000002056159',name:'Mind Lift Dispensary',city:'Plainfield',phone:null},
+  {id:'6699615000001563156',name:'MMD - New Jersey',city:'Jersey City',phone:'8058505995'},
+  {id:'6699615000001563157',name:'Molly Ann Farms',city:'Haledon',phone:'(973) 315-4900'},
+  {id:'6699615000001745740',name:'Monteverde NJ',city:'Red Bank',phone:'7327044575'},
+  {id:'6699615000001745741',name:'Mountain Dispensary',city:'Vernon Township',phone:'9732877034'},
+  {id:'6699615000001563158',name:'Mountain View Farmacy',city:'Oak Ridge',phone:'7322325593'},
+  {id:'6699615000001563159',name:'MPX NJ',city:null,phone:null},
+  {id:'6699615000001563160',name:'MPX NJ - Atlantic City',city:'Atlantic City',phone:'6096167770'},
+  {id:'6699615000001563161',name:'MPX NJ - Gloucester',city:'Sicklerville',phone:'8482922764'},
+  {id:'6699615000001563162',name:'MPX NJ - Pennsauken',city:'Pennsauken Township',phone:'8482065060'},
+  {id:'6699615000001563163',name:'New Era Dispensary',city:'South Bound Brook',phone:'7327099842'},
+  {id:'6699615000001563164',name:'Nirvana Dispensary - Mount Laurel',city:'Mount Laurel',phone:'5515803644'},
+  {id:'6699615000001563165',name:'NJ Leaf',city:'Freehold',phone:'7327629155'},
+  {id:'6699615000001745742',name:'NJ Pure',city:'Edgewater Park',phone:'2345657873'},
+  {id:'6699615000005592019',name:'Northeast Alternatives - Hamilton',city:'Hamilton Township',phone:null},
+  {id:'6699615000001563166',name:'Nova Farms - Woodbury',city:'Woodbury',phone:'7743130763'},
+  {id:'6699615000011822139',name:'Ohm Theory',city:'Elmwood Park',phone:'973-454-3717'},
+  {id:'6699615000001745743',name:'One Green Leaf Dispensary',city:'Gibbsboro',phone:'8563442879'},
+  {id:'6699615000001745744',name:'Plantabis',city:'Rahway',phone:'7324810002'},
+  {id:'6699615000014309056',name:'Plantopia LLC',city:'Englishtown',phone:null},
+  {id:'6699615000001563167',name:'Puffin Store NJ',city:'New Brunswick',phone:'8335071500'},
+  {id:'6699615000013629003',name:'Public Cannabis - Absecon',city:'Absecon',phone:'(609) 241-0447'},
+  {id:'6699615000001563168',name:'Premo',city:'Keyport',phone:'2019054199'},
+  {id:'6699615000001563169',name:'Pure Blossom',city:'Pennington',phone:'7329843906'},
+  {id:'6699615000001563170',name:'ROOTS - Willingboro',city:'Willingboro',phone:'8566498416'},
+  {id:'6699615000001745745',name:'RushBudz Dispensary',city:'South Bound Brook',phone:'7323140099'},
+  {id:'6699615000012519037',name:'Rush Budz',city:'South Bound Brook',phone:'7323140099'},
+  {id:'6699615000001563171',name:'Ruuted',city:'Englishtown',phone:'8609444518'},
+  {id:'6699615000005592623',name:'Salt Air Botanicals',city:'Atlantic City',phone:'(609) 200-1584'},
+  {id:'6699615000007702005',name:'Sea and Leaf',city:'North Cape May',phone:null},
+  {id:'6699615000013795002',name:'Shipwreck\'d',city:'Neptune City',phone:'(732) 481-3136'},
+  {id:'6699615000001563172',name:'Shore House Canna',city:'Cape May',phone:'2158286057'},
+  {id:'6699615000001745746',name:'SilverLeaf Wellness',city:'Somerset',phone:'7326559842'},
+  {id:'6699615000002149057',name:'Simply Pure',city:'Ewing Township',phone:null},
+  {id:'6699615000011822201',name:'Somerset Green',city:'Somerset',phone:'(732) 354-0003'},
+  {id:'6699615000001563173',name:'Soul Flora',city:'Newfoundland',phone:'9734094319'},
+  {id:'6699615000014347179',name:'SoulFlora',city:'West Milford',phone:null},
+  {id:'6699615000001745747',name:'Sparkology',city:'Franklin Park',phone:'7324193330'},
+  {id:'6699615000001745748',name:'Story Cannabis NJ',city:'Springfield',phone:'9084308689'},
+  {id:'6699615000001563174',name:'Taste of Earth',city:'Buena',phone:'8563008783'},
+  {id:'6699615000001563175',name:'The Apothecarium',city:'Phillipsburg',phone:null},
+  {id:'6699615000001563176',name:'The Apothecarium - Lodi',city:'Lodi',phone:'8629102420'},
+  {id:'6699615000001563177',name:'The Apothecarium - Maplewood',city:'Maplewood',phone:'9739961420'},
+  {id:'6699615000001563178',name:'The Apothecarium - Phillipsburg',city:'Phillipsburg',phone:'9087777420'},
+  {id:'6699615000001563179',name:'The Botanist',city:null,phone:'6094578141'},
+  {id:'6699615000001563180',name:'The Botanist - Atlantic County Delivery Hub',city:'Atlantic City',phone:'6094578141'},
+  {id:'6699615000001563181',name:'The Botanist - Egg Harbor Township',city:'Egg Harbor Township',phone:'6093351028'},
+  {id:'6699615000001563182',name:'The Botanist - Williamstown',city:'Williamstown',phone:'6093351028'},
+  {id:'6699615000001563183',name:'The Cannabis Place - New Jersey',city:'Jersey City',phone:'8444201542'},
+  {id:'6699615000001563184',name:'The Dispensary of NJ',city:null,phone:'9082082912'},
+  {id:'6699615000001563185',name:'The Dispensary of Saddle Brook',city:'Saddle Brook',phone:'9082082912'},
+  {id:'6699615000001563186',name:'The Dispensary of Somerset NJ',city:'Somerset',phone:'9082082912'},
+  {id:'6699615000001563187',name:'The Dispensary of Union NJ',city:'Union',phone:'9082082912'},
+  {id:'6699615000005676133',name:'The Frosted Nug',city:'Red Bank',phone:null},
+  {id:'6699615000005676138',name:'The Frosted Nug - Carneys Point',city:'Penns Grove',phone:null},
+  {id:'6699615000005676143',name:'The Frosted Nug - Red Bank',city:'Red Bank',phone:null},
+  {id:'6699615000001745749',name:'The Public Garden',city:'Bloomfield',phone:'8624024366'},
+  {id:'6699615000001563188',name:'The Social Leaf',city:'Toms River',phone:'7323586800'},
+  {id:'6699615000001563189',name:'The Station - Hoboken',city:'Hoboken',phone:'9082854569'},
+  {id:'6699615000001745750',name:'The THC Shop',city:'Atlantic City',phone:'6402327467'},
+  {id:'6699615000001563190',name:'Theory Wellness - Trenton',city:'Trenton',phone:'5185671513'},
+  {id:'6699615000012912002',name:'Toke Lane',city:'Trenton',phone:'8556685843'},
+  {id:'6699615000001563191',name:'Tree House Co-op Dispensary',city:'Voorhees',phone:'4105887636'},
+  {id:'6699615000001745751',name:'Uforia',city:'Jersey City',phone:'2014209333'},
+  {id:'6699615000005955025',name:'Uma Flowers NJ',city:'Morristown',phone:'(862) 260-4115'},
+  {id:'6699615000001745752',name:'Unity Rd',city:'Somerset',phone:'7324127210'},
+  {id:'6699615000001745753',name:'Valley Wellness LLC',city:'Raritan',phone:'9084296680'},
+  {id:'6699615000001563192',name:'Village - Hoboken',city:'Hoboken',phone:'2019326522'},
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -387,7 +556,6 @@ export default function NJMenu() {
   }, []);
 
   // ── Account / Shop Identification ──────────────────────────────────────────
-  const accountFetcher = useFetcher<{accounts: Array<{id: string; name: string; city: string | null; phone: string | null}>}>();
   const createAccountFetcher = useFetcher<{ok: boolean; account?: {id: string; name: string; city: string | null; phone: string | null}; error?: string}>();
   const [accountQuery, setAccountQuery] = useState('');
   const [selectedAccount, setSelectedAccount] = useState<{id: string; name: string; city: string | null; phone: string | null} | null>(null);
@@ -397,16 +565,15 @@ export default function NJMenu() {
   const accountInputRef = useRef<HTMLInputElement>(null);
   const accountDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Debounced search — fetch from /api/accounts as user types
-  useEffect(() => {
-    if (accountQuery.length < 2 || selectedAccount) {
-      return;
-    }
-    const timer = setTimeout(() => {
-      accountFetcher.load(`/api/accounts?q=${encodeURIComponent(accountQuery)}`);
-      setShowAccountDropdown(true);
-    }, 250);
-    return () => clearTimeout(timer);
+  // Instant client-side search — filter NJ_DISPENSARIES as user types
+  const accountResults = useMemo(() => {
+    if (accountQuery.length < 2 || selectedAccount) return [];
+    const q = accountQuery.toLowerCase();
+    return NJ_DISPENSARIES.filter(
+      (d) =>
+        d.name.toLowerCase().includes(q) ||
+        (d.city && d.city.toLowerCase().includes(q)),
+    ).slice(0, 15);
   }, [accountQuery, selectedAccount]);
 
   // Close dropdown on outside click
@@ -424,8 +591,6 @@ export default function NJMenu() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  const accountResults = accountFetcher.data?.accounts || [];
 
   // Handle create-account response
   useEffect(() => {
@@ -833,10 +998,11 @@ export default function NJMenu() {
                   value={accountQuery}
                   onChange={(e) => {
                     setAccountQuery(e.target.value);
-                    if (e.target.value.length < 2) setShowAccountDropdown(false);
+                    setShowAccountDropdown(e.target.value.length >= 2);
+                    setShowNewAccountForm(false);
                   }}
                   onFocus={() => {
-                    if (accountResults.length > 0) setShowAccountDropdown(true);
+                    if (accountQuery.length >= 2) setShowAccountDropdown(true);
                   }}
                   placeholder="Start typing your dispensary name…"
                   autoComplete="off"
@@ -850,14 +1016,6 @@ export default function NJMenu() {
                     outline: 'none',
                   }}
                 />
-                {accountFetcher.state === 'loading' && (
-                  <div
-                    className="absolute right-4 top-1/2 -translate-y-1/2 font-body text-xs"
-                    style={{color: 'rgba(255,255,255,0.4)'}}
-                  >
-                    Searching…
-                  </div>
-                )}
 
                 {/* ── Dropdown results ────────────────────────────────── */}
                 {showAccountDropdown && accountResults.length > 0 && !showNewAccountForm && (
@@ -928,7 +1086,7 @@ export default function NJMenu() {
                 )}
 
                 {/* No results — prominent Add New option */}
-                {showAccountDropdown && !showNewAccountForm && accountQuery.length >= 2 && accountFetcher.state === 'idle' && accountResults.length === 0 && (
+                {showAccountDropdown && !showNewAccountForm && accountQuery.length >= 2 && accountResults.length === 0 && (
                   <div
                     className="absolute left-0 right-0 z-50 mt-2 px-4 py-3"
                     style={{
