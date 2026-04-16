@@ -45,14 +45,17 @@ async function getAccessToken(env: {
   return cachedAccessToken!;
 }
 
-/** Search Zoho CRM Accounts by name (NJ only). */
+/** Search Zoho CRM Accounts by name (NJ — matches both "NJ" and "New Jersey"). */
 async function searchAccounts(
   query: string,
   accessToken: string,
 ): Promise<Array<{id: string; name: string; city: string | null; phone: string | null}>> {
-  // Use Zoho's searchRecords with word search + NJ state filter
+  // Use contains matching and OR on both state formats
   const url = new URL('https://www.zohoapis.com/crm/v7/Accounts/search');
-  url.searchParams.set('criteria', `((Account_Name:starts_with:${query})and(Billing_State:equals:NJ))`);
+  url.searchParams.set(
+    'criteria',
+    `((Account_Name:contains:${query})and((Billing_State:equals:NJ)or(Billing_State:equals:New Jersey)))`,
+  );
   url.searchParams.set('fields', 'Account_Name,Billing_City,Billing_State,Phone');
   url.searchParams.set('per_page', '15');
 

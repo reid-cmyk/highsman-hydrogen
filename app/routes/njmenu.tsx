@@ -535,6 +535,14 @@ const NJ_DISPENSARIES: Array<{id: string; name: string; city: string | null; pho
   {id:'6699615000001745752',name:'Unity Rd',city:'Somerset',phone:'7324127210'},
   {id:'6699615000001745753',name:'Valley Wellness LLC',city:'Raritan',phone:'9084296680'},
   {id:'6699615000001563192',name:'Village - Hoboken',city:'Hoboken',phone:'2019326522'},
+  {id:'6699615000012521002',name:'Vigor',city:'Matawan',phone:'732-510-0400'},
+  {id:'6699615000011212048',name:'Quality Cannabliss',city:'Gloucester Township',phone:null},
+  {id:'6699615000009244028',name:'Evergreen Natures Remedy',city:'Butler',phone:null},
+  {id:'6699615000011211001',name:'Gas and Grass NJ',city:'Lake Hopatcong',phone:null},
+  {id:'6699615000009109009',name:'Twisted Hat Canna',city:'Carneys Point',phone:null},
+  {id:'6699615000010149092',name:'Silverleaf Wellness',city:'Somerset',phone:null},
+  {id:'6699615000007452001',name:'CANFECTIONS NJ, INC',city:'Ewing',phone:null},
+  {id:'6699615000011680079',name:'BluLight Cannabis - Woodbury Heights (2)',city:'Woodbury Heights',phone:null},
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -556,25 +564,52 @@ export default function NJMenu() {
   }, []);
 
   // ── Account / Shop Identification ──────────────────────────────────────────
+  const accountFetcher = useFetcher<{accounts: Array<{id: string; name: string; city: string | null; phone: string | null}>; error?: string}>();
   const createAccountFetcher = useFetcher<{ok: boolean; account?: {id: string; name: string; city: string | null; phone: string | null}; error?: string}>();
   const [accountQuery, setAccountQuery] = useState('');
   const [selectedAccount, setSelectedAccount] = useState<{id: string; name: string; city: string | null; phone: string | null} | null>(null);
   const [showAccountDropdown, setShowAccountDropdown] = useState(false);
   const [showNewAccountForm, setShowNewAccountForm] = useState(false);
   const [newAccountError, setNewAccountError] = useState<string | null>(null);
+  const [useLiveSearch, setUseLiveSearch] = useState(true); // try API first
   const accountInputRef = useRef<HTMLInputElement>(null);
   const accountDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Instant client-side search — filter NJ_DISPENSARIES as user types
+  // Debounced live search — try Zoho API first
+  useEffect(() => {
+    if (accountQuery.length < 2 || selectedAccount || !useLiveSearch) return;
+    const timer = setTimeout(() => {
+      accountFetcher.load(`/api/accounts?q=${encodeURIComponent(accountQuery)}`);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [accountQuery, selectedAccount, useLiveSearch]);
+
+  // If API returns "CRM not configured" error, fall back to static list permanently
+  useEffect(() => {
+    if (accountFetcher.data?.error === 'CRM not configured') {
+      setUseLiveSearch(false);
+    }
+  }, [accountFetcher.data]);
+
+  // Compute results: live API results when available, static fallback otherwise
   const accountResults = useMemo(() => {
     if (accountQuery.length < 2 || selectedAccount) return [];
+
+    // If live search is active and we have API results, use those
+    if (useLiveSearch && accountFetcher.data?.accounts && !accountFetcher.data?.error) {
+      return accountFetcher.data.accounts;
+    }
+
+    // Fallback: instant client-side filter on the embedded list
     const q = accountQuery.toLowerCase();
     return NJ_DISPENSARIES.filter(
       (d) =>
         d.name.toLowerCase().includes(q) ||
         (d.city && d.city.toLowerCase().includes(q)),
     ).slice(0, 15);
-  }, [accountQuery, selectedAccount]);
+  }, [accountQuery, selectedAccount, useLiveSearch, accountFetcher.data]);
+
+  const isSearching = useLiveSearch && accountFetcher.state === 'loading';
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -1016,6 +1051,14 @@ export default function NJMenu() {
                     outline: 'none',
                   }}
                 />
+                {isSearching && (
+                  <div
+                    className="absolute right-4 top-1/2 -translate-y-1/2 font-body text-xs"
+                    style={{color: 'rgba(255,255,255,0.4)'}}
+                  >
+                    Searching…
+                  </div>
+                )}
 
                 {/* ── Dropdown results ────────────────────────────────── */}
                 {showAccountDropdown && accountResults.length > 0 && !showNewAccountForm && (
