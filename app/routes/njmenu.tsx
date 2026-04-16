@@ -931,6 +931,54 @@ export default function NJMenu() {
                       </div>
                     )}
 
+                    {/* Quick-add bar — top of strain list */}
+                    <div
+                      className="flex items-center justify-between px-5 md:px-8 py-3"
+                      style={{borderBottom: `1px solid ${BRAND.border}`, background: BRAND.surfaceHigh}}
+                    >
+                      <span className="font-headline text-xs font-bold uppercase tracking-widest" style={{color: BRAND.textMuted}}>
+                        Quick order
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {/* Remove one of each */}
+                        <button
+                          onClick={() =>
+                            product.strains.forEach((s) => {
+                              const existing = getCasesForItem(product.id, s.name);
+                              if (existing > 0)
+                                updateCart(product.id, s.name, -1);
+                            })
+                          }
+                          className="flex items-center gap-1.5 font-headline text-xs font-bold uppercase tracking-wider px-3 py-2 transition-all hover:opacity-80 cursor-pointer"
+                          style={{
+                            background: 'transparent',
+                            border: `1px solid ${BRAND.border}`,
+                            color: BRAND.textMuted,
+                          }}
+                        >
+                          <span className="material-symbols-outlined" style={{fontSize: 15}}>remove_shopping_cart</span>
+                          −1 Each
+                        </button>
+                        {/* Add one of each */}
+                        <button
+                          onClick={() =>
+                            product.strains.forEach((s) =>
+                              updateCart(product.id, s.name, 1)
+                            )
+                          }
+                          className="flex items-center gap-1.5 font-headline text-xs font-bold uppercase tracking-wider px-3 py-2 transition-all hover:opacity-90 cursor-pointer"
+                          style={{
+                            background: BRAND.gold,
+                            border: 'none',
+                            color: BRAND.black,
+                          }}
+                        >
+                          <span className="material-symbols-outlined" style={{fontSize: 15}}>add_shopping_cart</span>
+                          +1 Each
+                        </button>
+                      </div>
+                    </div>
+
                     {/* Strain Rows */}
                     <div className="mb-0">
                       {product.strains.map((strain) => {
@@ -1049,35 +1097,6 @@ export default function NJMenu() {
                         );
                       })}
 
-                      {/* Quick-add bar */}
-                      <div
-                        className="flex items-center justify-end px-5 md:px-8 py-3"
-                        style={{background: BRAND.surfaceHigh, borderTop: `1px solid ${BRAND.border}`}}
-                      >
-                        <button
-                          onClick={() =>
-                            product.strains.forEach((s) => {
-                              const existing = getCasesForItem(
-                                product.id,
-                                s.name,
-                              );
-                              if (existing === 0)
-                                setCases(product.id, s.name, 1);
-                            })
-                          }
-                          className="flex items-center gap-1 font-headline text-xs font-bold uppercase tracking-wider px-3 py-1.5 transition-all hover:opacity-80 cursor-pointer"
-                          style={{
-                            background: product.color,
-                            color: BRAND.black,
-                            border: 'none',
-                          }}
-                        >
-                          <span className="material-symbols-outlined text-sm">
-                            add_shopping_cart
-                          </span>
-                          Add All Strains
-                        </button>
-                      </div>
                     </div>
                   </div>
                 )}
