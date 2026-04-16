@@ -571,29 +571,37 @@ export default function NJMenu() {
           </a>
         </div>
 
-        {/* ── Hero Banner ────────────────────────────────────────────────── */}
-        <div style={{background: BRAND.black, lineHeight: 0}}>
-          <img
-            src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Untitled_design_3.svg?v=1776298236"
-            alt="Highsman New Jersey Wholesale"
-            style={{width: '100%', display: 'block', maxHeight: '480px', objectFit: 'cover', objectPosition: 'center'}}
-          />
-        </div>
-
         {/* ── Hero ───────────────────────────────────────────────────────── */}
         <section
-          style={{background: BRAND.surface, borderBottom: `1px solid ${BRAND.border}`}}
-          className="px-6 md:px-12 py-12 md:py-20"
+          style={{background: BRAND.black, borderBottom: `1px solid ${BRAND.border}`}}
         >
-          <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+          {/* Logo lockup */}
+          <div
+            className="flex flex-col items-center justify-center px-6 pt-12 pb-10 text-center"
+            style={{borderBottom: `1px solid ${BRAND.border}`}}
+          >
+            <img
+              src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Logo_White.png?v=1775594430"
+              alt="Highsman"
+              style={{height: 72, width: 'auto', marginBottom: 16}}
+            />
+            <img
+              src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Spark_Greatness_White.png?v=1775594430"
+              alt="Spark Greatness™"
+              style={{height: 28, width: 'auto', opacity: 0.85}}
+            />
+          </div>
+
+          {/* Content row */}
+          <div className="max-w-6xl mx-auto px-6 md:px-12 py-12 md:py-16 grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
             <div>
               <p
-                className="font-headline text-xs font-bold tracking-[0.25em] uppercase mb-2"
+                className="font-headline text-xs font-bold tracking-[0.25em] uppercase mb-3"
                 style={{color: BRAND.gold}}
               >
                 New Jersey Wholesale
               </p>
-              <h1 className="font-headline text-6xl md:text-8xl font-bold uppercase leading-[0.85] mb-1">
+              <h1 className="font-headline text-6xl md:text-8xl font-bold uppercase leading-[0.85] mb-4">
                 Product
                 <br />
                 Menu
