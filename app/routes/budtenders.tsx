@@ -101,6 +101,13 @@ function StickyNav() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  const handleNav = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    e.preventDefault();
+    const el = document.querySelector(href);
+    if (el) el.scrollIntoView({behavior: 'smooth', block: 'start'});
+    else if (href === '#top') window.scrollTo({top: 0, behavior: 'smooth'});
+  };
+
   return (
     <nav
       className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
@@ -113,7 +120,7 @@ function StickyNav() {
       aria-label="Page navigation"
     >
       <div className="max-w-6xl mx-auto px-6 md:px-16 flex items-center justify-between h-14 md:h-16">
-        <a href="#top" className="focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-400" aria-label="Back to top">
+        <a href="#top" onClick={(e) => handleNav(e, '#top')} className="focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-400" aria-label="Back to top">
           <img
             src={`${CDN}Highsman_Logo_White.png?v=1775594430`}
             alt="Highsman"
@@ -126,6 +133,7 @@ function StickyNav() {
             <a
               key={href}
               href={href}
+              onClick={(e) => handleNav(e, href)}
               className="font-label text-[11px] md:text-xs tracking-[0.18em] uppercase px-4 md:px-5 py-2.5 md:py-3 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-400"
               style={{
                 color: active === href ? '#F5E100' : 'rgba(255,255,255,0.75)',
@@ -169,7 +177,7 @@ function ReferralForm() {
             <img src={`${CDN}Highsman_Letterman-Varsity-Jacket-01_1.png?v=1775594409`} alt="Highsman Varsity Jacket" className="w-16 h-16 flex-shrink-0" style={{objectFit: 'contain', background: '#1a1a1a'}} />
             <div>
               <h4 className="font-headline text-xl uppercase tracking-wider mb-1" style={{color: '#fff'}}>Training Camp Draw</h4>
-              <p className="font-body text-xs" style={{color: 'rgba(255,255,255,0.4)'}}>10 jackets. Each referral = one entry.</p>
+              <p className="font-body text-xs" style={{color: 'rgba(255,255,255,0.6)'}}>10 jackets. Each referral = one entry.</p>
             </div>
           </div>
           <div className="mb-5 px-4 py-3 flex items-center gap-3" style={{background: 'rgba(245,225,0,0.06)', border: '1px solid rgba(245,225,0,0.12)'}}>
@@ -186,21 +194,21 @@ function ReferralForm() {
           <fetcher.Form method="post" action="/api/budtender-referral" className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label htmlFor="referrerName" className="block font-label text-[9px] tracking-[0.25em] uppercase mb-1.5" style={{color: 'rgba(255,255,255,0.35)'}}>Your Name</label>
+                <label htmlFor="referrerName" className="block font-label text-[9px] tracking-[0.25em] uppercase mb-1.5" style={{color: 'rgba(255,255,255,0.6)'}}>Your Name</label>
                 <input id="referrerName" name="referrerName" type="text" placeholder="First and last" required className="font-body text-sm px-4 py-3 w-full outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 focus-visible:ring-offset-1 focus-visible:ring-offset-black" style={{background: '#1a1a1a', color: '#fff', border: '1px solid rgba(255,255,255,0.1)'}} />
               </div>
               <div>
-                <label htmlFor="referrerEmail" className="block font-label text-[9px] tracking-[0.25em] uppercase mb-1.5" style={{color: 'rgba(255,255,255,0.35)'}}>Your Email</label>
+                <label htmlFor="referrerEmail" className="block font-label text-[9px] tracking-[0.25em] uppercase mb-1.5" style={{color: 'rgba(255,255,255,0.6)'}}>Your Email</label>
                 <input id="referrerEmail" name="referrerEmail" type="email" placeholder="you@store.com" required className="font-body text-sm px-4 py-3 w-full outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 focus-visible:ring-offset-1 focus-visible:ring-offset-black" style={{background: '#1a1a1a', color: '#fff', border: '1px solid rgba(255,255,255,0.1)'}} />
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label htmlFor="budtenderName" className="block font-label text-[9px] tracking-[0.25em] uppercase mb-1.5" style={{color: 'rgba(255,255,255,0.35)'}}>Budtender&apos;s Name</label>
+                <label htmlFor="budtenderName" className="block font-label text-[9px] tracking-[0.25em] uppercase mb-1.5" style={{color: 'rgba(255,255,255,0.6)'}}>Budtender&apos;s Name</label>
                 <input id="budtenderName" name="budtenderName" type="text" placeholder="Their first and last" required className="font-body text-sm px-4 py-3 w-full outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 focus-visible:ring-offset-1 focus-visible:ring-offset-black" style={{background: '#1a1a1a', color: '#fff', border: '1px solid rgba(255,255,255,0.1)'}} />
               </div>
               <div>
-                <label htmlFor="budtenderEmail" className="block font-label text-[9px] tracking-[0.25em] uppercase mb-1.5" style={{color: 'rgba(255,255,255,0.35)'}}>Budtender&apos;s Email</label>
+                <label htmlFor="budtenderEmail" className="block font-label text-[9px] tracking-[0.25em] uppercase mb-1.5" style={{color: 'rgba(255,255,255,0.6)'}}>Budtender&apos;s Email</label>
                 <input id="budtenderEmail" name="budtenderEmail" type="email" placeholder="them@email.com" required className="font-body text-sm px-4 py-3 w-full outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 focus-visible:ring-offset-1 focus-visible:ring-offset-black" style={{background: '#1a1a1a', color: '#fff', border: '1px solid rgba(255,255,255,0.1)'}} />
               </div>
             </div>
@@ -217,6 +225,12 @@ function ReferralForm() {
 export default function Budtenders() {
   return (
     <>
+      <style dangerouslySetInnerHTML={{__html: `
+        html { scroll-behavior: smooth; }
+        .bt-page { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+        .bt-page img { display: block; }
+      `}} />
+      <div className="bt-page">
       <StickyNav />
 
       <div id="top" />
@@ -269,7 +283,7 @@ export default function Budtenders() {
             Behavior beats knowledge. Speed beats perfection.{' '}
             <strong style={{letterSpacing: '0.05em'}}>Volume beats hesitation.</strong>
           </p>
-          <img src={`${CDN}HM_SparkGreatness_Black.png?v=1775594430`} alt="Spark Greatness" className="h-5 opacity-40" />
+          <img src={`${CDN}HM_SparkGreatness_Black.png?v=1775594430`} alt="Spark Greatness" className="h-5 opacity-60" />
         </div>
       </div>
 
@@ -283,7 +297,7 @@ export default function Budtenders() {
               <span style={{color: '#F5E100'}}>You&apos;re the reason this works</span>{' '}
               &mdash; and we don&apos;t take that lightly.{'\u201D'}
             </blockquote>
-            <p className="font-label text-[10px] tracking-[0.28em] uppercase" style={{color: 'rgba(255,255,255,0.4)'}}>
+            <p className="font-label text-[10px] tracking-[0.28em] uppercase" style={{color: 'rgba(255,255,255,0.6)'}}>
               <strong style={{color: '#fff', letterSpacing: '0.08em'}}>Ricky Williams</strong>{' '}
               &mdash; Co-Founder, Highsman &middot; #34 &middot; The Highsman
             </p>
@@ -296,10 +310,10 @@ export default function Budtenders() {
         <div className="max-w-6xl mx-auto px-8 md:px-16 pt-24 pb-6">
           <div className="flex items-end justify-between mb-14 flex-wrap gap-4">
             <div>
-              <p className="font-label text-[10px] tracking-[0.4em] uppercase mb-4" style={{color: 'rgba(255,255,255,0.35)'}}>Top 3 Performers Win</p>
+              <p className="font-label text-[10px] tracking-[0.4em] uppercase mb-4" style={{color: 'rgba(255,255,255,0.6)'}}>Top 3 Performers Win</p>
               <h2 className="font-headline uppercase tracking-tight" style={{fontSize: 'clamp(60px,10vw,108px)', lineHeight: 0.86, color: '#fff'}}>The Prizes</h2>
             </div>
-            <span className="font-label text-[10px] tracking-[0.3em] uppercase" style={{color: 'rgba(255,255,255,0.25)'}}>May 7 &ndash; June 7 &middot; NJ</span>
+            <span className="font-label text-[10px] tracking-[0.3em] uppercase" style={{color: 'rgba(255,255,255,0.65)'}}>May 7 &ndash; June 7 &middot; NJ</span>
           </div>
         </div>
         {/* 3-Column Prize Cards */}
@@ -343,7 +357,7 @@ export default function Budtenders() {
                 </div>
                 <ul className="space-y-2.5">
                   {PRIZE_ITEMS_SECOND.map((item) => (
-                    <li key={item} className="flex items-center gap-3 font-body text-sm" style={{color: 'rgba(255,255,255,0.45)'}}>
+                    <li key={item} className="flex items-center gap-3 font-body text-sm" style={{color: 'rgba(255,255,255,0.65)'}}>
                       <span className="flex-shrink-0 w-1 h-1" style={{background: 'rgba(192,192,192,0.4)'}} />
                       {item}
                     </li>
@@ -362,7 +376,7 @@ export default function Budtenders() {
                 </div>
                 <ul className="space-y-2.5">
                   {['Custom Highsman Letterman Jacket', 'Wear the brand on the floor.'].map((item) => (
-                    <li key={item} className="flex items-center gap-3 font-body text-sm" style={{color: 'rgba(255,255,255,0.45)'}}>
+                    <li key={item} className="flex items-center gap-3 font-body text-sm" style={{color: 'rgba(255,255,255,0.65)'}}>
                       <span className="flex-shrink-0 w-1 h-1" style={{background: 'rgba(205,127,50,0.5)'}} />
                       {item}
                     </li>
@@ -399,13 +413,13 @@ export default function Budtenders() {
             <div className="flex flex-col justify-center relative overflow-hidden" style={{background: '#000', minHeight: '440px'}}>
               <div className="flex items-center gap-4 px-10 pt-8">
                 <div className="h-px flex-1" style={{background: 'rgba(245,225,0,0.15)'}} />
-                <span className="font-label text-[9px] tracking-[0.3em] uppercase" style={{color: 'rgba(245,225,0,0.4)'}}>Game Day &middot; 2026</span>
+                <span className="font-label text-[9px] tracking-[0.3em] uppercase" style={{color: 'rgba(245,225,0,0.6)'}}>Game Day &middot; 2026</span>
                 <div className="h-px flex-1" style={{background: 'rgba(245,225,0,0.15)'}} />
               </div>
               <img src={`${CDN}Budtenders_Prize_Image_football_giveaway_9028f72e-b1c6-4cdb-a8b3-556663907532.png?v=1775599444`} alt="Football game day tickets with Highsman" className="w-full" style={{maxHeight: '400px', objectFit: 'contain', padding: '24px 32px'}} />
               <div className="flex items-center gap-4 px-10 pb-8">
                 <div className="h-px flex-1" style={{background: 'rgba(245,225,0,0.15)'}} />
-                <span className="font-label text-[9px] tracking-[0.3em] uppercase" style={{color: 'rgba(245,225,0,0.4)'}}>Highsman &middot; NJ</span>
+                <span className="font-label text-[9px] tracking-[0.3em] uppercase" style={{color: 'rgba(245,225,0,0.6)'}}>Highsman &middot; NJ</span>
                 <div className="h-px flex-1" style={{background: 'rgba(245,225,0,0.15)'}} />
               </div>
             </div>
@@ -418,7 +432,7 @@ export default function Budtenders() {
         <div className="max-w-6xl mx-auto px-8 md:px-16 py-24">
           <div className="md:grid md:grid-cols-[260px_1fr] md:gap-20 items-start">
             <div className="mb-16 md:mb-0 md:sticky md:top-24">
-              <p className="font-label text-[10px] tracking-[0.4em] uppercase mb-4" style={{color: 'rgba(0,0,0,0.35)'}}>No tracking. No app.</p>
+              <p className="font-label text-[10px] tracking-[0.4em] uppercase mb-4" style={{color: 'rgba(0,0,0,0.55)'}}>No tracking. No app.</p>
               <h2 className="font-headline uppercase tracking-tight" style={{fontSize: 'clamp(48px,7vw,80px)', lineHeight: 0.86, color: '#000'}}>How It <br />Works</h2>
             </div>
             <div>
@@ -445,9 +459,9 @@ export default function Budtenders() {
       <section id="referral" style={{background: '#0a0a0a', borderTop: '1px solid rgba(255,255,255,0.05)'}}>
         <div className="max-w-6xl mx-auto px-8 md:px-16 py-24 md:grid md:grid-cols-2 md:gap-20 items-center">
           <div>
-            <p className="font-label text-[10px] tracking-[0.4em] uppercase mb-5" style={{color: 'rgba(255,255,255,0.35)'}}>Know a budtender?</p>
+            <p className="font-label text-[10px] tracking-[0.4em] uppercase mb-5" style={{color: 'rgba(255,255,255,0.6)'}}>Know a budtender?</p>
             <h2 className="font-headline uppercase tracking-tight mb-6" style={{fontSize: 'clamp(44px,7vw,76px)', lineHeight: 0.87, color: '#fff'}}>Refer Them. <br /><span style={{color: '#F5E100'}}>Win a Jacket.</span></h2>
-            <p className="font-body text-base leading-relaxed max-w-md" style={{color: 'rgba(255,255,255,0.5)'}}>
+            <p className="font-body text-base leading-relaxed max-w-md" style={{color: 'rgba(255,255,255,0.65)'}}>
               Know a budtender who should be repping Highsman? Refer them to the{' '}
               <strong style={{color: '#fff'}}>Highsman Budtender Education Training Camp</strong>
               {'. '}Every budtender you refer who completes the Training Camp enters you into a draw to win one of{' '}
@@ -476,9 +490,10 @@ export default function Budtenders() {
       {/* FOOTER MARK */}
       <div style={{background: '#000', borderTop: '1px solid rgba(255,255,255,0.06)'}}>
         <div className="max-w-6xl mx-auto px-8 md:px-16 py-10 flex items-center justify-between flex-wrap gap-4">
-          <img src={`${CDN}Spark_Greatness_White.png?v=1775594430`} alt="Spark Greatness" className="h-5 opacity-40" />
-          <p className="font-label text-[10px] tracking-[0.2em] uppercase" style={{color: 'rgba(255,255,255,0.25)'}}>&copy; 2026 Highsman. All rights reserved.</p>
+          <img src={`${CDN}Spark_Greatness_White.png?v=1775594430`} alt="Spark Greatness" className="h-5 opacity-60" />
+          <p className="font-label text-[10px] tracking-[0.2em] uppercase" style={{color: 'rgba(255,255,255,0.65)'}}>&copy; 2026 Highsman. All rights reserved.</p>
         </div>
+      </div>
       </div>
     </>
   );
