@@ -112,7 +112,7 @@ const PRODUCT_CONFIG = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const NAV_SECTIONS = [
-  {id: 'wholesale',       label: 'Wholesale',        count: 2},
+  {id: 'wholesale',       label: 'Wholesale',        count: 3},
   {id: 'menu-images',     label: 'Menu Images',      count: 5},
   {id: 'merchandising',   label: 'Merchandising',    count: 2},
   {id: 'social-media',    label: 'Social Media',     count: 24},
@@ -654,7 +654,7 @@ export default function NewJersey() {
           eyebrow="Section 1"
           title={<>Wholesale &amp;<br />Sell Sheets</>}
           desc="Pricing, sell sheets, and budtender training materials. Start here for everything your team needs to onboard Highsman."
-          downloadLabel="Download All (2)"
+          downloadLabel="Download All (3)"
           onDownload={() => downloadAll('Wholesale & Sell Sheets')}
         />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -662,11 +662,19 @@ export default function NewJersey() {
             icon="request_quote"
             name="Wholesale Menu"
             desc="NJ pricing, SKUs, MOQs · Updated May 7, 2026"
+            href="/njmenu"
           />
           <DocCard
             icon="school"
             name="Budtender Education Folder"
             desc="Training decks, product guides, sell scripts"
+            href="https://drive.google.com/drive/folders/1tUIVNx5R4ldEc8wqDvdrJApJhewdV-eK?usp=sharing"
+          />
+          <DocCard
+            icon="emoji_events"
+            name="Budtender Training Camp"
+            desc="Complete training and earn $50 at the Highsman Merch Store"
+            href="/budtender-education"
           />
         </div>
       </section>
