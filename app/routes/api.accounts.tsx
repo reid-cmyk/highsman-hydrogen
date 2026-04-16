@@ -90,6 +90,10 @@ async function createAccountWithContact(
     jobRole: string;
     phone: string;
     email: string;
+    street: string;
+    city: string;
+    state: string;
+    zip: string;
   },
   accessToken: string,
 ): Promise<{id: string; name: string; city: string | null; phone: string | null}> {
@@ -105,7 +109,16 @@ async function createAccountWithContact(
         {
           Account_Name: data.dispensaryName,
           Phone: data.phone || null,
-          Billing_State: 'NJ',
+          Billing_Street: data.street || null,
+          Billing_City: data.city || null,
+          Billing_State: data.state || 'NJ',
+          Billing_Code: data.zip || null,
+          Billing_Country: 'United States',
+          Shipping_Street: data.street || null,
+          Shipping_City: data.city || null,
+          Shipping_State: data.state || 'NJ',
+          Shipping_Code: data.zip || null,
+          Shipping_Country: 'United States',
           Account_Type: 'Prospect',
           Description: `Self-registered via NJ wholesale menu. Contact: ${data.contactName} (${data.jobRole}). Email: ${data.email}`,
         },
@@ -232,6 +245,10 @@ export async function action({request, context}: ActionFunctionArgs) {
   const jobRole = (formData.get('jobRole') as string || '').trim();
   const phone = (formData.get('phone') as string || '').trim();
   const email = (formData.get('email') as string || '').trim();
+  const street = (formData.get('street') as string || '').trim();
+  const city = (formData.get('city') as string || '').trim();
+  const state = (formData.get('state') as string || 'NJ').trim();
+  const zip = (formData.get('zip') as string || '').trim();
 
   // Validate required fields
   if (!dispensaryName) {
@@ -256,7 +273,7 @@ export async function action({request, context}: ActionFunctionArgs) {
       account: {
         id: `local-${Date.now()}`,
         name: dispensaryName,
-        city: null,
+        city: city || null,
         phone: phone || null,
       },
       note: 'CRM not configured — account saved locally.',
@@ -271,7 +288,7 @@ export async function action({request, context}: ActionFunctionArgs) {
     });
 
     const account = await createAccountWithContact(
-      {dispensaryName, contactName, jobRole, phone, email},
+      {dispensaryName, contactName, jobRole, phone, email, street, city, state, zip},
       accessToken,
     );
 

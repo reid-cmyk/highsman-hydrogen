@@ -572,6 +572,12 @@ export default function NJMenu() {
   const [showNewAccountForm, setShowNewAccountForm] = useState(false);
   const [newAccountError, setNewAccountError] = useState<string | null>(null);
   const [useLiveSearch, setUseLiveSearch] = useState(true); // try API first
+  // Address autocomplete state
+  const [addressQuery, setAddressQuery] = useState('');
+  const [addressResults, setAddressResults] = useState<Array<{display: string; street: string; city: string; state: string; zip: string}>>([]);
+  const [showAddressDropdown, setShowAddressDropdown] = useState(false);
+  const [selectedAddress, setSelectedAddress] = useState<{display: string; street: string; city: string; state: string; zip: string} | null>(null);
+  const addressDropdownRef = useRef<HTMLDivElement>(null);
   const accountInputRef = useRef<HTMLInputElement>(null);
   const accountDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -640,6 +646,46 @@ export default function NJMenu() {
       }
     }
   }, [createAccountFetcher.state, createAccountFetcher.data]);
+
+  // Debounced address autocomplete via Nominatim (OpenStreetMap) — free, no key
+  useEffect(() => {
+    if (addressQuery.length < 4 || selectedAddress) return;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?` +
+          `q=${encodeURIComponent(addressQuery)}&countrycodes=us&format=json&addressdetails=1&limit=6`,
+          {headers: {'Accept-Language': 'en'}},
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        const results = data
+          .filter((r: any) => r.address?.state === 'New Jersey')
+          .map((r: any) => {
+            const a = r.address;
+            const street = [a.house_number, a.road].filter(Boolean).join(' ');
+            const city = a.city || a.town || a.village || a.hamlet || '';
+            const zip = a.postcode || '';
+            const display = [street, city, zip ? `NJ ${zip}` : 'NJ'].filter(Boolean).join(', ');
+            return {display, street, city, state: 'NJ', zip};
+          });
+        setAddressResults(results);
+        setShowAddressDropdown(results.length > 0);
+      } catch { /* silent fail */ }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [addressQuery, selectedAddress]);
+
+  // Close address dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (addressDropdownRef.current && !addressDropdownRef.current.contains(e.target as Node)) {
+        setShowAddressDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // ── Cart & Order State ───────────────────────────────────────────────────
   const [cart, setCart] = useState<Record<string, CartItem>>({});
@@ -1299,6 +1345,82 @@ export default function NJMenu() {
                         }}
                       />
                     </div>
+                  </div>
+
+                  {/* Address with autocomplete */}
+                  <div className="relative">
+                    <label className="font-body text-xs font-600 tracking-wider uppercase block mb-1.5" style={{color: 'rgba(255,255,255,0.6)'}}>
+                      Dispensary Address
+                    </label>
+                    <input
+                      type="text"
+                      value={selectedAddress ? selectedAddress.display : addressQuery}
+                      onChange={(e) => {
+                        setAddressQuery(e.target.value);
+                        setSelectedAddress(null);
+                        if (e.target.value.length < 4) setShowAddressDropdown(false);
+                      }}
+                      onFocus={() => {
+                        if (addressResults.length > 0 && !selectedAddress) setShowAddressDropdown(true);
+                      }}
+                      placeholder="Start typing address…"
+                      autoComplete="off"
+                      className="w-full font-body text-sm"
+                      style={{
+                        background: 'rgba(255,255,255,0.06)',
+                        border: `1px solid ${selectedAddress ? 'rgba(245,228,0,0.3)' : 'rgba(255,255,255,0.15)'}`,
+                        borderRadius: 4,
+                        padding: '10px 14px',
+                        color: '#fff',
+                        outline: 'none',
+                      }}
+                    />
+                    {/* Hidden fields for form submission */}
+                    <input type="hidden" name="street" value={selectedAddress?.street || ''} />
+                    <input type="hidden" name="city" value={selectedAddress?.city || ''} />
+                    <input type="hidden" name="state" value={selectedAddress?.state || 'NJ'} />
+                    <input type="hidden" name="zip" value={selectedAddress?.zip || ''} />
+
+                    {showAddressDropdown && addressResults.length > 0 && (
+                      <div
+                        ref={addressDropdownRef}
+                        className="absolute left-0 right-0 z-50 mt-1 overflow-hidden"
+                        style={{
+                          background: '#1A1A1A',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          borderRadius: 4,
+                          maxHeight: 220,
+                          overflowY: 'auto',
+                        }}
+                      >
+                        {addressResults.map((addr, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => {
+                              setSelectedAddress(addr);
+                              setAddressQuery(addr.display);
+                              setShowAddressDropdown(false);
+                            }}
+                            className="w-full text-left px-4 py-2.5 cursor-pointer font-body text-sm"
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              borderBottom: '1px solid rgba(255,255,255,0.06)',
+                              color: '#fff',
+                            }}
+                            onMouseEnter={(e) => {
+                              (e.currentTarget as HTMLButtonElement).style.background = 'rgba(245,228,0,0.08)';
+                            }}
+                            onMouseLeave={(e) => {
+                              (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                            }}
+                          >
+                            {addr.display}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Error message */}
