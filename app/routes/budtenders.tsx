@@ -119,22 +119,22 @@ function StickyNav() {
       }}
       aria-label="Page navigation"
     >
-      <div className="max-w-6xl mx-auto px-6 md:px-16 flex items-center justify-between h-14 md:h-16">
-        <a href="#top" onClick={(e) => handleNav(e, '#top')} className="focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-400" aria-label="Back to top">
+      <div className="max-w-6xl mx-auto px-3 md:px-16 flex items-center justify-between h-12 md:h-16">
+        <a href="#top" onClick={(e) => handleNav(e, '#top')} className="hidden md:block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-400" aria-label="Back to top">
           <img
             src={`${CDN}Highsman_Logo_White.png?v=1775594430`}
             alt="Highsman"
-            className="h-7 md:h-8 transition-opacity"
+            className="h-8 transition-opacity"
             style={{opacity: scrolled ? 1 : 0.7}}
           />
         </a>
-        <div className="flex items-center gap-0.5 md:gap-1">
+        <div className="flex items-center justify-center md:justify-end gap-0 md:gap-1 w-full md:w-auto">
           {NAV_ITEMS.map(({label, href}) => (
             <a
               key={href}
               href={href}
               onClick={(e) => handleNav(e, href)}
-              className="font-label text-[11px] md:text-xs tracking-[0.18em] uppercase px-4 md:px-5 py-2.5 md:py-3 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-400"
+              className="font-label text-[10px] md:text-xs tracking-[0.12em] md:tracking-[0.18em] uppercase whitespace-nowrap px-2.5 md:px-5 py-2 md:py-3 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-400"
               style={{
                 color: active === href ? '#F5E100' : 'rgba(255,255,255,0.75)',
                 background: active === href ? 'rgba(245,225,0,0.1)' : 'transparent',
