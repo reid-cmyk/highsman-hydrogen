@@ -153,7 +153,7 @@ const PRODUCT_LINES: ProductLine[] = [
     wholesale: 30.0,
     casePrice: 180.0,
     rrp: 59.99,
-    color: '#FF6B35',
+    color: BRAND.gold,
     icon: 'workspace_premium',
     imageType: 'Pouch' as ImageType,
     fixedImageUrl: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Untitled_design_10.png',
@@ -170,7 +170,7 @@ const PRODUCT_LINES: ProductLine[] = [
     wholesale: 14.5,
     casePrice: 174.0,
     rrp: 29.0,
-    color: BRAND.purple,
+    color: BRAND.gold,
     icon: 'sports_mma',
     imageType: 'PreRoll_Menu' as ImageType,
     thcDisplay: '45%+',
@@ -186,7 +186,7 @@ const PRODUCT_LINES: ProductLine[] = [
     wholesale: 45.0,
     casePrice: 270.0,
     rrp: 90.0,
-    color: BRAND.green,
+    color: BRAND.gold,
     icon: 'grass',
     imageType: 'Pouch' as ImageType,
     thcDisplay: '40%+',
@@ -704,32 +704,39 @@ export default function NJMenu() {
 
         {/* ── Product Lines ──────────────────────────────────────────────── */}
         <div ref={menuRef} className="max-w-6xl mx-auto px-4 md:px-8 py-10">
-          {/* Quick-nav pills */}
-          <div className="flex flex-wrap gap-2 mb-8">
-            {PRODUCT_LINES.map((p) => (
-              <button
-                key={p.id}
-                onClick={() =>
-                  setExpandedProduct(expandedProduct === p.id ? null : p.id)
-                }
-                className="flex items-center gap-2 font-headline text-sm font-bold uppercase tracking-wider px-4 py-2 border transition-all"
-                style={{
-                  borderColor:
-                    expandedProduct === p.id ? p.color : BRAND.border,
-                  background:
-                    expandedProduct === p.id
-                      ? `${p.color}15`
-                      : 'transparent',
-                  color: expandedProduct === p.id ? p.color : BRAND.textMuted,
-                }}
-              >
-                <span
-                  className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                  style={{background: p.color}}
-                />
-                {p.name} {p.subtitle}
-              </button>
-            ))}
+          {/* Quick-nav tabs */}
+          <div className="flex flex-wrap gap-0 mb-0 border-b" style={{borderColor: BRAND.border}}>
+            {PRODUCT_LINES.map((p) => {
+              const active = expandedProduct === p.id;
+              const thumbSrc = p.fixedImageUrl ?? strainImage(p.strains[0].name, p.imageType);
+              return (
+                <button
+                  key={p.id}
+                  onClick={() =>
+                    setExpandedProduct(active ? null : p.id)
+                  }
+                  className="flex items-center gap-3 font-headline text-sm font-bold uppercase tracking-wider px-5 py-4 transition-all relative"
+                  style={{
+                    background: active ? BRAND.surfaceHigh : 'transparent',
+                    border: 'none',
+                    borderBottom: active ? `3px solid ${BRAND.gold}` : '3px solid transparent',
+                    color: active ? '#fff' : BRAND.textMuted,
+                    cursor: 'pointer',
+                    marginBottom: -1,
+                  }}
+                >
+                  <img
+                    src={thumbSrc}
+                    alt={p.name}
+                    style={{width: 32, height: 32, objectFit: 'contain', opacity: active ? 1 : 0.5}}
+                  />
+                  <span>
+                    {p.name}{' '}
+                    <span style={{color: active ? BRAND.gold : 'inherit'}}>{p.subtitle}</span>
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Product Sections */}
@@ -744,13 +751,17 @@ export default function NJMenu() {
               product.discount,
             );
 
+            const marginPct = Math.round(((product.rrp - discountedWholesale) / product.rrp) * 100);
+            const headerThumb = product.fixedImageUrl ?? strainImage(product.strains[0].name, product.imageType);
+
             return (
               <section
                 key={product.id}
-                className="product-section mb-4"
+                className="product-section mb-3"
                 style={{
-                  border: `1px solid ${isExpanded ? product.color + '40' : BRAND.border}`,
                   background: BRAND.surface,
+                  border: `1px solid ${isExpanded ? BRAND.gold + '30' : BRAND.border}`,
+                  borderLeft: `4px solid ${isExpanded ? BRAND.gold : BRAND.border}`,
                 }}
               >
                 {/* Product Header — always visible */}
@@ -760,45 +771,67 @@ export default function NJMenu() {
                   }
                   className="w-full flex items-center justify-between px-5 md:px-8 py-5 text-left"
                   style={{
-                    background: 'transparent',
+                    background: isExpanded ? `${BRAND.gold}06` : 'transparent',
                     border: 'none',
                     color: '#fff',
                     cursor: 'pointer',
                   }}
                 >
-                  <div className="flex items-center gap-4">
-                    <span
-                      className="material-symbols-outlined text-3xl"
-                      style={{color: product.color}}
+                  <div className="flex items-center gap-5">
+                    {/* Product thumbnail */}
+                    <div
+                      className="flex-shrink-0 hidden md:flex items-center justify-center"
+                      style={{width: 64, height: 64}}
                     >
-                      {product.icon}
-                    </span>
+                      <img
+                        src={headerThumb}
+                        alt={product.name}
+                        style={{width: 64, height: 64, objectFit: 'contain'}}
+                      />
+                    </div>
                     <div>
-                      <h2 className="font-headline text-2xl md:text-3xl font-bold uppercase leading-none">
+                      <h2 className="font-headline text-2xl md:text-4xl font-bold uppercase leading-none tracking-tight">
                         {product.name}{' '}
-                        <span style={{color: product.color}}>
+                        <span style={{color: BRAND.gold}}>
                           {product.subtitle}
                         </span>
                       </h2>
                       <p
-                        className="text-sm mt-0.5"
+                        className="text-sm mt-1"
                         style={{color: BRAND.textMuted}}
                       >
-                        {product.weight} &middot; {product.format} &middot;
-                        Case of {product.caseSize}
+                        {product.weight} &middot; {product.format} &middot; Case of {product.caseSize}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-5">
+                  <div className="flex items-center gap-4">
                     {product.discount && (
                       <span className="discount-badge text-xs font-bold px-2.5 py-1 rounded text-black">
                         {product.discount.label}
                       </span>
                     )}
+                    {/* Margin badge */}
+                    <div
+                      className="text-center hidden md:block px-4 py-2"
+                      style={{
+                        background: `${BRAND.gold}12`,
+                        border: `1px solid ${BRAND.gold}30`,
+                      }}
+                    >
+                      <span
+                        className="font-headline text-2xl font-bold block leading-none"
+                        style={{color: BRAND.gold}}
+                      >
+                        {marginPct}%
+                      </span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest" style={{color: BRAND.textMuted}}>
+                        Margin
+                      </span>
+                    </div>
                     <div className="text-right hidden md:block">
-                      <span className="font-headline text-xl font-bold block" style={{color: product.color}}>
+                      <span className="font-headline text-2xl font-bold block" style={{color: '#fff'}}>
                         {formatCurrency(discountedWholesale)}
-                        <span className="text-xs font-normal" style={{color: BRAND.textMuted}}>
+                        <span className="font-headline text-sm font-normal" style={{color: BRAND.textMuted}}>
                           /unit
                         </span>
                       </span>
@@ -810,9 +843,7 @@ export default function NJMenu() {
                       className="material-symbols-outlined text-2xl transition-transform"
                       style={{
                         color: BRAND.textMuted,
-                        transform: isExpanded
-                          ? 'rotate(180deg)'
-                          : 'rotate(0deg)',
+                        transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
                       }}
                     >
                       expand_more
@@ -847,24 +878,30 @@ export default function NJMenu() {
                         {
                           label: 'Margin',
                           value: `${(((product.rrp - discountedWholesale) / product.rrp) * 100).toFixed(0)}%`,
-                          highlight: false,
+                          highlight: true,
+                          isMargin: true,
                         },
                       ].map((cell) => (
                         <div
                           key={cell.label}
                           className="px-4 py-3"
-                          style={{background: BRAND.surfaceHigh}}
+                          style={{
+                            background: (cell as any).isMargin ? `${BRAND.gold}10` : BRAND.surfaceHigh,
+                            borderTop: (cell as any).isMargin ? `2px solid ${BRAND.gold}40` : 'none',
+                          }}
                         >
                           <span
                             className="text-[10px] font-bold uppercase tracking-widest block mb-0.5"
-                            style={{color: BRAND.textMuted}}
+                            style={{color: (cell as any).isMargin ? BRAND.gold : BRAND.textMuted}}
                           >
                             {cell.label}
                           </span>
                           <span
-                            className="font-headline text-lg font-bold"
+                            className="font-headline font-bold"
                             style={{
-                              color: cell.highlight ? product.color : '#fff',
+                              color: cell.highlight ? BRAND.gold : '#fff',
+                              fontSize: (cell as any).isMargin ? 28 : 18,
+                              lineHeight: 1,
                             }}
                           >
                             {cell.value}
@@ -894,150 +931,119 @@ export default function NJMenu() {
                       </div>
                     )}
 
-                    {/* Strain Table */}
-                    <div className="mx-5 md:mx-8 mb-6 overflow-x-auto">
-                      {/* Table Header */}
-                      <div
-                        className="grid gap-2 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest"
-                        style={{
-                          gridTemplateColumns: '148px minmax(160px,2fr) 80px 60px 1fr',
-                          color: BRAND.textMuted,
-                          borderBottom: `1px solid ${BRAND.border}`,
-                        }}
-                      >
-                        <span></span>
-                        <span>Strain</span>
-                        <span>Type</span>
-                        <span>THC</span>
-                        <span className="text-right">Cases</span>
-                      </div>
-
-                      {/* Strain Rows */}
+                    {/* Strain Rows */}
+                    <div className="mb-0">
                       {product.strains.map((strain) => {
                         const cases = getCasesForItem(product.id, strain.name);
+                        const imgSrc = product.fixedImageUrl ?? strainImage(strain.name, product.imageType);
                         return (
                           <div
                             key={strain.name}
-                            className="strain-row grid gap-3 items-center px-4 py-4 transition-colors"
+                            className="strain-row flex items-center gap-4 px-5 md:px-8 py-3 transition-all"
                             style={{
-                              gridTemplateColumns:
-                                '148px minmax(160px,2fr) 80px 60px 1fr',
                               borderBottom: `1px solid ${BRAND.border}`,
-                              background:
-                                cases > 0
-                                  ? `${product.color}08`
-                                  : 'transparent',
+                              borderLeft: `3px solid ${cases > 0 ? BRAND.gold : 'transparent'}`,
+                              background: cases > 0 ? `${BRAND.gold}07` : 'transparent',
                             }}
                           >
                             {/* Product image */}
-                            <div className="flex items-center justify-center">
+                            <div className="flex-shrink-0">
                               <img
-                                src={product.fixedImageUrl ?? strainImage(strain.name, product.imageType)}
+                                src={imgSrc}
                                 alt={`${product.name} ${strain.name}`}
                                 className="strain-img"
                                 style={{
-                                  width: 132,
-                                  height: 132,
+                                  width: 72,
+                                  height: 72,
                                   objectFit: 'contain',
-                                  background: 'transparent',
                                 }}
                                 loading="lazy"
                               />
                             </div>
-                            {/* Strain name */}
-                            <div className="flex items-center gap-2">
-                              <span
-                                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                                style={{
-                                  background:
-                                    STRAIN_TYPE_COLORS[strain.type],
-                                }}
-                              />
-                              <span className="font-headline font-bold text-base text-white uppercase tracking-wide">
+
+                            {/* Strain info */}
+                            <div className="flex-1 min-w-0">
+                              <span className="font-headline font-bold text-xl md:text-2xl text-white uppercase leading-none tracking-tight block">
                                 {strain.name}
                               </span>
+                              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                <span
+                                  className="font-headline text-xs font-bold px-2 py-0.5 uppercase tracking-wider"
+                                  style={{
+                                    background: `${STRAIN_TYPE_COLORS[strain.type]}18`,
+                                    color: STRAIN_TYPE_COLORS[strain.type],
+                                    border: `1px solid ${STRAIN_TYPE_COLORS[strain.type]}40`,
+                                  }}
+                                >
+                                  {strain.type}
+                                </span>
+                                <span
+                                  className="font-headline text-xs font-bold px-2 py-0.5 uppercase tracking-wider"
+                                  style={{
+                                    background: `${BRAND.gold}10`,
+                                    color: BRAND.gold,
+                                    border: `1px solid ${BRAND.gold}30`,
+                                  }}
+                                >
+                                  {product.thcDisplay ?? strain.thc} THC
+                                </span>
+                                {cases > 0 && (
+                                  <span
+                                    className="font-headline text-xs font-bold"
+                                    style={{color: BRAND.gold}}
+                                  >
+                                    {cases * product.caseSize} units · {formatCurrency(discountedCase * cases)}
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            {/* Type */}
-                            <span
-                              className="text-xs font-bold px-2.5 py-1 rounded inline-block text-center uppercase tracking-wider"
-                              style={{
-                                background: `${STRAIN_TYPE_COLORS[strain.type]}20`,
-                                color: STRAIN_TYPE_COLORS[strain.type],
-                              }}
-                            >
-                              {strain.type}
-                            </span>
-                            {/* THC */}
-                            <span className="text-sm" style={{color: BRAND.textMuted}}>
-                              {product.thcDisplay ?? strain.thc}
-                            </span>
-                            {/* Qty Stepper */}
-                            <div className="flex items-center justify-end gap-1">
+
+                            {/* Qty stepper */}
+                            <div className="flex items-center gap-0 flex-shrink-0">
                               <button
-                                onClick={() =>
-                                  updateCart(product.id, strain.name, -1)
-                                }
-                                className="w-8 h-8 flex items-center justify-center transition-colors"
+                                onClick={() => updateCart(product.id, strain.name, -1)}
+                                disabled={cases === 0}
+                                className="w-10 h-10 flex items-center justify-center transition-colors cursor-pointer"
                                 style={{
-                                  background:
-                                    cases > 0
-                                      ? BRAND.surfaceHigh
-                                      : 'transparent',
+                                  background: cases > 0 ? BRAND.surfaceContainer : 'transparent',
                                   border: `1px solid ${cases > 0 ? BRAND.border : 'transparent'}`,
                                   color: cases > 0 ? '#fff' : BRAND.textMuted,
-                                  cursor:
-                                    cases > 0 ? 'pointer' : 'default',
-                                  opacity: cases > 0 ? 1 : 0.3,
+                                  opacity: cases > 0 ? 1 : 0.25,
+                                  cursor: cases > 0 ? 'pointer' : 'default',
                                 }}
-                                disabled={cases === 0}
                               >
-                                <span className="material-symbols-outlined text-lg">
-                                  remove
-                                </span>
+                                <span className="material-symbols-outlined" style={{fontSize: 18}}>remove</span>
                               </button>
                               <input
                                 type="number"
                                 min={0}
                                 value={cases}
                                 onChange={(e) =>
-                                  setCases(
-                                    product.id,
-                                    strain.name,
-                                    parseInt(e.target.value, 10) || 0,
-                                  )
+                                  setCases(product.id, strain.name, parseInt(e.target.value, 10) || 0)
                                 }
-                                className="w-12 h-8 text-center font-headline text-base font-bold"
+                                className="font-headline text-base font-bold text-center"
                                 style={{
-                                  background: BRAND.surfaceHigh,
-                                  border: `1px solid ${cases > 0 ? product.color + '60' : BRAND.border}`,
-                                  color: cases > 0 ? product.color : '#fff',
+                                  width: 48,
+                                  height: 40,
+                                  background: BRAND.surfaceContainer,
+                                  border: `1px solid ${cases > 0 ? BRAND.gold + '60' : BRAND.border}`,
+                                  borderLeft: 'none',
+                                  borderRight: 'none',
+                                  color: cases > 0 ? BRAND.gold : '#fff',
                                   outline: 'none',
                                 }}
                               />
                               <button
-                                onClick={() =>
-                                  updateCart(product.id, strain.name, 1)
-                                }
-                                className="w-8 h-8 flex items-center justify-center transition-colors cursor-pointer"
+                                onClick={() => updateCart(product.id, strain.name, 1)}
+                                className="w-10 h-10 flex items-center justify-center transition-all cursor-pointer"
                                 style={{
-                                  background: BRAND.surfaceHigh,
-                                  border: `1px solid ${BRAND.border}`,
-                                  color: '#fff',
+                                  background: cases > 0 ? BRAND.gold : BRAND.surfaceContainer,
+                                  border: `1px solid ${cases > 0 ? BRAND.gold : BRAND.border}`,
+                                  color: cases > 0 ? BRAND.black : '#fff',
                                 }}
                               >
-                                <span className="material-symbols-outlined text-lg">
-                                  add
-                                </span>
+                                <span className="material-symbols-outlined" style={{fontSize: 18}}>add</span>
                               </button>
-                              {cases > 0 && (
-                                <span
-                                  className="ml-2 text-xs font-semibold whitespace-nowrap hidden md:block"
-                                  style={{color: product.color}}
-                                >
-                                  {cases * product.caseSize} units &middot;{' '}
-                                  {formatCurrency(discountedCase * cases)}
-                                </span>
-                              )}
                             </div>
                           </div>
                         );
@@ -1045,12 +1051,9 @@ export default function NJMenu() {
 
                       {/* Quick-add bar */}
                       <div
-                        className="flex items-center justify-between px-4 py-3 mt-1"
-                        style={{background: BRAND.surfaceHigh}}
+                        className="flex items-center justify-end px-5 md:px-8 py-3"
+                        style={{background: BRAND.surfaceHigh, borderTop: `1px solid ${BRAND.border}`}}
                       >
-                        <span className="text-xs" style={{color: BRAND.textMuted}}>
-                          Quick Add: Add 1 case of each strain
-                        </span>
                         <button
                           onClick={() =>
                             product.strains.forEach((s) => {
