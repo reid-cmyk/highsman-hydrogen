@@ -254,15 +254,15 @@ export default function Budtenders() {
       </section>
 
       {/* HERO */}
-      <section className="relative min-h-screen flex flex-col justify-end overflow-hidden" style={{background: '#000'}}>
+      <section className="relative overflow-hidden" style={{background: '#000'}}>
         <div className="absolute inset-0" style={{background: 'linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.7) 60%, #000 100%)'}} />
         <div className="absolute top-0 left-0 right-0 h-1" style={{background: '#F5E100'}} />
-        <div className="absolute top-0 left-0 right-0 px-8 md:px-16 pt-7 flex items-center justify-between z-20">
-          <img src={`${CDN}Highsman_Logo_White.png?v=1775594430`} alt="Highsman" className="h-8 md:h-9" />
-          <div className="inline-block font-label text-[10px] tracking-[0.4em] uppercase px-4 py-2" style={{background: '#F5E100', color: '#000'}}>NJ Launch &middot; May 7 &ndash; June 7, 2026</div>
+        <div className="relative z-20 px-6 md:px-16 pt-6 md:pt-7 flex items-center justify-between flex-wrap gap-3">
+          <img src={`${CDN}Highsman_Logo_White.png?v=1775594430`} alt="Highsman" className="h-7 md:h-9" />
+          <div className="font-label text-[9px] md:text-[10px] tracking-[0.3em] md:tracking-[0.4em] uppercase px-3 md:px-4 py-1.5 md:py-2" style={{background: '#F5E100', color: '#000'}}>NJ Launch &middot; May 7 &ndash; June 7, 2026</div>
         </div>
         <div className="absolute right-0 bottom-0 pointer-events-none select-none leading-none" aria-hidden="true" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(280px, 45vw, 580px)', lineHeight: 0.85, color: 'rgba(245,225,0,0.06)', letterSpacing: '-0.04em'}}>34</div>
-        <div className="relative z-10 px-8 md:px-16 pb-20 md:pb-28 max-w-6xl">
+        <div className="relative z-10 px-6 md:px-16 pt-12 md:pt-24 pb-16 md:pb-28 max-w-6xl">
           <div className="inline-block font-label text-[10px] tracking-[0.4em] uppercase px-3 py-1.5 mb-8" style={{background: 'rgba(245,225,0,0.15)', color: '#F5E100', border: '1px solid rgba(245,225,0,0.25)'}}>Budtender Championship &middot; NJ Only</div>
           <h1 className="font-headline uppercase tracking-tight mb-6" style={{fontSize: 'clamp(72px, 14vw, 160px)', lineHeight: 0.84, color: '#fff'}}>
             Today Is <br />
