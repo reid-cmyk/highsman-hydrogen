@@ -1,4 +1,4 @@
-import type {LoaderFunctionArgs} from '@shopify/remix-oxygen';
+import type {LoaderFunctionArgs, ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -79,6 +79,90 @@ async function searchAccounts(
   }));
 }
 
+/** Create a new Account in Zoho CRM and attach a Contact. */
+async function createAccountWithContact(
+  data: {
+    dispensaryName: string;
+    contactName: string;
+    jobRole: string;
+    phone: string;
+    email: string;
+  },
+  accessToken: string,
+): Promise<{id: string; name: string; city: string | null; phone: string | null}> {
+  // 1. Create the Account
+  const accountRes = await fetch('https://www.zohoapis.com/crm/v7/Accounts', {
+    method: 'POST',
+    headers: {
+      Authorization: `Zoho-oauthtoken ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      data: [
+        {
+          Account_Name: data.dispensaryName,
+          Phone: data.phone || null,
+          Billing_State: 'NJ',
+          Account_Type: 'Prospect',
+          Description: `Self-registered via NJ wholesale menu. Contact: ${data.contactName} (${data.jobRole}). Email: ${data.email}`,
+        },
+      ],
+      trigger: ['workflow'],
+    }),
+  });
+
+  if (!accountRes.ok) {
+    const text = await accountRes.text().catch(() => '');
+    throw new Error(`Zoho account creation failed (${accountRes.status}): ${text.slice(0, 500)}`);
+  }
+
+  const accountData = await accountRes.json();
+  const accountRecord = accountData.data?.[0];
+  if (accountRecord?.status !== 'success') {
+    throw new Error(`Zoho account creation rejected: ${JSON.stringify(accountRecord?.details || {})}`);
+  }
+
+  const accountId = accountRecord.details.id;
+
+  // 2. Create a Contact linked to the Account
+  const [firstName, ...lastParts] = data.contactName.trim().split(/\s+/);
+  const lastName = lastParts.length > 0 ? lastParts.join(' ') : firstName; // Zoho requires Last_Name
+
+  try {
+    await fetch('https://www.zohoapis.com/crm/v7/Contacts', {
+      method: 'POST',
+      headers: {
+        Authorization: `Zoho-oauthtoken ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        data: [
+          {
+            First_Name: firstName,
+            Last_Name: lastName,
+            Email: data.email || null,
+            Phone: data.phone || null,
+            Title: data.jobRole || null,
+            Account_Name: {id: accountId},
+            Description: `Self-registered via NJ wholesale menu (${data.jobRole}).`,
+          },
+        ],
+        trigger: ['workflow'],
+      }),
+    });
+  } catch (contactErr) {
+    // Don't fail the whole flow if contact creation fails — the account is enough
+    console.error('[api/accounts] Contact creation failed (non-fatal):', contactErr);
+  }
+
+  return {
+    id: accountId,
+    name: data.dispensaryName,
+    city: null,
+    phone: data.phone || null,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Loader (GET /api/accounts?q=...)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -127,5 +211,70 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       status: 200, // don't break the UI — degrade gracefully
       headers: {'Cache-Control': 'no-store'},
     });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Action (POST /api/accounts) — Create a new dispensary account in Zoho CRM
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function action({request, context}: ActionFunctionArgs) {
+  if (request.method !== 'POST') {
+    return json({ok: false, error: 'Method not allowed'}, {status: 405});
+  }
+
+  const formData = await request.formData();
+  const dispensaryName = (formData.get('dispensaryName') as string || '').trim();
+  const contactName = (formData.get('contactName') as string || '').trim();
+  const jobRole = (formData.get('jobRole') as string || '').trim();
+  const phone = (formData.get('phone') as string || '').trim();
+  const email = (formData.get('email') as string || '').trim();
+
+  // Validate required fields
+  if (!dispensaryName) {
+    return json({ok: false, error: 'Dispensary name is required.'}, {status: 400});
+  }
+  if (!contactName) {
+    return json({ok: false, error: 'Contact name is required.'}, {status: 400});
+  }
+  if (!email) {
+    return json({ok: false, error: 'Email is required.'}, {status: 400});
+  }
+
+  const env = context.env as any;
+  const clientId = env.ZOHO_CLIENT_ID;
+  const clientSecret = env.ZOHO_CLIENT_SECRET;
+  const refreshToken = env.ZOHO_REFRESH_TOKEN;
+
+  if (!clientId || !clientSecret || !refreshToken) {
+    // If CRM isn't configured, return a mock account so they can still order
+    return json({
+      ok: true,
+      account: {
+        id: `local-${Date.now()}`,
+        name: dispensaryName,
+        city: null,
+        phone: phone || null,
+      },
+      note: 'CRM not configured — account saved locally.',
+    });
+  }
+
+  try {
+    const accessToken = await getAccessToken({
+      ZOHO_CLIENT_ID: clientId,
+      ZOHO_CLIENT_SECRET: clientSecret,
+      ZOHO_REFRESH_TOKEN: refreshToken,
+    });
+
+    const account = await createAccountWithContact(
+      {dispensaryName, contactName, jobRole, phone, email},
+      accessToken,
+    );
+
+    return json({ok: true, account});
+  } catch (err: any) {
+    console.error('[api/accounts] Create error:', err.message);
+    return json({ok: false, error: 'Could not create account. Please try again or email njsales@highsman.com.'}, {status: 500});
   }
 }

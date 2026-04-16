@@ -388,9 +388,12 @@ export default function NJMenu() {
 
   // ── Account / Shop Identification ──────────────────────────────────────────
   const accountFetcher = useFetcher<{accounts: Array<{id: string; name: string; city: string | null; phone: string | null}>}>();
+  const createAccountFetcher = useFetcher<{ok: boolean; account?: {id: string; name: string; city: string | null; phone: string | null}; error?: string}>();
   const [accountQuery, setAccountQuery] = useState('');
   const [selectedAccount, setSelectedAccount] = useState<{id: string; name: string; city: string | null; phone: string | null} | null>(null);
   const [showAccountDropdown, setShowAccountDropdown] = useState(false);
+  const [showNewAccountForm, setShowNewAccountForm] = useState(false);
+  const [newAccountError, setNewAccountError] = useState<string | null>(null);
   const accountInputRef = useRef<HTMLInputElement>(null);
   const accountDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -423,6 +426,20 @@ export default function NJMenu() {
   }, []);
 
   const accountResults = accountFetcher.data?.accounts || [];
+
+  // Handle create-account response
+  useEffect(() => {
+    if (createAccountFetcher.state === 'idle' && createAccountFetcher.data) {
+      if (createAccountFetcher.data.ok && createAccountFetcher.data.account) {
+        setSelectedAccount(createAccountFetcher.data.account);
+        setShowNewAccountForm(false);
+        setNewAccountError(null);
+        setToast(`Welcome, ${createAccountFetcher.data.account.name}! You can now place your order.`);
+      } else if (createAccountFetcher.data.error) {
+        setNewAccountError(createAccountFetcher.data.error);
+      }
+    }
+  }, [createAccountFetcher.state, createAccountFetcher.data]);
 
   // ── Cart & Order State ───────────────────────────────────────────────────
   const [cart, setCart] = useState<Record<string, CartItem>>({});
@@ -843,7 +860,7 @@ export default function NJMenu() {
                 )}
 
                 {/* ── Dropdown results ────────────────────────────────── */}
-                {showAccountDropdown && accountResults.length > 0 && (
+                {showAccountDropdown && accountResults.length > 0 && !showNewAccountForm && (
                   <div
                     ref={accountDropdownRef}
                     className="absolute left-0 right-0 z-50 mt-2 overflow-hidden"
@@ -851,7 +868,7 @@ export default function NJMenu() {
                       background: '#1A1A1A',
                       border: '1px solid rgba(255,255,255,0.15)',
                       borderRadius: 6,
-                      maxHeight: 280,
+                      maxHeight: 320,
                       overflowY: 'auto',
                     }}
                   >
@@ -885,32 +902,238 @@ export default function NJMenu() {
                         )}
                       </button>
                     ))}
+                    {/* Add New option at bottom of results */}
+                    <button
+                      onClick={() => {
+                        setShowAccountDropdown(false);
+                        setShowNewAccountForm(true);
+                      }}
+                      className="w-full text-left px-4 py-3 cursor-pointer font-body text-sm font-600"
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        borderTop: '1px solid rgba(255,255,255,0.12)',
+                        color: BRAND.gold,
+                      }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.background = 'rgba(245,228,0,0.06)';
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                      }}
+                    >
+                      + Add New Dispensary
+                    </button>
                   </div>
                 )}
 
-                {/* No results message */}
-                {showAccountDropdown && accountQuery.length >= 2 && accountFetcher.state === 'idle' && accountResults.length === 0 && (
+                {/* No results — prominent Add New option */}
+                {showAccountDropdown && !showNewAccountForm && accountQuery.length >= 2 && accountFetcher.state === 'idle' && accountResults.length === 0 && (
                   <div
-                    className="absolute left-0 right-0 z-50 mt-2 px-4 py-3 font-body text-sm"
+                    className="absolute left-0 right-0 z-50 mt-2 px-4 py-3"
                     style={{
                       background: '#1A1A1A',
                       border: '1px solid rgba(255,255,255,0.15)',
                       borderRadius: 6,
-                      color: 'rgba(255,255,255,0.5)',
                     }}
                   >
-                    No dispensary found — try a different name or{' '}
-                    <a href="mailto:njsales@highsman.com" className="underline" style={{color: BRAND.gold}}>
-                      email the team
-                    </a>
+                    <p className="font-body text-sm mb-3" style={{color: 'rgba(255,255,255,0.5)'}}>
+                      No dispensary found for "{accountQuery}"
+                    </p>
+                    <button
+                      onClick={() => {
+                        setShowAccountDropdown(false);
+                        setShowNewAccountForm(true);
+                      }}
+                      className="font-headline text-sm font-600 uppercase tracking-[0.15em] px-5 py-2.5 cursor-pointer transition-opacity hover:opacity-85"
+                      style={{background: BRAND.gold, color: '#000', border: 'none', borderRadius: 4}}
+                    >
+                      + Add New Dispensary
+                    </button>
                   </div>
                 )}
               </div>
             )}
 
-            {!selectedAccount && (
+            {/* ── New Dispensary Registration Form ──────────────────────── */}
+            {showNewAccountForm && !selectedAccount && (
+              <div
+                className="mt-4"
+                style={{
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: 6,
+                  padding: '20px 24px',
+                }}
+              >
+                <div className="flex items-center justify-between mb-5">
+                  <p className="font-headline text-base font-600 uppercase tracking-[0.12em]" style={{color: '#fff'}}>
+                    Register New Dispensary
+                  </p>
+                  <button
+                    onClick={() => {
+                      setShowNewAccountForm(false);
+                      setNewAccountError(null);
+                    }}
+                    className="font-body text-xs uppercase tracking-wider cursor-pointer"
+                    style={{background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.45)'}}
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                <createAccountFetcher.Form method="post" action="/api/accounts" className="space-y-4">
+                  {/* Dispensary Name */}
+                  <div>
+                    <label className="font-body text-xs font-600 tracking-wider uppercase block mb-1.5" style={{color: 'rgba(255,255,255,0.6)'}}>
+                      Dispensary Name *
+                    </label>
+                    <input
+                      name="dispensaryName"
+                      type="text"
+                      required
+                      defaultValue={accountQuery}
+                      placeholder="e.g. Green Leaf NJ"
+                      className="w-full font-body text-sm"
+                      style={{
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        borderRadius: 4,
+                        padding: '10px 14px',
+                        color: '#fff',
+                        outline: 'none',
+                      }}
+                    />
+                  </div>
+
+                  {/* Contact Name + Job Role — side by side on desktop */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="font-body text-xs font-600 tracking-wider uppercase block mb-1.5" style={{color: 'rgba(255,255,255,0.6)'}}>
+                        Contact Name *
+                      </label>
+                      <input
+                        name="contactName"
+                        type="text"
+                        required
+                        placeholder="First Last"
+                        className="w-full font-body text-sm"
+                        style={{
+                          background: 'rgba(255,255,255,0.06)',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          borderRadius: 4,
+                          padding: '10px 14px',
+                          color: '#fff',
+                          outline: 'none',
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="font-body text-xs font-600 tracking-wider uppercase block mb-1.5" style={{color: 'rgba(255,255,255,0.6)'}}>
+                        Job Role
+                      </label>
+                      <select
+                        name="jobRole"
+                        className="w-full font-body text-sm"
+                        style={{
+                          background: 'rgba(255,255,255,0.06)',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          borderRadius: 4,
+                          padding: '10px 14px',
+                          color: '#fff',
+                          outline: 'none',
+                          WebkitAppearance: 'none',
+                          appearance: 'none' as any,
+                        }}
+                      >
+                        <option value="" style={{background: '#1A1A1A', color: '#fff'}}>Select role…</option>
+                        <option value="Owner" style={{background: '#1A1A1A', color: '#fff'}}>Owner</option>
+                        <option value="General Manager" style={{background: '#1A1A1A', color: '#fff'}}>General Manager</option>
+                        <option value="Buyer / Purchasing" style={{background: '#1A1A1A', color: '#fff'}}>Buyer / Purchasing</option>
+                        <option value="Dispensary Manager" style={{background: '#1A1A1A', color: '#fff'}}>Dispensary Manager</option>
+                        <option value="Budtender" style={{background: '#1A1A1A', color: '#fff'}}>Budtender</option>
+                        <option value="Other" style={{background: '#1A1A1A', color: '#fff'}}>Other</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Phone + Email — side by side */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="font-body text-xs font-600 tracking-wider uppercase block mb-1.5" style={{color: 'rgba(255,255,255,0.6)'}}>
+                        Phone
+                      </label>
+                      <input
+                        name="phone"
+                        type="tel"
+                        placeholder="(555) 123-4567"
+                        className="w-full font-body text-sm"
+                        style={{
+                          background: 'rgba(255,255,255,0.06)',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          borderRadius: 4,
+                          padding: '10px 14px',
+                          color: '#fff',
+                          outline: 'none',
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="font-body text-xs font-600 tracking-wider uppercase block mb-1.5" style={{color: 'rgba(255,255,255,0.6)'}}>
+                        Email *
+                      </label>
+                      <input
+                        name="email"
+                        type="email"
+                        required
+                        placeholder="you@dispensary.com"
+                        className="w-full font-body text-sm"
+                        style={{
+                          background: 'rgba(255,255,255,0.06)',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          borderRadius: 4,
+                          padding: '10px 14px',
+                          color: '#fff',
+                          outline: 'none',
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Error message */}
+                  {newAccountError && (
+                    <p className="font-body text-sm" style={{color: '#ef4444'}}>{newAccountError}</p>
+                  )}
+
+                  {/* Submit */}
+                  <button
+                    type="submit"
+                    disabled={createAccountFetcher.state === 'submitting'}
+                    className="font-headline text-sm font-600 uppercase tracking-[0.15em] px-8 py-3.5 cursor-pointer transition-opacity hover:opacity-90"
+                    style={{
+                      background: BRAND.gold,
+                      color: '#000',
+                      border: 'none',
+                      borderRadius: 4,
+                      opacity: createAccountFetcher.state === 'submitting' ? 0.6 : 1,
+                    }}
+                  >
+                    {createAccountFetcher.state === 'submitting' ? 'Creating Account…' : 'Register & Start Ordering'}
+                  </button>
+                </createAccountFetcher.Form>
+              </div>
+            )}
+
+            {!selectedAccount && !showNewAccountForm && (
               <p className="font-body text-xs mt-3" style={{color: 'rgba(255,255,255,0.35)'}}>
-                Select your shop so we can attach your account to this order.
+                Select your shop so we can attach your account to this order.{' '}
+                <button
+                  onClick={() => setShowNewAccountForm(true)}
+                  className="underline cursor-pointer"
+                  style={{background: 'transparent', border: 'none', color: BRAND.gold, fontSize: 'inherit'}}
+                >
+                  New dispensary? Register here.
+                </button>
               </p>
             )}
           </div>
