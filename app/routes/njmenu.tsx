@@ -572,11 +572,12 @@ export default function NJMenu() {
   const [showNewAccountForm, setShowNewAccountForm] = useState(false);
   const [newAccountError, setNewAccountError] = useState<string | null>(null);
   const [useLiveSearch, setUseLiveSearch] = useState(true); // try API first
-  // Address autocomplete state
+  // Address autocomplete state (Google Places)
   const [addressQuery, setAddressQuery] = useState('');
-  const [addressResults, setAddressResults] = useState<Array<{display: string; street: string; city: string; state: string; zip: string}>>([]);
+  const [addressPredictions, setAddressPredictions] = useState<Array<{placeId: string; description: string; mainText: string; secondaryText: string}>>([]);
   const [showAddressDropdown, setShowAddressDropdown] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<{display: string; street: string; city: string; state: string; zip: string} | null>(null);
+  const [addressLoading, setAddressLoading] = useState(false);
   const addressDropdownRef = useRef<HTMLDivElement>(null);
   const accountInputRef = useRef<HTMLInputElement>(null);
   const accountDropdownRef = useRef<HTMLDivElement>(null);
@@ -647,34 +648,43 @@ export default function NJMenu() {
     }
   }, [createAccountFetcher.state, createAccountFetcher.data]);
 
-  // Debounced address autocomplete via Nominatim (OpenStreetMap) — free, no key
+  // Debounced address autocomplete via Google Places API (server-side proxy)
   useEffect(() => {
-    if (addressQuery.length < 4 || selectedAddress) return;
+    if (addressQuery.length < 3 || selectedAddress) return;
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?` +
-          `q=${encodeURIComponent(addressQuery)}&countrycodes=us&format=json&addressdetails=1&limit=6`,
-          {headers: {'Accept-Language': 'en'}},
-        );
+        const res = await fetch(`/api/places?q=${encodeURIComponent(addressQuery)}`);
         if (!res.ok) return;
         const data = await res.json();
-        const results = data
-          .filter((r: any) => r.address?.state === 'New Jersey')
-          .map((r: any) => {
-            const a = r.address;
-            const street = [a.house_number, a.road].filter(Boolean).join(' ');
-            const city = a.city || a.town || a.village || a.hamlet || '';
-            const zip = a.postcode || '';
-            const display = [street, city, zip ? `NJ ${zip}` : 'NJ'].filter(Boolean).join(', ');
-            return {display, street, city, state: 'NJ', zip};
-          });
-        setAddressResults(results);
-        setShowAddressDropdown(results.length > 0);
+        setAddressPredictions(data.predictions || []);
+        setShowAddressDropdown((data.predictions || []).length > 0);
       } catch { /* silent fail */ }
-    }, 350);
+    }, 200);
     return () => clearTimeout(timer);
   }, [addressQuery, selectedAddress]);
+
+  // Resolve a Google Place prediction to a structured address
+  const selectPlacePrediction = async (prediction: {placeId: string; description: string}) => {
+    setAddressLoading(true);
+    setShowAddressDropdown(false);
+    setAddressQuery(prediction.description);
+    try {
+      const res = await fetch(`/api/places?placeId=${encodeURIComponent(prediction.placeId)}`);
+      if (!res.ok) throw new Error('Details fetch failed');
+      const data = await res.json();
+      if (data.address) {
+        setSelectedAddress(data.address);
+        setAddressQuery(data.address.display);
+      } else {
+        // Fallback: use the prediction text as display
+        setSelectedAddress({display: prediction.description, street: '', city: '', state: 'NJ', zip: ''});
+      }
+    } catch {
+      setSelectedAddress({display: prediction.description, street: '', city: '', state: 'NJ', zip: ''});
+    } finally {
+      setAddressLoading(false);
+    }
+  };
 
   // Close address dropdown on outside click
   useEffect(() => {
@@ -1358,10 +1368,10 @@ export default function NJMenu() {
                       onChange={(e) => {
                         setAddressQuery(e.target.value);
                         setSelectedAddress(null);
-                        if (e.target.value.length < 4) setShowAddressDropdown(false);
+                        if (e.target.value.length < 3) setShowAddressDropdown(false);
                       }}
                       onFocus={() => {
-                        if (addressResults.length > 0 && !selectedAddress) setShowAddressDropdown(true);
+                        if (addressPredictions.length > 0 && !selectedAddress) setShowAddressDropdown(true);
                       }}
                       placeholder="Start typing address…"
                       autoComplete="off"
@@ -1381,7 +1391,7 @@ export default function NJMenu() {
                     <input type="hidden" name="state" value={selectedAddress?.state || 'NJ'} />
                     <input type="hidden" name="zip" value={selectedAddress?.zip || ''} />
 
-                    {showAddressDropdown && addressResults.length > 0 && (
+                    {showAddressDropdown && addressPredictions.length > 0 && (
                       <div
                         ref={addressDropdownRef}
                         className="absolute left-0 right-0 z-50 mt-1 overflow-hidden"
@@ -1393,15 +1403,11 @@ export default function NJMenu() {
                           overflowY: 'auto',
                         }}
                       >
-                        {addressResults.map((addr, i) => (
+                        {addressPredictions.map((pred) => (
                           <button
-                            key={i}
+                            key={pred.placeId}
                             type="button"
-                            onClick={() => {
-                              setSelectedAddress(addr);
-                              setAddressQuery(addr.display);
-                              setShowAddressDropdown(false);
-                            }}
+                            onClick={() => selectPlacePrediction(pred)}
                             className="w-full text-left px-4 py-2.5 cursor-pointer font-body text-sm"
                             style={{
                               background: 'transparent',
@@ -1416,9 +1422,17 @@ export default function NJMenu() {
                               (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
                             }}
                           >
-                            {addr.display}
+                            <span style={{color: '#fff'}}>{pred.mainText}</span>
+                            {pred.secondaryText && (
+                              <span style={{color: 'rgba(255,255,255,0.5)', marginLeft: 6, fontSize: '0.85em'}}>{pred.secondaryText}</span>
+                            )}
                           </button>
                         ))}
+                      </div>
+                    )}
+                    {addressLoading && (
+                      <div className="font-body text-xs mt-1" style={{color: 'rgba(255,255,255,0.4)'}}>
+                        Loading address…
                       </div>
                     )}
                   </div>
