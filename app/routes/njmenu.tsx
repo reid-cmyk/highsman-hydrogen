@@ -80,6 +80,7 @@ interface Strain {
   name: string;
   type: StrainType;
   thc: string;
+  sku?: string;
 }
 
 interface ProductLine {
@@ -102,12 +103,40 @@ interface ProductLine {
   discount?: {label: string; percent: number}; // optional active discount
 }
 
+// Base strains (no SKU — used for non-Hit-Stick lines)
 const STRAINS: Strain[] = [
   {name: 'Wavey Watermelon', type: 'Sativa', thc: '49.8%'},
   {name: 'Gridiron Grape', type: 'Sativa', thc: '50.0%'},
   {name: 'Blueberry Blitz', type: 'Hybrid', thc: '47.0%'},
   {name: 'Touchdown Tango Mango', type: 'Hybrid', thc: '53.8%'},
   {name: 'Cake Quake', type: 'Indica', thc: '47.4%'},
+];
+
+// Hit Stick Singles — Case (24)
+const STRAINS_HS_SINGLE: Strain[] = [
+  {name: 'Wavey Watermelon', type: 'Sativa', thc: '49.8%', sku: 'C-NJ-HSINF-WW'},
+  {name: 'Gridiron Grape', type: 'Sativa', thc: '50.0%', sku: 'C-NJ-HSINF-GG'},
+  {name: 'Blueberry Blitz', type: 'Hybrid', thc: '47.0%', sku: 'C-NJ-HSINF-BB'},
+  {name: 'Touchdown Tango Mango', type: 'Hybrid', thc: '53.8%', sku: 'C-NJ-HSINF-TM'},
+  {name: 'Cake Quake', type: 'Indica', thc: '47.4%', sku: 'C-NJ-HSINF-CQ'},
+];
+
+// Hit Stick Power Packs — Black Tin 5-Pack, Case (6)
+const STRAINS_HS_POWERPACK: Strain[] = [
+  {name: 'Wavey Watermelon', type: 'Sativa', thc: '49.8%', sku: 'C-NJ-HSTIN-WW'},
+  {name: 'Gridiron Grape', type: 'Sativa', thc: '50.0%', sku: 'C-NJ-HSTIN-GG'},
+  {name: 'Blueberry Blitz', type: 'Hybrid', thc: '47.0%', sku: 'C-NJ-HSTIN-BB'},
+  {name: 'Touchdown Tango Mango', type: 'Hybrid', thc: '53.8%', sku: 'C-NJ-HSTIN-TM'},
+  {name: 'Cake Quake', type: 'Indica', thc: '47.4%', sku: 'C-NJ-HSTIN-CQ'},
+];
+
+// Fly High Tins — 5-Pack, Case (6)
+const STRAINS_HS_FLYHIGH: Strain[] = [
+  {name: 'Wavey Watermelon', type: 'Sativa', thc: '49.8%', sku: 'C-NJ-HSTINFH-WW'},
+  {name: 'Gridiron Grape', type: 'Sativa', thc: '50.0%', sku: 'C-NJ-HSTINFH-GG'},
+  {name: 'Blueberry Blitz', type: 'Hybrid', thc: '47.0%', sku: 'C-NJ-HSTINFH-BB'},
+  {name: 'Touchdown Tango Mango', type: 'Hybrid', thc: '53.8%', sku: 'C-NJ-HSTINFH-TM'},
+  {name: 'Cake Quake', type: 'Indica', thc: '47.4%', sku: 'C-NJ-HSTINFH-CQ'},
 ];
 
 const PRODUCT_LINES: ProductLine[] = [
@@ -125,7 +154,7 @@ const PRODUCT_LINES: ProductLine[] = [
     icon: 'local_fire_department',
     imageType: 'HitStickSingle' as ImageType,
     thcDisplay: '50%+',
-    strains: STRAINS,
+    strains: STRAINS_HS_SINGLE,
   },
   {
     id: 'hit-sticks-5pack',
@@ -142,7 +171,7 @@ const PRODUCT_LINES: ProductLine[] = [
     imageType: 'Pouch' as ImageType,
     fixedImageUrl: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Untitled_design_9.png',
     thcDisplay: '50%+',
-    strains: STRAINS,
+    strains: STRAINS_HS_POWERPACK,
   },
   {
     id: 'fly-high-tins',
@@ -160,7 +189,7 @@ const PRODUCT_LINES: ProductLine[] = [
     fixedImageUrl: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Untitled_design_10.png',
     imageBg: '#FFFFFF',
     thcDisplay: '50%+',
-    strains: STRAINS,
+    strains: STRAINS_HS_FLYHIGH,
   },
   {
     id: 'triple-threat',
@@ -1064,6 +1093,14 @@ export default function NJMenu() {
                                   </span>
                                 )}
                               </div>
+                              {strain.sku && (
+                                <span
+                                  className="text-[10px] tracking-wider mt-1 block"
+                                  style={{color: BRAND.textMuted, fontFamily: 'monospace'}}
+                                >
+                                  SKU: {strain.sku}
+                                </span>
+                              )}
                             </div>
 
                             {/* Qty stepper */}
