@@ -96,6 +96,7 @@ interface ProductLine {
   icon: string;
   imageType: ImageType;
   fixedImageUrl?: string; // single image used for all strains in this line
+  imageBg?: string;       // background color behind the product image (e.g. '#fff' for images with baked-in light bg)
   thcDisplay?: string;    // overrides per-strain THC (e.g. "50%+")
   strains: Strain[];
   discount?: {label: string; percent: number}; // optional active discount
@@ -157,6 +158,7 @@ const PRODUCT_LINES: ProductLine[] = [
     icon: 'workspace_premium',
     imageType: 'Pouch' as ImageType,
     fixedImageUrl: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Untitled_design_10.png',
+    imageBg: '#FFFFFF',
     thcDisplay: '50%+',
     strains: STRAINS,
   },
@@ -725,11 +727,18 @@ export default function NJMenu() {
                     marginBottom: -1,
                   }}
                 >
-                  <img
-                    src={thumbSrc}
-                    alt={p.name}
-                    style={{width: 32, height: 32, objectFit: 'contain', opacity: active ? 1 : 0.5}}
-                  />
+                  <div style={{
+                    width: 32, height: 32, flexShrink: 0,
+                    background: p.imageBg ?? 'transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    borderRadius: 4,
+                  }}>
+                    <img
+                      src={thumbSrc}
+                      alt={p.name}
+                      style={{width: 32, height: 32, objectFit: 'contain', opacity: active ? 1 : 0.5}}
+                    />
+                  </div>
                   <span>
                     {p.name}{' '}
                     <span style={{color: active ? BRAND.gold : 'inherit'}}>{p.subtitle}</span>
@@ -781,7 +790,11 @@ export default function NJMenu() {
                     {/* Product thumbnail */}
                     <div
                       className="flex-shrink-0 hidden md:flex items-center justify-center"
-                      style={{width: 64, height: 64}}
+                      style={{
+                        width: 64,
+                        height: 64,
+                        background: product.imageBg ?? 'transparent',
+                      }}
                     >
                       <img
                         src={headerThumb}
@@ -995,7 +1008,14 @@ export default function NJMenu() {
                             }}
                           >
                             {/* Product image */}
-                            <div className="flex-shrink-0">
+                            <div
+                              className="flex-shrink-0 flex items-center justify-center"
+                              style={{
+                                width: 72,
+                                height: 72,
+                                background: product.imageBg ?? 'transparent',
+                              }}
+                            >
                               <img
                                 src={imgSrc}
                                 alt={`${product.name} ${strain.name}`}
