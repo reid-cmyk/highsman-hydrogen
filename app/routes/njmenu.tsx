@@ -243,12 +243,6 @@ const PRODUCT_LINES: ProductLine[] = [
   },
 ];
 
-const STRAIN_TYPE_COLORS: Record<StrainType, string> = {
-  Sativa: '#F59E0B',
-  Hybrid: '#3B82F6',
-  Indica: '#8B5CF6',
-};
-
 // ─────────────────────────────────────────────────────────────────────────────
 // BUDTENDER SAMPLE RULES
 // ─────────────────────────────────────────────────────────────────────────────
@@ -529,60 +523,6 @@ export default function NJMenu() {
     return `mailto:njsales@highsman.com?subject=${subject}&body=${body}`;
   }, [cartItems, orderNote, earnedSamples, sampleStrains]);
 
-  // Download menu as text
-  const downloadMenu = useCallback(() => {
-    const lines: string[] = [
-      '╔═══════════════════════════════════════════════════════════════╗',
-      '║           HIGHSMAN — NEW JERSEY WHOLESALE MENU              ║',
-      '║                     Spark Greatness™                        ║',
-      '╚═══════════════════════════════════════════════════════════════╝',
-      '',
-      `Generated: ${new Date().toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'})}`,
-      'Contact: njsales@highsman.com',
-      '',
-    ];
-
-    PRODUCT_LINES.forEach((product) => {
-      lines.push('━'.repeat(63));
-      lines.push(
-        `${product.name.toUpperCase()} ${product.subtitle.toUpperCase()} — ${product.weight} ${product.format}`,
-      );
-      lines.push(
-        `Case Size: ${product.caseSize} units | Wholesale: ${formatCurrency(product.wholesale)}/unit | Case: ${formatCurrency(product.casePrice)} | RRP: ${formatCurrency(product.rrp)}`,
-      );
-      if (product.discount) {
-        lines.push(`🔥 ${product.discount.label}: ${product.discount.percent}% OFF`);
-      }
-      lines.push('');
-      lines.push(
-        '  Strain                       Type      THC%',
-      );
-      lines.push('  ' + '─'.repeat(50));
-      product.strains.forEach((s) => {
-        const name = s.name.padEnd(30);
-        const type = s.type.padEnd(10);
-        lines.push(`  ${name}${type}${product.thcDisplay ?? s.thc}`);
-      });
-      lines.push('');
-    });
-
-    lines.push('━'.repeat(63));
-    lines.push('');
-    lines.push('To place an order, email njsales@highsman.com');
-    lines.push('or visit highsman.com/njmenu');
-    lines.push('');
-    lines.push('© Highsman Inc. All rights reserved.');
-
-    const blob = new Blob([lines.join('\n')], {type: 'text/plain'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'Highsman_NJ_Wholesale_Menu.txt';
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('Menu downloaded!');
-  }, [showToast]);
-
   const getCasesForItem = (productId: string, strainName: string): number => {
     return cart[cartKey(productId, strainName)]?.cases ?? 0;
   };
@@ -593,627 +533,398 @@ export default function NJMenu() {
       <style
         dangerouslySetInnerHTML={{
           __html: `
-        @import url('https://fonts.googleapis.com/css2?family=Teko:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap');
-        @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Teko:wght@300;400;500;600;700&family=Barlow+Semi+Condensed:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
 
         .font-headline { font-family: 'Teko', sans-serif; }
         .font-body { font-family: 'Barlow Semi Condensed', sans-serif; }
 
         .nj-menu * { box-sizing: border-box; }
-        .nj-menu { font-family: 'Barlow Semi Condensed', sans-serif; color: #fff; background: #000; min-height: 100vh; }
+        .nj-menu { font-family: 'Barlow Semi Condensed', sans-serif; color: #fff; background: #0A0A0A; min-height: 100vh; -webkit-font-smoothing: antialiased; }
 
         .nj-menu input[type="number"]::-webkit-inner-spin-button,
         .nj-menu input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         .nj-menu input[type="number"] { -moz-appearance: textfield; }
 
-        .nj-menu .strain-row:hover { background: rgba(255,255,255,0.06); }
+        .nj-menu a { text-decoration: none; }
+
         .nj-menu .strain-row { transition: background 0.15s ease; }
-        .nj-menu .product-section { transition: all 0.3s ease; }
+        .nj-menu .strain-row:hover { background: rgba(255,255,255,0.03); }
+
+        .nj-menu .product-card { transition: border-color 0.2s ease; }
 
         .nj-menu .strain-img {
-          border-radius: 8px;
-          transition: transform 0.2s ease;
-          filter: drop-shadow(0 2px 8px rgba(0,0,0,0.4));
+          transition: transform 0.25s ease;
+          filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));
         }
-        .nj-menu .strain-row:hover .strain-img { transform: scale(1.05); }
+        .nj-menu .strain-row:hover .strain-img { transform: scale(1.06); }
 
         @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        .slide-up { animation: slideUp 0.3s ease-out; }
+        .slide-up { animation: slideUp 0.25s ease-out; }
 
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .fade-in { animation: fadeIn 0.2s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-in { animation: fadeIn 0.3s ease-out; }
 
-        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
-        .cart-pulse { animation: pulse 0.3s ease; }
+        /* Minimal stepper */
+        .stepper-btn {
+          width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+          font-family: 'Barlow Semi Condensed', sans-serif; font-weight: 600; font-size: 18px;
+          cursor: pointer; transition: all 0.15s ease; border: none; user-select: none;
+        }
+        .stepper-btn:hover { opacity: 0.8; }
 
-        .discount-badge { background: linear-gradient(135deg, #ff6b35, #f7c948); }
+        /* Select reset */
+        .nj-menu select { -webkit-appearance: none; appearance: none; }
       `,
         }}
       />
 
       <div className="nj-menu">
         {/* ── Top Bar ────────────────────────────────────────────────────── */}
-        <div
-          style={{background: BRAND.gold, color: BRAND.black}}
-          className="flex items-center justify-between px-5 py-2 font-headline text-[13px] font-bold tracking-[0.15em] uppercase"
+        <nav
+          className="flex items-center justify-between px-6 md:px-10 py-3"
+          style={{background: '#000', borderBottom: '1px solid rgba(255,255,255,0.08)'}}
         >
           <Link
             to="/wholesale"
-            className="flex items-center gap-1 no-underline"
-            style={{color: BRAND.black}}
+            className="font-body text-xs font-600 tracking-[0.12em] uppercase"
+            style={{color: 'rgba(255,255,255,0.5)'}}
           >
-            <span className="material-symbols-outlined text-sm">
-              arrow_back
-            </span>
-            Wholesale Portal
+            &larr; Wholesale Portal
           </Link>
-          <span className="hidden md:block">
-            NJ Wholesale Menu &middot; Highsman
-          </span>
           <a
             href="mailto:njsales@highsman.com"
-            className="flex items-center gap-1 no-underline"
-            style={{color: BRAND.black}}
+            className="font-body text-xs font-600 tracking-[0.12em] uppercase"
+            style={{color: 'rgba(255,255,255,0.5)'}}
           >
-            <span className="material-symbols-outlined text-sm">mail</span>
             njsales@highsman.com
           </a>
-        </div>
+        </nav>
 
         {/* ── Hero ───────────────────────────────────────────────────────── */}
-        <section
-          style={{background: BRAND.black, borderBottom: `1px solid ${BRAND.border}`}}
-        >
-          {/* Logo lockup */}
-          <div
-            className="flex flex-col items-center justify-center px-6 pt-12 pb-10 text-center"
-            style={{borderBottom: `1px solid ${BRAND.border}`}}
-          >
-            <img
-              src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Logo_White.png?v=1775594430"
-              alt="Highsman"
-              style={{height: 72, width: 'auto', marginBottom: 16}}
-            />
-            <img
-              src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Spark_Greatness_White.png?v=1775594430"
-              alt="Spark Greatness™"
-              style={{height: 28, width: 'auto', opacity: 0.85}}
-            />
-          </div>
-
-          {/* Content row */}
-          <div className="max-w-6xl mx-auto px-6 md:px-12 py-12 md:py-16 grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
-            <div>
-              <p
-                className="font-headline text-xs font-bold tracking-[0.25em] uppercase mb-3"
-                style={{color: BRAND.gold}}
-              >
-                New Jersey Wholesale
-              </p>
-              <h1 className="font-headline text-6xl md:text-8xl font-bold uppercase leading-[0.85] mb-4">
-                Product
-                <br />
-                Menu
-              </h1>
-              <p
-                className="font-headline text-2xl md:text-3xl font-bold uppercase tracking-wide mb-5"
-                style={{color: BRAND.gold}}
-              >
-                2026 Catalog
-              </p>
-              <p
-                className="text-base leading-relaxed max-w-md mb-6"
-                style={{color: BRAND.textMuted}}
-              >
-                Browse our full New Jersey lineup. Select quantities, build your
-                order, and send it straight to your Highsman rep&mdash;all from
-                this page.
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <a
-                  href="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Menu_-_4.15.xlsx?v=1776303798"
-                  download="Highsman_Menu_NJ.xlsx"
-                  className="flex items-center gap-2 font-headline text-sm font-bold uppercase tracking-wider px-5 py-2.5 border-2 transition-all hover:opacity-80"
-                  style={{
-                    borderColor: BRAND.gold,
-                    color: BRAND.gold,
-                    background: 'transparent',
-                    textDecoration: 'none',
-                  }}
-                >
-                  <span className="material-symbols-outlined text-base">
-                    download
-                  </span>
-                  Download Order Form (.xlsx)
-                </a>
-                <button
-                  onClick={() => {
-                    setShowCart(true);
-                    setTimeout(
-                      () =>
-                        cartRef.current?.scrollIntoView({behavior: 'smooth'}),
-                      100,
-                    );
-                  }}
-                  className="flex items-center gap-2 font-headline text-sm font-bold uppercase tracking-wider px-5 py-2.5 transition-all hover:opacity-90"
-                  style={{
-                    background: BRAND.gold,
-                    color: BRAND.black,
-                    border: 'none',
-                  }}
-                >
-                  <span className="material-symbols-outlined text-base">
-                    shopping_cart
-                  </span>
-                  View Order ({cartCount})
-                </button>
-              </div>
+        <header style={{background: '#000'}}>
+          <div className="max-w-5xl mx-auto px-6 md:px-10 pt-16 pb-20 md:pt-24 md:pb-28">
+            {/* Logo */}
+            <div className="mb-14 md:mb-20">
+              <img
+                src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Logo_White.png?v=1775594430"
+                alt="Highsman"
+                style={{height: 48, width: 'auto'}}
+              />
             </div>
 
-            {/* Stats Grid */}
-            <div
-              className="grid grid-cols-2 gap-px"
-              style={{background: BRAND.border}}
+            {/* Title block */}
+            <p
+              className="font-body text-sm font-600 tracking-[0.2em] uppercase mb-5"
+              style={{color: BRAND.gold}}
             >
-              {[
-                {num: '5', label: 'Product Lines'},
-                {num: '5', label: 'Strains'},
-                {num: '25', label: 'Total SKUs'},
-                {
-                  num: '$7',
-                  label: 'Starting Wholesale',
-                  sub: 'per unit',
-                },
-              ].map((stat) => (
-                <div
-                  key={stat.label}
-                  className="p-5"
-                  style={{background: BRAND.surfaceHigh}}
-                >
-                  <span className="font-headline text-4xl font-bold text-white leading-none block">
-                    {stat.num}
-                  </span>
-                  <span
-                    className="text-xs font-bold uppercase tracking-widest"
-                    style={{color: BRAND.textMuted}}
-                  >
-                    {stat.label}
-                  </span>
-                  {stat.sub && (
-                    <span
-                      className="block text-[10px] mt-0.5"
-                      style={{color: BRAND.textMuted}}
-                    >
-                      {stat.sub}
-                    </span>
-                  )}
-                </div>
-              ))}
+              New Jersey &middot; Wholesale
+            </p>
+            <h1
+              className="font-headline font-700 uppercase leading-[0.82] mb-6"
+              style={{fontSize: 'clamp(72px, 12vw, 140px)', letterSpacing: '-0.02em'}}
+            >
+              Product<br />Menu
+            </h1>
+            <p
+              className="font-body text-lg md:text-xl leading-relaxed max-w-lg mb-10"
+              style={{color: 'rgba(255,255,255,0.55)', fontWeight: 400}}
+            >
+              Select quantities and send your order directly. Or download the spreadsheet for offline ordering.
+            </p>
+
+            {/* CTAs — clean, no icons */}
+            <div className="flex flex-wrap gap-4">
+              <a
+                href="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Menu_-_4.15.xlsx?v=1776303798"
+                download="Highsman_Menu_NJ.xlsx"
+                className="font-headline text-sm font-600 uppercase tracking-[0.15em] px-7 py-3 transition-opacity hover:opacity-80"
+                style={{
+                  border: `1.5px solid ${BRAND.gold}`,
+                  color: BRAND.gold,
+                }}
+              >
+                Download Order Form
+              </a>
+              <button
+                onClick={() => {
+                  setShowCart(true);
+                  setTimeout(
+                    () => cartRef.current?.scrollIntoView({behavior: 'smooth'}),
+                    100,
+                  );
+                }}
+                className="font-headline text-sm font-600 uppercase tracking-[0.15em] px-7 py-3 transition-opacity hover:opacity-90 cursor-pointer"
+                style={{
+                  background: BRAND.gold,
+                  color: '#000',
+                  border: 'none',
+                }}
+              >
+                View Order ({cartCount})
+              </button>
             </div>
           </div>
-        </section>
+
+          {/* Divider line */}
+          <div style={{height: 1, background: 'rgba(255,255,255,0.08)'}} />
+        </header>
 
         {/* ── Product Lines ──────────────────────────────────────────────── */}
-        <div ref={menuRef} className="max-w-6xl mx-auto px-4 md:px-8 py-10">
-          {/* Quick-nav tabs */}
-          <div className="flex flex-wrap gap-0 mb-0 border-b" style={{borderColor: BRAND.border}}>
-            {PRODUCT_LINES.map((p) => {
-              const active = expandedProduct === p.id;
-              const thumbSrc = p.fixedImageUrl ?? strainImage(p.strains[0].name, p.imageType);
-              return (
-                <button
-                  key={p.id}
-                  onClick={() =>
-                    setExpandedProduct(active ? null : p.id)
-                  }
-                  className="flex items-center gap-3 font-headline text-sm font-bold uppercase tracking-wider px-5 py-4 transition-all relative"
-                  style={{
-                    background: active ? BRAND.surfaceHigh : 'transparent',
-                    border: 'none',
-                    borderBottom: active ? `3px solid ${BRAND.gold}` : '3px solid transparent',
-                    color: active ? '#fff' : BRAND.textMuted,
-                    cursor: 'pointer',
-                    marginBottom: -1,
-                  }}
-                >
-                  <div style={{
-                    width: 32, height: 32, flexShrink: 0,
-                    background: p.imageBg ?? 'transparent',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    borderRadius: 4,
-                  }}>
-                    <img
-                      src={thumbSrc}
-                      alt={p.name}
-                      style={{width: 32, height: 32, objectFit: 'contain', opacity: active ? 1 : 0.5}}
-                    />
-                  </div>
-                  <span>
-                    {p.name}{' '}
-                    <span style={{color: active ? BRAND.gold : 'inherit'}}>{p.subtitle}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+        <div ref={menuRef} className="max-w-5xl mx-auto px-6 md:px-10 py-16 md:py-24">
 
-          {/* Product Sections */}
+          {/* Section label */}
+          <p
+            className="font-body text-xs font-600 tracking-[0.25em] uppercase mb-16"
+            style={{color: 'rgba(255,255,255,0.35)'}}
+          >
+            Product Catalog &mdash; {PRODUCT_LINES.length} Lines &middot; {PRODUCT_LINES.reduce((n, p) => n + p.strains.length, 0)} SKUs
+          </p>
+
+          {/* Product Cards */}
           {PRODUCT_LINES.map((product) => {
             const isExpanded = expandedProduct === product.id;
-            const discountedWholesale = applyDiscount(
-              product.wholesale,
-              product.discount,
-            );
-            const discountedCase = applyDiscount(
-              product.casePrice,
-              product.discount,
-            );
-
+            const discountedWholesale = applyDiscount(product.wholesale, product.discount);
+            const discountedCase = applyDiscount(product.casePrice, product.discount);
             const marginPct = Math.round(((product.rrp - discountedWholesale) / product.rrp) * 100);
             const headerThumb = product.fixedImageUrl ?? strainImage(product.strains[0].name, product.imageType);
 
             return (
               <section
                 key={product.id}
-                className="product-section mb-3"
-                style={{
-                  background: BRAND.surface,
-                  border: `1px solid ${isExpanded ? BRAND.gold + '30' : BRAND.border}`,
-                  borderLeft: `4px solid ${isExpanded ? BRAND.gold : BRAND.border}`,
-                }}
+                className="product-card mb-1"
+                style={{borderBottom: '1px solid rgba(255,255,255,0.06)'}}
               >
-                {/* Product Header — always visible */}
+                {/* Product Header */}
                 <button
-                  onClick={() =>
-                    setExpandedProduct(isExpanded ? null : product.id)
-                  }
-                  className="w-full flex items-center justify-between px-5 md:px-8 py-5 text-left"
-                  style={{
-                    background: isExpanded ? `${BRAND.gold}06` : 'transparent',
-                    border: 'none',
-                    color: '#fff',
-                    cursor: 'pointer',
-                  }}
+                  onClick={() => setExpandedProduct(isExpanded ? null : product.id)}
+                  className="w-full flex items-center gap-6 md:gap-10 py-8 md:py-10 text-left"
+                  style={{background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer'}}
                 >
-                  <div className="flex items-center gap-5">
-                    {/* Product thumbnail */}
-                    <div
-                      className="flex-shrink-0 hidden md:flex items-center justify-center"
-                      style={{
-                        width: 64,
-                        height: 64,
-                        background: product.imageBg ?? 'transparent',
-                      }}
-                    >
-                      <img
-                        src={headerThumb}
-                        alt={product.name}
-                        style={{width: 64, height: 64, objectFit: 'contain'}}
-                      />
-                    </div>
-                    <div>
-                      <h2 className="font-headline text-2xl md:text-4xl font-bold uppercase leading-none tracking-tight">
-                        {product.name}{' '}
-                        <span style={{color: BRAND.gold}}>
-                          {product.subtitle}
-                        </span>
-                      </h2>
-                      <p
-                        className="text-sm mt-1"
-                        style={{color: BRAND.textMuted}}
-                      >
-                        {product.weight} &middot; {product.format} &middot; Case of {product.caseSize}
-                      </p>
-                    </div>
+                  {/* Product image */}
+                  <div
+                    className="flex-shrink-0 hidden md:flex items-center justify-center"
+                    style={{width: 80, height: 80, background: product.imageBg ?? 'transparent'}}
+                  >
+                    <img src={headerThumb} alt={product.name} style={{width: 80, height: 80, objectFit: 'contain'}} />
                   </div>
-                  <div className="flex items-center gap-4">
-                    {product.discount && (
-                      <span className="discount-badge text-xs font-bold px-2.5 py-1 rounded text-black">
-                        {product.discount.label}
+
+                  {/* Name + meta */}
+                  <div className="flex-1 min-w-0">
+                    <h2 className="font-headline font-600 uppercase leading-[0.9] tracking-tight" style={{fontSize: 'clamp(28px, 5vw, 48px)'}}>
+                      {product.name} <span style={{color: BRAND.gold}}>{product.subtitle}</span>
+                    </h2>
+                    <p className="font-body text-sm mt-2" style={{color: 'rgba(255,255,255,0.4)'}}>
+                      {product.weight} &middot; {product.format} &middot; Case of {product.caseSize}
+                    </p>
+                  </div>
+
+                  {/* Key numbers — clean typography, no boxes */}
+                  <div className="hidden md:flex items-center gap-10 flex-shrink-0">
+                    <div className="text-right">
+                      <span className="font-headline text-3xl font-600 block leading-none" style={{color: '#fff'}}>
+                        {formatCurrency(discountedWholesale)}
                       </span>
-                    )}
-                    {/* Margin badge */}
-                    <div
-                      className="text-center hidden md:block px-4 py-2"
-                      style={{
-                        background: `${BRAND.gold}12`,
-                        border: `1px solid ${BRAND.gold}30`,
-                      }}
-                    >
-                      <span
-                        className="font-headline text-2xl font-bold block leading-none"
-                        style={{color: BRAND.gold}}
-                      >
+                      <span className="font-body text-xs" style={{color: 'rgba(255,255,255,0.35)'}}>per unit wholesale</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-headline text-3xl font-600 block leading-none" style={{color: BRAND.gold}}>
                         {marginPct}%
                       </span>
-                      <span className="text-[10px] font-bold uppercase tracking-widest" style={{color: BRAND.textMuted}}>
-                        Margin
-                      </span>
-                    </div>
-                    <div className="text-right hidden md:block">
-                      <span className="font-headline text-2xl font-bold block" style={{color: '#fff'}}>
-                        {formatCurrency(discountedWholesale)}
-                        <span className="font-headline text-sm font-normal" style={{color: BRAND.textMuted}}>
-                          /unit
-                        </span>
-                      </span>
-                      <span className="text-xs" style={{color: BRAND.textMuted}}>
-                        RRP {formatCurrency(product.rrp)}
-                      </span>
+                      <span className="font-body text-xs" style={{color: 'rgba(255,255,255,0.35)'}}>retail margin</span>
                     </div>
                     <span
-                      className="material-symbols-outlined text-2xl transition-transform"
-                      style={{
-                        color: BRAND.textMuted,
-                        transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                      }}
+                      className="font-headline text-2xl font-300 transition-transform"
+                      style={{color: 'rgba(255,255,255,0.3)', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s ease'}}
                     >
-                      expand_more
+                      &#8964;
                     </span>
                   </div>
                 </button>
 
-                {/* Expanded: pricing bar + strain table */}
+                {/* Expanded content */}
                 {isExpanded && (
-                  <div className="fade-in">
-                    {/* Pricing summary bar */}
-                    <div
-                      className="grid grid-cols-2 md:grid-cols-4 gap-px mx-5 md:mx-8 mb-5"
-                      style={{background: BRAND.border}}
-                    >
+                  <div className="fade-in pb-10">
+                    {/* Pricing strip — horizontal, minimal */}
+                    <div className="flex flex-wrap gap-x-10 gap-y-2 mb-8 pl-0 md:pl-[120px]">
                       {[
-                        {
-                          label: 'Wholesale / Unit',
-                          value: formatCurrency(discountedWholesale),
-                          highlight: true,
-                        },
-                        {
-                          label: `Case of ${product.caseSize}`,
-                          value: formatCurrency(discountedCase),
-                          highlight: false,
-                        },
-                        {
-                          label: 'RRP',
-                          value: formatCurrency(product.rrp),
-                          highlight: false,
-                        },
-                        {
-                          label: 'Margin',
-                          value: `${(((product.rrp - discountedWholesale) / product.rrp) * 100).toFixed(0)}%`,
-                          highlight: true,
-                          isMargin: true,
-                        },
-                      ].map((cell) => (
-                        <div
-                          key={cell.label}
-                          className="px-4 py-3"
-                          style={{
-                            background: (cell as any).isMargin ? `${BRAND.gold}10` : BRAND.surfaceHigh,
-                            borderTop: (cell as any).isMargin ? `2px solid ${BRAND.gold}40` : 'none',
-                          }}
-                        >
-                          <span
-                            className="text-[10px] font-bold uppercase tracking-widest block mb-0.5"
-                            style={{color: (cell as any).isMargin ? BRAND.gold : BRAND.textMuted}}
-                          >
-                            {cell.label}
-                          </span>
-                          <span
-                            className="font-headline font-bold"
-                            style={{
-                              color: cell.highlight ? BRAND.gold : '#fff',
-                              fontSize: (cell as any).isMargin ? 28 : 18,
-                              lineHeight: 1,
-                            }}
-                          >
-                            {cell.value}
-                          </span>
+                        {l: 'Unit', v: formatCurrency(discountedWholesale)},
+                        {l: `Case of ${product.caseSize}`, v: formatCurrency(discountedCase)},
+                        {l: 'RRP', v: formatCurrency(product.rrp)},
+                        {l: 'Margin', v: `${marginPct}%`, gold: true},
+                      ].map((d) => (
+                        <div key={d.l} className="flex items-baseline gap-2">
+                          <span className="font-body text-xs font-500 uppercase tracking-[0.15em]" style={{color: 'rgba(255,255,255,0.3)'}}>{d.l}</span>
+                          <span className="font-headline text-lg font-600" style={{color: (d as any).gold ? BRAND.gold : '#fff'}}>{d.v}</span>
                         </div>
                       ))}
                     </div>
 
-                    {/* Discount display */}
+                    {/* Discount callout */}
                     {product.discount && (
-                      <div
-                        className="mx-5 md:mx-8 mb-4 flex items-center gap-2 text-sm px-4 py-2.5"
-                        style={{
-                          background: 'rgba(255,107,53,0.08)',
-                          border: '1px solid rgba(255,107,53,0.25)',
-                        }}
-                      >
-                        <span className="material-symbols-outlined text-base" style={{color: '#ff6b35'}}>
-                          local_offer
-                        </span>
-                        <span style={{color: '#ff6b35'}}>
-                          <strong>{product.discount.label}</strong> &mdash;{' '}
-                          {product.discount.percent}% off wholesale. Was{' '}
-                          {formatCurrency(product.wholesale)}/unit, now{' '}
-                          <strong>{formatCurrency(discountedWholesale)}/unit</strong>.
-                        </span>
+                      <div className="mb-6 pl-0 md:pl-[120px]">
+                        <p className="font-body text-sm" style={{color: '#ff6b35'}}>
+                          {product.discount.label} &mdash; {product.discount.percent}% off.
+                          Was {formatCurrency(product.wholesale)}/unit, now <strong>{formatCurrency(discountedWholesale)}/unit</strong>
+                        </p>
                       </div>
                     )}
 
-                    {/* Quick-add bar — top of strain list */}
+                    {/* Quick order — subtle */}
+                    <div className="flex items-center gap-3 mb-6 pl-0 md:pl-[120px]">
+                      <span className="font-body text-xs font-500 tracking-[0.15em] uppercase" style={{color: 'rgba(255,255,255,0.3)'}}>Quick</span>
+                      <button
+                        onClick={() => product.strains.forEach((s) => { if (getCasesForItem(product.id, s.name) > 0) updateCart(product.id, s.name, -1); })}
+                        className="font-headline text-xs font-600 uppercase tracking-[0.1em] px-4 py-2 cursor-pointer transition-opacity hover:opacity-70"
+                        style={{background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.5)'}}
+                      >
+                        −1 Each
+                      </button>
+                      <button
+                        onClick={() => product.strains.forEach((s) => updateCart(product.id, s.name, 1))}
+                        className="font-headline text-xs font-600 uppercase tracking-[0.1em] px-4 py-2 cursor-pointer transition-opacity hover:opacity-90"
+                        style={{background: BRAND.gold, border: 'none', color: '#000'}}
+                      >
+                        +1 Each
+                      </button>
+                    </div>
+
+                    {/* Strain table header */}
                     <div
-                      className="flex items-center justify-between px-5 md:px-8 py-3"
-                      style={{borderBottom: `1px solid ${BRAND.border}`, background: BRAND.surfaceHigh}}
+                      className="hidden md:grid items-center gap-4 px-0 md:pl-[120px] pb-3 mb-0 font-body text-[10px] font-600 tracking-[0.2em] uppercase"
+                      style={{color: 'rgba(255,255,255,0.25)', gridTemplateColumns: '1fr 80px 70px 56px 120px'}}
                     >
-                      <span className="font-headline text-xs font-bold uppercase tracking-widest" style={{color: BRAND.textMuted}}>
-                        Quick order
-                      </span>
-                      <div className="flex items-center gap-2">
-                        {/* Remove one of each */}
-                        <button
-                          onClick={() =>
-                            product.strains.forEach((s) => {
-                              const existing = getCasesForItem(product.id, s.name);
-                              if (existing > 0)
-                                updateCart(product.id, s.name, -1);
-                            })
-                          }
-                          className="flex items-center gap-1.5 font-headline text-xs font-bold uppercase tracking-wider px-3 py-2 transition-all hover:opacity-80 cursor-pointer"
-                          style={{
-                            background: 'transparent',
-                            border: `1px solid ${BRAND.border}`,
-                            color: BRAND.textMuted,
-                          }}
-                        >
-                          <span className="material-symbols-outlined" style={{fontSize: 15}}>remove_shopping_cart</span>
-                          −1 Each
-                        </button>
-                        {/* Add one of each */}
-                        <button
-                          onClick={() =>
-                            product.strains.forEach((s) =>
-                              updateCart(product.id, s.name, 1)
-                            )
-                          }
-                          className="flex items-center gap-1.5 font-headline text-xs font-bold uppercase tracking-wider px-3 py-2 transition-all hover:opacity-90 cursor-pointer"
-                          style={{
-                            background: BRAND.gold,
-                            border: 'none',
-                            color: BRAND.black,
-                          }}
-                        >
-                          <span className="material-symbols-outlined" style={{fontSize: 15}}>add_shopping_cart</span>
-                          +1 Each
-                        </button>
-                      </div>
+                      <span>Strain</span>
+                      <span>Type</span>
+                      <span>THC</span>
+                      <span>SKU</span>
+                      <span className="text-right">Cases</span>
                     </div>
 
                     {/* Strain Rows */}
-                    <div className="mb-0">
+                    <div>
                       {product.strains.map((strain) => {
                         const cases = getCasesForItem(product.id, strain.name);
                         const imgSrc = product.fixedImageUrl ?? strainImage(strain.name, product.imageType);
                         return (
                           <div
                             key={strain.name}
-                            className="strain-row flex items-center gap-4 px-5 md:px-8 py-3 transition-all"
+                            className="strain-row flex items-center gap-4 md:gap-0 py-4 md:py-5"
                             style={{
-                              borderBottom: `1px solid ${BRAND.border}`,
-                              borderLeft: `3px solid ${cases > 0 ? BRAND.gold : 'transparent'}`,
-                              background: cases > 0 ? `${BRAND.gold}07` : 'transparent',
+                              borderTop: '1px solid rgba(255,255,255,0.05)',
+                              paddingLeft: 0,
+                              background: cases > 0 ? 'rgba(245,228,0,0.03)' : 'transparent',
                             }}
                           >
-                            {/* Product image */}
+                            {/* Image — aligned with header thumbs */}
                             <div
-                              className="flex-shrink-0 flex items-center justify-center"
-                              style={{
-                                width: 72,
-                                height: 72,
-                                background: product.imageBg ?? 'transparent',
-                              }}
+                              className="flex-shrink-0 hidden md:flex items-center justify-center"
+                              style={{width: 80, height: 80, marginRight: 40, background: product.imageBg ?? 'transparent'}}
                             >
                               <img
                                 src={imgSrc}
                                 alt={`${product.name} ${strain.name}`}
                                 className="strain-img"
-                                style={{
-                                  width: 72,
-                                  height: 72,
-                                  objectFit: 'contain',
-                                }}
+                                style={{width: 80, height: 80, objectFit: 'contain'}}
                                 loading="lazy"
                               />
                             </div>
 
-                            {/* Strain info */}
-                            <div className="flex-1 min-w-0">
-                              <span className="font-headline font-bold text-xl md:text-2xl text-white uppercase leading-none tracking-tight block">
-                                {strain.name}
-                              </span>
-                              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                <span
-                                  className="font-headline text-xs font-bold px-2 py-0.5 uppercase tracking-wider"
-                                  style={{
-                                    background: `${STRAIN_TYPE_COLORS[strain.type]}18`,
-                                    color: STRAIN_TYPE_COLORS[strain.type],
-                                    border: `1px solid ${STRAIN_TYPE_COLORS[strain.type]}40`,
-                                  }}
-                                >
-                                  {strain.type}
-                                </span>
-                                <span
-                                  className="font-headline text-xs font-bold px-2 py-0.5 uppercase tracking-wider"
-                                  style={{
-                                    background: `${BRAND.gold}10`,
-                                    color: BRAND.gold,
-                                    border: `1px solid ${BRAND.gold}30`,
-                                  }}
-                                >
-                                  {product.thcDisplay ?? strain.thc} THC
+                            {/* Mobile: image + info stacked */}
+                            <div
+                              className="flex-shrink-0 flex md:hidden items-center justify-center"
+                              style={{width: 56, height: 56, background: product.imageBg ?? 'transparent'}}
+                            >
+                              <img src={imgSrc} alt={strain.name} className="strain-img" style={{width: 56, height: 56, objectFit: 'contain'}} loading="lazy" />
+                            </div>
+
+                            {/* Desktop grid row */}
+                            <div className="hidden md:grid flex-1 items-center gap-4" style={{gridTemplateColumns: '1fr 80px 70px 56px 120px'}}>
+                              {/* Strain name */}
+                              <div>
+                                <span className="font-headline font-600 text-2xl text-white uppercase leading-none tracking-tight block">
+                                  {strain.name}
                                 </span>
                                 {cases > 0 && (
-                                  <span
-                                    className="font-headline text-xs font-bold"
-                                    style={{color: BRAND.gold}}
-                                  >
-                                    {cases * product.caseSize} units · {formatCurrency(discountedCase * cases)}
+                                  <span className="font-body text-xs font-500 mt-1 block" style={{color: BRAND.gold}}>
+                                    {cases * product.caseSize} units &middot; {formatCurrency(discountedCase * cases)}
                                   </span>
                                 )}
                               </div>
-                              {strain.sku && (
-                                <span
-                                  className="text-[10px] tracking-wider mt-1 block"
-                                  style={{color: BRAND.textMuted, fontFamily: 'monospace'}}
+                              {/* Type */}
+                              <span className="font-body text-xs font-500 uppercase tracking-wider" style={{color: 'rgba(255,255,255,0.5)'}}>
+                                {strain.type}
+                              </span>
+                              {/* THC */}
+                              <span className="font-body text-xs font-600" style={{color: 'rgba(255,255,255,0.7)'}}>
+                                {product.thcDisplay ?? strain.thc}
+                              </span>
+                              {/* SKU */}
+                              <span className="font-body text-[10px] tracking-wider" style={{color: 'rgba(255,255,255,0.25)', fontFamily: 'monospace, monospace'}}>
+                                {strain.sku ? strain.sku.split('-').pop() : '—'}
+                              </span>
+                              {/* Stepper */}
+                              <div className="flex items-center justify-end gap-0">
+                                <button
+                                  onClick={() => updateCart(product.id, strain.name, -1)}
+                                  disabled={cases === 0}
+                                  className="stepper-btn"
+                                  style={{
+                                    background: cases > 0 ? 'rgba(255,255,255,0.08)' : 'transparent',
+                                    color: cases > 0 ? '#fff' : 'rgba(255,255,255,0.15)',
+                                    cursor: cases > 0 ? 'pointer' : 'default',
+                                  }}
                                 >
-                                  SKU: {strain.sku}
-                                </span>
-                              )}
+                                  −
+                                </button>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={cases}
+                                  onChange={(e) => setCases(product.id, strain.name, parseInt(e.target.value, 10) || 0)}
+                                  className="font-headline text-base font-600 text-center"
+                                  style={{
+                                    width: 44, height: 36,
+                                    background: 'rgba(255,255,255,0.04)',
+                                    border: cases > 0 ? `1px solid ${BRAND.gold}50` : '1px solid rgba(255,255,255,0.08)',
+                                    color: cases > 0 ? BRAND.gold : 'rgba(255,255,255,0.6)',
+                                    outline: 'none',
+                                  }}
+                                />
+                                <button
+                                  onClick={() => updateCart(product.id, strain.name, 1)}
+                                  className="stepper-btn"
+                                  style={{
+                                    background: cases > 0 ? BRAND.gold : 'rgba(255,255,255,0.08)',
+                                    color: cases > 0 ? '#000' : '#fff',
+                                  }}
+                                >
+                                  +
+                                </button>
+                              </div>
                             </div>
 
-                            {/* Qty stepper */}
-                            <div className="flex items-center gap-0 flex-shrink-0">
-                              <button
-                                onClick={() => updateCart(product.id, strain.name, -1)}
-                                disabled={cases === 0}
-                                className="w-10 h-10 flex items-center justify-center transition-colors cursor-pointer"
-                                style={{
-                                  background: cases > 0 ? BRAND.surfaceContainer : 'transparent',
-                                  border: `1px solid ${cases > 0 ? BRAND.border : 'transparent'}`,
-                                  color: cases > 0 ? '#fff' : BRAND.textMuted,
-                                  opacity: cases > 0 ? 1 : 0.25,
-                                  cursor: cases > 0 ? 'pointer' : 'default',
-                                }}
-                              >
-                                <span className="material-symbols-outlined" style={{fontSize: 18}}>remove</span>
-                              </button>
-                              <input
-                                type="number"
-                                min={0}
-                                value={cases}
-                                onChange={(e) =>
-                                  setCases(product.id, strain.name, parseInt(e.target.value, 10) || 0)
-                                }
-                                className="font-headline text-base font-bold text-center"
-                                style={{
-                                  width: 48,
-                                  height: 40,
-                                  background: BRAND.surfaceContainer,
-                                  border: `1px solid ${cases > 0 ? BRAND.gold + '60' : BRAND.border}`,
-                                  borderLeft: 'none',
-                                  borderRight: 'none',
-                                  color: cases > 0 ? BRAND.gold : '#fff',
-                                  outline: 'none',
-                                }}
-                              />
-                              <button
-                                onClick={() => updateCart(product.id, strain.name, 1)}
-                                className="w-10 h-10 flex items-center justify-center transition-all cursor-pointer"
-                                style={{
-                                  background: cases > 0 ? BRAND.gold : BRAND.surfaceContainer,
-                                  border: `1px solid ${cases > 0 ? BRAND.gold : BRAND.border}`,
-                                  color: cases > 0 ? BRAND.black : '#fff',
-                                }}
-                              >
-                                <span className="material-symbols-outlined" style={{fontSize: 18}}>add</span>
-                              </button>
+                            {/* Mobile layout */}
+                            <div className="flex md:hidden flex-1 items-center justify-between min-w-0">
+                              <div className="min-w-0">
+                                <span className="font-headline font-600 text-lg text-white uppercase leading-none block truncate">{strain.name}</span>
+                                <span className="font-body text-xs block mt-0.5" style={{color: 'rgba(255,255,255,0.4)'}}>
+                                  {strain.type} &middot; {product.thcDisplay ?? strain.thc}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-0 flex-shrink-0 ml-3">
+                                <button onClick={() => updateCart(product.id, strain.name, -1)} disabled={cases === 0}
+                                  className="stepper-btn" style={{background: cases > 0 ? 'rgba(255,255,255,0.08)' : 'transparent', color: cases > 0 ? '#fff' : 'rgba(255,255,255,0.15)', width: 32, height: 32, fontSize: 16}}>−</button>
+                                <input type="number" min={0} value={cases}
+                                  onChange={(e) => setCases(product.id, strain.name, parseInt(e.target.value, 10) || 0)}
+                                  className="font-headline text-sm font-600 text-center"
+                                  style={{width: 36, height: 32, background: 'rgba(255,255,255,0.04)', border: cases > 0 ? `1px solid ${BRAND.gold}50` : '1px solid rgba(255,255,255,0.08)', color: cases > 0 ? BRAND.gold : 'rgba(255,255,255,0.6)', outline: 'none'}} />
+                                <button onClick={() => updateCart(product.id, strain.name, 1)}
+                                  className="stepper-btn" style={{background: cases > 0 ? BRAND.gold : 'rgba(255,255,255,0.08)', color: cases > 0 ? '#000' : '#fff', width: 32, height: 32, fontSize: 16}}>+</button>
+                              </div>
                             </div>
                           </div>
                         );
                       })}
-
                     </div>
                   </div>
                 )}
@@ -1225,159 +936,69 @@ export default function NJMenu() {
         {/* ── Order Summary / Cart ────────────────────────────────────────── */}
         <div
           ref={cartRef}
-          className="max-w-6xl mx-auto px-4 md:px-8 pb-32"
+          className="max-w-5xl mx-auto px-6 md:px-10 pb-32"
           style={{display: showCart || cartCount > 0 ? 'block' : 'none'}}
         >
-          <div
-            className="p-6 md:p-8"
-            style={{
-              background: BRAND.surface,
-              border: `1px solid ${BRAND.gold}40`,
-            }}
-          >
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <span
-                  className="material-symbols-outlined text-2xl"
-                  style={{color: BRAND.gold}}
-                >
-                  shopping_cart
-                </span>
-                <h2 className="font-headline text-2xl font-bold uppercase">
-                  Your Order
-                </h2>
-                <span
-                  className="font-headline text-sm px-2.5 py-0.5 rounded-full"
-                  style={{
-                    background: `${BRAND.gold}20`,
-                    color: BRAND.gold,
-                  }}
-                >
+          <div style={{borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 48}}>
+            <div className="flex items-baseline justify-between mb-8">
+              <h2 className="font-headline text-4xl md:text-5xl font-600 uppercase tracking-tight">
+                Your Order
+              </h2>
+              <div className="flex items-center gap-6">
+                <span className="font-body text-sm" style={{color: 'rgba(255,255,255,0.4)'}}>
                   {cartCount} case{cartCount !== 1 ? 's' : ''}
                 </span>
+                {cartCount > 0 && (
+                  <button
+                    onClick={clearCart}
+                    className="font-body text-xs font-500 tracking-[0.1em] uppercase cursor-pointer hover:opacity-70 transition-opacity"
+                    style={{background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.3)'}}
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
-              {cartCount > 0 && (
-                <button
-                  onClick={clearCart}
-                  className="text-xs font-bold uppercase tracking-wider hover:opacity-70 transition-opacity cursor-pointer"
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: BRAND.textMuted,
-                  }}
-                >
-                  Clear All
-                </button>
-              )}
             </div>
 
             {cartCount === 0 ? (
-              <div className="text-center py-12" style={{color: BRAND.textMuted}}>
-                <span className="material-symbols-outlined text-5xl block mb-3 opacity-30">
-                  inventory_2
-                </span>
-                <p className="text-base mb-1">Your order is empty</p>
-                <p className="text-sm">
-                  Add products from the menu above to get started.
+              <div className="py-16 text-center">
+                <p className="font-body text-base" style={{color: 'rgba(255,255,255,0.3)'}}>
+                  No items yet. Select quantities from the catalog above.
                 </p>
               </div>
             ) : (
               <>
-                {/* Cart Items */}
-                <div
-                  className="mb-6"
-                  style={{
-                    borderBottom: `1px solid ${BRAND.border}`,
-                  }}
-                >
+                {/* Cart line items */}
+                <div className="mb-8">
                   {cartItems.map((item) => {
-                    const product = PRODUCT_LINES.find(
-                      (p) => p.id === item.productId,
-                    );
+                    const product = PRODUCT_LINES.find((p) => p.id === item.productId);
                     if (!product) return null;
-                    const unitPrice = applyDiscount(
-                      product.casePrice,
-                      product.discount,
-                    );
+                    const unitPrice = applyDiscount(product.casePrice, product.discount);
                     return (
                       <div
                         key={cartKey(item.productId, item.strainName)}
-                        className="flex items-center justify-between py-3 px-2"
-                        style={{borderBottom: `1px solid ${BRAND.border}`}}
+                        className="flex items-center justify-between py-4"
+                        style={{borderBottom: '1px solid rgba(255,255,255,0.06)'}}
                       >
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <span
-                            className="w-2 h-2 rounded-full flex-shrink-0"
-                            style={{background: product.color}}
-                          />
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold truncate">
-                              {product.name} {product.subtitle}
-                            </p>
-                            <p
-                              className="text-xs truncate"
-                              style={{color: BRAND.textMuted}}
-                            >
-                              {item.strainName}
-                            </p>
-                          </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-body text-sm font-600">{product.name} {product.subtitle}</p>
+                          <p className="font-body text-xs" style={{color: 'rgba(255,255,255,0.4)'}}>{item.strainName}</p>
                         </div>
-                        <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() =>
-                                updateCart(item.productId, item.strainName, -1)
-                              }
-                              className="w-7 h-7 flex items-center justify-center cursor-pointer"
-                              style={{
-                                background: BRAND.surfaceHigh,
-                                border: `1px solid ${BRAND.border}`,
-                                color: '#fff',
-                              }}
-                            >
-                              <span className="material-symbols-outlined text-base">
-                                remove
-                              </span>
-                            </button>
-                            <span className="w-8 text-center font-headline text-sm font-bold">
-                              {item.cases}
-                            </span>
-                            <button
-                              onClick={() =>
-                                updateCart(item.productId, item.strainName, 1)
-                              }
-                              className="w-7 h-7 flex items-center justify-center cursor-pointer"
-                              style={{
-                                background: BRAND.surfaceHigh,
-                                border: `1px solid ${BRAND.border}`,
-                                color: '#fff',
-                              }}
-                            >
-                              <span className="material-symbols-outlined text-base">
-                                add
-                              </span>
-                            </button>
+                        <div className="flex items-center gap-5 flex-shrink-0">
+                          <div className="flex items-center gap-0">
+                            <button onClick={() => updateCart(item.productId, item.strainName, -1)}
+                              className="stepper-btn" style={{width: 28, height: 28, fontSize: 14, background: 'rgba(255,255,255,0.06)', color: '#fff'}}>−</button>
+                            <span className="font-headline text-sm font-600 w-8 text-center">{item.cases}</span>
+                            <button onClick={() => updateCart(item.productId, item.strainName, 1)}
+                              className="stepper-btn" style={{width: 28, height: 28, fontSize: 14, background: 'rgba(255,255,255,0.06)', color: '#fff'}}>+</button>
                           </div>
-                          <span
-                            className="font-headline text-sm font-bold w-24 text-right"
-                            style={{color: product.color}}
-                          >
+                          <span className="font-headline text-sm font-600 w-20 text-right" style={{color: '#fff'}}>
                             {formatCurrency(unitPrice * item.cases)}
                           </span>
-                          <button
-                            onClick={() =>
-                              setCases(item.productId, item.strainName, 0)
-                            }
-                            className="cursor-pointer"
-                            style={{
-                              background: 'transparent',
-                              border: 'none',
-                              color: BRAND.textMuted,
-                            }}
-                          >
-                            <span className="material-symbols-outlined text-lg hover:text-white transition-colors">
-                              close
-                            </span>
+                          <button onClick={() => setCases(item.productId, item.strainName, 0)}
+                            className="cursor-pointer font-body text-lg leading-none hover:opacity-60 transition-opacity"
+                            style={{background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.25)'}}>
+                            &times;
                           </button>
                         </div>
                       </div>
@@ -1385,218 +1006,72 @@ export default function NJMenu() {
                   })}
                 </div>
 
-                {/* ── Budtender Samples ────────────────────────────── */}
+                {/* Budtender Samples */}
                 {earnedSamples.length > 0 && (
-                  <div className="mb-6">
-                    {/* Header */}
-                    <div
-                      className="flex items-center justify-between px-5 py-3 mb-0"
-                      style={{
-                        background: 'linear-gradient(135deg, #0d2b0d 0%, #1a1a0a 100%)',
-                        border: `1px solid #4CAF5060`,
-                        borderBottom: 'none',
-                      }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span
-                          className="material-symbols-outlined text-2xl"
-                          style={{color: '#4CAF50'}}
-                        >
-                          redeem
-                        </span>
-                        <div>
-                          <p
-                            className="font-headline text-base font-bold uppercase tracking-widest"
-                            style={{color: '#4CAF50'}}
-                          >
-                            Free Budtender Samples
-                          </p>
-                          <p className="text-xs" style={{color: BRAND.textMuted}}>
-                            Auto-earned from your order — choose strains below
-                          </p>
-                        </div>
-                      </div>
-                      <span
-                        className="font-headline text-sm font-bold px-3 py-1 uppercase tracking-wider"
-                        style={{
-                          background: '#4CAF5020',
-                          color: '#4CAF50',
-                          border: '1px solid #4CAF5040',
-                        }}
-                      >
+                  <div className="mb-8">
+                    <div className="flex items-baseline justify-between mb-4">
+                      <p className="font-headline text-xl font-600 uppercase tracking-tight">
+                        Budtender Samples <span style={{color: BRAND.gold}}>Included</span>
+                      </p>
+                      <span className="font-body text-xs font-500" style={{color: 'rgba(255,255,255,0.35)'}}>
                         {totalSamples} free unit{totalSamples !== 1 ? 's' : ''}
                       </span>
                     </div>
-
-                    {/* Sample rows */}
-                    <div
-                      style={{
-                        border: `1px solid #4CAF5040`,
-                        background: BRAND.surfaceHigh,
-                      }}
-                    >
-                      {earnedSamples.map((sample, idx) => (
-                        <div
-                          key={sample.id}
-                          className="flex items-center justify-between px-5 py-4"
+                    {earnedSamples.map((sample) => (
+                      <div key={sample.id} className="flex items-center justify-between py-3" style={{borderBottom: '1px solid rgba(255,255,255,0.04)'}}>
+                        <div>
+                          <span className="font-body text-sm font-600">{sample.qty}&times; {sample.label}</span>
+                          <span className="font-body text-xs ml-2" style={{color: 'rgba(255,255,255,0.3)'}}>{sample.unit}</span>
+                        </div>
+                        <select
+                          value={sampleStrains[sample.id] ?? ''}
+                          onChange={(e) => setSampleStrains((prev) => ({...prev, [sample.id]: e.target.value}))}
+                          className="font-body text-xs font-500 px-3 py-2 cursor-pointer"
                           style={{
-                            borderBottom:
-                              idx < earnedSamples.length - 1
-                                ? `1px solid ${BRAND.border}`
-                                : 'none',
+                            background: 'rgba(255,255,255,0.04)',
+                            border: sampleStrains[sample.id] ? `1px solid ${BRAND.gold}60` : '1px solid rgba(255,255,255,0.08)',
+                            color: sampleStrains[sample.id] ? '#fff' : 'rgba(255,255,255,0.4)',
+                            outline: 'none', minWidth: 160,
                           }}
                         >
-                          <div className="flex items-center gap-3 flex-1 min-w-0">
-                            <span
-                              className="material-symbols-outlined text-xl flex-shrink-0"
-                              style={{color: sample.color}}
-                            >
-                              {sample.icon}
-                            </span>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span
-                                  className="font-headline text-sm font-bold uppercase"
-                                  style={{color: '#fff'}}
-                                >
-                                  {sample.qty}× {sample.label}
-                                </span>
-                                <span
-                                  className="font-headline text-xs font-bold px-2 py-0.5 uppercase tracking-wider"
-                                  style={{
-                                    background: '#4CAF5020',
-                                    color: '#4CAF50',
-                                    border: '1px solid #4CAF5040',
-                                  }}
-                                >
-                                  FREE
-                                </span>
-                              </div>
-                              <p
-                                className="text-xs mt-0.5"
-                                style={{color: BRAND.textMuted}}
-                              >
-                                {sample.unit}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Strain selector */}
-                          <div className="flex-shrink-0 ml-4">
-                            <select
-                              value={sampleStrains[sample.id] ?? ''}
-                              onChange={(e) =>
-                                setSampleStrains((prev) => ({
-                                  ...prev,
-                                  [sample.id]: e.target.value,
-                                }))
-                              }
-                              className="font-headline text-xs font-bold uppercase tracking-wide px-3 py-2 cursor-pointer"
-                              style={{
-                                background: BRAND.surface,
-                                border: `1px solid ${
-                                  sampleStrains[sample.id]
-                                    ? sample.color + '80'
-                                    : BRAND.border
-                                }`,
-                                color: sampleStrains[sample.id]
-                                  ? '#fff'
-                                  : BRAND.textMuted,
-                                outline: 'none',
-                                minWidth: '180px',
-                              }}
-                            >
-                              <option value="">— Choose Strain —</option>
-                              {STRAINS.map((s) => (
-                                <option key={s.name} value={s.name}>
-                                  {s.name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                      ))}
-
-                      {/* Footer nudge */}
-                      {earnedSamples.some((s) => !sampleStrains[s.id]) && (
-                        <div
-                          className="px-5 py-2.5 text-xs"
-                          style={{
-                            background: '#0d1a0d',
-                            borderTop: `1px solid #4CAF5030`,
-                            color: BRAND.textMuted,
-                          }}
-                        >
-                          ↑ Select a strain for each sample — they'll be included in your order email
-                        </div>
-                      )}
-                    </div>
+                          <option value="">Choose strain</option>
+                          {STRAINS.map((s) => (<option key={s.name} value={s.name}>{s.name}</option>))}
+                        </select>
+                      </div>
+                    ))}
                   </div>
                 )}
 
-                {/* Order Note */}
-                <div className="mb-5">
-                  <label
-                    className="text-xs font-bold uppercase tracking-widest block mb-2"
-                    style={{color: BRAND.textMuted}}
-                  >
-                    Order Note (optional)
+                {/* Note */}
+                <div className="mb-8">
+                  <label className="font-body text-xs font-500 tracking-[0.15em] uppercase block mb-2" style={{color: 'rgba(255,255,255,0.3)'}}>
+                    Order Note
                   </label>
                   <textarea
                     value={orderNote}
                     onChange={(e) => setOrderNote(e.target.value)}
-                    placeholder="Special instructions, delivery preferences, etc."
+                    placeholder="Special instructions, delivery preferences..."
                     rows={2}
-                    className="w-full px-4 py-3 text-sm resize-none"
-                    style={{
-                      background: BRAND.surfaceHigh,
-                      border: `1px solid ${BRAND.border}`,
-                      color: '#fff',
-                      outline: 'none',
-                    }}
+                    className="w-full px-4 py-3 font-body text-sm resize-none"
+                    style={{background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: '#fff', outline: 'none'}}
                   />
                 </div>
 
-                {/* Totals */}
-                <div
-                  className="flex items-center justify-between py-4 px-4 mb-5"
-                  style={{
-                    background: BRAND.surfaceHigh,
-                    border: `1px solid ${BRAND.border}`,
-                  }}
-                >
-                  <span className="font-headline text-lg font-bold uppercase tracking-wider">
-                    Estimated Total
-                  </span>
-                  <span
-                    className="font-headline text-3xl font-bold"
-                    style={{color: BRAND.gold}}
-                  >
-                    {formatCurrency(cartTotal)}
-                  </span>
+                {/* Total + Submit */}
+                <div className="flex items-center justify-between py-6 mb-6" style={{borderTop: '1px solid rgba(255,255,255,0.08)'}}>
+                  <span className="font-headline text-xl font-600 uppercase tracking-wider">Estimated Total</span>
+                  <span className="font-headline text-4xl font-700" style={{color: BRAND.gold}}>{formatCurrency(cartTotal)}</span>
                 </div>
 
-                {/* Submit */}
                 <a
                   href={buildOrderEmail()}
-                  className="flex items-center justify-center gap-2 font-headline text-lg font-bold uppercase tracking-wider py-4 w-full no-underline transition-all hover:opacity-90"
-                  style={{
-                    background: BRAND.gold,
-                    color: BRAND.black,
-                    border: 'none',
-                  }}
+                  className="block font-headline text-base font-600 uppercase tracking-[0.15em] py-4 w-full text-center transition-opacity hover:opacity-90"
+                  style={{background: BRAND.gold, color: '#000'}}
                 >
-                  <span className="material-symbols-outlined text-xl">
-                    send
-                  </span>
-                  Send Order to Highsman Rep
+                  Send Order to Highsman
                 </a>
-                <p
-                  className="text-xs text-center mt-3"
-                  style={{color: BRAND.textMuted}}
-                >
-                  This opens your email client with the order details pre-filled.
-                  Your rep will confirm pricing, availability, and delivery.
+                <p className="font-body text-xs text-center mt-4" style={{color: 'rgba(255,255,255,0.3)'}}>
+                  Opens your email client with the order pre-filled. Your rep will confirm.
                 </p>
               </>
             )}
@@ -1607,100 +1082,46 @@ export default function NJMenu() {
         {cartCount > 0 && !showCart && (
           <div
             className="fixed bottom-0 left-0 right-0 z-50 slide-up"
-            style={{
-              background: `linear-gradient(to right, ${BRAND.surface}, ${BRAND.surfaceHigh})`,
-              borderTop: `2px solid ${BRAND.gold}`,
-            }}
+            style={{background: '#000', borderTop: `1px solid ${BRAND.gold}`}}
           >
-            <div className="max-w-6xl mx-auto flex items-center justify-between px-5 py-3">
-              <div className="flex items-center gap-3">
-                <span
-                  className="material-symbols-outlined text-xl"
-                  style={{color: BRAND.gold}}
-                >
-                  shopping_cart
-                </span>
-                <span className="font-headline text-base font-bold">
-                  {cartCount} case{cartCount !== 1 ? 's' : ''} &middot;{' '}
-                  <span style={{color: BRAND.gold}}>
-                    {formatCurrency(cartTotal)}
-                  </span>
-                </span>
-              </div>
+            <div className="max-w-5xl mx-auto flex items-center justify-between px-6 md:px-10 py-3">
+              <span className="font-headline text-base font-600">
+                {cartCount} case{cartCount !== 1 ? 's' : ''} &middot;{' '}
+                <span style={{color: BRAND.gold}}>{formatCurrency(cartTotal)}</span>
+              </span>
               <button
-                onClick={() => {
-                  setShowCart(true);
-                  setTimeout(
-                    () =>
-                      cartRef.current?.scrollIntoView({behavior: 'smooth'}),
-                    100,
-                  );
-                }}
-                className="flex items-center gap-2 font-headline text-sm font-bold uppercase tracking-wider px-5 py-2.5 cursor-pointer transition-all hover:opacity-90"
-                style={{
-                  background: BRAND.gold,
-                  color: BRAND.black,
-                  border: 'none',
-                }}
+                onClick={() => { setShowCart(true); setTimeout(() => cartRef.current?.scrollIntoView({behavior: 'smooth'}), 100); }}
+                className="font-headline text-sm font-600 uppercase tracking-[0.12em] px-6 py-2.5 cursor-pointer transition-opacity hover:opacity-90"
+                style={{background: BRAND.gold, color: '#000', border: 'none'}}
               >
-                Review Order
-                <span className="material-symbols-outlined text-base">
-                  arrow_forward
-                </span>
+                Review Order &rarr;
               </button>
             </div>
           </div>
         )}
 
         {/* ── Footer ─────────────────────────────────────────────────────── */}
-        <footer
-          className="px-6 md:px-12 py-10 text-center"
-          style={{
-            background: BRAND.black,
-            borderTop: `1px solid ${BRAND.border}`,
-          }}
-        >
+        <footer className="px-6 md:px-10 pt-20 pb-12 text-center" style={{borderTop: '1px solid rgba(255,255,255,0.06)'}}>
           <img
             src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Spark_Greatness_White.png?v=1775594430"
             alt="Spark Greatness™"
-            style={{height: 32, width: 'auto', margin: '0 auto 8px', display: 'block', opacity: 0.9}}
+            style={{height: 24, width: 'auto', margin: '0 auto 20px', display: 'block', opacity: 0.6}}
           />
-          <p className="text-sm mb-1" style={{color: BRAND.textMuted}}>
-            Questions? Contact{' '}
-            <a
-              href="mailto:njsales@highsman.com"
-              className="underline"
-              style={{color: BRAND.gold}}
-            >
-              njsales@highsman.com
-            </a>
+          <p className="font-body text-sm mb-2" style={{color: 'rgba(255,255,255,0.35)'}}>
+            <a href="mailto:njsales@highsman.com" style={{color: 'rgba(255,255,255,0.5)'}}>njsales@highsman.com</a>
           </p>
-          <p
-            className="text-xs"
-            style={{color: `${BRAND.textMuted}80`}}
-          >
-            &copy; {new Date().getFullYear()} Highsman Inc. All rights
-            reserved. Prices subject to change.
+          <p className="font-body text-xs" style={{color: 'rgba(255,255,255,0.2)'}}>
+            &copy; {new Date().getFullYear()} Highsman Inc. All rights reserved. Prices subject to change.
           </p>
         </footer>
 
         {/* ── Toast ──────────────────────────────────────────────────────── */}
         {toast && (
           <div
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] fade-in flex items-center gap-2 px-5 py-3 shadow-lg"
-            style={{
-              background: BRAND.surfaceHigh,
-              border: `1px solid ${BRAND.gold}40`,
-              color: '#fff',
-            }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] fade-in px-5 py-3"
+            style={{background: '#000', border: `1px solid ${BRAND.gold}40`, color: '#fff'}}
           >
-            <span
-              className="material-symbols-outlined text-base"
-              style={{color: BRAND.gold}}
-            >
-              check_circle
-            </span>
-            <span className="text-sm font-semibold">{toast}</span>
+            <span className="font-body text-sm font-500">{toast}</span>
           </div>
         )}
       </div>
