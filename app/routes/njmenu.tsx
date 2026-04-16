@@ -1,4 +1,4 @@
-import {useState, useRef, useCallback, useMemo} from 'react';
+import {useState, useRef, useCallback, useMemo, useEffect} from 'react';
 import type {MetaFunction} from '@shopify/remix-oxygen';
 import {Link} from '@remix-run/react';
 
@@ -373,6 +373,19 @@ function cartKey(productId: string, strainName: string): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function NJMenu() {
+  // Suppress Klaviyo popup — this is a B2B wholesale page, not consumer-facing
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.id = 'suppress-klaviyo-popup';
+    style.textContent =
+      '[data-testid="klaviyo-form-overlay"], .klaviyo-form-overlay, ' +
+      '.needsclick.kl-private-reset-css-Xuajs1, #klaviyo-ios-modal, ' +
+      '[class*="klaviyo"][class*="overlay"], [class*="klaviyo"][class*="modal"], ' +
+      '[id*="klaviyo"][id*="popup"] { display: none !important; }';
+    document.head.appendChild(style);
+    return () => { style.remove(); };
+  }, []);
+
   const [cart, setCart] = useState<Record<string, CartItem>>({});
   const [showCart, setShowCart] = useState(false);
   const [toast, setToast] = useState<string | null>(null);

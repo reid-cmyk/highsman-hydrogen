@@ -223,6 +223,19 @@ function ReferralForm() {
 }
 
 export default function Budtenders() {
+  // Suppress Klaviyo popup — this is a B2B / budtender page, not consumer-facing
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.id = 'suppress-klaviyo-popup';
+    style.textContent =
+      '[data-testid="klaviyo-form-overlay"], .klaviyo-form-overlay, ' +
+      '.needsclick.kl-private-reset-css-Xuajs1, #klaviyo-ios-modal, ' +
+      '[class*="klaviyo"][class*="overlay"], [class*="klaviyo"][class*="modal"], ' +
+      '[id*="klaviyo"][id*="popup"] { display: none !important; }';
+    document.head.appendChild(style);
+    return () => { style.remove(); };
+  }, []);
+
   return (
     <>
       <style dangerouslySetInnerHTML={{__html: `
