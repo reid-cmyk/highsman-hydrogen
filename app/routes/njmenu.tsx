@@ -971,6 +971,7 @@ export default function NJMenu() {
                   style={{color: 'rgba(255,255,255,0.55)', fontWeight: 400}}
                 >
                   Select quantities and send your order directly. Or download the spreadsheet for offline ordering.
+                  <br /><strong style={{color: '#fff', fontWeight: 700}}>All orders will be processed through Leaflink.</strong>
                 </p>
 
                 {/* CTAs — clean, no icons */}
