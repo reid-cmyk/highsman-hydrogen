@@ -1059,7 +1059,7 @@ export default function NJMenu() {
                     {selectedAccount.name}
                   </p>
                   <p className="font-body text-sm mt-1" style={{color: 'rgba(255,255,255,0.55)'}}>
-                    {[selectedAccount.city && `${selectedAccount.city}, NJ`, selectedAccount.phone].filter(Boolean).join(' · ')}
+                    {selectedAccount.city ? `${selectedAccount.city}, NJ` : 'NJ'}
                   </p>
                 </div>
                 <button
