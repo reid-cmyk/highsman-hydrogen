@@ -248,7 +248,9 @@ export async function action({request, context}: ActionFunctionArgs) {
   const email = (formData.get('email') as string || '').trim();
   const street = (formData.get('street') as string || '').trim();
   const city = (formData.get('city') as string || '').trim();
-  const state = (formData.get('state') as string || 'NJ').trim();
+  const rawState = (formData.get('state') as string || 'NJ').trim();
+  // Normalize state to 2-letter abbreviation (Google Places may return full name)
+  const state = rawState.toLowerCase() === 'new jersey' ? 'NJ' : (rawState || 'NJ');
   const zip = (formData.get('zip') as string || '').trim();
 
   // Validate required fields
