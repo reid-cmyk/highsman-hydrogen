@@ -526,7 +526,7 @@ export default function NJMenu() {
       `Highsman NJ Wholesale Order — ${new Date().toLocaleDateString()}`,
     );
     const body = encodeURIComponent(lines.join('\n'));
-    return `mailto:marketing@highsman.com?subject=${subject}&body=${body}`;
+    return `mailto:njsales@highsman.com?subject=${subject}&body=${body}`;
   }, [cartItems, orderNote, earnedSamples, sampleStrains]);
 
   // Download menu as text
@@ -538,7 +538,7 @@ export default function NJMenu() {
       '╚═══════════════════════════════════════════════════════════════╝',
       '',
       `Generated: ${new Date().toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'})}`,
-      'Contact: marketing@highsman.com',
+      'Contact: njsales@highsman.com',
       '',
     ];
 
@@ -568,7 +568,7 @@ export default function NJMenu() {
 
     lines.push('━'.repeat(63));
     lines.push('');
-    lines.push('To place an order, email marketing@highsman.com');
+    lines.push('To place an order, email njsales@highsman.com');
     lines.push('or visit highsman.com/njmenu');
     lines.push('');
     lines.push('© Highsman Inc. All rights reserved.');
@@ -651,12 +651,12 @@ export default function NJMenu() {
             NJ Wholesale Menu &middot; Highsman
           </span>
           <a
-            href="mailto:marketing@highsman.com"
+            href="mailto:njsales@highsman.com"
             className="flex items-center gap-1 no-underline"
             style={{color: BRAND.black}}
           >
             <span className="material-symbols-outlined text-sm">mail</span>
-            marketing@highsman.com
+            njsales@highsman.com
           </a>
         </div>
 
@@ -1660,20 +1660,19 @@ export default function NJMenu() {
             borderTop: `1px solid ${BRAND.border}`,
           }}
         >
-          <p
-            className="font-headline text-xs font-bold tracking-[0.2em] uppercase mb-2"
-            style={{color: BRAND.gold}}
-          >
-            Spark Greatness&trade;
-          </p>
+          <img
+            src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Spark_Greatness_White.png?v=1775594430"
+            alt="Spark Greatness™"
+            style={{height: 32, width: 'auto', margin: '0 auto 8px', display: 'block', opacity: 0.9}}
+          />
           <p className="text-sm mb-1" style={{color: BRAND.textMuted}}>
             Questions? Contact{' '}
             <a
-              href="mailto:marketing@highsman.com"
+              href="mailto:njsales@highsman.com"
               className="underline"
               style={{color: BRAND.gold}}
             >
-              marketing@highsman.com
+              njsales@highsman.com
             </a>
           </p>
           <p
