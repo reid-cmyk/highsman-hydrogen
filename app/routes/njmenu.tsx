@@ -616,7 +616,7 @@ export default function NJMenu() {
             </div>
 
             {/* Split layout: text left, hero image right */}
-            <div className="md:grid md:items-center" style={{gridTemplateColumns: '1fr auto', gap: '40px'}}>
+            <div className="md:grid md:items-center" style={{gridTemplateColumns: '1fr 1fr', gap: '48px'}}>
               <div>
                 {/* Title block */}
                 <p
@@ -672,7 +672,7 @@ export default function NJMenu() {
               </div>
 
               {/* Hero product image — hidden on small mobile, visible md+ */}
-              <div className="hidden md:block" style={{maxWidth: 420, flexShrink: 0}}>
+              <div className="hidden md:block" style={{maxWidth: 620, flexShrink: 0}}>
                 <img
                   src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Hero_Image_NJ_Menu.png?v=1776306732"
                   alt="Highsman Hit Stick — Triple Infused, all 5 strains"
@@ -683,7 +683,7 @@ export default function NJMenu() {
             </div>
 
             {/* Mobile hero image — stacked below CTAs */}
-            <div className="md:hidden mt-10" style={{maxWidth: 360, margin: '40px auto 0'}}>
+            <div className="md:hidden" style={{maxWidth: 520, margin: '40px auto 0'}}>
               <img
                 src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Hero_Image_NJ_Menu.png?v=1776306732"
                 alt="Highsman Hit Stick — Triple Infused, all 5 strains"
