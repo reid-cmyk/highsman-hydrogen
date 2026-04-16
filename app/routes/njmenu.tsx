@@ -582,8 +582,8 @@ export default function NJMenu() {
 
         /* Minimal stepper */
         .stepper-btn {
-          width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
-          font-family: 'Barlow Semi Condensed', sans-serif; font-weight: 600; font-size: 18px;
+          width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+          font-family: 'Barlow Semi Condensed', sans-serif; font-weight: 600; font-size: 20px;
           cursor: pointer; transition: all 0.15s ease; border: none; user-select: none;
         }
         .stepper-btn:hover { opacity: 0.8; }
@@ -656,7 +656,7 @@ export default function NJMenu() {
                   <a
                     href="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Menu_-_4.15.xlsx?v=1776303798"
                     download="Highsman_Menu_NJ.xlsx"
-                    className="font-headline text-sm font-600 uppercase tracking-[0.15em] px-7 py-3 transition-opacity hover:opacity-80"
+                    className="font-headline text-base font-600 uppercase tracking-[0.15em] px-9 py-4 transition-opacity hover:opacity-80"
                     style={{
                       border: `1.5px solid ${BRAND.gold}`,
                       color: BRAND.gold,
@@ -672,7 +672,7 @@ export default function NJMenu() {
                         100,
                       );
                     }}
-                    className="font-headline text-sm font-600 uppercase tracking-[0.15em] px-7 py-3 transition-opacity hover:opacity-90 cursor-pointer"
+                    className="font-headline text-base font-600 uppercase tracking-[0.15em] px-9 py-4 transition-opacity hover:opacity-90 cursor-pointer"
                     style={{
                       background: BRAND.gold,
                       color: '#000',
@@ -815,14 +815,14 @@ export default function NJMenu() {
                       <span className="font-body text-xs font-500 tracking-[0.15em] uppercase" style={{color: 'rgba(255,255,255,0.55)'}}>Quick</span>
                       <button
                         onClick={() => product.strains.forEach((s) => { if (getCasesForItem(product.id, s.name) > 0) updateCart(product.id, s.name, -1); })}
-                        className="font-headline text-xs font-600 uppercase tracking-[0.1em] px-4 py-2 cursor-pointer transition-opacity hover:opacity-70"
+                        className="font-headline text-sm font-600 uppercase tracking-[0.1em] px-5 py-2.5 cursor-pointer transition-opacity hover:opacity-70"
                         style={{background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.65)'}}
                       >
                         −1 Each
                       </button>
                       <button
                         onClick={() => product.strains.forEach((s) => updateCart(product.id, s.name, 1))}
-                        className="font-headline text-xs font-600 uppercase tracking-[0.1em] px-4 py-2 cursor-pointer transition-opacity hover:opacity-90"
+                        className="font-headline text-sm font-600 uppercase tracking-[0.1em] px-5 py-2.5 cursor-pointer transition-opacity hover:opacity-90"
                         style={{background: BRAND.gold, border: 'none', color: '#000'}}
                       >
                         +1 Each
@@ -954,13 +954,13 @@ export default function NJMenu() {
                               </div>
                               <div className="flex items-center gap-0 flex-shrink-0 ml-3">
                                 <button onClick={() => updateCart(product.id, strain.name, -1)} disabled={cases === 0}
-                                  className="stepper-btn" style={{background: cases > 0 ? 'rgba(255,255,255,0.08)' : 'transparent', color: cases > 0 ? '#fff' : 'rgba(255,255,255,0.35)', width: 32, height: 32, fontSize: 16}}>−</button>
+                                  className="stepper-btn" style={{background: cases > 0 ? 'rgba(255,255,255,0.08)' : 'transparent', color: cases > 0 ? '#fff' : 'rgba(255,255,255,0.35)', width: 40, height: 40, fontSize: 18}}>−</button>
                                 <input type="number" min={0} value={cases}
                                   onChange={(e) => setCases(product.id, strain.name, parseInt(e.target.value, 10) || 0)}
                                   className="font-headline text-sm font-600 text-center"
-                                  style={{width: 36, height: 32, background: 'rgba(255,255,255,0.04)', border: cases > 0 ? `1px solid ${BRAND.gold}50` : '1px solid rgba(255,255,255,0.08)', color: cases > 0 ? BRAND.gold : 'rgba(255,255,255,0.6)', outline: 'none'}} />
+                                  style={{width: 44, height: 40, background: 'rgba(255,255,255,0.04)', border: cases > 0 ? `1px solid ${BRAND.gold}50` : '1px solid rgba(255,255,255,0.08)', color: cases > 0 ? BRAND.gold : 'rgba(255,255,255,0.6)', outline: 'none'}} />
                                 <button onClick={() => updateCart(product.id, strain.name, 1)}
-                                  className="stepper-btn" style={{background: cases > 0 ? BRAND.gold : 'rgba(255,255,255,0.08)', color: cases > 0 ? '#000' : '#fff', width: 32, height: 32, fontSize: 16}}>+</button>
+                                  className="stepper-btn" style={{background: cases > 0 ? BRAND.gold : 'rgba(255,255,255,0.08)', color: cases > 0 ? '#000' : '#fff', width: 40, height: 40, fontSize: 18}}>+</button>
                               </div>
                             </div>
                           </div>
@@ -1028,10 +1028,10 @@ export default function NJMenu() {
                         <div className="flex items-center gap-5 flex-shrink-0">
                           <div className="flex items-center gap-0">
                             <button onClick={() => updateCart(item.productId, item.strainName, -1)}
-                              className="stepper-btn" style={{width: 28, height: 28, fontSize: 14, background: 'rgba(255,255,255,0.06)', color: '#fff'}}>−</button>
+                              className="stepper-btn" style={{width: 36, height: 36, fontSize: 16, background: 'rgba(255,255,255,0.06)', color: '#fff'}}>−</button>
                             <span className="font-headline text-sm font-600 w-8 text-center">{item.cases}</span>
                             <button onClick={() => updateCart(item.productId, item.strainName, 1)}
-                              className="stepper-btn" style={{width: 28, height: 28, fontSize: 14, background: 'rgba(255,255,255,0.06)', color: '#fff'}}>+</button>
+                              className="stepper-btn" style={{width: 36, height: 36, fontSize: 16, background: 'rgba(255,255,255,0.06)', color: '#fff'}}>+</button>
                           </div>
                           <span className="font-headline text-sm font-600 w-20 text-right" style={{color: '#fff'}}>
                             {formatCurrency(unitPrice * item.cases)}
@@ -1106,7 +1106,7 @@ export default function NJMenu() {
 
                 <a
                   href={buildOrderEmail()}
-                  className="block font-headline text-base font-600 uppercase tracking-[0.15em] py-4 w-full text-center transition-opacity hover:opacity-90"
+                  className="block font-headline text-lg font-600 uppercase tracking-[0.15em] py-5 w-full text-center transition-opacity hover:opacity-90"
                   style={{background: BRAND.gold, color: '#000'}}
                 >
                   Send Order to Highsman
@@ -1132,7 +1132,7 @@ export default function NJMenu() {
               </span>
               <button
                 onClick={() => { setShowCart(true); setTimeout(() => cartRef.current?.scrollIntoView({behavior: 'smooth'}), 100); }}
-                className="font-headline text-sm font-600 uppercase tracking-[0.12em] px-6 py-2.5 cursor-pointer transition-opacity hover:opacity-90"
+                className="font-headline text-base font-600 uppercase tracking-[0.12em] px-8 py-3.5 cursor-pointer transition-opacity hover:opacity-90"
                 style={{background: BRAND.gold, color: '#000', border: 'none'}}
               >
                 Review Order &rarr;

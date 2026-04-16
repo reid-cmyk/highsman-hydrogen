@@ -167,7 +167,7 @@ function ReferralForm() {
           <p className="font-body text-base" style={{color: 'rgba(255,255,255,0.6)'}}>
             {data?.message || 'They will receive an invite to Training Camp.'}
           </p>
-          <button type="button" onClick={() => setSubmitted(false)} className="mt-6 font-headline text-xs uppercase tracking-[0.18em] px-6 py-3 transition-opacity hover:opacity-85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-400" style={{background: 'rgba(255,255,255,0.08)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)'}}>
+          <button type="button" onClick={() => setSubmitted(false)} className="mt-6 font-headline text-sm uppercase tracking-[0.18em] px-8 py-4 transition-opacity hover:opacity-85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-400" style={{background: 'rgba(255,255,255,0.08)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)'}}>
             Refer Another
           </button>
         </div>
@@ -212,7 +212,7 @@ function ReferralForm() {
                 <input id="budtenderEmail" name="budtenderEmail" type="email" placeholder="them@email.com" required className="font-body text-sm px-4 py-3 w-full outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 focus-visible:ring-offset-1 focus-visible:ring-offset-black" style={{background: '#1a1a1a', color: '#fff', border: '1px solid rgba(255,255,255,0.1)'}} />
               </div>
             </div>
-            <button type="submit" disabled={isSubmitting} className="block w-full font-headline text-sm uppercase tracking-[0.18em] px-8 py-4 text-center transition-opacity hover:opacity-85 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black" style={{background: '#F5E100', color: '#000'}}>
+            <button type="submit" disabled={isSubmitting} className="block w-full font-headline text-base uppercase tracking-[0.18em] px-10 py-5 text-center transition-opacity hover:opacity-85 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black" style={{background: '#F5E100', color: '#000'}}>
               {isSubmitting ? 'Sending...' : 'Refer a Budtender'}
             </button>
           </fetcher.Form>
@@ -283,8 +283,8 @@ export default function Budtenders() {
             Sell the most May 7 &ndash; June 7. Walk away with the Champions Box, the Varsity Jacket, and seats at the game.
           </p>
           <div className="flex flex-wrap gap-4">
-            <a href="#prizes" className="font-headline text-sm uppercase tracking-[0.18em] px-8 py-4 transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black" style={{background: '#F5E100', color: '#000'}}>See the Prizes</a>
-            <a href="#how-it-works" className="font-headline text-sm uppercase tracking-[0.18em] px-8 py-4 border transition-colors hover:bg-white hover:text-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-400" style={{borderColor: 'rgba(255,255,255,0.3)', color: '#fff'}}>How It Works</a>
+            <a href="#prizes" className="font-headline text-base uppercase tracking-[0.18em] px-10 py-5 transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black" style={{background: '#F5E100', color: '#000'}}>See the Prizes</a>
+            <a href="#how-it-works" className="font-headline text-base uppercase tracking-[0.18em] px-10 py-5 border transition-colors hover:bg-white hover:text-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-400" style={{borderColor: 'rgba(255,255,255,0.3)', color: '#fff'}}>How It Works</a>
           </div>
         </div>
       </section>
@@ -494,8 +494,8 @@ export default function Budtenders() {
             <a href="mailto:budtenders@highsman.com" className="font-semibold underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black" style={{color: '#000'}}>budtenders@highsman.com</a>
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
-            <a href="mailto:budtenders@highsman.com" className="font-headline text-sm uppercase tracking-[0.18em] px-8 py-4 transition-opacity hover:opacity-85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-400" style={{background: '#000', color: '#F5E100'}}>Email the Team</a>
-            <Link to="/#store-locator" className="font-headline text-sm uppercase tracking-[0.18em] px-8 py-4 border transition-colors hover:bg-black hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black" style={{borderColor: 'rgba(0,0,0,0.25)', color: '#000'}}>Find Your Store</Link>
+            <a href="mailto:budtenders@highsman.com" className="font-headline text-base uppercase tracking-[0.18em] px-10 py-5 transition-opacity hover:opacity-85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-400" style={{background: '#000', color: '#F5E100'}}>Email the Team</a>
+            <Link to="/#store-locator" className="font-headline text-base uppercase tracking-[0.18em] px-10 py-5 border transition-colors hover:bg-black hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black" style={{borderColor: 'rgba(0,0,0,0.25)', color: '#000'}}>Find Your Store</Link>
           </div>
         </div>
       </section>
