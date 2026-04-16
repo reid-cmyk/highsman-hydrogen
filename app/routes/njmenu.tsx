@@ -687,7 +687,7 @@ export default function NJMenu() {
               {/* Hero product image — hidden on small mobile, visible md+ */}
               <div className="hidden md:block" style={{maxWidth: 620, flexShrink: 0}}>
                 <img
-                  src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Hero_Image_NJ_Menu.png?v=1776306733"
+                  src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Hero_Image_NJ_Menu.png?v=1776306734"
                   alt="Highsman Hit Stick — Triple Infused, all 5 strains"
                   className="w-full h-auto"
                   style={{filter: 'drop-shadow(0 8px 32px rgba(0,0,0,0.5))'}}
@@ -698,7 +698,7 @@ export default function NJMenu() {
             {/* Mobile hero image — stacked below CTAs */}
             <div className="md:hidden" style={{maxWidth: 520, margin: '40px auto 0'}}>
               <img
-                src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Hero_Image_NJ_Menu.png?v=1776306733"
+                src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Hero_Image_NJ_Menu.png?v=1776306734"
                 alt="Highsman Hit Stick — Triple Infused, all 5 strains"
                 className="w-full h-auto"
                 style={{filter: 'drop-shadow(0 8px 32px rgba(0,0,0,0.5))'}}
