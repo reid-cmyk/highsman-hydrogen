@@ -139,6 +139,24 @@ const STRAINS_HS_FLYHIGH: Strain[] = [
   {name: 'Cake Quake', type: 'Indica', thc: '47.4%', sku: 'C-NJ-HSTINFH-CQ'},
 ];
 
+// Triple Threat Pre-Roll — Case (12)
+const STRAINS_TT: Strain[] = [
+  {name: 'Wavey Watermelon', type: 'Sativa', thc: '49.8%', sku: 'C-NJ-HSTT-WW'},
+  {name: 'Gridiron Grape', type: 'Sativa', thc: '50.0%', sku: 'C-NJ-HSTT-GG'},
+  {name: 'Blueberry Blitz', type: 'Hybrid', thc: '47.0%', sku: 'C-NJ-HSTT-BB'},
+  {name: 'Touchdown Tango Mango', type: 'Hybrid', thc: '53.8%', sku: 'C-NJ-HSTT-TM'},
+  {name: 'Cake Quake', type: 'Indica', thc: '47.4%', sku: 'C-NJ-HSTT-CQ'},
+];
+
+// Ground Game — Case (6)
+const STRAINS_GG: Strain[] = [
+  {name: 'Wavey Watermelon', type: 'Sativa', thc: '49.8%', sku: 'C-NJ-HSGG-WW'},
+  {name: 'Gridiron Grape', type: 'Sativa', thc: '50.0%', sku: 'C-NJ-HSGG-GG'},
+  {name: 'Blueberry Blitz', type: 'Hybrid', thc: '47.0%', sku: 'C-NJ-HSGG-BB'},
+  {name: 'Touchdown Tango Mango', type: 'Hybrid', thc: '53.8%', sku: 'C-NJ-HSGG-TM'},
+  {name: 'Cake Quake', type: 'Indica', thc: '47.4%', sku: 'C-NJ-HSGG-CQ'},
+];
+
 const PRODUCT_LINES: ProductLine[] = [
   {
     id: 'hit-sticks-single',
@@ -205,7 +223,7 @@ const PRODUCT_LINES: ProductLine[] = [
     icon: 'sports_mma',
     imageType: 'PreRoll_Menu' as ImageType,
     thcDisplay: '45%+',
-    strains: STRAINS,
+    strains: STRAINS_TT,
   },
   {
     id: 'ground-game',
@@ -221,7 +239,7 @@ const PRODUCT_LINES: ProductLine[] = [
     icon: 'grass',
     imageType: 'Pouch' as ImageType,
     thcDisplay: '40%+',
-    strains: STRAINS,
+    strains: STRAINS_GG,
   },
 ];
 
@@ -243,6 +261,7 @@ interface SampleRule {
   every: number;         // 1 sample per N cases
   color: string;
   icon: string;
+  sampleSkus?: Record<string, string>; // strain name → Zoho sample SKU
 }
 
 const SAMPLE_RULES: SampleRule[] = [
@@ -254,6 +273,13 @@ const SAMPLE_RULES: SampleRule[] = [
     every: 1,
     color: BRAND.gold,
     icon: 'local_fire_department',
+    sampleSkus: {
+      'Blueberry Blitz': 'C-S-NJ-HSINF-BB',
+      'Cake Quake': 'C-S-NJ-HSINF-CQ',
+      'Gridiron Grape': 'C-S-NJ-HSINF-GG',
+      'Touchdown Tango Mango': 'C-S-NJ-HSINF-TM',
+      'Wavey Watermelon': 'C-S-NJ-HSINF-WW',
+    },
   },
   {
     id: 'sample-power-pack',
@@ -263,6 +289,13 @@ const SAMPLE_RULES: SampleRule[] = [
     every: 1,
     color: BRAND.gold,
     icon: 'local_fire_department',
+    sampleSkus: {
+      'Blueberry Blitz': 'C-S-NJ-HSINF-BB',
+      'Cake Quake': 'C-S-NJ-HSINF-CQ',
+      'Gridiron Grape': 'C-S-NJ-HSINF-GG',
+      'Touchdown Tango Mango': 'C-S-NJ-HSINF-TM',
+      'Wavey Watermelon': 'C-S-NJ-HSINF-WW',
+    },
   },
   {
     id: 'sample-fly-high-tin',
@@ -272,6 +305,13 @@ const SAMPLE_RULES: SampleRule[] = [
     every: 1,
     color: '#FF6B35',
     icon: 'workspace_premium',
+    sampleSkus: {
+      'Blueberry Blitz': 'C-S-NJ-HSINF-BB',
+      'Cake Quake': 'C-S-NJ-HSINF-CQ',
+      'Gridiron Grape': 'C-S-NJ-HSINF-GG',
+      'Touchdown Tango Mango': 'C-S-NJ-HSINF-TM',
+      'Wavey Watermelon': 'C-S-NJ-HSINF-WW',
+    },
   },
   {
     id: 'sample-triple-threat',
@@ -281,6 +321,13 @@ const SAMPLE_RULES: SampleRule[] = [
     every: 2,
     color: BRAND.purple,
     icon: 'sports_mma',
+    sampleSkus: {
+      'Blueberry Blitz': 'C-S-NJ-HSTT-BB',
+      'Cake Quake': 'C-S-NJ-HSTT-CQ',
+      'Gridiron Grape': 'C-S-NJ-HSTT-GG',
+      'Touchdown Tango Mango': 'C-S-NJ-HSTT-TM',
+      'Wavey Watermelon': 'C-S-NJ-HSTT-WW',
+    },
   },
   {
     id: 'sample-ground-game',
@@ -290,6 +337,13 @@ const SAMPLE_RULES: SampleRule[] = [
     every: 4,
     color: BRAND.green,
     icon: 'grass',
+    sampleSkus: {
+      'Blueberry Blitz': 'C-S-NJ-HSGG-BB',
+      'Cake Quake': 'C-S-NJ-HSGG-CQ',
+      'Gridiron Grape': 'C-S-NJ-HSGG-GG',
+      'Touchdown Tango Mango': 'C-S-NJ-HSGG-TM',
+      'Wavey Watermelon': 'C-S-NJ-HSGG-WW',
+    },
   },
 ];
 
@@ -428,8 +482,10 @@ export default function NJMenu() {
       const unitPrice = applyDiscount(product.casePrice, product.discount);
       const lineTotal = unitPrice * item.cases;
       total += lineTotal;
+      const strain = product.strains.find((s) => s.name === item.strainName);
+      const skuTag = strain?.sku ? ` [${strain.sku}]` : '';
       lines.push(
-        `${product.name} ${product.subtitle} — ${item.strainName}`,
+        `${product.name} ${product.subtitle} — ${item.strainName}${skuTag}`,
       );
       lines.push(
         `  ${item.cases} case${item.cases > 1 ? 's' : ''} × ${formatCurrency(unitPrice)}/case = ${formatCurrency(lineTotal)}`,
@@ -453,7 +509,9 @@ export default function NJMenu() {
       lines.push('FREE BUDTENDER SAMPLES INCLUDED:');
       earnedSamples.forEach((s) => {
         const strain = sampleStrains[s.id] || 'STRAIN TBD';
-        lines.push(`  • ${s.qty}x ${s.label} — ${strain}`);
+        const rule = SAMPLE_RULES.find((r) => r.id === s.id);
+        const sampleSku = rule?.sampleSkus?.[strain] || '';
+        lines.push(`  • ${s.qty}x ${s.label} — ${strain}${sampleSku ? ` (${sampleSku})` : ''}`);
       });
       lines.push('');
     }
@@ -652,20 +710,22 @@ export default function NJMenu() {
                 this page.
               </p>
               <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={downloadMenu}
+                <a
+                  href="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Menu_-_4.15.xlsx?v=1776303798"
+                  download="Highsman_Menu_NJ.xlsx"
                   className="flex items-center gap-2 font-headline text-sm font-bold uppercase tracking-wider px-5 py-2.5 border-2 transition-all hover:opacity-80"
                   style={{
                     borderColor: BRAND.gold,
                     color: BRAND.gold,
                     background: 'transparent',
+                    textDecoration: 'none',
                   }}
                 >
                   <span className="material-symbols-outlined text-base">
                     download
                   </span>
-                  Download Menu
-                </button>
+                  Download Order Form (.xlsx)
+                </a>
                 <button
                   onClick={() => {
                     setShowCart(true);
