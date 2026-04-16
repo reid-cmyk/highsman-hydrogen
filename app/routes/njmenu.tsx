@@ -571,6 +571,15 @@ export default function NJMenu() {
           </a>
         </div>
 
+        {/* ── Hero Banner ────────────────────────────────────────────────── */}
+        <div style={{background: BRAND.black, lineHeight: 0}}>
+          <img
+            src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Untitled_design_3.svg?v=1776298236"
+            alt="Highsman New Jersey Wholesale"
+            style={{width: '100%', display: 'block', maxHeight: '480px', objectFit: 'cover', objectPosition: 'center'}}
+          />
+        </div>
+
         {/* ── Hero ───────────────────────────────────────────────────────── */}
         <section
           style={{background: BRAND.surface, borderBottom: `1px solid ${BRAND.border}`}}
