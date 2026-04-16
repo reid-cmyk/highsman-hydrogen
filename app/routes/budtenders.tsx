@@ -317,7 +317,7 @@ export default function Budtenders() {
                   + Varsity Jacket
                 </h3>
                 <div className="overflow-hidden mb-4" style={{background: '#111', border: '1px solid rgba(245,225,0,0.15)'}}>
-                  <img src={`${CDN}Game_Day_Prize_Pic.svg?v=1775597075`} alt="Highsman Champions Box" className="w-full" style={{maxHeight: '200px', objectFit: 'contain', padding: '12px'}} />
+                  <img src={`${CDN}Champions_Box_Highsman_Comp_2.png?v=1776305321`} alt="Highsman Champions Box" className="w-full" style={{maxHeight: '200px', objectFit: 'contain', padding: '12px'}} />
                 </div>
                 <div className="overflow-hidden mb-6" style={{background: '#111', border: '1px solid rgba(245,225,0,0.1)'}}>
                   <img src={`${CDN}Highsman_Letterman-Varsity-Jacket-01_1.png?v=1775594409`} alt="Highsman Varsity Jacket" className="w-full" style={{maxHeight: '160px', objectFit: 'contain', padding: '12px'}} />
@@ -339,7 +339,7 @@ export default function Budtenders() {
                 <div className="inline-block font-label text-[10px] tracking-[0.4em] uppercase px-3 py-1.5 mb-6" style={{background: '#C0C0C0', color: '#000'}}>Second Place</div>
                 <h3 className="font-headline uppercase tracking-tight mb-6 text-white" style={{fontSize: 'clamp(30px,3.5vw,44px)', lineHeight: 0.88}}>Champions Box</h3>
                 <div className="overflow-hidden mb-6" style={{background: '#111', border: '1px solid rgba(192,192,192,0.1)'}}>
-                  <img src={`${CDN}Game_Day_Prize_Pic.svg?v=1775597075`} alt="Champions Box" className="w-full" style={{maxHeight: '200px', objectFit: 'contain', padding: '12px'}} />
+                  <img src={`${CDN}Champions_Box_Highsman_Comp_2.png?v=1776305321`} alt="Champions Box" className="w-full" style={{maxHeight: '200px', objectFit: 'contain', padding: '12px'}} />
                 </div>
                 <ul className="space-y-2.5">
                   {PRIZE_ITEMS_SECOND.map((item) => (
