@@ -605,7 +605,7 @@ export default function NJMenu() {
 
         {/* ── Hero ───────────────────────────────────────────────────────── */}
         <header style={{background: '#000'}}>
-          <div className="max-w-5xl mx-auto px-6 md:px-10 pt-16 pb-20 md:pt-24 md:pb-28">
+          <div className="max-w-5xl mx-auto px-6 md:px-10 pt-16 pb-16 md:pt-24 md:pb-20">
             {/* Logo */}
             <div className="mb-14 md:mb-20">
               <img
@@ -615,56 +615,81 @@ export default function NJMenu() {
               />
             </div>
 
-            {/* Title block */}
-            <p
-              className="font-body text-sm font-600 tracking-[0.2em] uppercase mb-5"
-              style={{color: BRAND.gold}}
-            >
-              New Jersey &middot; Wholesale
-            </p>
-            <h1
-              className="font-headline font-700 uppercase leading-[0.82] mb-6"
-              style={{fontSize: 'clamp(72px, 12vw, 140px)', letterSpacing: '-0.02em'}}
-            >
-              Product<br />Menu
-            </h1>
-            <p
-              className="font-body text-lg md:text-xl leading-relaxed max-w-lg mb-10"
-              style={{color: 'rgba(255,255,255,0.55)', fontWeight: 400}}
-            >
-              Select quantities and send your order directly. Or download the spreadsheet for offline ordering.
-            </p>
+            {/* Split layout: text left, hero image right */}
+            <div className="md:grid md:items-center" style={{gridTemplateColumns: '1fr auto', gap: '40px'}}>
+              <div>
+                {/* Title block */}
+                <p
+                  className="font-body text-sm font-600 tracking-[0.2em] uppercase mb-5"
+                  style={{color: BRAND.gold}}
+                >
+                  New Jersey &middot; Wholesale
+                </p>
+                <h1
+                  className="font-headline font-700 uppercase leading-[0.82] mb-6"
+                  style={{fontSize: 'clamp(64px, 11vw, 130px)', letterSpacing: '-0.02em'}}
+                >
+                  Product<br />Menu
+                </h1>
+                <p
+                  className="font-body text-lg md:text-xl leading-relaxed max-w-lg mb-10"
+                  style={{color: 'rgba(255,255,255,0.55)', fontWeight: 400}}
+                >
+                  Select quantities and send your order directly. Or download the spreadsheet for offline ordering.
+                </p>
 
-            {/* CTAs — clean, no icons */}
-            <div className="flex flex-wrap gap-4">
-              <a
-                href="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Menu_-_4.15.xlsx?v=1776303798"
-                download="Highsman_Menu_NJ.xlsx"
-                className="font-headline text-sm font-600 uppercase tracking-[0.15em] px-7 py-3 transition-opacity hover:opacity-80"
-                style={{
-                  border: `1.5px solid ${BRAND.gold}`,
-                  color: BRAND.gold,
-                }}
-              >
-                Download Order Form
-              </a>
-              <button
-                onClick={() => {
-                  setShowCart(true);
-                  setTimeout(
-                    () => cartRef.current?.scrollIntoView({behavior: 'smooth'}),
-                    100,
-                  );
-                }}
-                className="font-headline text-sm font-600 uppercase tracking-[0.15em] px-7 py-3 transition-opacity hover:opacity-90 cursor-pointer"
-                style={{
-                  background: BRAND.gold,
-                  color: '#000',
-                  border: 'none',
-                }}
-              >
-                View Order ({cartCount})
-              </button>
+                {/* CTAs — clean, no icons */}
+                <div className="flex flex-wrap gap-4">
+                  <a
+                    href="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Menu_-_4.15.xlsx?v=1776303798"
+                    download="Highsman_Menu_NJ.xlsx"
+                    className="font-headline text-sm font-600 uppercase tracking-[0.15em] px-7 py-3 transition-opacity hover:opacity-80"
+                    style={{
+                      border: `1.5px solid ${BRAND.gold}`,
+                      color: BRAND.gold,
+                    }}
+                  >
+                    Download Order Form
+                  </a>
+                  <button
+                    onClick={() => {
+                      setShowCart(true);
+                      setTimeout(
+                        () => cartRef.current?.scrollIntoView({behavior: 'smooth'}),
+                        100,
+                      );
+                    }}
+                    className="font-headline text-sm font-600 uppercase tracking-[0.15em] px-7 py-3 transition-opacity hover:opacity-90 cursor-pointer"
+                    style={{
+                      background: BRAND.gold,
+                      color: '#000',
+                      border: 'none',
+                    }}
+                  >
+                    View Order ({cartCount})
+                  </button>
+                </div>
+              </div>
+
+              {/* Hero product image — hidden on small mobile, visible md+ */}
+              <div className="hidden md:block" style={{maxWidth: 420, flexShrink: 0}}>
+                <img
+                  src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Hero_Image_NJ_Menu.png?v=1776306732"
+                  alt="Highsman Hit Stick — Triple Infused, all 5 strains"
+                  className="w-full h-auto"
+                  style={{filter: 'drop-shadow(0 8px 32px rgba(0,0,0,0.5))'}}
+                />
+              </div>
+            </div>
+
+            {/* Mobile hero image — stacked below CTAs */}
+            <div className="md:hidden mt-10" style={{maxWidth: 360, margin: '40px auto 0'}}>
+              <img
+                src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Hero_Image_NJ_Menu.png?v=1776306732"
+                alt="Highsman Hit Stick — Triple Infused, all 5 strains"
+                className="w-full h-auto"
+                style={{filter: 'drop-shadow(0 8px 32px rgba(0,0,0,0.5))'}}
+              />
             </div>
           </div>
 
