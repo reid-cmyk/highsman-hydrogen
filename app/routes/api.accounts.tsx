@@ -74,19 +74,16 @@ async function searchAccounts(
   scope: 'nj' | 'all' = 'nj',
 ): Promise<AccountResult[]> {
   const url = new URL('https://www.zohoapis.com/crm/v7/Accounts/search');
-  if (scope === 'all') {
-    // All accounts — use 'word' param for broad name matching (Zoho doesn't
-    // support standalone 'contains' criteria without a compound expression)
-    url.searchParams.set('word', query);
-  } else {
-    // NJ only — matches both "NJ" and "New Jersey"
-    url.searchParams.set(
-      'criteria',
-      `((Account_Name:contains:${query})and((Billing_State:equals:NJ)or(Billing_State:equals:New Jersey)))`,
-    );
-  }
-  // Include custom pop-up fields. Zoho API names typically use underscores in place of
-  // spaces in the UI label — best-guess names plus a couple of variants for tolerance.
+  // Zoho CRM's criteria API does NOT support `contains` on Account_Name — only
+  // `equals` and `starts_with`. For true partial matching we use `word=X`, which
+  // performs a broad text search across all fields. When scope is 'nj' we post-
+  // filter the results by Billing_State in the server so only NJ accounts are
+  // returned to the client.
+  url.searchParams.set('word', query);
+  // Custom field API names were confirmed 2026-04-17 against a live Account:
+  // - Email_to_book_pop_ups (lowercase)
+  // - Link_for_Pop_Ups
+  // - Visit_Date (the "Data Collection Last Visit Date" UI label)
   url.searchParams.set(
     'fields',
     [
@@ -95,12 +92,12 @@ async function searchAccounts(
       'Billing_City',
       'Billing_State',
       'Phone',
-      'Email_for_Pop_Ups',
+      'Email_to_book_pop_ups',
       'Link_for_Pop_Ups',
-      'Data_Collection_Last_Visit_Date',
+      'Visit_Date',
     ].join(','),
   );
-  url.searchParams.set('per_page', '15');
+  url.searchParams.set('per_page', '50');
 
   const res = await fetch(url.toString(), {
     headers: {
@@ -117,17 +114,26 @@ async function searchAccounts(
   }
 
   const data = await res.json();
-  return (data.data || []).map((acct: any): AccountResult => ({
+  const allAccounts: AccountResult[] = (data.data || []).map((acct: any): AccountResult => ({
     id: acct.id,
     name: acct.Account_Name,
     city: acct.Billing_City || null,
     state: acct.Billing_State || null,
     street: acct.Billing_Street || null,
     phone: acct.Phone || null,
-    popUpEmail: readCustom(acct, 'Email_for_Pop_Ups', 'Email_For_Pop_Ups', 'Email_for_PopUps'),
-    popUpLink: readCustom(acct, 'Link_for_Pop_Ups', 'Link_For_Pop_Ups', 'Link_for_PopUps'),
-    lastVisitDate: readCustom(acct, 'Data_Collection_Last_Visit_Date', 'Data_Collection_Last_Visit'),
+    popUpEmail: readCustom(acct, 'Email_to_book_pop_ups', 'Email_for_Pop_Ups'),
+    popUpLink: readCustom(acct, 'Link_for_Pop_Ups', 'Link_For_Pop_Ups'),
+    lastVisitDate: readCustom(acct, 'Visit_Date', 'Data_Collection_Last_Visit_Date'),
   }));
+
+  // Post-filter for NJ when scope requires it. `word` search doesn't accept a
+  // Billing_State filter, so we do it in JS.
+  if (scope === 'nj') {
+    return allAccounts
+      .filter((a) => a.state === 'NJ' || a.state === 'New Jersey')
+      .slice(0, 15);
+  }
+  return allAccounts.slice(0, 15);
 }
 
 /** Look up a single Contact by email. Used to resolve `Email for Pop Ups` → full contact record. */

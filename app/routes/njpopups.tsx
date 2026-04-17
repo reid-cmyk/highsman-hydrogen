@@ -97,9 +97,9 @@ const COORDS_LOOKUP: Record<string, {lat: number; lng: number}> = {
   'valley wellness|raritan': {lat: 40.5712, lng: -74.6335},
   'ascend|montclair': {lat: 40.8162, lng: -74.2029},
   'ascend|rochelle park': {lat: 40.9064, lng: -74.0741},
-  // Premo + Shore House Canna — verified NJ rec locations
-  'premo cannabis|keyport': {lat: 40.4337, lng: -74.1996},
-  'shore house cannabis|long branch': {lat: 40.3037, lng: -73.9921},
+  // Premo + Shore House Canna — verified from Zoho 2026-04-17
+  'premo|keyport': {lat: 40.4337, lng: -74.1996},
+  'shore house canna|cape may': {lat: 38.9351, lng: -74.9060},
   'the cannabist|deptford': {lat: 39.8412, lng: -75.1080},
   'the cannabist|vineland': {lat: 39.4864, lng: -75.0263},
 };
