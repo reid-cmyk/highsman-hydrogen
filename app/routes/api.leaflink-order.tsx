@@ -341,17 +341,24 @@ async function createLeafLinkOrder(
   },
   apiKey: string,
 ): Promise<{success: boolean; orderNumber?: string; error?: string}> {
-  // Build regular line items — send quantity in individual units, let LeafLink use its own wholesale pricing
+  // Build regular line items — quantity = number of cases, price = case price
+  // LeafLink products are configured with wholesale_price = case price
   const regularItems = params.lineItems
     .filter(item => !item.isSample && SKU_TO_PRODUCT_ID[item.sku])
     .map(item => {
       const productId = SKU_TO_PRODUCT_ID[item.sku];
-      console.log(`[api/leaflink-order] Line item: SKU=${item.sku} → Product=${productId}, qty=${item.quantity} units`);
+      console.log(`[api/leaflink-order] Line item: SKU=${item.sku} → Product=${productId}, qty=${item.quantity} cases, price=$${item.unitPrice}/case`);
       return {
         product: productId,
         quantity: item.quantity.toString(),
-        // Do NOT override ordered_unit_price — let LeafLink use its configured wholesale price
-        // Overriding with per-unit price ($7) was causing LeafLink to show $7/case instead of $168/case
+        ordered_unit_price: {
+          amount: item.unitPrice.toFixed(2),
+          currency: 'USD',
+        },
+        sale_price: {
+          amount: item.unitPrice.toFixed(2),
+          currency: 'USD',
+        },
       };
     });
 

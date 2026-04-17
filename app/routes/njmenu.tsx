@@ -898,18 +898,19 @@ export default function NJMenu() {
     if (!selectedAccount || cartItems.length === 0) return;
 
     // Build line items for LeafLink API
+    // Send quantity as NUMBER OF CASES and price as CASE PRICE
+    // LeafLink products are configured with wholesale_price = case price
     const items = cartItems.map((item) => {
       const product = PRODUCT_LINES.find((p) => p.id === item.productId);
       if (!product) return null;
       const strain = product.strains.find((s) => s.name === item.strainName);
       if (!strain?.sku) return null;
-      const unitPrice = applyDiscount(product.wholesale, product.discount);
-      const totalUnits = item.cases * product.caseSize;
-      console.log(`[njmenu] Cart item: ${product.name} ${product.subtitle} - ${strain.name}, SKU=${strain.sku}, cases=${item.cases}, caseSize=${product.caseSize}, totalUnits=${totalUnits}, unitPrice=${unitPrice}`);
+      const casePrice = applyDiscount(product.casePrice, product.discount);
+      console.log(`[njmenu] Cart item: ${product.name} ${product.subtitle} - ${strain.name}, SKU=${strain.sku}, cases=${item.cases}, casePrice=${casePrice}`);
       return {
         sku: strain.sku,
-        quantity: totalUnits, // total units — LeafLink does the case math internally
-        unitPrice, // per-unit wholesale price (e.g. $7 per Hit Stick unit)
+        quantity: item.cases, // number of cases — matches LeafLink's unit = case
+        unitPrice: casePrice, // case price (e.g. $168 for Hit Stick Singles case of 24)
       };
     }).filter(Boolean);
 
