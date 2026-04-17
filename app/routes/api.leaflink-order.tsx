@@ -442,8 +442,8 @@ export async function action({request, context}: ActionFunctionArgs) {
       customer ? `Found ${customer.name} (ID: ${customer.id})` : 'Not found',
     );
 
-    // Step 2: Create the order
-    const result = await createLeafLinkOrder(
+    // Step 2: Create the order (with customer link if found)
+    let result = await createLeafLinkOrder(
       {
         customerId: customer?.id ?? null,
         dispensaryName,
@@ -453,8 +453,31 @@ export async function action({request, context}: ActionFunctionArgs) {
       apiKey,
     );
 
+    // If order failed because customer isn't linked to our seller, retry without customer
+    if (!result.success && result.error?.includes('is not a customer of') && customer) {
+      console.warn(
+        `[api/leaflink-order] Customer ${customer.name} (${customer.id}) not linked to seller — retrying without customer`,
+      );
+      result = await createLeafLinkOrder(
+        {
+          customerId: null,
+          dispensaryName,
+          lineItems: eligibleItems,
+          notes: notes || '',
+        },
+        apiKey,
+      );
+      // Notify that customer wasn't linked
+      sendFailureNotification(env, {
+        dispensaryName,
+        reason: `Customer "${customer.name}" (ID: ${customer.id}) exists in LeafLink but is not linked to Canfections NJ — order created without buyer link. Please add them as a customer in LeafLink.`,
+        items: eligibleItems,
+        notes,
+      }).catch(() => {});
+    }
+
     if (result.success) {
-      // If order was created but customer wasn't matched, send notification
+      // If order was created but customer wasn't matched at all, send notification
       if (!customer) {
         sendFailureNotification(env, {
           dispensaryName,
