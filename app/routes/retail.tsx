@@ -32,6 +32,7 @@ interface MerchItem {
 
 const CATEGORIES = [
   {id: 'pos-displays', label: 'Point of Sale Displays', icon: 'storefront'},
+  {id: 'display-packaging', label: 'In-Store Display Packaging', icon: 'inventory_2'},
   {id: 'cutouts', label: 'Cutouts & Standees', icon: 'person'},
   {id: 'banners', label: 'Banners', icon: 'flag'},
   {id: 'signs', label: 'In-Store Stand Up Signs', icon: 'display_settings'},
@@ -56,6 +57,35 @@ const MERCH_ITEMS: MerchItem[] = [
     description: 'Sleek acrylic sign holder detailing each Hit Stick tier — Exotic Indoor, Infused Indoor, and Rosin. Premium build, compact footprint, perfect for educating consumers at point of purchase.',
     image: '/retail/acrylic-display.png',
     maxQty: 3,
+  },
+
+  // ── In-Store Display Packaging ─────────────────────────────────────────────
+  {
+    id: 'display-hitstick-tube',
+    name: 'Hit Stick Display Tube',
+    category: 'display-packaging',
+    description: 'Empty replica of the Hit Stick Dispose-A-Bowl black tube. Same packaging, same shelf presence, no product. Built for window displays, counter showcases, and product education without tying up sellable inventory.',
+    image: '/hitstick-product.jpeg',
+    maxQty: 5,
+    tag: 'New',
+  },
+  {
+    id: 'display-preroll-tin',
+    name: 'Triple Threat Pre-Roll Display Tin',
+    category: 'display-packaging',
+    description: 'Empty replica of the Triple Threat 1.2g Pre-Roll tin. Same packaging, same shelf presence, no product. Includes display stand. Built for window displays, counter showcases, and product education without tying up sellable inventory.',
+    image: '/prerolls-product.jpeg',
+    maxQty: 5,
+    tag: 'New',
+  },
+  {
+    id: 'display-groundgame-tin',
+    name: 'Ground Game Display Tin',
+    category: 'display-packaging',
+    description: 'Empty replica of the Ground Game 7g Ready-to-Roll tin. Same packaging, same shelf presence, no product. Includes display stand. Built for window displays, counter showcases, and product education without tying up sellable inventory.',
+    image: '/groundgame-product.jpeg',
+    maxQty: 5,
+    tag: 'New',
   },
 
   // ── Cutouts & Standees ─────────────────────────────────────────────────────
@@ -167,7 +197,7 @@ const MERCH_ITEMS: MerchItem[] = [
     id: 'football-signed',
     name: 'Signed Ricky Williams Football',
     category: 'footballs',
-    description: 'The ultimate collector\'s item. Custom Highsman football with Ricky Williams\' authentic signature. A high-value prize for top customers and major in-store promotions.',
+    description: 'The ultimate collector\'s item. Custom Highsman football with Ricky Williams\' authentic signature. A high-value prize for top customers and major in-store promotions. Includes display stand.',
     image: '/retail/signed-football.png',
     maxQty: 1,
     tag: 'Limited',
@@ -176,7 +206,7 @@ const MERCH_ITEMS: MerchItem[] = [
     id: 'football-branded',
     name: 'Highsman Branded Football',
     category: 'footballs',
-    description: 'Premium branded football — a fantastic giveaway item. Perfect for building brand loyalty and engaging the sports-loving cannabis consumer.',
+    description: 'Premium branded football — a fantastic giveaway item. Perfect for building brand loyalty and engaging the sports-loving cannabis consumer. Includes display stand.',
     image: '/retail/branded-football.png',
     maxQty: 1,
   },
