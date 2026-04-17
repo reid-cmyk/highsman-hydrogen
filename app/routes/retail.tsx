@@ -197,11 +197,22 @@ export default function RetailMerchStore() {
 
   // ── Account / Dispensary Identification ────────────────────────────────────
   const accountFetcher = useFetcher<{accounts: Account[]; error?: string}>();
+  const createAccountFetcher = useFetcher<{ok: boolean; account?: Account; error?: string}>();
   const [accountQuery, setAccountQuery] = useState('');
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [showAccountDropdown, setShowAccountDropdown] = useState(false);
+  const [showNewAccountForm, setShowNewAccountForm] = useState(false);
+  const [newAccountError, setNewAccountError] = useState<string | null>(null);
   const accountInputRef = useRef<HTMLInputElement>(null);
   const accountDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Address autocomplete state (Google Places)
+  const [addressQuery, setAddressQuery] = useState('');
+  const [addressPredictions, setAddressPredictions] = useState<Array<{placeId: string; description: string; mainText: string; secondaryText: string}>>([]);
+  const [showAddressDropdown, setShowAddressDropdown] = useState(false);
+  const [selectedAddress, setSelectedAddress] = useState<{display: string; street: string; city: string; state: string; zip: string} | null>(null);
+  const [addressLoading, setAddressLoading] = useState(false);
+  const addressDropdownRef = useRef<HTMLDivElement>(null);
 
   // Debounced live search — queries ALL Zoho accounts (scope=all)
   useEffect(() => {
@@ -233,6 +244,67 @@ export default function RetailMerchStore() {
         !accountInputRef.current.contains(e.target as Node)
       ) {
         setShowAccountDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Handle create-account response
+  useEffect(() => {
+    if (createAccountFetcher.state === 'idle' && createAccountFetcher.data) {
+      if (createAccountFetcher.data.ok && createAccountFetcher.data.account) {
+        setSelectedAccount(createAccountFetcher.data.account);
+        setShowNewAccountForm(false);
+        setNewAccountError(null);
+      } else if (createAccountFetcher.data.error) {
+        setNewAccountError(createAccountFetcher.data.error);
+      }
+    }
+  }, [createAccountFetcher.state, createAccountFetcher.data]);
+
+  // Debounced address autocomplete via Google Places API (server-side proxy)
+  useEffect(() => {
+    if (addressQuery.length < 3 || selectedAddress) return;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/places?q=${encodeURIComponent(addressQuery)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setAddressPredictions(data.predictions || []);
+        setShowAddressDropdown((data.predictions || []).length > 0);
+      } catch { /* silent fail */ }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [addressQuery, selectedAddress]);
+
+  // Resolve a Google Place prediction to a structured address
+  const selectPlacePrediction = async (prediction: {placeId: string; description: string}) => {
+    setAddressLoading(true);
+    setShowAddressDropdown(false);
+    setAddressQuery(prediction.description);
+    try {
+      const res = await fetch(`/api/places?placeId=${encodeURIComponent(prediction.placeId)}`);
+      if (!res.ok) throw new Error('Details fetch failed');
+      const data = await res.json();
+      if (data.address) {
+        setSelectedAddress(data.address);
+        setAddressQuery(data.address.display);
+      } else {
+        setSelectedAddress({display: prediction.description, street: '', city: '', state: '', zip: ''});
+      }
+    } catch {
+      setSelectedAddress({display: prediction.description, street: '', city: '', state: '', zip: ''});
+    } finally {
+      setAddressLoading(false);
+    }
+  };
+
+  // Close address dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (addressDropdownRef.current && !addressDropdownRef.current.contains(e.target as Node)) {
+        setShowAddressDropdown(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -368,6 +440,10 @@ export default function RetailMerchStore() {
                     setAccountQuery('');
                     setCart({});
                     setSubmitted(false);
+                    setShowNewAccountForm(false);
+                    setNewAccountError(null);
+                    setAddressQuery('');
+                    setSelectedAddress(null);
                     setTimeout(() => accountInputRef.current?.focus(), 50);
                   }}
                   className="font-headline text-xs font-bold uppercase tracking-[0.15em] px-4 py-2 cursor-pointer transition-opacity hover:opacity-80 bg-transparent text-[#A9ACAF] border border-[#A9ACAF]/30"
@@ -443,11 +519,28 @@ export default function RetailMerchStore() {
                         )}
                       </button>
                     ))}
+                    {/* Add New option at bottom of results */}
+                    <button
+                      onClick={() => {
+                        setShowAccountDropdown(false);
+                        setShowNewAccountForm(true);
+                      }}
+                      className="w-full text-left px-5 py-3.5 cursor-pointer text-sm font-semibold bg-transparent border-0"
+                      style={{borderTop: '1px solid rgba(255,255,255,0.12)', color: '#F5E400'}}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.background = 'rgba(245,228,0,0.06)';
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                      }}
+                    >
+                      + Add New Dispensary
+                    </button>
                   </div>
                 )}
 
-                {/* No results */}
-                {showAccountDropdown && accountQuery.length >= 2 && accountResults.length === 0 && !isSearching && accountFetcher.state === 'idle' && (
+                {/* No results — prominent Add New option */}
+                {showAccountDropdown && !showNewAccountForm && accountQuery.length >= 2 && accountResults.length === 0 && !isSearching && accountFetcher.state === 'idle' && (
                   <div
                     className="absolute left-0 right-0 z-50 mt-2 px-5 py-4"
                     style={{
@@ -456,23 +549,230 @@ export default function RetailMerchStore() {
                       borderRadius: 8,
                     }}
                   >
-                    <p className="text-sm text-[#A9ACAF]/60 mb-2">
+                    <p className="text-sm text-[#A9ACAF]/60 mb-3">
                       No dispensary found for "{accountQuery}"
                     </p>
-                    <p className="text-xs text-[#A9ACAF]/40">
-                      Contact <a href="mailto:njsales@highsman.com" className="text-[#F5E400] no-underline hover:underline">njsales@highsman.com</a> to get set up as a retail partner.
-                    </p>
+                    <button
+                      onClick={() => {
+                        setShowAccountDropdown(false);
+                        setShowNewAccountForm(true);
+                      }}
+                      className="font-headline text-sm font-bold uppercase tracking-[0.15em] px-5 py-2.5 cursor-pointer transition-opacity hover:opacity-85 bg-[#F5E400] text-black border-0"
+                      style={{borderRadius: 4}}
+                    >
+                      + Add New Dispensary
+                    </button>
                   </div>
                 )}
 
-                {accountQuery.length === 0 && (
+                {accountQuery.length === 0 && !showNewAccountForm && (
                   <p className="text-xs text-[#A9ACAF]/40 mt-3">
                     Search for your dispensary to access the merch catalog. New partner?{' '}
-                    <a href="mailto:njsales@highsman.com" className="text-[#F5E400] no-underline hover:underline">
-                      Contact us
-                    </a>
+                    <button
+                      onClick={() => setShowNewAccountForm(true)}
+                      className="text-[#F5E400] bg-transparent border-0 cursor-pointer underline text-xs p-0"
+                    >
+                      Register here
+                    </button>
                   </p>
                 )}
+              </div>
+            )}
+
+            {/* ── New Dispensary Registration Form ──────────────────────── */}
+            {showNewAccountForm && !selectedAccount && (
+              <div
+                className="mt-4 max-w-lg mx-auto text-left"
+                style={{
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: 8,
+                  padding: '20px 24px',
+                }}
+              >
+                <div className="flex items-center justify-between mb-5">
+                  <p className="font-headline text-base font-bold uppercase tracking-[0.12em] text-white">
+                    Register New Dispensary
+                  </p>
+                  <button
+                    onClick={() => {
+                      setShowNewAccountForm(false);
+                      setNewAccountError(null);
+                    }}
+                    className="text-xs uppercase tracking-wider cursor-pointer bg-transparent border-0 text-[#A9ACAF]/60"
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                <createAccountFetcher.Form method="post" action="/api/accounts" className="space-y-4">
+                  {/* Dispensary Name */}
+                  <div>
+                    <label className="text-xs font-bold tracking-wider uppercase block mb-1.5 text-[#A9ACAF]">
+                      Dispensary Name *
+                    </label>
+                    <input
+                      name="dispensaryName"
+                      type="text"
+                      required
+                      defaultValue={accountQuery}
+                      placeholder="e.g. Green Leaf Dispensary"
+                      className="w-full text-sm bg-[#111] border border-[#A9ACAF]/20 px-3.5 py-2.5 text-white placeholder-[#A9ACAF]/40 focus:border-[#F5E400] focus:outline-none transition-colors"
+                      style={{borderRadius: 4}}
+                    />
+                  </div>
+
+                  {/* Contact Name + Job Role */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold tracking-wider uppercase block mb-1.5 text-[#A9ACAF]">
+                        Contact Name *
+                      </label>
+                      <input
+                        name="contactName"
+                        type="text"
+                        required
+                        placeholder="First Last"
+                        className="w-full text-sm bg-[#111] border border-[#A9ACAF]/20 px-3.5 py-2.5 text-white placeholder-[#A9ACAF]/40 focus:border-[#F5E400] focus:outline-none transition-colors"
+                        style={{borderRadius: 4}}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold tracking-wider uppercase block mb-1.5 text-[#A9ACAF]">
+                        Job Role
+                      </label>
+                      <select
+                        name="jobRole"
+                        className="w-full text-sm bg-[#111] border border-[#A9ACAF]/20 px-3.5 py-2.5 text-white focus:border-[#F5E400] focus:outline-none transition-colors"
+                        style={{borderRadius: 4, appearance: 'none' as any, WebkitAppearance: 'none'}}
+                      >
+                        <option value="" style={{background: '#1A1A1A'}}>Select role…</option>
+                        <option value="Owner" style={{background: '#1A1A1A'}}>Owner</option>
+                        <option value="General Manager" style={{background: '#1A1A1A'}}>General Manager</option>
+                        <option value="Buyer / Purchasing" style={{background: '#1A1A1A'}}>Buyer / Purchasing</option>
+                        <option value="Dispensary Manager" style={{background: '#1A1A1A'}}>Dispensary Manager</option>
+                        <option value="Budtender" style={{background: '#1A1A1A'}}>Budtender</option>
+                        <option value="Other" style={{background: '#1A1A1A'}}>Other</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Phone + Email */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold tracking-wider uppercase block mb-1.5 text-[#A9ACAF]">
+                        Phone
+                      </label>
+                      <input
+                        name="phone"
+                        type="tel"
+                        placeholder="(555) 123-4567"
+                        className="w-full text-sm bg-[#111] border border-[#A9ACAF]/20 px-3.5 py-2.5 text-white placeholder-[#A9ACAF]/40 focus:border-[#F5E400] focus:outline-none transition-colors"
+                        style={{borderRadius: 4}}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold tracking-wider uppercase block mb-1.5 text-[#A9ACAF]">
+                        Email *
+                      </label>
+                      <input
+                        name="email"
+                        type="email"
+                        required
+                        placeholder="you@dispensary.com"
+                        className="w-full text-sm bg-[#111] border border-[#A9ACAF]/20 px-3.5 py-2.5 text-white placeholder-[#A9ACAF]/40 focus:border-[#F5E400] focus:outline-none transition-colors"
+                        style={{borderRadius: 4}}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Address with Google Places autocomplete */}
+                  <div className="relative">
+                    <label className="text-xs font-bold tracking-wider uppercase block mb-1.5 text-[#A9ACAF]">
+                      Dispensary Address
+                    </label>
+                    <input
+                      type="text"
+                      value={selectedAddress ? selectedAddress.display : addressQuery}
+                      onChange={(e) => {
+                        setAddressQuery(e.target.value);
+                        setSelectedAddress(null);
+                        if (e.target.value.length < 3) setShowAddressDropdown(false);
+                      }}
+                      onFocus={() => {
+                        if (addressPredictions.length > 0 && !selectedAddress) setShowAddressDropdown(true);
+                      }}
+                      placeholder="Start typing address…"
+                      autoComplete="off"
+                      className="w-full text-sm bg-[#111] px-3.5 py-2.5 text-white placeholder-[#A9ACAF]/40 focus:outline-none transition-colors"
+                      style={{
+                        border: `1px solid ${selectedAddress ? 'rgba(245,228,0,0.3)' : 'rgba(169,172,175,0.2)'}`,
+                        borderRadius: 4,
+                      }}
+                    />
+                    {/* Hidden fields for form submission */}
+                    <input type="hidden" name="street" value={selectedAddress?.street || ''} />
+                    <input type="hidden" name="city" value={selectedAddress?.city || ''} />
+                    <input type="hidden" name="state" value={selectedAddress?.state || ''} />
+                    <input type="hidden" name="zip" value={selectedAddress?.zip || ''} />
+
+                    {showAddressDropdown && addressPredictions.length > 0 && (
+                      <div
+                        ref={addressDropdownRef}
+                        className="absolute left-0 right-0 z-50 mt-1 overflow-hidden"
+                        style={{
+                          background: '#1A1A1A',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          borderRadius: 4,
+                          maxHeight: 220,
+                          overflowY: 'auto',
+                        }}
+                      >
+                        {addressPredictions.map((pred) => (
+                          <button
+                            key={pred.placeId}
+                            type="button"
+                            onClick={() => selectPlacePrediction(pred)}
+                            className="w-full text-left px-4 py-2.5 cursor-pointer text-sm bg-transparent border-0 text-white"
+                            style={{borderBottom: '1px solid rgba(255,255,255,0.06)'}}
+                            onMouseEnter={(e) => {
+                              (e.currentTarget as HTMLButtonElement).style.background = 'rgba(245,228,0,0.08)';
+                            }}
+                            onMouseLeave={(e) => {
+                              (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                            }}
+                          >
+                            <span>{pred.mainText}</span>
+                            {pred.secondaryText && (
+                              <span className="text-[#A9ACAF]/50 ml-1.5 text-xs">{pred.secondaryText}</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {addressLoading && (
+                      <div className="text-xs mt-1 text-[#A9ACAF]/40">Loading address…</div>
+                    )}
+                  </div>
+
+                  {/* Error message */}
+                  {newAccountError && (
+                    <p className="text-sm text-red-400">{newAccountError}</p>
+                  )}
+
+                  {/* Submit */}
+                  <button
+                    type="submit"
+                    disabled={createAccountFetcher.state === 'submitting'}
+                    className="font-headline text-sm font-bold uppercase tracking-[0.15em] px-8 py-3.5 cursor-pointer transition-opacity hover:opacity-90 bg-[#F5E400] text-black border-0"
+                    style={{
+                      borderRadius: 4,
+                      opacity: createAccountFetcher.state === 'submitting' ? 0.6 : 1,
+                    }}
+                  >
+                    {createAccountFetcher.state === 'submitting' ? 'Creating Account…' : 'Register & Start Ordering'}
+                  </button>
+                </createAccountFetcher.Form>
               </div>
             )}
           </div>
