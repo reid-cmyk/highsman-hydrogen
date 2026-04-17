@@ -800,6 +800,106 @@ export default function NJMenu() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // ── Buyer Identity & Store Credit ─────────────────────────────────────────
+  const [buyerFirstName, setBuyerFirstName] = useState('');
+  const [buyerLastName, setBuyerLastName] = useState('');
+  const [buyerEmail, setBuyerEmail] = useState('');
+  const [buyerContactId, setBuyerContactId] = useState<string | null>(null);
+  const [buyerCredit, setBuyerCredit] = useState<number>(0);
+  const [buyerCreditLoading, setBuyerCreditLoading] = useState(false);
+  const [buyerIdentified, setBuyerIdentified] = useState(false);
+
+  // Pre-fill buyer info from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('highsman_buyer');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.firstName) setBuyerFirstName(parsed.firstName);
+        if (parsed.lastName) setBuyerLastName(parsed.lastName);
+        if (parsed.email) setBuyerEmail(parsed.email);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  // Look up buyer credit when they identify themselves
+  const lookupBuyerCredit = useCallback(async (email: string, accountId: string) => {
+    if (!email || !accountId) return;
+    setBuyerCreditLoading(true);
+    try {
+      const res = await fetch(`/api/buyer-credit?email=${encodeURIComponent(email)}&accountId=${encodeURIComponent(accountId)}`);
+      if (!res.ok) throw new Error('Credit lookup failed');
+      const data = await res.json();
+      if (data.ok) {
+        setBuyerCredit(data.credit || 0);
+        if (data.contactId) setBuyerContactId(data.contactId);
+      }
+    } catch (err) {
+      console.error('[njmenu] Credit lookup error:', err);
+    } finally {
+      setBuyerCreditLoading(false);
+    }
+  }, []);
+
+  // Register or find buyer when they submit their info
+  const handleBuyerIdentify = useCallback(async () => {
+    if (!buyerEmail.trim() || !buyerLastName.trim() || !selectedAccount) return;
+    setBuyerCreditLoading(true);
+    try {
+      // Save to localStorage for next visit
+      localStorage.setItem('highsman_buyer', JSON.stringify({
+        firstName: buyerFirstName.trim(),
+        lastName: buyerLastName.trim(),
+        email: buyerEmail.trim().toLowerCase(),
+      }));
+
+      // Register/find in Zoho
+      const res = await fetch('/api/buyer-credit', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          action: 'register',
+          firstName: buyerFirstName.trim(),
+          lastName: buyerLastName.trim(),
+          email: buyerEmail.trim().toLowerCase(),
+          accountId: selectedAccount.id,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setBuyerContactId(data.contactId);
+        setBuyerCredit(data.credit || 0);
+        setBuyerIdentified(true);
+      } else {
+        console.error('[njmenu] Buyer register error:', data.error);
+        // Still mark as identified so they can order
+        setBuyerIdentified(true);
+      }
+    } catch (err) {
+      console.error('[njmenu] Buyer identify error:', err);
+      setBuyerIdentified(true);
+    } finally {
+      setBuyerCreditLoading(false);
+    }
+  }, [buyerFirstName, buyerLastName, buyerEmail, selectedAccount, lookupBuyerCredit]);
+
+  // Auto-lookup credit if buyer was pre-filled from localStorage and account is selected
+  useEffect(() => {
+    if (selectedAccount && buyerEmail && buyerLastName && !buyerIdentified) {
+      // Don't auto-register, but do lookup existing credit
+      lookupBuyerCredit(buyerEmail.trim().toLowerCase(), selectedAccount.id);
+    }
+  }, [selectedAccount]);
+
+  // Reset buyer state when dispensary changes
+  useEffect(() => {
+    if (!selectedAccount) {
+      setBuyerIdentified(false);
+      setBuyerContactId(null);
+      setBuyerCredit(0);
+    }
+  }, [selectedAccount]);
+
   // ── Cart & Order State ───────────────────────────────────────────────────
   const [cart, setCart] = useState<Record<string, CartItem>>({});
   const [showCart, setShowCart] = useState(false);
@@ -969,6 +1069,35 @@ export default function NJMenu() {
           } else {
             setLeaflinkStatus('success');
             setLeaflinkMessage('Order placed successfully. Your rep will confirm shortly.');
+
+            // ── Accrue buyer store credit (menu orders only) ──────────
+            if (buyerContactId) {
+              const orderTotal = cartItems.reduce((sum, item) => {
+                const product = PRODUCT_LINES.find((p) => p.id === item.productId);
+                if (!product) return sum;
+                const casePrice = applyDiscount(product.casePrice, product.discount);
+                return sum + item.cases * casePrice;
+              }, 0);
+              if (orderTotal > 0) {
+                fetch('/api/buyer-credit', {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/json'},
+                  body: JSON.stringify({
+                    action: 'accrue',
+                    contactId: buyerContactId,
+                    orderTotal,
+                  }),
+                })
+                  .then((r) => r.json())
+                  .then((creditData: any) => {
+                    if (creditData.ok && creditData.action === 'accrued') {
+                      setBuyerCredit(creditData.newBalance);
+                      console.log(`[njmenu] Credit accrued: +$${creditData.creditEarned} → $${creditData.newBalance}`);
+                    }
+                  })
+                  .catch((e) => console.error('[njmenu] Credit accrual error:', e));
+              }
+            }
           }
         } else {
           setLeaflinkStatus('error');
@@ -983,7 +1112,7 @@ export default function NJMenu() {
         setLeaflinkMessage(`Connection issue: ${err.message || err}`);
         console.error('[njmenu] LeafLink submission error:', err);
       });
-  }, [selectedAccount, cartItems, orderNote, earnedSamples, sampleStrains]);
+  }, [selectedAccount, cartItems, orderNote, earnedSamples, sampleStrains, buyerContactId]);
 
   // Build mailto order
   const buildOrderEmail = useCallback(() => {
@@ -1679,6 +1808,166 @@ export default function NJMenu() {
             )}
           </div>
         </div>
+
+        {/* ── Buyer Identity & Store Credit ────────────────────────────── */}
+        {selectedAccount && (
+          <div className="max-w-5xl mx-auto px-6 md:px-10 pt-10 md:pt-14">
+            <div
+              style={{
+                background: 'rgba(255,255,255,0.03)',
+                border: `1px solid ${buyerIdentified ? 'rgba(245,228,0,0.2)' : 'rgba(255,255,255,0.1)'}`,
+                borderRadius: 8,
+                padding: '20px 24px',
+              }}
+            >
+              {buyerIdentified ? (
+                /* ── Identified state — show credit badge ──────────────── */
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div>
+                    <p className="font-body text-sm" style={{color: 'rgba(255,255,255,0.7)'}}>
+                      Ordering as{' '}
+                      <span style={{color: '#fff', fontWeight: 600}}>
+                        {buyerFirstName} {buyerLastName}
+                      </span>
+                      <span style={{color: 'rgba(255,255,255,0.4)', marginLeft: 8, fontSize: '0.85em'}}>
+                        {buyerEmail}
+                      </span>
+                    </p>
+                    {buyerCredit > 0 && (
+                      <p className="font-body text-xs mt-1.5" style={{color: BRAND.gold}}>
+                        You have <span style={{fontWeight: 700}}>${buyerCredit.toFixed(2)}</span> in store credit
+                        {' '}
+                        <a
+                          href="https://highsman.com/apparel"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline"
+                          style={{color: BRAND.gold, opacity: 0.8}}
+                        >
+                          — shop apparel
+                        </a>
+                      </p>
+                    )}
+                    {buyerCredit === 0 && (
+                      <p className="font-body text-xs mt-1.5" style={{color: 'rgba(255,255,255,0.4)'}}>
+                        Earn 0.5% store credit on every menu order — redeemable at{' '}
+                        <a
+                          href="https://highsman.com/apparel"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline"
+                          style={{color: BRAND.gold, opacity: 0.7}}
+                        >
+                          highsman.com/apparel
+                        </a>
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => {
+                      setBuyerIdentified(false);
+                      setBuyerContactId(null);
+                      setBuyerCredit(0);
+                    }}
+                    className="font-body text-xs font-600 uppercase tracking-[0.15em] px-3 py-1.5 cursor-pointer transition-opacity hover:opacity-80"
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      color: 'rgba(255,255,255,0.5)',
+                      borderRadius: 4,
+                    }}
+                  >
+                    Change
+                  </button>
+                </div>
+              ) : (
+                /* ── Capture state — name + email form ─────────────────── */
+                <>
+                  <p className="font-headline text-sm font-600 uppercase tracking-[0.12em] mb-1" style={{color: '#fff'}}>
+                    Who&rsquo;s ordering?
+                  </p>
+                  <p className="font-body text-xs mb-4" style={{color: 'rgba(255,255,255,0.45)'}}>
+                    Earn 0.5% store credit on every order — redeemable at{' '}
+                    <a
+                      href="https://highsman.com/apparel"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline"
+                      style={{color: BRAND.gold, opacity: 0.7}}
+                    >
+                      highsman.com/apparel
+                    </a>
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <input
+                      type="text"
+                      value={buyerFirstName}
+                      onChange={(e) => setBuyerFirstName(e.target.value)}
+                      placeholder="First name"
+                      className="font-body text-sm"
+                      style={{
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        borderRadius: 4,
+                        padding: '10px 14px',
+                        color: '#fff',
+                        outline: 'none',
+                      }}
+                    />
+                    <input
+                      type="text"
+                      value={buyerLastName}
+                      onChange={(e) => setBuyerLastName(e.target.value)}
+                      placeholder="Last name *"
+                      className="font-body text-sm"
+                      style={{
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        borderRadius: 4,
+                        padding: '10px 14px',
+                        color: '#fff',
+                        outline: 'none',
+                      }}
+                    />
+                    <input
+                      type="email"
+                      value={buyerEmail}
+                      onChange={(e) => setBuyerEmail(e.target.value)}
+                      placeholder="Email *"
+                      className="font-body text-sm"
+                      style={{
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        borderRadius: 4,
+                        padding: '10px 14px',
+                        color: '#fff',
+                        outline: 'none',
+                      }}
+                    />
+                    <button
+                      onClick={handleBuyerIdentify}
+                      disabled={!buyerEmail.trim() || !buyerLastName.trim() || buyerCreditLoading}
+                      className="font-headline text-sm font-600 uppercase tracking-[0.12em] cursor-pointer transition-opacity hover:opacity-90"
+                      style={{
+                        background: (!buyerEmail.trim() || !buyerLastName.trim()) ? 'rgba(245,228,0,0.3)' : BRAND.gold,
+                        color: '#000',
+                        border: 'none',
+                        borderRadius: 4,
+                        padding: '10px 14px',
+                        opacity: buyerCreditLoading ? 0.6 : 1,
+                      }}
+                    >
+                      {buyerCreditLoading ? 'Checking…' : 'Continue'}
+                    </button>
+                  </div>
+                  <p className="font-body text-xs mt-2" style={{color: 'rgba(255,255,255,0.3)'}}>
+                    * Required — we&rsquo;ll remember you for next time
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ── Product Lines ──────────────────────────────────────────────── */}
         <div ref={menuRef} className="max-w-5xl mx-auto px-6 md:px-10 py-16 md:py-24">
