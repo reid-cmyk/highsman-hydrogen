@@ -1,8 +1,12 @@
 import {useState, useEffect, useMemo, useRef, useCallback} from 'react';
 import type {MetaFunction} from '@shopify/remix-oxygen';
 import {Link, useFetcher} from '@remix-run/react';
-import type {RepId} from '~/lib/reps';
-import {MAX_SOLO_DRIVE_MIN, MAX_DOUBLEHEADER_HOP_MIN} from '~/lib/reps';
+import type {RepId, QuickCoverage} from '~/lib/reps';
+import {
+  MAX_SOLO_DRIVE_MIN,
+  MAX_DOUBLEHEADER_HOP_MIN,
+  quickCoverageStatus,
+} from '~/lib/reps';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // META — staff-only internal tool; hide global nav like /njmenu
@@ -287,6 +291,59 @@ function buildWeeks(): Week[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// COVERAGE PILL — quick, no-API coverage tag rendered in the picker and on the
+// selected-dispensary card. The authoritative check still runs via /api/rep-assign
+// once a slot is picked, but this lets the rep see out-of-coverage spots as soon
+// as they appear in search results. Red border-left on the row drives the eye.
+// ─────────────────────────────────────────────────────────────────────────────
+function CoveragePill({
+  cov,
+  compact = false,
+}: {
+  cov: QuickCoverage;
+  compact?: boolean;
+}) {
+  const miles =
+    typeof cov.miles === 'number' ? Math.round(cov.miles) : null;
+  let label: string;
+  let color: string;
+  switch (cov.status) {
+    case 'in':
+      label = compact ? 'In Coverage' : `In Coverage · ${miles} mi`;
+      color = BRAND.green;
+      break;
+    case 'edge':
+      label = `Edge · ~${miles} mi`;
+      color = BRAND.gold;
+      break;
+    case 'out':
+      label = `Out of NJ Coverage · ~${miles} mi`;
+      color = BRAND.red;
+      break;
+    default:
+      label = 'Verify on pick';
+      color = BRAND.gray;
+  }
+  return (
+    <span
+      style={{
+        fontFamily: TEKO,
+        fontSize: 12,
+        letterSpacing: '0.15em',
+        textTransform: 'uppercase',
+        padding: '2px 8px',
+        border: `1px solid ${color}`,
+        color,
+        display: 'inline-block',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 export default function NJPopups() {
@@ -360,6 +417,36 @@ export default function NJPopups() {
       }
     | {status: 'error'; message: string}
   >({status: 'idle'});
+
+  // ── Snr Staff override for out-of-coverage bookings ──
+  // When a dispensary is out of the 60-min hub radius (and no doubleheader anchor
+  // saves it), the booking is hard-blocked. Snr Staff can punch through the
+  // block with password `hmexec2025$` — the override stamps a warning line on
+  // the Zoho Event Description so the CRM record shows it was a manual call.
+  // Only applies to `out_of_coverage` — never to `doubleheader_too_far` (that's
+  // a scheduling problem, not a policy-level judgment call).
+  // Override state resets whenever dispensary/slot changes.
+  const [repOverride, setRepOverride] = useState<{
+    active: boolean;
+    reason: string;
+    approvedBy: string;
+  }>({active: false, reason: '', approvedBy: ''});
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [overrideReasonInput, setOverrideReasonInput] = useState('');
+  const [overrideNameInput, setOverrideNameInput] = useState('');
+  const [overridePasswordInput, setOverridePasswordInput] = useState('');
+  const [overrideError, setOverrideError] = useState<string | null>(null);
+
+  // Reset override state whenever context changes — never let an old override
+  // silently carry into a new booking.
+  useEffect(() => {
+    setRepOverride({active: false, reason: '', approvedBy: ''});
+    setOverrideOpen(false);
+    setOverrideReasonInput('');
+    setOverrideNameInput('');
+    setOverridePasswordInput('');
+    setOverrideError(null);
+  }, [dispensary?.id, slot?.date, slot?.shiftKey]);
 
   // Live Zoho account search — same pattern as /njmenu.
   const accountFetcher = useFetcher<{accounts: ApiAccount[]; error?: string}>();
@@ -813,7 +900,11 @@ export default function NJPopups() {
     };
   }, [dispensary, slot, bookings]);
 
-  const repBlocked = repCheck.status === 'blocked';
+  // `repBlocked` = booking is blocked by rep coverage. Snr Staff override ONLY
+  // unblocks `out_of_coverage` (policy-level) — never `doubleheader_too_far`.
+  const repBlocked =
+    repCheck.status === 'blocked' &&
+    !(repCheck.reason === 'out_of_coverage' && repOverride.active);
 
   // Booking-window checks. The picker already gray-outs disallowed shifts, but
   // we also defend here so a bypassed click (devtools, stale state) can't book.
@@ -867,6 +958,19 @@ export default function NJPopups() {
       fd.append('repMode', repCheck.mode);
       fd.append('repDriveMin', String(repCheck.driveMin));
       if (repCheck.anchorName) fd.append('repAnchorName', repCheck.anchorName);
+    }
+    // Snr Staff out-of-coverage override — stamped on the Zoho Event
+    // Description so CRM shows the exception was a human call, not an
+    // automatic pass.
+    if (
+      repOverride.active &&
+      repCheck.status === 'blocked' &&
+      repCheck.reason === 'out_of_coverage'
+    ) {
+      fd.append('coverageOverride', '1');
+      fd.append('coverageOverrideReason', repOverride.reason);
+      fd.append('coverageOverrideApprovedBy', repOverride.approvedBy);
+      fd.append('coverageOverrideMessage', repCheck.message);
     }
     fetch('/api/popups-book', {method: 'POST', body: fd})
       .then((r) => r.json().catch(() => null))
@@ -1345,60 +1449,79 @@ export default function NJPopups() {
                         No NJ dispensaries found for "{query.trim()}". Check the spelling or try a city.
                       </div>
                     ) : (
-                      filtered.map((d) => (
-                        <div
-                          key={d.id}
-                          onMouseDown={() => {
-                            setDispensary(d);
-                            setOverrideContact(false);
-                            setQuery('');
-                            setPickerOpen(false);
-                          }}
-                          style={{
-                            padding: '14px 20px',
-                            borderBottom: `1px solid ${BRAND.line}`,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            gap: 14,
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = BRAND.chip)}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                        >
-                          <div>
-                            <div
-                              style={{
-                                fontFamily: TEKO,
-                                fontSize: 22,
-                                letterSpacing: '0.03em',
-                                textTransform: 'uppercase',
-                              }}
-                            >
-                              {d.name}
-                            </div>
-                            <div style={{color: BRAND.gray, fontSize: 14}}>{d.city}, NJ</div>
-                          </div>
-                          {(() => {
-                            const label = d.popUpLink ? 'Portal' : d.contact || d.popUpEmail ? 'Email POC' : 'No POC';
-                            const color = d.popUpLink ? BRAND.gold : d.contact || d.popUpEmail ? BRAND.green : BRAND.gray;
-                            return (
-                              <span
+                      filtered.map((d) => {
+                        const cov = quickCoverageStatus(d.lat, d.lng);
+                        const isOut = cov.status === 'out';
+                        return (
+                          <div
+                            key={d.id}
+                            onMouseDown={() => {
+                              setDispensary(d);
+                              setOverrideContact(false);
+                              setQuery('');
+                              setPickerOpen(false);
+                            }}
+                            style={{
+                              padding: '14px 20px',
+                              borderBottom: `1px solid ${BRAND.line}`,
+                              borderLeft: isOut
+                                ? `3px solid ${BRAND.red}`
+                                : '3px solid transparent',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              gap: 14,
+                              opacity: isOut ? 0.85 : 1,
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = BRAND.chip)}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                          >
+                            <div style={{minWidth: 0, flex: 1}}>
+                              <div
                                 style={{
                                   fontFamily: TEKO,
-                                  fontSize: 12,
-                                  letterSpacing: '0.15em',
-                                  padding: '2px 8px',
-                                  border: `1px solid ${color}`,
-                                  color,
+                                  fontSize: 22,
+                                  letterSpacing: '0.03em',
+                                  textTransform: 'uppercase',
                                 }}
                               >
-                                {label}
-                              </span>
-                            );
-                          })()}
-                        </div>
-                      ))
+                                {d.name}
+                              </div>
+                              <div style={{color: BRAND.gray, fontSize: 14}}>{d.city}, NJ</div>
+                              <div
+                                style={{
+                                  marginTop: 6,
+                                  display: 'flex',
+                                  gap: 6,
+                                  flexWrap: 'wrap',
+                                }}
+                              >
+                                <CoveragePill cov={cov} compact />
+                              </div>
+                            </div>
+                            {(() => {
+                              const label = d.popUpLink ? 'Portal' : d.contact || d.popUpEmail ? 'Email POC' : 'No POC';
+                              const color = d.popUpLink ? BRAND.gold : d.contact || d.popUpEmail ? BRAND.green : BRAND.gray;
+                              return (
+                                <span
+                                  style={{
+                                    fontFamily: TEKO,
+                                    fontSize: 12,
+                                    letterSpacing: '0.15em',
+                                    padding: '2px 8px',
+                                    border: `1px solid ${color}`,
+                                    color,
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  {label}
+                                </span>
+                              );
+                            })()}
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 )}
@@ -1438,6 +1561,9 @@ export default function NJPopups() {
                         </span>
                       </>
                     )}
+                  </div>
+                  <div style={{marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap'}}>
+                    <CoveragePill cov={quickCoverageStatus(dispensary.lat, dispensary.lng)} />
                   </div>
                   {dispensary.popUpLink && (
                     <div
@@ -2399,14 +2525,20 @@ export default function NJPopups() {
                   padding: '16px 20px',
                   border: `1px solid ${
                     repCheck.status === 'blocked'
-                      ? BRAND.red
+                      ? repOverride.active &&
+                        repCheck.reason === 'out_of_coverage'
+                        ? BRAND.gold
+                        : BRAND.red
                       : repCheck.status === 'assigned'
                         ? repCheck.color
                         : BRAND.lineStrong
                   }`,
                   background:
                     repCheck.status === 'blocked'
-                      ? 'rgba(220,53,69,0.08)'
+                      ? repOverride.active &&
+                        repCheck.reason === 'out_of_coverage'
+                        ? 'rgba(245,228,0,0.06)'
+                        : 'rgba(220,53,69,0.08)'
                       : repCheck.status === 'assigned'
                         ? 'rgba(245,228,0,0.04)'
                         : 'rgba(255,255,255,0.03)',
@@ -2420,7 +2552,10 @@ export default function NJPopups() {
                     textTransform: 'uppercase',
                     color:
                       repCheck.status === 'blocked'
-                        ? BRAND.red
+                        ? repOverride.active &&
+                          repCheck.reason === 'out_of_coverage'
+                          ? BRAND.gold
+                          : BRAND.red
                         : repCheck.status === 'assigned'
                           ? BRAND.gold
                           : BRAND.gray,
@@ -2435,7 +2570,9 @@ export default function NJPopups() {
                   {repCheck.status === 'blocked' &&
                     (repCheck.reason === 'doubleheader_too_far'
                       ? '✕ Doubleheader too far — booking blocked'
-                      : '✕ Out of NJ coverage — booking blocked')}
+                      : repOverride.active
+                        ? '⚠ Snr Staff Override — Out of Coverage'
+                        : '✕ Out of NJ coverage — booking blocked')}
                   {repCheck.status === 'error' && 'Rep coverage check unavailable'}
                 </div>
                 <div
@@ -2479,6 +2616,251 @@ export default function NJPopups() {
                     </>
                   )}
                 </div>
+
+                {/* ── Snr Staff Override (out_of_coverage only) ── */}
+                {repCheck.status === 'blocked' &&
+                  repCheck.reason === 'out_of_coverage' && (
+                    <div style={{marginTop: 14}}>
+                      {repOverride.active ? (
+                        <div
+                          style={{
+                            border: `1px solid ${BRAND.gold}`,
+                            padding: '10px 14px',
+                            background: 'rgba(245,228,0,0.06)',
+                            fontFamily: BODY,
+                            fontSize: 14,
+                            color: BRAND.white,
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontFamily: TEKO,
+                              fontSize: 12,
+                              letterSpacing: '0.18em',
+                              textTransform: 'uppercase',
+                              color: BRAND.gold,
+                              marginBottom: 4,
+                            }}
+                          >
+                            Override Approved
+                          </div>
+                          Approved by{' '}
+                          <strong>{repOverride.approvedBy}</strong> —{' '}
+                          <em>"{repOverride.reason}"</em>. This exception will
+                          be stamped on the Zoho Event record.
+                          <div style={{marginTop: 8}}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRepOverride({
+                                  active: false,
+                                  reason: '',
+                                  approvedBy: '',
+                                });
+                                setOverrideOpen(false);
+                                setOverrideReasonInput('');
+                                setOverrideNameInput('');
+                                setOverridePasswordInput('');
+                                setOverrideError(null);
+                              }}
+                              style={{
+                                background: 'transparent',
+                                border: `1px solid ${BRAND.gray}`,
+                                color: BRAND.gray,
+                                padding: '4px 10px',
+                                fontFamily: TEKO,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.14em',
+                                fontSize: 12,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Revoke Override
+                            </button>
+                          </div>
+                        </div>
+                      ) : overrideOpen ? (
+                        <div
+                          style={{
+                            border: `1px solid ${BRAND.lineStrong}`,
+                            padding: '12px 14px',
+                            background: 'rgba(255,255,255,0.03)',
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontFamily: TEKO,
+                              fontSize: 12,
+                              letterSpacing: '0.18em',
+                              textTransform: 'uppercase',
+                              color: BRAND.gold,
+                              marginBottom: 8,
+                            }}
+                          >
+                            Snr Staff Override
+                          </div>
+                          <div
+                            style={{
+                              display: 'grid',
+                              gap: 8,
+                              gridTemplateColumns: '1fr',
+                            }}
+                          >
+                            <input
+                              type="text"
+                              value={overrideNameInput}
+                              onChange={(e) =>
+                                setOverrideNameInput(e.target.value)
+                              }
+                              placeholder="Your name (approver)"
+                              style={{
+                                background: BRAND.black,
+                                border: `1px solid ${BRAND.lineStrong}`,
+                                color: BRAND.white,
+                                fontFamily: BODY,
+                                fontSize: 14,
+                                padding: '10px 12px',
+                                outline: 'none',
+                              }}
+                            />
+                            <input
+                              type="text"
+                              value={overrideReasonInput}
+                              onChange={(e) =>
+                                setOverrideReasonInput(e.target.value)
+                              }
+                              placeholder="Reason for override (logged to Zoho)"
+                              style={{
+                                background: BRAND.black,
+                                border: `1px solid ${BRAND.lineStrong}`,
+                                color: BRAND.white,
+                                fontFamily: BODY,
+                                fontSize: 14,
+                                padding: '10px 12px',
+                                outline: 'none',
+                              }}
+                            />
+                            <input
+                              type="password"
+                              value={overridePasswordInput}
+                              onChange={(e) =>
+                                setOverridePasswordInput(e.target.value)
+                              }
+                              placeholder="Snr Staff password"
+                              style={{
+                                background: BRAND.black,
+                                border: `1px solid ${BRAND.lineStrong}`,
+                                color: BRAND.white,
+                                fontFamily: BODY,
+                                fontSize: 14,
+                                padding: '10px 12px',
+                                outline: 'none',
+                              }}
+                            />
+                            {overrideError && (
+                              <div
+                                style={{
+                                  color: BRAND.red,
+                                  fontFamily: BODY,
+                                  fontSize: 13,
+                                }}
+                              >
+                                {overrideError}
+                              </div>
+                            )}
+                            <div style={{display: 'flex', gap: 8}}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const name = overrideNameInput.trim();
+                                  const reason = overrideReasonInput.trim();
+                                  if (!name) {
+                                    setOverrideError(
+                                      'Enter your name so we can log who approved.',
+                                    );
+                                    return;
+                                  }
+                                  if (reason.length < 5) {
+                                    setOverrideError(
+                                      'Reason must be at least 5 characters — this goes in the CRM record.',
+                                    );
+                                    return;
+                                  }
+                                  if (overridePasswordInput !== 'hmexec2025$') {
+                                    setOverrideError(
+                                      'Password incorrect. Snr Staff only.',
+                                    );
+                                    return;
+                                  }
+                                  setRepOverride({
+                                    active: true,
+                                    reason,
+                                    approvedBy: name,
+                                  });
+                                  setOverrideOpen(false);
+                                  setOverridePasswordInput('');
+                                  setOverrideError(null);
+                                }}
+                                style={{
+                                  background: BRAND.gold,
+                                  border: `1px solid ${BRAND.gold}`,
+                                  color: BRAND.black,
+                                  padding: '8px 14px',
+                                  fontFamily: TEKO,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.14em',
+                                  fontSize: 13,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                Approve Override
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOverrideOpen(false);
+                                  setOverridePasswordInput('');
+                                  setOverrideError(null);
+                                }}
+                                style={{
+                                  background: 'transparent',
+                                  border: `1px solid ${BRAND.lineStrong}`,
+                                  color: BRAND.gray,
+                                  padding: '8px 14px',
+                                  fontFamily: TEKO,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.14em',
+                                  fontSize: 13,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setOverrideOpen(true)}
+                          style={{
+                            background: 'transparent',
+                            border: `1px solid ${BRAND.gold}`,
+                            color: BRAND.gold,
+                            padding: '8px 14px',
+                            fontFamily: TEKO,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.14em',
+                            fontSize: 13,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Snr Staff Override
+                        </button>
+                      )}
+                    </div>
+                  )}
               </div>
             )}
 

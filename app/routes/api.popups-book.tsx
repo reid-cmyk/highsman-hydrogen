@@ -139,6 +139,13 @@ export async function action({request, context}: ActionFunctionArgs) {
   const repMode = ((fd.get('repMode') as string) || '').trim();
   const repDriveMin = ((fd.get('repDriveMin') as string) || '').trim();
   const repAnchorName = ((fd.get('repAnchorName') as string) || '').trim();
+  // Snr Staff out-of-coverage override — stamped on Description so the CRM
+  // record shows this booking was a human exception, not an automatic pass.
+  const coverageOverride =
+    ((fd.get('coverageOverride') as string) || '').trim() === '1';
+  const coverageOverrideReason = ((fd.get('coverageOverrideReason') as string) || '').trim();
+  const coverageOverrideApprovedBy = ((fd.get('coverageOverrideApprovedBy') as string) || '').trim();
+  const coverageOverrideMessage = ((fd.get('coverageOverrideMessage') as string) || '').trim();
 
   if (!accountId || !dispensaryName || !date || !shiftKey) {
     return json(
@@ -184,6 +191,17 @@ export async function action({request, context}: ActionFunctionArgs) {
         descriptionLines.push('  Doubleheader — same rep running an earlier stop that day.');
       }
     }
+    if (coverageOverride) {
+      descriptionLines.push(
+        '',
+        '⚠ SNR STAFF OVERRIDE — OUT OF NJ COVERAGE',
+        `  Approved by: ${coverageOverrideApprovedBy || 'Snr Staff'}`,
+        `  Reason: ${coverageOverrideReason || '(no reason provided)'}`,
+      );
+      if (coverageOverrideMessage) {
+        descriptionLines.push(`  Block detail: ${coverageOverrideMessage}`);
+      }
+    }
     if (contactName || contactEmail || contactPhone) {
       descriptionLines.push('', 'POC:');
       if (contactName) descriptionLines.push(`  Name: ${contactName}${contactRole ? ` (${contactRole})` : ''}`);
@@ -197,7 +215,9 @@ export async function action({request, context}: ActionFunctionArgs) {
 
     // Subject prefix makes the rep obvious in Zoho's calendar views without
     // needing to click into the Event. e.g. "[NJ-N] Highsman Pop Up — ..."
-    const titlePrefix = repTag ? `${repTag} ` : '';
+    // Snr Staff override adds a "[OVR]" flag so exception bookings are visible
+    // at-a-glance on the calendar (not just buried in Description).
+    const titlePrefix = `${repTag ? `${repTag} ` : ''}${coverageOverride ? '[OVR] ' : ''}`;
     const eventPayload: Record<string, any> = {
       Event_Title: `${titlePrefix}Highsman Pop Up — ${dispensaryName} (${shiftTitleSuffix(shiftKey)})`,
       Start_DateTime: startISO,
