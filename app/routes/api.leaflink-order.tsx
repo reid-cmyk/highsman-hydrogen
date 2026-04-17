@@ -115,19 +115,24 @@ async function sendGmailEmail(params: {
   subject: string;
   body: string;
 }): Promise<boolean> {
-  // Build RFC 2822 MIME message
+  // Sanitize subject and body to pure ASCII to avoid encoding issues
+  const sanitize = (s: string) => s.replace(/[\u2014\u2013]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u2022]/g, '*').replace(/[^\x00-\x7F]/g, '');
+  const safeSubject = sanitize(params.subject);
+  const safeBody = sanitize(params.body);
+
+  // Build RFC 2822 MIME message (ASCII-safe)
   const mimeMessage = [
     `From: ${params.from}`,
     `To: ${params.to}`,
-    `Subject: ${params.subject}`,
+    `Subject: ${safeSubject}`,
     'MIME-Version: 1.0',
     'Content-Type: text/plain; charset=UTF-8',
     '',
-    params.body,
+    safeBody,
   ].join('\r\n');
 
   // Base64url encode (Gmail API requirement)
-  const encoded = btoa(unescape(encodeURIComponent(mimeMessage)))
+  const encoded = btoa(mimeMessage)
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/, '');
@@ -186,7 +191,7 @@ async function sendFailureNotification(
 
   // Build the email body
   const itemLines = params.items.map(
-    (item) => `  • ${item.sku} — ${item.quantity} units @ $${item.unitPrice.toFixed(2)}/unit`,
+    (item) => `  * ${item.sku} - ${item.quantity} units @ $${item.unitPrice.toFixed(2)}/unit`,
   );
 
   const emailBody = [
@@ -207,10 +212,10 @@ async function sendFailureNotification(
     'This order needs to be input manually into LeafLink.',
     `LeafLink: https://app.leaflink.com/c/canfections-nj-inc/orders/received/`,
     '',
-    '— Highsman Automated Order System',
+    '- Highsman Automated Order System',
   ].join('\n');
 
-  const subject = `HIGHSMAN Order Input Failed for ${params.dispensaryName} — ${params.reason}`;
+  const subject = `HIGHSMAN Order Input Failed for ${params.dispensaryName} - ${params.reason}`;
 
   await sendGmailEmail({
     accessToken,
@@ -226,43 +231,11 @@ async function sendFailureNotification(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Search LeafLink customers by license number (exact match).
+ *  Scans all Canfections NJ customers and matches on license_number field.
  *  This is the preferred method — license numbers are unique state-issued IDs
  *  that don't have the ambiguity problems of business names.
  */
 async function findCustomerByLicense(
-  licenseNumber: string,
-  apiKey: string,
-): Promise<{id: number; name: string} | null> {
-  try {
-    // LeafLink supports license_number filter on the customers endpoint
-    const url = `${LEAFLINK_API_BASE}/customers/?seller=${LEAFLINK_COMPANY_ID}&license_number=${encodeURIComponent(licenseNumber)}&page_size=10`;
-    const res = await fetch(url, {
-      headers: {Authorization: `Token ${apiKey}`},
-    });
-
-    if (!res.ok) {
-      // If the filter param isn't supported, fall back to scanning
-      console.warn(`[api/leaflink-order] License filter returned ${res.status}, falling back to scan`);
-      return await findCustomerByLicenseScan(licenseNumber, apiKey);
-    }
-
-    const data = await res.json();
-    if (data.results && data.results.length > 0) {
-      const c = data.results[0];
-      console.log(`[api/leaflink-order] License match: "${c.name}" (ID: ${c.id}) for license "${licenseNumber}"`);
-      return {id: c.id, name: c.name};
-    }
-
-    // No results from filter — try scanning
-    return await findCustomerByLicenseScan(licenseNumber, apiKey);
-  } catch (err) {
-    console.error('[api/leaflink-order] License search error:', err);
-    return null;
-  }
-}
-
-/** Fallback: scan all customers to find one by license number */
-async function findCustomerByLicenseScan(
   licenseNumber: string,
   apiKey: string,
 ): Promise<{id: number; name: string} | null> {
