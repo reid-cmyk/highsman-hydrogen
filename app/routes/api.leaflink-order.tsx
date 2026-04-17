@@ -7,9 +7,11 @@ import {json} from '@shopify/remix-oxygen';
 // POST /api/leaflink-order
 // Creates an order in LeafLink from njmenu cart data.
 // Keeps LeafLink API key server-side (never exposed to browser).
+// On failure, sends email notification via Gmail API to njorders@highsman.com.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const LEAFLINK_API_BASE = 'https://app.leaflink.com/api/v2';
+const FAILURE_NOTIFY_EMAIL = 'njorders@highsman.com';
 const LEAFLINK_COMPANY_ID = 24087; // Canfections NJ, INC
 
 // SKU → LeafLink Product ID mapping
@@ -34,6 +36,159 @@ const SKU_TO_PRODUCT_ID: Record<string, number> = {
   'C-NJ-HSTINFH-TM': 2644316,
   'C-NJ-HSTINFH-WW': 2644317,
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Gmail API — Failure Notification Email
+// ─────────────────────────────────────────────────────────────────────────────
+// Uses OAuth2 refresh token to get an access token, then sends via Gmail REST API.
+// Env vars needed: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN, GMAIL_FROM_EMAIL
+
+/** Get a fresh Gmail access token using the stored refresh token. */
+async function getGmailAccessToken(env: {
+  GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
+  GOOGLE_REFRESH_TOKEN: string;
+}): Promise<string | null> {
+  try {
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({
+        client_id: env.GOOGLE_CLIENT_ID,
+        client_secret: env.GOOGLE_CLIENT_SECRET,
+        refresh_token: env.GOOGLE_REFRESH_TOKEN,
+        grant_type: 'refresh_token',
+      }),
+    });
+    if (!res.ok) {
+      console.error('[gmail] Token refresh failed:', res.status, await res.text().catch(() => ''));
+      return null;
+    }
+    const data = await res.json();
+    return data.access_token || null;
+  } catch (err) {
+    console.error('[gmail] Token refresh error:', err);
+    return null;
+  }
+}
+
+/** Send an email via Gmail REST API. */
+async function sendGmailEmail(params: {
+  accessToken: string;
+  from: string;
+  to: string;
+  subject: string;
+  body: string;
+}): Promise<boolean> {
+  // Build RFC 2822 MIME message
+  const mimeMessage = [
+    `From: ${params.from}`,
+    `To: ${params.to}`,
+    `Subject: ${params.subject}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset=UTF-8',
+    '',
+    params.body,
+  ].join('\r\n');
+
+  // Base64url encode (Gmail API requirement)
+  const encoded = btoa(unescape(encodeURIComponent(mimeMessage)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  try {
+    const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${params.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({raw: encoded}),
+    });
+    if (!res.ok) {
+      console.error('[gmail] Send failed:', res.status, await res.text().catch(() => ''));
+      return false;
+    }
+    console.log('[gmail] Failure notification sent successfully');
+    return true;
+  } catch (err) {
+    console.error('[gmail] Send error:', err);
+    return false;
+  }
+}
+
+/** Send a failure notification email for a LeafLink order that couldn't be synced. */
+async function sendFailureNotification(
+  env: any,
+  params: {
+    dispensaryName: string;
+    reason: string;
+    items: Array<{sku: string; quantity: number; unitPrice: number}>;
+    notes?: string;
+  },
+): Promise<void> {
+  const clientId = env.GOOGLE_CLIENT_ID;
+  const clientSecret = env.GOOGLE_CLIENT_SECRET;
+  const refreshToken = env.GOOGLE_REFRESH_TOKEN;
+  const fromEmail = env.GMAIL_FROM_EMAIL || 'njorders@highsman.com';
+
+  if (!clientId || !clientSecret || !refreshToken) {
+    console.warn('[gmail] Gmail credentials not configured — skipping failure notification email');
+    return;
+  }
+
+  const accessToken = await getGmailAccessToken({
+    GOOGLE_CLIENT_ID: clientId,
+    GOOGLE_CLIENT_SECRET: clientSecret,
+    GOOGLE_REFRESH_TOKEN: refreshToken,
+  });
+
+  if (!accessToken) {
+    console.error('[gmail] Could not get access token — failure notification not sent');
+    return;
+  }
+
+  // Build the email body
+  const itemLines = params.items.map(
+    (item) => `  • ${item.sku} — ${item.quantity} units @ $${item.unitPrice.toFixed(2)}/unit`,
+  );
+
+  const emailBody = [
+    'HIGHSMAN ORDER INPUT FAILED',
+    '═══════════════════════════════════════',
+    '',
+    `DISPENSARY: ${params.dispensaryName}`,
+    `DATE: ${new Date().toLocaleString('en-US', {timeZone: 'America/New_York'})}`,
+    '',
+    `REASON: ${params.reason}`,
+    '',
+    '───────────────────────────────────────',
+    'ORDER ITEMS:',
+    ...itemLines,
+    '',
+    ...(params.notes ? [`NOTE: ${params.notes}`, ''] : []),
+    '═══════════════════════════════════════',
+    'This order needs to be input manually into LeafLink.',
+    `LeafLink: https://app.leaflink.com/c/canfections-nj-inc/orders/received/`,
+    '',
+    '— Highsman Automated Order System',
+  ].join('\n');
+
+  const subject = `HIGHSMAN Order Input Failed for ${params.dispensaryName} — ${params.reason}`;
+
+  await sendGmailEmail({
+    accessToken,
+    from: fromEmail,
+    to: FAILURE_NOTIFY_EMAIL,
+    subject,
+    body: emailBody,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LeafLink Customer Search
+// ─────────────────────────────────────────────────────────────────────────────
 
 /** Search LeafLink customers by name to find the matching dispensary. */
 async function findCustomer(
@@ -233,6 +388,16 @@ export async function action({request, context}: ActionFunctionArgs) {
     );
 
     if (result.success) {
+      // If order was created but customer wasn't matched, send notification
+      if (!customer) {
+        sendFailureNotification(env, {
+          dispensaryName,
+          reason: `Customer name "${dispensaryName}" not found in LeafLink — order created without buyer link`,
+          items: eligibleItems,
+          notes,
+        }).catch(() => {}); // fire-and-forget, don't block response
+      }
+
       return json({
         ok: true,
         orderNumber: result.orderNumber,
@@ -242,6 +407,14 @@ export async function action({request, context}: ActionFunctionArgs) {
         itemsSkipped: items.length - eligibleItems.length,
       });
     } else {
+      // Order creation failed — send failure notification
+      sendFailureNotification(env, {
+        dispensaryName,
+        reason: result.error || 'LeafLink order creation failed',
+        items: eligibleItems,
+        notes,
+      }).catch(() => {}); // fire-and-forget
+
       return json({
         ok: false,
         error: result.error,
@@ -249,6 +422,15 @@ export async function action({request, context}: ActionFunctionArgs) {
     }
   } catch (err: any) {
     console.error('[api/leaflink-order] Unexpected error:', err.message);
+
+    // Unexpected error — send failure notification
+    sendFailureNotification(env, {
+      dispensaryName,
+      reason: `Unexpected error: ${err.message || 'Unknown'}`,
+      items: eligibleItems,
+      notes,
+    }).catch(() => {}); // fire-and-forget
+
     return json({
       ok: false,
       error: 'Unexpected error creating LeafLink order',
