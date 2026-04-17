@@ -24,7 +24,6 @@ interface MerchItem {
   maxQty: number;
   step?: number; // Order increment (defaults to 1). Use for items sold in packs (e.g., stickers in 10s).
   tag?: string;
-  imageZoom?: number; // Multiplier for tight-cropped tube/bag shots with heavy source whitespace (defaults to 1).
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -65,10 +64,9 @@ const MERCH_ITEMS: MerchItem[] = [
     name: 'Hit Stick Display Tube',
     category: 'display-packaging',
     description: 'Empty replica of the Hit Stick Dispose-A-Bowl black tube. Same packaging, same shelf presence, no product. Built for window displays, counter showcases, and product education without tying up sellable inventory.',
-    image: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/HM_HitStick_Infused_White__800x360_1.png?v=1776435918',
+    image: '/retail/hitstick-tube.png',
     maxQty: 5,
     tag: 'New',
-    imageZoom: 3.2,
   },
   {
     id: 'display-hitstick-powerpack',
@@ -93,10 +91,9 @@ const MERCH_ITEMS: MerchItem[] = [
     name: 'Triple Threat Pre-Roll Display Tube',
     category: 'display-packaging',
     description: 'Empty replica of the Triple Threat 1.2g Pre-Roll tube. Same packaging, same shelf presence, no product. Built for window displays, counter showcases, and product education without tying up sellable inventory.',
-    image: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Untitled_design_14.png?v=1776436052',
+    image: '/retail/preroll-tube.png',
     maxQty: 5,
     tag: 'New',
-    imageZoom: 1.9,
   },
   {
     id: 'display-groundgame-bag',
@@ -1108,27 +1105,12 @@ export default function RetailMerchStore() {
 
                       {/* Image */}
                       <div className="relative bg-white overflow-hidden" style={{aspectRatio: '4/3'}}>
-                        {item.imageZoom ? (
-                          // For sources with heavy whitespace (tube shots), use a background-image
-                          // div with explicit backgroundSize. This gives pixel-perfect control and
-                          // avoids object-contain shrinking the product to nothing.
-                          <div
-                            role="img"
-                            aria-label={item.name}
-                            className="absolute inset-0 bg-no-repeat bg-center group-hover:scale-[1.04] transition-transform duration-300"
-                            style={{
-                              backgroundImage: `url(${item.image})`,
-                              backgroundSize: `${Math.round(item.imageZoom * 100)}% auto`,
-                            }}
-                          />
-                        ) : (
-                          <img
-                            src={item.image}
-                            alt={item.name}
-                            className="absolute inset-0 w-full h-full object-contain p-5 group-hover:scale-[1.04] transition-transform duration-300"
-                            loading="lazy"
-                          />
-                        )}
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="absolute inset-0 w-full h-full object-contain p-5 group-hover:scale-[1.04] transition-transform duration-300"
+                          loading="lazy"
+                        />
                       </div>
 
                       {/* Content */}
