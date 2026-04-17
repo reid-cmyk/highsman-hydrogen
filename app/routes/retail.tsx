@@ -31,13 +31,13 @@ interface MerchItem {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CATEGORIES = [
-  {id: 'pos-displays', label: 'Point of Sale Displays', icon: 'storefront'},
-  {id: 'display-packaging', label: 'In-Store Display Packaging', icon: 'inventory_2'},
-  {id: 'cutouts', label: 'Cutouts & Standees', icon: 'person'},
+  {id: 'pos-displays', label: 'POS Displays', icon: 'storefront'},
+  {id: 'display-packaging', label: 'Display Packaging', icon: 'inventory_2'},
+  {id: 'cutouts', label: 'Cutouts', icon: 'person'},
   {id: 'banners', label: 'Banners', icon: 'flag'},
-  {id: 'signs', label: 'In-Store Stand Up Signs', icon: 'display_settings'},
+  {id: 'signs', label: 'Signs', icon: 'display_settings'},
   {id: 'stickers', label: 'Stickers', icon: 'sell'},
-  {id: 'footballs', label: 'Branded Footballs', icon: 'sports_football'},
+  {id: 'footballs', label: 'Footballs', icon: 'sports_football'},
 ];
 
 const MERCH_ITEMS: MerchItem[] = [
@@ -377,6 +377,7 @@ export default function RetailMerchStore() {
   // ── Cart & Product State ───────────────────────────────────────────────────
   const [cart, setCart] = useState<Record<string, number>>({});
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [catalogSearch, setCatalogSearch] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
@@ -400,9 +401,16 @@ export default function RetailMerchStore() {
     });
   };
 
-  const filteredItems = activeCategory
-    ? MERCH_ITEMS.filter((i) => i.category === activeCategory)
-    : MERCH_ITEMS;
+  const filteredItems = useMemo(() => {
+    const q = catalogSearch.trim().toLowerCase();
+    return MERCH_ITEMS.filter((i) => {
+      const catMatch = activeCategory ? i.category === activeCategory : true;
+      const searchMatch = q
+        ? `${i.name} ${i.description} ${i.dimensions || ''} ${i.tag || ''}`.toLowerCase().includes(q)
+        : true;
+      return catMatch && searchMatch;
+    });
+  }, [activeCategory, catalogSearch]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -456,24 +464,39 @@ export default function RetailMerchStore() {
       </header>
 
       {/* ── Hero ──────────────────────────────────────────────────────── */}
-      <section className="relative px-6 py-20 md:py-28 text-center overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-[#111] to-black" />
-        <div className="absolute inset-0 opacity-5" style={{backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 20px, #F5E400 20px, #F5E400 21px)'}} />
-        <div className="relative max-w-3xl mx-auto">
-          <p className="font-headline text-xs font-bold tracking-[0.4em] text-[#F5E400] uppercase mb-4">
-            For Authorized Retailers Only
-          </p>
-          <h1 className="font-headline text-5xl md:text-6xl font-bold uppercase leading-[0.95] mb-6">
-            Elevate Your<br />
-            <span className="text-[#F5E400]">Retail Space</span>
-          </h1>
-          <p className="text-lg text-[#A9ACAF] max-w-xl mx-auto leading-relaxed mb-10">
-            Premium point-of-sale displays, signage, and branded materials — free for
-            Highsman retail partners. Select what you need and we'll ship it to your store.
-          </p>
+      <section className="relative px-6 pt-14 pb-10 md:pt-20 md:pb-14 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a0a] to-black" />
+        <div
+          className="absolute inset-0 opacity-[0.08]"
+          style={{
+            backgroundImage:
+              'repeating-linear-gradient(45deg, transparent, transparent 18px, #F5E400 18px, #F5E400 19px)',
+          }}
+        />
+        {/* Yellow glow accent, right side */}
+        <div
+          className="absolute top-1/2 right-[-10%] -translate-y-1/2 w-[600px] h-[600px] rounded-full opacity-[0.09] pointer-events-none hidden md:block"
+          style={{background: 'radial-gradient(circle, #F5E400 0%, transparent 70%)'}}
+        />
+
+        <div className="relative max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-[1.1fr_1fr] gap-10 md:gap-14 items-center">
+          {/* ── Left column: positioning + selector ─────────────────── */}
+          <div className="text-left">
+            <p className="font-headline text-[11px] font-bold tracking-[0.4em] text-[#F5E400] uppercase mb-5 flex items-center gap-2">
+              <span className="inline-block w-8 h-px bg-[#F5E400]" />
+              For Authorized Retailers
+            </p>
+            <h1 className="font-headline text-[44px] sm:text-5xl md:text-[64px] font-bold uppercase leading-[0.92] mb-5 tracking-tight">
+              Elevate Your<br />
+              <span className="text-[#F5E400]">Retail Space</span>
+            </h1>
+            <p className="text-base md:text-lg text-[#A9ACAF] max-w-xl leading-relaxed mb-8">
+              Premium point-of-sale displays, in-store signage, and branded materials —
+              complimentary for Highsman partners. Pick what you need, we'll ship it free.
+            </p>
 
           {/* ── Dispensary Selector ─────────────────────────────────────── */}
-          <div className="max-w-lg mx-auto text-left">
+          <div className="max-w-lg text-left">
             <label
               className="font-headline text-xs font-bold tracking-[0.3em] text-[#F5E400] uppercase mb-3 block"
               htmlFor="retail-account-search"
@@ -841,182 +864,388 @@ export default function RetailMerchStore() {
               </div>
             )}
           </div>
+          </div>
+          {/* ── End Left Column ─────────────────────────────────────── */}
+
+          {/* ── Right Column: Merch Stack Visual ────────────────────── */}
+          <div className="relative hidden md:block">
+            <div className="relative aspect-[4/5] w-full max-w-md ml-auto">
+              {/* Main hero visual: Ricky cutout as the anchor */}
+              <div
+                className="absolute inset-0 overflow-hidden"
+                style={{
+                  background: 'linear-gradient(180deg, #F5E400 0%, #F5E400 100%)',
+                  clipPath: 'polygon(0 0, 100% 0, 100% 92%, 0 100%)',
+                }}
+              />
+              <img
+                src="/retail/ricky-cutout.png"
+                alt="Ricky Williams cutout — Highsman retail display"
+                className="relative w-full h-full object-contain object-bottom z-10"
+                style={{filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.5))'}}
+              />
+              {/* Product stack callout — bottom right floating card */}
+              <div
+                className="absolute -bottom-4 -right-4 bg-black border border-[#F5E400]/30 px-5 py-4 z-20 shadow-2xl"
+                style={{minWidth: 190}}
+              >
+                <p className="font-headline text-[10px] font-bold tracking-[0.25em] text-[#F5E400] uppercase mb-1">
+                  Signature Merch
+                </p>
+                <p className="font-headline text-xl font-bold uppercase leading-tight text-white">
+                  Ricky Williams
+                  <br />
+                  <span className="text-[#A9ACAF] text-sm font-semibold normal-case tracking-normal">
+                    Cutouts, footballs + more
+                  </span>
+                </p>
+              </div>
+              {/* Product stack callout — top left */}
+              <div
+                className="absolute -top-3 -left-3 bg-[#F5E400] text-black px-4 py-2 z-20 shadow-xl"
+              >
+                <p className="font-headline text-[11px] font-bold tracking-[0.2em] uppercase">
+                  17+ Free Items
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Trust Strip ───────────────────────────────────────────────── */}
+      <section className="border-y border-[#A9ACAF]/15 bg-[#0a0a0a]">
+        <div className="max-w-7xl mx-auto px-6 py-5 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8 text-center md:text-left">
+          <div className="flex items-center justify-center md:justify-start gap-3">
+            <span className="material-symbols-outlined text-2xl text-[#F5E400]">verified</span>
+            <div>
+              <p className="font-headline text-xs font-bold uppercase tracking-[0.15em] text-white leading-tight">
+                Complimentary
+              </p>
+              <p className="text-[11px] text-[#A9ACAF] leading-snug mt-0.5">
+                Free for authorized partners
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center justify-center md:justify-start gap-3 md:border-l md:border-r md:border-[#A9ACAF]/15 md:px-6">
+            <span className="material-symbols-outlined text-2xl text-[#F5E400]">local_shipping</span>
+            <div>
+              <p className="font-headline text-xs font-bold uppercase tracking-[0.15em] text-white leading-tight">
+                Ships Fast
+              </p>
+              <p className="text-[11px] text-[#A9ACAF] leading-snug mt-0.5">
+                1–2 business days
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center justify-center md:justify-start gap-3">
+            <span className="material-symbols-outlined text-2xl text-[#F5E400]">support_agent</span>
+            <div>
+              <p className="font-headline text-xs font-bold uppercase tracking-[0.15em] text-white leading-tight">
+                Brand Support
+              </p>
+              <p className="text-[11px] text-[#A9ACAF] leading-snug mt-0.5">
+                Direct line to the Highsman team
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
       {/* ── Everything below only shows after dispensary is selected ─── */}
       {selectedAccount && (
         <>
-          {/* ── Category Filter ───────────────────────────────────────── */}
+          {/* ── Category Filter + Catalog Search ──────────────────────── */}
           <nav className="sticky top-[65px] z-40 bg-black/95 backdrop-blur-sm border-b border-[#A9ACAF]/20">
-            <div className="max-w-7xl mx-auto px-6 py-3 flex gap-2 overflow-x-auto scrollbar-hide">
-              <button
-                onClick={() => setActiveCategory(null)}
-                className={`flex items-center gap-1.5 whitespace-nowrap px-4 py-2 font-headline text-xs font-bold uppercase tracking-wide border transition-colors ${
-                  !activeCategory
-                    ? 'bg-[#F5E400] text-black border-[#F5E400]'
-                    : 'bg-transparent text-[#A9ACAF] border-[#A9ACAF]/30 hover:border-[#F5E400]/60 hover:text-white'
-                }`}
-              >
-                <span className="material-symbols-outlined text-sm">grid_view</span>
-                All ({MERCH_ITEMS.length})
-              </button>
-              {CATEGORIES.map((cat) => {
-                const count = MERCH_ITEMS.filter((i) => i.category === cat.id).length;
-                return (
+            <div className="max-w-7xl mx-auto px-6 py-3 flex flex-col lg:flex-row gap-3 lg:items-center">
+              {/* Category pills — scrollable */}
+              <div className="flex gap-2 overflow-x-auto scrollbar-hide flex-1 min-w-0">
+                <button
+                  onClick={() => setActiveCategory(null)}
+                  className={`flex items-center gap-1.5 whitespace-nowrap px-4 py-2 font-headline text-xs font-bold uppercase tracking-wide border transition-colors ${
+                    !activeCategory
+                      ? 'bg-[#F5E400] text-black border-[#F5E400]'
+                      : 'bg-transparent text-[#A9ACAF] border-[#A9ACAF]/30 hover:border-[#F5E400]/60 hover:text-white'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-sm">grid_view</span>
+                  All ({MERCH_ITEMS.length})
+                </button>
+                {CATEGORIES.map((cat) => {
+                  const count = MERCH_ITEMS.filter((i) => i.category === cat.id).length;
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => setActiveCategory(activeCategory === cat.id ? null : cat.id)}
+                      className={`flex items-center gap-1.5 whitespace-nowrap px-4 py-2 font-headline text-xs font-bold uppercase tracking-wide border transition-colors ${
+                        activeCategory === cat.id
+                          ? 'bg-[#F5E400] text-black border-[#F5E400]'
+                          : 'bg-transparent text-[#A9ACAF] border-[#A9ACAF]/30 hover:border-[#F5E400]/60 hover:text-white'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-sm">{cat.icon}</span>
+                      {cat.label} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Catalog keyword search */}
+              <div className="relative lg:w-64 flex-shrink-0">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#A9ACAF]/60 text-lg">search</span>
+                <input
+                  type="text"
+                  value={catalogSearch}
+                  onChange={(e) => setCatalogSearch(e.target.value)}
+                  placeholder="Search merch…"
+                  className="w-full text-sm bg-[#111] border border-[#A9ACAF]/25 pl-10 pr-8 py-2 text-white placeholder-[#A9ACAF]/50 focus:border-[#F5E400] focus:outline-none transition-colors"
+                  style={{borderRadius: 4}}
+                />
+                {catalogSearch && (
                   <button
-                    key={cat.id}
-                    onClick={() => setActiveCategory(activeCategory === cat.id ? null : cat.id)}
-                    className={`flex items-center gap-1.5 whitespace-nowrap px-4 py-2 font-headline text-xs font-bold uppercase tracking-wide border transition-colors ${
-                      activeCategory === cat.id
-                        ? 'bg-[#F5E400] text-black border-[#F5E400]'
-                        : 'bg-transparent text-[#A9ACAF] border-[#A9ACAF]/30 hover:border-[#F5E400]/60 hover:text-white'
-                    }`}
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => setCatalogSearch('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[#A9ACAF]/60 hover:text-white transition-colors bg-transparent border-0 cursor-pointer p-1"
                   >
-                    <span className="material-symbols-outlined text-sm">{cat.icon}</span>
-                    {cat.label} ({count})
+                    <span className="material-symbols-outlined text-base">close</span>
                   </button>
-                );
-              })}
+                )}
+              </div>
             </div>
           </nav>
 
           {/* ── Product Grid ──────────────────────────────────────────── */}
-          <main className="max-w-7xl mx-auto px-6 py-12">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredItems.map((item) => {
-                const qty = cart[item.id] || 0;
-                return (
-                  <article
-                    key={item.id}
-                    className="group relative bg-[#111] border border-[#A9ACAF]/15 hover:border-[#F5E400]/40 transition-all flex flex-col overflow-hidden"
-                  >
-                    {/* Tag */}
-                    {item.tag && (
-                      <span className="absolute top-3 left-3 z-10 bg-[#F5E400] text-black font-headline text-[10px] font-bold tracking-widest uppercase px-2.5 py-1">
-                        {item.tag}
+          <main className="max-w-7xl mx-auto px-6 py-10 md:py-14">
+            {/* Result count / active filter indicator */}
+            {(activeCategory || catalogSearch) && (
+              <div className="flex flex-wrap items-center gap-3 mb-6">
+                <p className="text-sm text-[#A9ACAF]">
+                  <span className="font-headline font-bold text-white">{filteredItems.length}</span>{' '}
+                  {filteredItems.length === 1 ? 'item' : 'items'}
+                  {activeCategory && (
+                    <>
+                      {' in '}
+                      <span className="font-headline font-bold uppercase tracking-wide text-white">
+                        {CATEGORIES.find((c) => c.id === activeCategory)?.label}
                       </span>
-                    )}
+                    </>
+                  )}
+                  {catalogSearch && (
+                    <>
+                      {' matching '}
+                      <span className="font-headline font-bold text-white">"{catalogSearch}"</span>
+                    </>
+                  )}
+                </p>
+                <button
+                  onClick={() => {
+                    setActiveCategory(null);
+                    setCatalogSearch('');
+                  }}
+                  className="font-headline text-[11px] font-bold uppercase tracking-[0.15em] text-[#F5E400] hover:text-white transition-colors bg-transparent border-0 cursor-pointer underline underline-offset-4"
+                >
+                  Clear filters
+                </button>
+              </div>
+            )}
 
-                    {/* Image */}
-                    <div className="relative bg-white overflow-hidden" style={{aspectRatio: '4/3'}}>
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-300"
-                        loading="lazy"
-                      />
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1 p-5 flex flex-col">
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <h3 className="font-headline text-base font-bold uppercase tracking-wide leading-tight">
-                          {item.name}
-                        </h3>
-                        <span className="font-headline text-lg font-bold text-[#F5E400] whitespace-nowrap">
-                          FREE
-                        </span>
-                      </div>
-                      {item.dimensions && (
-                        <span className="inline-block text-[10px] font-bold uppercase tracking-wide text-[#A9ACAF] bg-[#A9ACAF]/10 px-2 py-0.5 rounded-sm mb-2 w-fit">
-                          {item.dimensions}
+            {/* Empty state */}
+            {filteredItems.length === 0 ? (
+              <div className="border border-[#A9ACAF]/15 bg-[#0a0a0a] py-16 px-6 text-center">
+                <span className="material-symbols-outlined text-5xl text-[#A9ACAF]/40 mb-3">search_off</span>
+                <h3 className="font-headline text-2xl font-bold uppercase mb-2">No matches</h3>
+                <p className="text-sm text-[#A9ACAF] mb-6 max-w-md mx-auto">
+                  Try a different keyword or clear your filters to see the full catalog.
+                </p>
+                <button
+                  onClick={() => {
+                    setActiveCategory(null);
+                    setCatalogSearch('');
+                  }}
+                  className="font-headline text-xs font-bold uppercase tracking-[0.15em] bg-[#F5E400] text-black px-6 py-2.5 hover:opacity-90 transition-opacity cursor-pointer border-0"
+                >
+                  Show all merch
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
+                {filteredItems.map((item) => {
+                  const qty = cart[item.id] || 0;
+                  const isInCart = qty > 0;
+                  const atMax = qty + (item.step ?? 1) > item.maxQty;
+                  const addLabel = item.step && item.step > 1 ? `Add ${item.step}-pack` : 'Add to Order';
+                  return (
+                    <article
+                      key={item.id}
+                      className={`group relative bg-[#111] border transition-all flex flex-col overflow-hidden ${
+                        isInCart
+                          ? 'border-[#F5E400]/60 shadow-[0_0_0_1px_rgba(245,228,0,0.25)]'
+                          : 'border-[#A9ACAF]/15 hover:border-[#F5E400]/40'
+                      }`}
+                    >
+                      {/* Tag — top left */}
+                      {item.tag && (
+                        <span className="absolute top-3 left-3 z-10 bg-white text-black font-headline text-[10px] font-bold tracking-widest uppercase px-2.5 py-1">
+                          {item.tag}
                         </span>
                       )}
-                      <p className="text-sm text-[#A9ACAF] leading-relaxed flex-1 mb-4">
-                        {item.description}
-                      </p>
 
-                      {/* Quantity controls */}
-                      <div className="flex items-center gap-3">
-                        {qty === 0 ? (
-                          <button
-                            onClick={() => updateQty(item.id, 1)}
-                            className="w-full flex items-center justify-center gap-2 bg-transparent border border-[#F5E400] text-[#F5E400] font-headline text-xs font-bold uppercase tracking-wide py-2.5 hover:bg-[#F5E400] hover:text-black transition-colors"
-                          >
-                            <span className="material-symbols-outlined text-sm">add_shopping_cart</span>
-                            Add to Order
-                          </button>
-                        ) : (
-                          <>
-                            <div className="flex items-center border border-[#A9ACAF]/30">
-                              <button
-                                onClick={() => updateQty(item.id, -1)}
-                                className="w-9 h-9 flex items-center justify-center text-white hover:bg-[#A9ACAF]/10 transition-colors"
-                              >
-                                <span className="material-symbols-outlined text-sm">remove</span>
-                              </button>
-                              <span className="w-10 h-9 flex items-center justify-center font-headline text-sm font-bold border-x border-[#A9ACAF]/30">
-                                {qty}
-                              </span>
-                              <button
-                                onClick={() => updateQty(item.id, 1)}
-                                className={`w-9 h-9 flex items-center justify-center transition-colors ${
-                                  qty + (item.step ?? 1) > item.maxQty
-                                    ? 'text-[#A9ACAF]/30 cursor-not-allowed'
-                                    : 'text-white hover:bg-[#A9ACAF]/10'
-                                }`}
-                                disabled={qty + (item.step ?? 1) > item.maxQty}
-                              >
-                                <span className="material-symbols-outlined text-sm">add</span>
-                              </button>
-                            </div>
-                            <span className="text-[10px] text-[#A9ACAF] uppercase tracking-wide">
-                              Max {item.maxQty}
-                              {item.step && item.step > 1 ? ` · in ${item.step}s` : ''}
-                            </span>
-                            <button
-                              onClick={() => setCart((prev) => {
-                                const {[item.id]: _, ...rest} = prev;
-                                return rest;
-                              })}
-                              className="ml-auto text-[#A9ACAF]/60 hover:text-red-400 transition-colors"
-                            >
-                              <span className="material-symbols-outlined text-sm">delete</span>
-                            </button>
-                          </>
-                        )}
+                      {/* FREE pill — top right */}
+                      <span className="absolute top-3 right-3 z-10 bg-[#F5E400] text-black font-headline text-[10px] font-bold tracking-widest uppercase px-2.5 py-1">
+                        Free
+                      </span>
+
+                      {/* In-cart badge — appears below tag/free when added */}
+                      {isInCart && (
+                        <span className="absolute top-11 right-3 z-10 flex items-center gap-1 bg-black text-[#F5E400] border border-[#F5E400]/50 font-headline text-[10px] font-bold tracking-widest uppercase px-2 py-1">
+                          <span className="material-symbols-outlined text-xs">check</span>
+                          In Order
+                        </span>
+                      )}
+
+                      {/* Image */}
+                      <div className="relative bg-white overflow-hidden" style={{aspectRatio: '4/3'}}>
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-full h-full object-contain p-5 group-hover:scale-[1.04] transition-transform duration-300"
+                          loading="lazy"
+                        />
                       </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
+
+                      {/* Content */}
+                      <div className="flex-1 p-5 flex flex-col">
+                        <h3 className="font-headline text-base md:text-lg font-bold uppercase tracking-wide leading-tight mb-2">
+                          {item.name}
+                        </h3>
+                        {item.dimensions && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-[#A9ACAF] bg-[#A9ACAF]/10 px-2 py-0.5 rounded-sm mb-2.5 w-fit">
+                            <span className="material-symbols-outlined text-[11px]">straighten</span>
+                            {item.dimensions}
+                          </span>
+                        )}
+                        <p className="text-[13px] text-[#A9ACAF] leading-relaxed flex-1 mb-4">
+                          {item.description}
+                        </p>
+
+                        {/* Quantity controls */}
+                        <div className="flex items-center gap-3">
+                          {qty === 0 ? (
+                            <button
+                              onClick={() => updateQty(item.id, 1)}
+                              className="w-full flex items-center justify-center gap-2 bg-transparent border border-[#F5E400] text-[#F5E400] font-headline text-xs font-bold uppercase tracking-wide py-3 hover:bg-[#F5E400] hover:text-black transition-colors"
+                            >
+                              <span className="material-symbols-outlined text-sm">add_shopping_cart</span>
+                              {addLabel}
+                            </button>
+                          ) : (
+                            <>
+                              <div className="flex items-center border border-[#A9ACAF]/30">
+                                <button
+                                  aria-label="Decrease quantity"
+                                  onClick={() => updateQty(item.id, -1)}
+                                  className="w-9 h-9 flex items-center justify-center text-white hover:bg-[#A9ACAF]/10 transition-colors"
+                                >
+                                  <span className="material-symbols-outlined text-sm">remove</span>
+                                </button>
+                                <span className="w-10 h-9 flex items-center justify-center font-headline text-sm font-bold border-x border-[#A9ACAF]/30">
+                                  {qty}
+                                </span>
+                                <button
+                                  aria-label="Increase quantity"
+                                  onClick={() => updateQty(item.id, 1)}
+                                  className={`w-9 h-9 flex items-center justify-center transition-colors ${
+                                    atMax
+                                      ? 'text-[#A9ACAF]/30 cursor-not-allowed'
+                                      : 'text-white hover:bg-[#A9ACAF]/10'
+                                  }`}
+                                  disabled={atMax}
+                                >
+                                  <span className="material-symbols-outlined text-sm">add</span>
+                                </button>
+                              </div>
+                              <div className="flex flex-col leading-tight">
+                                <span className="text-[10px] font-bold text-[#A9ACAF] uppercase tracking-wider">
+                                  Max {item.maxQty}
+                                </span>
+                                {item.step && item.step > 1 && (
+                                  <span className="text-[10px] text-[#F5E400]/80 uppercase tracking-wider">
+                                    Packs of {item.step}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                aria-label="Remove from order"
+                                onClick={() => setCart((prev) => {
+                                  const {[item.id]: _, ...rest} = prev;
+                                  return rest;
+                                })}
+                                className="ml-auto text-[#A9ACAF]/60 hover:text-red-400 transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-sm">delete</span>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
           </main>
 
           {/* ── Order Review / Submit ──────────────────────────────────── */}
           {totalItems > 0 && (
             <section id="order" className="border-t border-[#A9ACAF]/20 bg-[#0a0a0a]">
-              <div className="max-w-3xl mx-auto px-6 py-16">
-                <div className="text-center mb-10">
-                  <p className="font-headline text-xs font-bold tracking-[0.4em] text-[#F5E400] uppercase mb-2">
-                    Review & Submit
+              <div className="max-w-3xl mx-auto px-6 py-14 md:py-16">
+                <div className="text-center mb-8 md:mb-10">
+                  <p className="font-headline text-xs font-bold tracking-[0.4em] text-[#F5E400] uppercase mb-2 flex items-center justify-center gap-2">
+                    <span className="inline-block w-6 h-px bg-[#F5E400]" />
+                    Review &amp; Submit
+                    <span className="inline-block w-6 h-px bg-[#F5E400]" />
                   </p>
-                  <h2 className="font-headline text-3xl font-bold uppercase">
+                  <h2 className="font-headline text-3xl md:text-4xl font-bold uppercase">
                     Your Order
                   </h2>
                 </div>
 
                 {/* Show selected dispensary */}
-                <div className="mb-8 px-5 py-4 border border-[#A9ACAF]/20 bg-[#111]">
-                  <p className="text-xs font-bold uppercase tracking-wide text-[#A9ACAF] mb-1.5">
-                    Ordering For
-                  </p>
-                  <p className="text-lg font-semibold">{selectedAccount.name}</p>
-                  {(selectedAccount.city || selectedAccount.state) && (
-                    <p className="text-sm text-[#A9ACAF]">
-                      {[selectedAccount.city, selectedAccount.state].filter(Boolean).join(', ')}
+                <div className="mb-6 px-5 py-4 border border-[#A9ACAF]/20 bg-[#111] flex items-center justify-between gap-4 flex-wrap">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#A9ACAF] mb-1">
+                      Shipping To
                     </p>
-                  )}
+                    <p className="font-headline text-lg font-bold uppercase tracking-wide">{selectedAccount.name}</p>
+                    {(selectedAccount.city || selectedAccount.state) && (
+                      <p className="text-sm text-[#A9ACAF]">
+                        {[selectedAccount.city, selectedAccount.state].filter(Boolean).join(', ')}
+                      </p>
+                    )}
+                  </div>
+                  <a
+                    href="#top"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      window.scrollTo({top: 0, behavior: 'smooth'});
+                    }}
+                    className="font-headline text-[11px] font-bold uppercase tracking-[0.15em] px-4 py-2 border border-[#A9ACAF]/40 text-[#A9ACAF] hover:border-white hover:text-white transition-colors no-underline"
+                  >
+                    Keep Shopping
+                  </a>
                 </div>
 
                 {submitted ? (
-                  <div className="text-center py-12">
+                  <div className="text-center py-12 border border-[#F5E400]/30 bg-[#111]">
                     <span className="material-symbols-outlined text-5xl text-[#F5E400] mb-4">check_circle</span>
-                    <h3 className="font-headline text-2xl font-bold uppercase mb-3">Order Submitted</h3>
-                    <p className="text-[#A9ACAF]">
-                      Your email client should have opened with your order details.
-                      Our team will confirm your order within 1-2 business days.
+                    <h3 className="font-headline text-2xl md:text-3xl font-bold uppercase mb-3">Order Sent</h3>
+                    <p className="text-[#A9ACAF] max-w-md mx-auto leading-relaxed px-6">
+                      Your email client opened with a pre-filled order. Hit send and our team
+                      will confirm within 1–2 business days.
+                    </p>
+                    <p className="text-sm text-[#A9ACAF] mt-4">
+                      Questions? <a href="mailto:njsales@highsman.com" className="text-[#F5E400] no-underline hover:underline">njsales@highsman.com</a>
                     </p>
                   </div>
                 ) : (
@@ -1108,15 +1337,27 @@ export default function RetailMerchStore() {
 
                     <button
                       type="submit"
-                      className="w-full flex items-center justify-center gap-2 bg-[#F5E400] text-black font-headline text-base font-bold uppercase tracking-wide py-4 hover:bg-[#F5E400]/90 transition-colors"
+                      className="w-full flex items-center justify-center gap-2 bg-[#F5E400] text-black font-headline text-base md:text-lg font-bold uppercase tracking-wide py-4 md:py-5 hover:bg-[#F5E400]/90 transition-colors"
                     >
                       <span className="material-symbols-outlined text-xl">send</span>
                       Submit Order Request
                     </button>
-                    <p className="text-center text-xs text-[#A9ACAF]/60 mt-3">
-                      All items are complimentary for authorized Highsman retail partners.
-                      Orders are confirmed within 1-2 business days.
-                    </p>
+
+                    {/* Trust signals below CTA */}
+                    <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
+                      <div className="flex items-center justify-center gap-1.5 text-[11px] text-[#A9ACAF]">
+                        <span className="material-symbols-outlined text-sm text-[#F5E400]">verified</span>
+                        <span>Complimentary for partners</span>
+                      </div>
+                      <div className="flex items-center justify-center gap-1.5 text-[11px] text-[#A9ACAF]">
+                        <span className="material-symbols-outlined text-sm text-[#F5E400]">schedule</span>
+                        <span>Confirmed in 1–2 days</span>
+                      </div>
+                      <div className="flex items-center justify-center gap-1.5 text-[11px] text-[#A9ACAF]">
+                        <span className="material-symbols-outlined text-sm text-[#F5E400]">local_shipping</span>
+                        <span>Shipped direct to your store</span>
+                      </div>
+                    </div>
                   </form>
                 )}
               </div>
@@ -1125,8 +1366,41 @@ export default function RetailMerchStore() {
         </>
       )}
 
+      {/* ── Mobile Sticky Order Bar ──────────────────────────────────── */}
+      {selectedAccount && totalItems > 0 && !submitted && (
+        <div
+          className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-black/95 backdrop-blur-md border-t border-[#F5E400]/30 px-4 py-3 safe-bottom"
+          style={{paddingBottom: 'calc(12px + env(safe-area-inset-bottom))'}}
+        >
+          <a
+            href="#order"
+            className="flex items-center justify-between gap-3 bg-[#F5E400] text-black no-underline px-5 py-3.5 shadow-lg"
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="material-symbols-outlined text-xl">shopping_cart</span>
+              <div className="flex flex-col leading-tight">
+                <span className="font-headline text-sm font-bold uppercase tracking-wide">
+                  {totalItems} {totalItems === 1 ? 'Item' : 'Items'}
+                </span>
+                <span className="text-[10px] uppercase tracking-wider opacity-80">
+                  Complimentary
+                </span>
+              </div>
+            </div>
+            <span className="font-headline text-sm font-bold uppercase tracking-[0.15em] flex items-center gap-1">
+              Review Order
+              <span className="material-symbols-outlined text-lg">arrow_forward</span>
+            </span>
+          </a>
+        </div>
+      )}
+
       {/* ── Footer ────────────────────────────────────────────────────── */}
-      <footer className="border-t border-[#A9ACAF]/20 px-6 py-8">
+      <footer
+        className={`border-t border-[#A9ACAF]/20 px-6 py-8 ${
+          selectedAccount && totalItems > 0 && !submitted ? 'pb-28 md:pb-8' : ''
+        }`}
+      >
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <img
             src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Spark_Greatness_White.png?v=1775594430"
