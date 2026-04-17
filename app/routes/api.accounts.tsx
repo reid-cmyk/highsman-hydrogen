@@ -53,8 +53,9 @@ async function searchAccounts(
 ): Promise<Array<{id: string; name: string; city: string | null; state: string | null; phone: string | null}>> {
   const url = new URL('https://www.zohoapis.com/crm/v7/Accounts/search');
   if (scope === 'all') {
-    // All accounts — no state filter
-    url.searchParams.set('criteria', `(Account_Name:contains:${query})`);
+    // All accounts — use 'word' param for broad name matching (Zoho doesn't
+    // support standalone 'contains' criteria without a compound expression)
+    url.searchParams.set('word', query);
   } else {
     // NJ only — matches both "NJ" and "New Jersey"
     url.searchParams.set(
@@ -233,7 +234,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     });
   } catch (err: any) {
     console.error('[api/accounts] Error:', err.message);
-    return json({accounts: [], error: 'Search unavailable', debug: err.message}, {
+    return json({accounts: [], error: 'Search unavailable'}, {
       status: 200, // don't break the UI — degrade gracefully
       headers: {'Cache-Control': 'no-store'},
     });
