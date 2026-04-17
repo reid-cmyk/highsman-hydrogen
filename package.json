@@ -16,6 +16,7 @@
     "@remix-run/server-runtime": "^2.8.0",
     "@shopify/hydrogen": "^2024.4.0",
     "@shopify/remix-oxygen": "^2.0.3",
+    "aws4fetch": "^1.0.20",
     "graphql": "^16.8.1",
     "graphql-tag": "^2.12.6",
     "isbot": "^5.1.0",

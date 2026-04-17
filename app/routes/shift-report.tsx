@@ -32,9 +32,18 @@ export async function loader({context}: LoaderFunctionArgs) {
         env?.ZOHO_REFRESH_TOKEN,
     ),
     // Submission backend readiness — false means /api/shift-report-submit will
-    // accept payloads but only log (not persist). Toggles true once Supabase
-    // env vars are wired in Oxygen.
-    submitReady: Boolean(env?.SUPABASE_URL && env?.SUPABASE_SERVICE_KEY),
+    // accept payloads but only log (not persist). Toggles true once the full
+    // Supabase + R2 env set is wired in Oxygen. Must mirror the storageReady
+    // check in api.shift-report-submit.tsx.
+    submitReady: Boolean(
+      env?.SUPABASE_URL &&
+        env?.SUPABASE_SERVICE_KEY &&
+        env?.R2_ACCOUNT_ID &&
+        env?.R2_ACCESS_KEY_ID &&
+        env?.R2_SECRET_ACCESS_KEY &&
+        env?.R2_BUCKET &&
+        env?.R2_PUBLIC_URL,
+    ),
   });
 }
 
