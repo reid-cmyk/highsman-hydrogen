@@ -522,10 +522,12 @@ export default function NJPopups() {
   }) => {
     if (!dispensary || !slot) return;
     if (!dispensary.id || dispensary.id.startsWith('local-')) return;
+    const slotDate = slot.date;
+    const dispId = dispensary.id;
     const fd = new FormData();
     fd.append('accountId', dispensary.id);
     fd.append('dispensaryName', dispensary.name);
-    fd.append('date', slot.date);
+    fd.append('date', slotDate);
     fd.append('shiftKey', slot.shiftKey);
     fd.append('shiftLabel', shiftLabel(slot.shiftKey));
     fd.append('channel', opts.channel);
@@ -540,10 +542,16 @@ export default function NJPopups() {
       .then((data) => {
         if (!data?.ok) {
           console.warn('[njpopups] Event creation failed:', data?.error);
-        } else {
-          // eslint-disable-next-line no-console
-          console.log('[njpopups] Zoho Event created:', data.eventId);
+          return;
         }
+        // eslint-disable-next-line no-console
+        console.log('[njpopups] Zoho Event created:', data.eventId);
+        // Mirror the newly stamped "Last Pop Up Date" onto local state so the UI
+        // reflects Zoho without a full refetch. Server uses the slot date, not today.
+        const stamped = data.lastPopUpDate || slotDate;
+        setDispensary((prev) =>
+          prev && prev.id === dispId ? {...prev, lastVisitDate: stamped} : prev,
+        );
       })
       .catch((err) => console.warn('[njpopups] Event creation error:', err));
   };
@@ -631,19 +639,19 @@ export default function NJPopups() {
       fd.append('contactName', contact.name);
       if (contact.role && contact.role !== '—') fd.append('contactRole', contact.role);
       if (contact.phone) fd.append('contactPhone', contact.phone);
-      fd.append('stampVisit', 'true');
+      // NOTE: no stampVisit here — /api/popups-book owns Visit_Date (UI label
+      // "Last Pop Up Date") and stamps it with the slot date, not today.
       fetch('/api/popups-poc', {method: 'POST', body: fd})
         .then((r) => r.json().catch(() => null))
         .then((data) => {
           if (data?.ok) {
-            // Mirror the new values onto the dispensary so the UI reflects Zoho.
-            const today = new Date().toISOString().slice(0, 10);
+            // Mirror the new POC values onto the dispensary so the UI reflects
+            // Zoho. Last Pop Up Date is handled by postBookingEvent's callback.
             setDispensary((prev) =>
               prev && prev.id === dispensary.id
                 ? {
                     ...prev,
                     popUpEmail: contact.email,
-                    lastVisitDate: today,
                     contact: {
                       name: contact.name,
                       role: contact.role || '—',
@@ -713,7 +721,9 @@ export default function NJPopups() {
   };
 
   // Push the override to Zoho. Override semantics: whatever staff typed wins,
-  // including empty strings (which clear the field). Visit_Date is auto-stamped.
+  // including empty strings (which clear the field). Last Pop Up Date is NOT
+  // touched here — that field (Visit_Date) is owned by /api/popups-book and
+  // stamps the pop-up slot date on every booking.
   const saveStaffEdit = async () => {
     if (!dispensary) return;
     setStaffSaving(true);
@@ -726,7 +736,6 @@ export default function NJPopups() {
       if (staffEdit.name.trim()) fd.append('contactName', staffEdit.name.trim());
       if (staffEdit.role.trim()) fd.append('contactRole', staffEdit.role.trim());
       if (staffEdit.phone.trim()) fd.append('contactPhone', staffEdit.phone.trim());
-      fd.append('stampVisit', 'true');
 
       const res = await fetch('/api/popups-poc', {method: 'POST', body: fd});
       const data = await res.json().catch(() => ({ok: false, error: 'Bad response'}));
@@ -741,7 +750,6 @@ export default function NJPopups() {
       const newName = staffEdit.name.trim();
       const newRole = staffEdit.role.trim();
       const newPhone = staffEdit.phone.trim();
-      const today = new Date().toISOString().slice(0, 10);
 
       setDispensary((prev) => {
         if (!prev) return prev;
@@ -760,7 +768,6 @@ export default function NJPopups() {
           ...prev,
           popUpEmail: newEmail || null,
           popUpLink: newLink || null,
-          lastVisitDate: today,
           contact,
         };
       });
@@ -1625,7 +1632,8 @@ export default function NJPopups() {
                       <strong style={{color: BRAND.white}}>
                         {dispensary.name} — {dispensary.city}
                       </strong>
-                      . Today's date will be stamped as the last visit.
+                      . "Last Pop Up Date" isn't changed here — that field updates
+                      automatically when a pop-up is booked.
                     </div>
                   </div>
                   <button

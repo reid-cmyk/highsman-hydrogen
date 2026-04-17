@@ -26,9 +26,10 @@ import {json} from '@shopify/remix-oxygen';
 //   city             — optional, for Venue/Location
 //   street           — optional, for Location
 //
-// NOTE: This endpoint does NOT stamp Visit_Date on the Account. That field is
-// reserved for "last data-collection visit" and is stamped only by
-// /api/popups-poc when staff actually changes the POC data.
+// NOTE: This endpoint also PATCHes the Account's `Visit_Date` field (UI label
+// "Last Pop Up Date") with the pop-up slot date, so any NJ dispensary in Zoho
+// shows when its most recent pop-up was booked. The POC endpoint (/api/popups-poc)
+// no longer touches Visit_Date.
 // ─────────────────────────────────────────────────────────────────────────────
 
 let cachedAccessToken: string | null = null;
@@ -213,11 +214,38 @@ export async function action({request, context}: ActionFunctionArgs) {
       throw new Error(`Zoho Event create rejected: ${JSON.stringify(record?.details || {})}`);
     }
 
+    // Stamp the Account's Visit_Date (UI label: "Last Pop Up Date") with the
+    // pop-up slot date. Fire-and-forget — Event creation already succeeded, so
+    // a PATCH failure here shouldn't fail the whole request.
+    let lastPopUpDate: string | null = null;
+    try {
+      const patchRes = await fetch(`https://www.zohoapis.com/crm/v7/Accounts/${accountId}`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Zoho-oauthtoken ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          data: [{Visit_Date: date}],
+          trigger: ['workflow'],
+        }),
+      });
+      if (patchRes.ok) {
+        lastPopUpDate = date;
+      } else {
+        const t = await patchRes.text().catch(() => '');
+        console.warn(`[api/popups-book] Account PATCH (Visit_Date) failed: ${patchRes.status} ${t.slice(0, 300)}`);
+      }
+    } catch (patchErr: any) {
+      console.warn('[api/popups-book] Account PATCH (Visit_Date) error:', patchErr?.message);
+    }
+
     return json({
       ok: true,
       eventId: record.details.id,
       startDateTime: startISO,
       endDateTime: endISO,
+      lastPopUpDate,
     });
   } catch (err: any) {
     console.error('[api/popups-book] Error:', err.message);

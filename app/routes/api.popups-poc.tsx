@@ -17,12 +17,11 @@ import {json} from '@shopify/remix-oxygen';
 //   contactName       — full name (split on whitespace into First/Last_Name)
 //   contactRole       — Title on the Contact
 //   contactPhone      — Phone
-//   stampVisit        — "true" to stamp Visit_Date with today (default: true)
 //
 // Rules:
 //   • OVERRIDE semantics: blank strings clear the field; undefined leaves it alone.
-//   • Always stamps Visit_Date (Data Collection Last Visit Date) with today unless
-//     stampVisit === "false".
+//   • Does NOT touch Visit_Date — that field (UI label "Last Pop Up Date") is
+//     owned by /api/popups-book and stamped with the pop-up slot date.
 //   • If contactName + popUpEmail are both present, creates a Contact on the
 //     Account (or updates the matching-email Contact if one already exists).
 //   • Fires Zoho workflows with trigger: ['workflow'].
@@ -191,8 +190,6 @@ export async function action({request, context}: ActionFunctionArgs) {
   const contactName = ((formData.get('contactName') as string) || '').trim();
   const contactRole = ((formData.get('contactRole') as string) || '').trim();
   const contactPhone = ((formData.get('contactPhone') as string) || '').trim();
-  const stampVisitRaw = ((formData.get('stampVisit') as string) || 'true').trim().toLowerCase();
-  const stampVisit = stampVisitRaw !== 'false';
 
   const env = context.env as any;
   const clientId = env.ZOHO_CLIENT_ID;
@@ -217,14 +214,11 @@ export async function action({request, context}: ActionFunctionArgs) {
     });
 
     // Build the Account PATCH payload. Only include fields the client explicitly
-    // sent — that preserves any untouched values.
+    // sent — that preserves any untouched values. Visit_Date is intentionally
+    // untouched here: it's owned by /api/popups-book (UI label "Last Pop Up Date").
     const accountFields: Record<string, string | null> = {};
     if (hasEmail) accountFields.Email_to_book_pop_ups = popUpEmailRaw || null;
     if (hasLink) accountFields.Link_for_Pop_Ups = popUpLinkRaw || null;
-    if (stampVisit) {
-      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-      accountFields.Visit_Date = today;
-    }
 
     if (Object.keys(accountFields).length > 0) {
       await patchAccountPopUpFields(accountId, accountFields, accessToken);
@@ -248,7 +242,6 @@ export async function action({request, context}: ActionFunctionArgs) {
       updated: {
         popUpEmail: hasEmail ? popUpEmailRaw || null : undefined,
         popUpLink: hasLink ? popUpLinkRaw || null : undefined,
-        lastVisitDate: stampVisit ? new Date().toISOString().slice(0, 10) : undefined,
       },
     });
   } catch (err: any) {
