@@ -22,6 +22,7 @@ interface MerchItem {
   dimensions?: string;
   image: string;
   maxQty: number;
+  step?: number; // Order increment (defaults to 1). Use for items sold in packs (e.g., stickers in 10s).
   tag?: string;
 }
 
@@ -34,6 +35,7 @@ const CATEGORIES = [
   {id: 'cutouts', label: 'Cutouts & Standees', icon: 'person'},
   {id: 'banners', label: 'Banners', icon: 'flag'},
   {id: 'signs', label: 'In-Store Stand Up Signs', icon: 'display_settings'},
+  {id: 'stickers', label: 'Stickers', icon: 'sell'},
   {id: 'footballs', label: 'Branded Footballs', icon: 'sports_football'},
 ];
 
@@ -144,6 +146,19 @@ const MERCH_ITEMS: MerchItem[] = [
     dimensions: '7 × 7.76 in',
     image: '/retail/groundgame-sign.png',
     maxQty: 5,
+    tag: 'New',
+  },
+
+  // ── Stickers ───────────────────────────────────────────────────────────────
+  {
+    id: 'sticker-logo',
+    name: 'Highsman Logo Sticker',
+    category: 'stickers',
+    description: 'Classic Highsman wordmark sticker. Built for register counters, case glass, customer giveaway bags, and budtender swag. Every sticker is a brand touchpoint that follows the customer home. Sold in 10-packs.',
+    dimensions: '3.6 × 1.26 in',
+    image: '/retail/sticker-logo.png',
+    maxQty: 50,
+    step: 10,
     tag: 'New',
   },
 
@@ -324,9 +339,11 @@ export default function RetailMerchStore() {
   const updateQty = (id: string, delta: number) => {
     const item = MERCH_ITEMS.find((i) => i.id === id);
     if (!item) return;
+    const step = item.step ?? 1;
     setCart((prev) => {
       const current = prev[id] || 0;
-      const next = Math.max(0, Math.min(item.maxQty, current + delta));
+      // delta is the direction (+1 / -1); multiply by item's step so pack-based items move in increments
+      const next = Math.max(0, Math.min(item.maxQty, current + delta * step));
       if (next === 0) {
         const {[id]: _, ...rest} = prev;
         return rest;
@@ -887,17 +904,18 @@ export default function RetailMerchStore() {
                               <button
                                 onClick={() => updateQty(item.id, 1)}
                                 className={`w-9 h-9 flex items-center justify-center transition-colors ${
-                                  qty >= item.maxQty
+                                  qty + (item.step ?? 1) > item.maxQty
                                     ? 'text-[#A9ACAF]/30 cursor-not-allowed'
                                     : 'text-white hover:bg-[#A9ACAF]/10'
                                 }`}
-                                disabled={qty >= item.maxQty}
+                                disabled={qty + (item.step ?? 1) > item.maxQty}
                               >
                                 <span className="material-symbols-outlined text-sm">add</span>
                               </button>
                             </div>
                             <span className="text-[10px] text-[#A9ACAF] uppercase tracking-wide">
                               Max {item.maxQty}
+                              {item.step && item.step > 1 ? ` · in ${item.step}s` : ''}
                             </span>
                             <button
                               onClick={() => setCart((prev) => {
