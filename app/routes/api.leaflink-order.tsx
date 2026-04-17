@@ -469,17 +469,8 @@ export async function loader({request, context}: ActionFunctionArgs) {
       });
       if (res.ok) {
         const p = await res.json();
-        results.push({
-          id: p.id,
-          name: p.name,
-          sku: p.sku,
-          unit_of_measure: p.unit_of_measure,
-          quantity_per_unit: p.quantity_per_unit,
-          unit_denomination: p.unit_denomination,
-          wholesale_price: p.wholesale_price,
-          category: p.category,
-          subcategory: p.subcategory,
-        });
+        // Return all fields for debugging — compare Hit Sticks vs Ground Game
+        results.push(p);
       } else {
         results.push({id: pid, error: `HTTP ${res.status}`});
       }
