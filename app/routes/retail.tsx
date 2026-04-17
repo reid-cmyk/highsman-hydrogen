@@ -1108,15 +1108,27 @@ export default function RetailMerchStore() {
 
                       {/* Image */}
                       <div className="relative bg-white overflow-hidden" style={{aspectRatio: '4/3'}}>
-                        <div className="absolute inset-0 group-hover:scale-[1.04] transition-transform duration-300 flex items-center justify-center">
+                        {item.imageZoom ? (
+                          // For sources with heavy whitespace (tube shots), use a background-image
+                          // div with explicit backgroundSize. This gives pixel-perfect control and
+                          // avoids object-contain shrinking the product to nothing.
+                          <div
+                            role="img"
+                            aria-label={item.name}
+                            className="absolute inset-0 bg-no-repeat bg-center group-hover:scale-[1.04] transition-transform duration-300"
+                            style={{
+                              backgroundImage: `url(${item.image})`,
+                              backgroundSize: `${Math.round(item.imageZoom * 100)}% auto`,
+                            }}
+                          />
+                        ) : (
                           <img
                             src={item.image}
                             alt={item.name}
-                            className={`w-full h-full object-contain ${item.imageZoom ? 'p-0' : 'p-5'}`}
-                            style={item.imageZoom ? {transform: `scale(${item.imageZoom})`, transformOrigin: 'center'} : undefined}
+                            className="absolute inset-0 w-full h-full object-contain p-5 group-hover:scale-[1.04] transition-transform duration-300"
                             loading="lazy"
                           />
-                        </div>
+                        )}
                       </div>
 
                       {/* Content */}
