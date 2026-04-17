@@ -225,7 +225,75 @@ async function sendFailureNotification(
 // LeafLink Customer Search
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Search LeafLink customers by name to find the matching dispensary.
+/** Search LeafLink customers by license number (exact match).
+ *  This is the preferred method — license numbers are unique state-issued IDs
+ *  that don't have the ambiguity problems of business names.
+ */
+async function findCustomerByLicense(
+  licenseNumber: string,
+  apiKey: string,
+): Promise<{id: number; name: string} | null> {
+  try {
+    // LeafLink supports license_number filter on the customers endpoint
+    const url = `${LEAFLINK_API_BASE}/customers/?seller=${LEAFLINK_COMPANY_ID}&license_number=${encodeURIComponent(licenseNumber)}&page_size=10`;
+    const res = await fetch(url, {
+      headers: {Authorization: `Token ${apiKey}`},
+    });
+
+    if (!res.ok) {
+      // If the filter param isn't supported, fall back to scanning
+      console.warn(`[api/leaflink-order] License filter returned ${res.status}, falling back to scan`);
+      return await findCustomerByLicenseScan(licenseNumber, apiKey);
+    }
+
+    const data = await res.json();
+    if (data.results && data.results.length > 0) {
+      const c = data.results[0];
+      console.log(`[api/leaflink-order] License match: "${c.name}" (ID: ${c.id}) for license "${licenseNumber}"`);
+      return {id: c.id, name: c.name};
+    }
+
+    // No results from filter — try scanning
+    return await findCustomerByLicenseScan(licenseNumber, apiKey);
+  } catch (err) {
+    console.error('[api/leaflink-order] License search error:', err);
+    return null;
+  }
+}
+
+/** Fallback: scan all customers to find one by license number */
+async function findCustomerByLicenseScan(
+  licenseNumber: string,
+  apiKey: string,
+): Promise<{id: number; name: string} | null> {
+  const target = licenseNumber.toLowerCase().trim();
+  let nextUrl: string | null = `${LEAFLINK_API_BASE}/customers/?seller=${LEAFLINK_COMPANY_ID}&page_size=200`;
+  let pages = 0;
+
+  while (nextUrl && pages < 20) {
+    const res = await fetch(nextUrl, {
+      headers: {Authorization: `Token ${apiKey}`},
+    });
+    if (!res.ok) break;
+    const data = await res.json();
+    if (!data.results || data.results.length === 0) break;
+
+    for (const c of data.results) {
+      if ((c.license_number || '').toLowerCase().trim() === target) {
+        console.log(`[api/leaflink-order] License scan match: "${c.name}" (ID: ${c.id}) for license "${licenseNumber}"`);
+        return {id: c.id, name: c.name};
+      }
+    }
+
+    nextUrl = data.next || null;
+    pages++;
+  }
+
+  console.warn(`[api/leaflink-order] No license match found for "${licenseNumber}" after scanning`);
+  return null;
+}
+
+/** Search LeafLink customers by name (fallback when no license available).
  *  IMPORTANT: Filters by seller (LEAFLINK_COMPANY_ID) so we only match
  *  customers that are actual buyers of Canfections NJ — not customers
  *  belonging to other sellers that happen to share the same name.
@@ -412,7 +480,7 @@ export async function action({request, context}: ActionFunctionArgs) {
     return json({ok: false, error: 'Invalid JSON body'}, {status: 400});
   }
 
-  const {dispensaryName, dispensaryId, items, notes} = body;
+  const {dispensaryName, dispensaryId, dispensaryLicense, items, notes} = body;
 
   if (!dispensaryName) {
     return json({ok: false, error: 'Dispensary name is required'}, {status: 400});
@@ -442,10 +510,18 @@ export async function action({request, context}: ActionFunctionArgs) {
   }
 
   try {
-    // Step 1: Find the customer in LeafLink
-    const customer = await findCustomer(dispensaryName, apiKey);
+    // Step 1: Find the customer in LeafLink — try license first, then name
+    let customer: {id: number; name: string} | null = null;
+    if (dispensaryLicense) {
+      console.log(`[api/leaflink-order] Trying license lookup: "${dispensaryLicense}" for "${dispensaryName}"`);
+      customer = await findCustomerByLicense(dispensaryLicense, apiKey);
+    }
+    if (!customer) {
+      console.log(`[api/leaflink-order] Trying name lookup for "${dispensaryName}"`);
+      customer = await findCustomer(dispensaryName, apiKey);
+    }
     console.log(
-      `[api/leaflink-order] Customer lookup for "${dispensaryName}":`,
+      `[api/leaflink-order] Customer lookup for "${dispensaryName}" (license: ${dispensaryLicense || 'none'}):`,
       customer ? `Found ${customer.name} (ID: ${customer.id})` : 'Not found',
     );
 
