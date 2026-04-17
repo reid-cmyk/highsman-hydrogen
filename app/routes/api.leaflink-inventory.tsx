@@ -115,31 +115,48 @@ export async function loader({context}: LoaderFunctionArgs) {
       }
     }
 
-    // Temp debug: find all Highsman-related products
-    const highsmanProducts: Array<{id: number; name: string; listing_state: string; qty: string}> = [];
+    // Temp debug: try different filters to find Highsman products
+    const debug: any = {};
     try {
-      let dp = 1;
-      let dMore = true;
-      while (dMore && dp <= 10) {
-        const dRes = await fetch(`${LEAFLINK_API_BASE}/products/?seller=${LEAFLINK_COMPANY_ID}&page_size=100&page=${dp}`, {
-          headers: {Authorization: `Token ${apiKey}`},
-        });
-        if (!dRes.ok) break;
-        const dData = await dRes.json();
-        if (!dData.results || dData.results.length === 0) break;
-        for (const p of dData.results) {
-          const name = (p.name || '').toLowerCase();
-          if (name.includes('highsman') || name.includes('hit stick') || name.includes('triple threat') || name.includes('ground game') || name.includes('fly high') || name.includes('blueberry blitz') || name.includes('watermelon') || name.includes('grape') || name.includes('mango') || name.includes('cake quake')) {
-            highsmanProducts.push({id: p.id, name: p.name, listing_state: p.listing_state, qty: p.quantity});
-          }
-        }
-        dMore = !!dData.next;
-        dp++;
+      // Try brand filter (Highsman brand ID: 11334)
+      const brandRes = await fetch(`${LEAFLINK_API_BASE}/products/?brand=11334&page_size=10&page=1`, {
+        headers: {Authorization: `Token ${apiKey}`},
+      });
+      if (brandRes.ok) {
+        const brandData = await brandRes.json();
+        debug.brandFilter = {count: brandData.count, results: (brandData.results || []).slice(0, 5).map((p: any) => ({id: p.id, name: p.name, listing_state: p.listing_state, qty: p.quantity}))};
+      } else {
+        debug.brandFilter = {error: brandRes.status, body: (await brandRes.text().catch(() => '')).slice(0, 200)};
       }
-    } catch {}
+
+      // Try no seller filter at all
+      const noFilterRes = await fetch(`${LEAFLINK_API_BASE}/products/?page_size=5&page=1`, {
+        headers: {Authorization: `Token ${apiKey}`},
+      });
+      if (noFilterRes.ok) {
+        const nfData = await noFilterRes.json();
+        debug.noFilter = {count: nfData.count, first: (nfData.results || []).slice(0, 2).map((p: any) => ({id: p.id, name: p.name, seller: p.seller}))};
+      }
+
+      // Try direct product lookup for one of our IDs
+      const directRes = await fetch(`${LEAFLINK_API_BASE}/products/2554071/`, {
+        headers: {Authorization: `Token ${apiKey}`},
+      });
+      debug.directLookup = {status: directRes.status};
+      if (directRes.ok) {
+        const dp = await directRes.json();
+        debug.directLookup.name = dp.name;
+        debug.directLookup.seller = dp.seller;
+        debug.directLookup.brand = dp.brand;
+      } else {
+        debug.directLookup.body = (await directRes.text().catch(() => '')).slice(0, 200);
+      }
+    } catch (e: any) {
+      debug.error = e.message;
+    }
 
     return json(
-      {ok: true, inventory, _matched: matched, _highsman: highsmanProducts},
+      {ok: true, inventory, _matched: matched, _debug: debug},
       {
         headers: {
           // Cache for 5 minutes — inventory doesn't change that fast
