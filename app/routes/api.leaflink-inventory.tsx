@@ -8,15 +8,14 @@ import {json} from '@shopify/remix-oxygen';
 // Returns available inventory for all Highsman products in LeafLink.
 // Keyed by our internal SKU, values are available unit counts.
 //
-// NOTE: LeafLink auto-generates SKUs (random hashes), so we match by
-// LeafLink Product ID instead, then map back to our internal SKUs.
+// We filter by brand=11334 (Highsman) and match by LeafLink Product ID,
+// then map back to our internal SKUs.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const LEAFLINK_API_BASE = 'https://app.leaflink.com/api/v2';
-const LEAFLINK_COMPANY_ID = 24087; // Canfections NJ, INC
+const HIGHSMAN_BRAND_ID = 11334;
 
 // LeafLink Product ID → our internal SKU
-// (Reverse of the SKU_TO_PRODUCT_ID mapping in api.leaflink-order.tsx)
 const PRODUCT_ID_TO_SKU: Record<number, string> = {
   // Hit Stick Singles (0.5g, Case 24)
   2554071: 'C-NJ-HSINF-BB',
@@ -68,8 +67,8 @@ export async function loader({context}: LoaderFunctionArgs) {
     let page = 1;
     let hasMore = true;
 
-    while (hasMore && page <= 10) {
-      const url = `${LEAFLINK_API_BASE}/products/?seller=${LEAFLINK_COMPANY_ID}&page_size=100&page=${page}`;
+    while (hasMore && page <= 5) {
+      const url = `${LEAFLINK_API_BASE}/products/?brand=${HIGHSMAN_BRAND_ID}&page_size=100&page=${page}`;
       const res = await fetch(url, {
         headers: {Authorization: `Token ${apiKey}`},
       });
@@ -101,9 +100,7 @@ export async function loader({context}: LoaderFunctionArgs) {
         matched++;
       }
 
-      // Early exit if we've found all tracked products
       if (matched >= ALL_SKUS.length) break;
-
       hasMore = !!data.next;
       page++;
     }
@@ -115,51 +112,10 @@ export async function loader({context}: LoaderFunctionArgs) {
       }
     }
 
-    // Temp debug: try different filters to find Highsman products
-    const debug: any = {};
-    try {
-      // Try brand filter (Highsman brand ID: 11334)
-      const brandRes = await fetch(`${LEAFLINK_API_BASE}/products/?brand=11334&page_size=10&page=1`, {
-        headers: {Authorization: `Token ${apiKey}`},
-      });
-      if (brandRes.ok) {
-        const brandData = await brandRes.json();
-        debug.brandFilter = {count: brandData.count, results: (brandData.results || []).slice(0, 5).map((p: any) => ({id: p.id, name: p.name, listing_state: p.listing_state, qty: p.quantity}))};
-      } else {
-        debug.brandFilter = {error: brandRes.status, body: (await brandRes.text().catch(() => '')).slice(0, 200)};
-      }
-
-      // Try no seller filter at all
-      const noFilterRes = await fetch(`${LEAFLINK_API_BASE}/products/?page_size=5&page=1`, {
-        headers: {Authorization: `Token ${apiKey}`},
-      });
-      if (noFilterRes.ok) {
-        const nfData = await noFilterRes.json();
-        debug.noFilter = {count: nfData.count, first: (nfData.results || []).slice(0, 2).map((p: any) => ({id: p.id, name: p.name, seller: p.seller}))};
-      }
-
-      // Try direct product lookup for one of our IDs
-      const directRes = await fetch(`${LEAFLINK_API_BASE}/products/2554071/`, {
-        headers: {Authorization: `Token ${apiKey}`},
-      });
-      debug.directLookup = {status: directRes.status};
-      if (directRes.ok) {
-        const dp = await directRes.json();
-        debug.directLookup.name = dp.name;
-        debug.directLookup.seller = dp.seller;
-        debug.directLookup.brand = dp.brand;
-      } else {
-        debug.directLookup.body = (await directRes.text().catch(() => '')).slice(0, 200);
-      }
-    } catch (e: any) {
-      debug.error = e.message;
-    }
-
     return json(
-      {ok: true, inventory, _matched: matched, _debug: debug},
+      {ok: true, inventory},
       {
         headers: {
-          // Cache for 5 minutes — inventory doesn't change that fast
           'Cache-Control': 'public, max-age=300, s-maxage=300',
         },
       },

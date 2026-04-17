@@ -555,7 +555,7 @@ const NJ_DISPENSARIES: Array<{id: string; name: string; city: string | null; pho
 // and map back to our internal SKUs.
 
 const LEAFLINK_API_BASE = 'https://app.leaflink.com/api/v2';
-const LEAFLINK_COMPANY_ID = 24087;
+const HIGHSMAN_BRAND_ID = 11334;
 
 // LeafLink Product ID → our internal SKU
 const PRODUCT_ID_TO_SKU: Record<number, string> = {
@@ -589,8 +589,8 @@ export async function loader({context}: LoaderFunctionArgs) {
     let page = 1;
     let hasMore = true;
 
-    while (hasMore && page <= 10) {
-      const url = `${LEAFLINK_API_BASE}/products/?seller=${LEAFLINK_COMPANY_ID}&page_size=100&page=${page}`;
+    while (hasMore && page <= 5) {
+      const url = `${LEAFLINK_API_BASE}/products/?brand=${HIGHSMAN_BRAND_ID}&page_size=100&page=${page}`;
       const res = await fetch(url, {
         headers: {Authorization: `Token ${apiKey}`},
       });
