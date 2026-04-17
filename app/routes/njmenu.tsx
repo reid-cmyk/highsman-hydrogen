@@ -788,6 +788,73 @@ export default function NJMenu() {
     [earnedSamples],
   );
 
+  // ── LeafLink Order Sync ─────────────────────────────────────────────────
+  const [leaflinkStatus, setLeaflinkStatus] = useState<'idle' | 'sending' | 'success' | 'error' | 'skipped'>('idle');
+  const [leaflinkMessage, setLeaflinkMessage] = useState<string | null>(null);
+
+  const submitToLeafLink = useCallback(() => {
+    if (!selectedAccount || cartItems.length === 0) return;
+
+    // Build line items for LeafLink API
+    const items = cartItems.map((item) => {
+      const product = PRODUCT_LINES.find((p) => p.id === item.productId);
+      if (!product) return null;
+      const strain = product.strains.find((s) => s.name === item.strainName);
+      if (!strain?.sku) return null;
+      const unitPrice = applyDiscount(product.wholesale, product.discount);
+      return {
+        sku: strain.sku,
+        quantity: item.cases * product.caseSize, // total units, not cases
+        unitPrice,
+      };
+    }).filter(Boolean);
+
+    if (items.length === 0) {
+      setLeaflinkStatus('skipped');
+      setLeaflinkMessage('No LeafLink-eligible products in cart');
+      return;
+    }
+
+    setLeaflinkStatus('sending');
+    setLeaflinkMessage(null);
+
+    fetch('/api/leaflink-order', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        dispensaryName: selectedAccount.name,
+        dispensaryId: selectedAccount.id,
+        items,
+        notes: orderNote.trim() || undefined,
+      }),
+    })
+      .then((res) => res.json())
+      .then((data: any) => {
+        if (data.ok) {
+          if (data.skipped) {
+            setLeaflinkStatus('skipped');
+            setLeaflinkMessage(data.message || 'No products synced to LeafLink');
+          } else {
+            setLeaflinkStatus('success');
+            const matchNote = data.customerMatched
+              ? `Matched to "${data.customerName}"`
+              : 'Customer not matched — order created without buyer';
+            setLeaflinkMessage(
+              `LeafLink order ${data.orderNumber} created! ${data.itemsSynced} item(s) synced. ${matchNote}`,
+            );
+          }
+        } else {
+          setLeaflinkStatus('error');
+          setLeaflinkMessage(data.error || 'Failed to create LeafLink order');
+        }
+      })
+      .catch((err) => {
+        setLeaflinkStatus('error');
+        setLeaflinkMessage('Network error — LeafLink order not sent');
+        console.error('[njmenu] LeafLink submission error:', err);
+      });
+  }, [selectedAccount, cartItems, orderNote]);
+
   // Build mailto order
   const buildOrderEmail = useCallback(() => {
     const lines: string[] = [
@@ -1885,12 +1952,36 @@ export default function NJMenu() {
                 )}
                 <a
                   href={buildOrderEmail()}
+                  onClick={() => {
+                    // Fire LeafLink order in background when email is sent
+                    submitToLeafLink();
+                  }}
                   className="block font-headline text-lg font-600 uppercase tracking-[0.15em] py-5 w-full text-center transition-opacity hover:opacity-90"
                   style={{background: BRAND.gold, color: '#000'}}
                 >
                   Send Order{selectedAccount ? ` — ${selectedAccount.name}` : ' to Highsman'}
                 </a>
-                <p className="font-body text-xs text-center mt-4" style={{color: 'rgba(255,255,255,0.55)'}}>
+                {leaflinkStatus === 'sending' && (
+                  <p className="font-body text-xs text-center mt-3" style={{color: BRAND.gold}}>
+                    Syncing to LeafLink...
+                  </p>
+                )}
+                {leaflinkStatus === 'success' && leaflinkMessage && (
+                  <p className="font-body text-xs text-center mt-3" style={{color: BRAND.green}}>
+                    ✓ {leaflinkMessage}
+                  </p>
+                )}
+                {leaflinkStatus === 'error' && leaflinkMessage && (
+                  <p className="font-body text-xs text-center mt-3" style={{color: '#ef4444'}}>
+                    ✗ {leaflinkMessage}
+                  </p>
+                )}
+                {leaflinkStatus === 'skipped' && leaflinkMessage && (
+                  <p className="font-body text-xs text-center mt-3" style={{color: 'rgba(255,255,255,0.45)'}}>
+                    {leaflinkMessage}
+                  </p>
+                )}
+                <p className="font-body text-xs text-center mt-3" style={{color: 'rgba(255,255,255,0.55)'}}>
                   Opens your email client with the order pre-filled. Your rep will confirm.
                 </p>
               </>
