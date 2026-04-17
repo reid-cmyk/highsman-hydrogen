@@ -1,6 +1,8 @@
 import {useState, useEffect, useMemo, useRef, useCallback} from 'react';
 import type {MetaFunction} from '@shopify/remix-oxygen';
 import {Link, useFetcher} from '@remix-run/react';
+import type {RepId} from '~/lib/reps';
+import {MAX_SOLO_DRIVE_MIN, MAX_DOUBLEHEADER_HOP_MIN} from '~/lib/reps';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // META — staff-only internal tool; hide global nav like /njmenu
@@ -327,6 +329,36 @@ export default function NJPopups() {
     | {status: 'ok'; minutes: number; text: string; otherName: string}
     | {status: 'blocked'; minutes: number; text: string; otherName: string}
     | {status: 'error'; message: string; otherName: string}
+  >({status: 'idle'});
+
+  // ── Rep assignment (NJ coverage guardrail) ──────────────────────────────
+  // Every NJ pop-up is run by either the North Jersey rep (Newark hub) or
+  // South Jersey rep (Collingswood hub). The server figures out which rep
+  // covers the dispensary based on drive time from each hub, and blocks
+  // bookings outside coverage. Weekend doubleheader exception: if the same
+  // rep already has an earlier booking that Sat/Sun, the second stop can
+  // be within MAX_DOUBLEHEADER_HOP_MIN of the earlier dispensary instead.
+  const [repCheck, setRepCheck] = useState<
+    | {status: 'idle'}
+    | {status: 'checking'}
+    | {
+        status: 'assigned';
+        repId: RepId;
+        repName: string;
+        hubLabel: string;
+        subjectTag: string;
+        color: string;
+        driveMin: number;
+        mode: 'solo' | 'doubleheader';
+        anchorName?: string;
+        note?: string;
+      }
+    | {
+        status: 'blocked';
+        reason: 'out_of_coverage' | 'doubleheader_too_far';
+        message: string;
+      }
+    | {status: 'error'; message: string}
   >({status: 'idle'});
 
   // Live Zoho account search — same pattern as /njmenu.
@@ -692,6 +724,97 @@ export default function NJPopups() {
 
   const driveBlocked = driveCheck.status === 'blocked';
 
+  // ── Rep-assignment lookup ───────────────────────────────────────────────
+  // Fires whenever dispensary + slot are both present and the dispensary has
+  // coordinates. Checks coverage from both NJ rep hubs, applies the weekend
+  // doubleheader exception if an earlier same-day booking exists.
+  useEffect(() => {
+    if (
+      !dispensary ||
+      !slot ||
+      typeof dispensary.lat !== 'number' ||
+      typeof dispensary.lng !== 'number'
+    ) {
+      setRepCheck({status: 'idle'});
+      return;
+    }
+
+    const fd = new FormData();
+    fd.append('destLat', String(dispensary.lat));
+    fd.append('destLng', String(dispensary.lng));
+    fd.append('dispensaryName', dispensary.name);
+    fd.append('shiftKey', slot.shiftKey);
+    fd.append('date', slot.date);
+
+    // Look for a same-day earlier booking at a different dispensary with
+    // coords — that unlocks the doubleheader exception server-side.
+    const isWeekend =
+      slot.shiftKey.startsWith('sat-') || slot.shiftKey.startsWith('sun-');
+    if (isWeekend) {
+      const anchor = bookings.find(
+        (b) =>
+          b.date === slot.date &&
+          b.dispId !== dispensary.id &&
+          typeof b.lat === 'number' &&
+          typeof b.lng === 'number',
+      );
+      if (anchor) {
+        fd.append('anchorLat', String(anchor.lat));
+        fd.append('anchorLng', String(anchor.lng));
+        fd.append('anchorName', anchor.name);
+        fd.append('anchorShiftKey', anchor.shiftKey);
+      }
+    }
+
+    setRepCheck({status: 'checking'});
+    let cancelled = false;
+    fetch('/api/rep-assign', {method: 'POST', body: fd})
+      .then((r) => r.json().catch(() => null))
+      .then((data) => {
+        if (cancelled) return;
+        if (data?.ok) {
+          setRepCheck({
+            status: 'assigned',
+            repId: data.repId,
+            repName: data.repName,
+            hubLabel: data.hubLabel,
+            subjectTag: data.subjectTag,
+            color: data.color,
+            driveMin: data.driveMin,
+            mode: data.mode,
+            anchorName: data.anchorName,
+            note: data.note,
+          });
+        } else if (data?.reason === 'drive_lookup_failed') {
+          setRepCheck({
+            status: 'error',
+            message: data?.message || 'Rep coverage check unavailable.',
+          });
+        } else {
+          setRepCheck({
+            status: 'blocked',
+            reason: data?.reason === 'doubleheader_too_far'
+              ? 'doubleheader_too_far'
+              : 'out_of_coverage',
+            message: data?.message || 'Dispensary is outside NJ rep coverage.',
+          });
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setRepCheck({
+          status: 'error',
+          message: err?.message || 'Rep coverage check failed.',
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dispensary, slot, bookings]);
+
+  const repBlocked = repCheck.status === 'blocked';
+
   // Booking-window checks. The picker already gray-outs disallowed shifts, but
   // we also defend here so a bypassed click (devtools, stale state) can't book.
   //   leadOk     → slot is at least MIN_LEAD_DAYS out from today
@@ -704,7 +827,8 @@ export default function NJPopups() {
   const step2Done = !!slot;
   // Link mode is "done" as soon as a slot is picked — the contact handoff happens in the portal.
   const step3Done = mode === 'link' ? !!slot : !!contact;
-  const step5Done = step1Done && step2Done && step3Done && !driveBlocked && windowOk;
+  const step5Done =
+    step1Done && step2Done && step3Done && !driveBlocked && !repBlocked && windowOk;
 
   // Fire a Zoho Event creation for every booking so the Account's Activities
   // timeline shows the pop-up history + upcoming stops on the Zoho calendar.
@@ -734,6 +858,16 @@ export default function NJPopups() {
     if (opts.contactRole && opts.contactRole !== '—') fd.append('contactRole', opts.contactRole);
     if (opts.portalUrl) fd.append('portalUrl', opts.portalUrl);
     if (dispensary.city) fd.append('city', dispensary.city);
+    // Rep assignment — stamped onto the Zoho Event Subject prefix + Description
+    // so staff can see which rep owns each booking from the CRM directly.
+    if (repCheck.status === 'assigned') {
+      fd.append('repId', repCheck.repId);
+      fd.append('repName', repCheck.repName);
+      fd.append('repTag', repCheck.subjectTag);
+      fd.append('repMode', repCheck.mode);
+      fd.append('repDriveMin', String(repCheck.driveMin));
+      if (repCheck.anchorName) fd.append('repAnchorName', repCheck.anchorName);
+    }
     fetch('/api/popups-book', {method: 'POST', body: fd})
       .then((r) => r.json().catch(() => null))
       .then((data) => {
@@ -757,6 +891,8 @@ export default function NJPopups() {
     if (!dispensary || !slot) return;
     // Hard block: same-day weekend booking > 40 min drive from the existing stop.
     if (driveBlocked) return;
+    // Hard block: dispensary is outside the NJ rep coverage radius.
+    if (repBlocked) return;
     // Hard block: under the 5-day lead-time window or before LAUNCH_DATE.
     if (!windowOk) return;
 
@@ -1357,7 +1493,9 @@ export default function NJPopups() {
                 All shifts cap at 2 simultaneous bookings statewide. Sat/Sun splits into matinee (1–3 PM)
                 and late (4–6 PM) — each with its own 2-spot cap. Pop-ups officially launch{' '}
                 <strong>Fri May 8</strong>; bookings require a {MIN_LEAD_DAYS}-day minimum lead time. Window
-                rolls forward weekly so you can always plan ~2 months out.
+                rolls forward weekly so you can always plan ~2 months out. Dispensaries must sit within{' '}
+                {MAX_SOLO_DRIVE_MIN} min of Newark (North Jersey Rep) or Collingswood (South Jersey Rep) — auto-assigned
+                on pick. Weekend doubleheaders allow up to {MAX_DOUBLEHEADER_HOP_MIN} min between stops.
               </p>
             </div>
             <div style={stepStatus(step2Done)}>{step2Done ? 'Locked In' : 'Pending'}</div>
@@ -2252,6 +2390,97 @@ export default function NJPopups() {
                 </div>
               ))}
             </div>
+
+            {/* ── Rep on Duty banner (NJ coverage guardrail) ── */}
+            {repCheck.status !== 'idle' && (
+              <div
+                style={{
+                  marginTop: 20,
+                  padding: '16px 20px',
+                  border: `1px solid ${
+                    repCheck.status === 'blocked'
+                      ? BRAND.red
+                      : repCheck.status === 'assigned'
+                        ? repCheck.color
+                        : BRAND.lineStrong
+                  }`,
+                  background:
+                    repCheck.status === 'blocked'
+                      ? 'rgba(220,53,69,0.08)'
+                      : repCheck.status === 'assigned'
+                        ? 'rgba(245,228,0,0.04)'
+                        : 'rgba(255,255,255,0.03)',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: TEKO,
+                    fontSize: 14,
+                    letterSpacing: '0.18em',
+                    textTransform: 'uppercase',
+                    color:
+                      repCheck.status === 'blocked'
+                        ? BRAND.red
+                        : repCheck.status === 'assigned'
+                          ? BRAND.gold
+                          : BRAND.gray,
+                    marginBottom: 6,
+                  }}
+                >
+                  {repCheck.status === 'checking' && 'Assigning rep…'}
+                  {repCheck.status === 'assigned' &&
+                    (repCheck.mode === 'doubleheader'
+                      ? '✓ Rep on Duty · Doubleheader'
+                      : '✓ Rep on Duty')}
+                  {repCheck.status === 'blocked' &&
+                    (repCheck.reason === 'doubleheader_too_far'
+                      ? '✕ Doubleheader too far — booking blocked'
+                      : '✕ Out of NJ coverage — booking blocked')}
+                  {repCheck.status === 'error' && 'Rep coverage check unavailable'}
+                </div>
+                <div
+                  style={{
+                    fontFamily: BODY,
+                    fontSize: 15,
+                    color: BRAND.white,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {repCheck.status === 'checking' && (
+                    <>
+                      Checking drive time from Newark &amp; Collingswood hubs…
+                    </>
+                  )}
+                  {repCheck.status === 'assigned' && (
+                    <>
+                      <strong style={{color: BRAND.gold}}>
+                        {repCheck.repName}
+                      </strong>{' '}
+                      runs this shift —{' '}
+                      <strong>{repCheck.driveMin} min</strong>{' '}
+                      {repCheck.mode === 'doubleheader' ? (
+                        <>
+                          from{' '}
+                          <strong>
+                            {repCheck.anchorName || 'earlier stop'}
+                          </strong>{' '}
+                          (doubleheader; same rep already in the field).
+                        </>
+                      ) : (
+                        <>from {repCheck.hubLabel}.</>
+                      )}
+                    </>
+                  )}
+                  {repCheck.status === 'blocked' && <>{repCheck.message}</>}
+                  {repCheck.status === 'error' && (
+                    <>
+                      {repCheck.message} Double-check rep coverage manually
+                      before confirming.
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* ── Drive-time guardrail banner (weekend same-day rule) ── */}
             {driveCheck.status !== 'idle' && (

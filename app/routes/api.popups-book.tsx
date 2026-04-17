@@ -131,6 +131,14 @@ export async function action({request, context}: ActionFunctionArgs) {
   const portalUrl = ((fd.get('portalUrl') as string) || '').trim();
   const city = ((fd.get('city') as string) || '').trim();
   const street = ((fd.get('street') as string) || '').trim();
+  // Rep assignment (optional — only set when UI successfully resolved a rep).
+  // repId is received but not persisted as its own field; Subject + Description
+  // carry the identity. Later we can map it to a Zoho Host_Rep custom field.
+  const repName = ((fd.get('repName') as string) || '').trim();
+  const repTag = ((fd.get('repTag') as string) || '').trim();
+  const repMode = ((fd.get('repMode') as string) || '').trim();
+  const repDriveMin = ((fd.get('repDriveMin') as string) || '').trim();
+  const repAnchorName = ((fd.get('repAnchorName') as string) || '').trim();
 
   if (!accountId || !dispensaryName || !date || !shiftKey) {
     return json(
@@ -169,6 +177,13 @@ export async function action({request, context}: ActionFunctionArgs) {
       `Shift: ${shiftLabel || shiftTitleSuffix(shiftKey)}`,
       `Booking Channel: ${channel === 'link' ? 'Dispensary Portal' : channel === 'manual' ? 'Email (new contact)' : 'Email'}`,
     ];
+    if (repName) {
+      const driveLine = repDriveMin ? ` (${repDriveMin} min${repMode === 'doubleheader' ? ` from ${repAnchorName || 'earlier stop'}` : ' from hub'})` : '';
+      descriptionLines.push(`Rep on Duty: ${repName}${driveLine}`);
+      if (repMode === 'doubleheader') {
+        descriptionLines.push('  Doubleheader — same rep running an earlier stop that day.');
+      }
+    }
     if (contactName || contactEmail || contactPhone) {
       descriptionLines.push('', 'POC:');
       if (contactName) descriptionLines.push(`  Name: ${contactName}${contactRole ? ` (${contactRole})` : ''}`);
@@ -180,8 +195,11 @@ export async function action({request, context}: ActionFunctionArgs) {
     }
     descriptionLines.push('', 'Created via /njpopups staff tool.');
 
+    // Subject prefix makes the rep obvious in Zoho's calendar views without
+    // needing to click into the Event. e.g. "[NJ-N] Highsman Pop Up — ..."
+    const titlePrefix = repTag ? `${repTag} ` : '';
     const eventPayload: Record<string, any> = {
-      Event_Title: `Highsman Pop Up — ${dispensaryName} (${shiftTitleSuffix(shiftKey)})`,
+      Event_Title: `${titlePrefix}Highsman Pop Up — ${dispensaryName} (${shiftTitleSuffix(shiftKey)})`,
       Start_DateTime: startISO,
       End_DateTime: endISO,
       Description: descriptionLines.join('\n'),
