@@ -957,11 +957,14 @@ export default function NJMenu() {
           if (data.skipped) {
             setLeaflinkStatus('skipped');
             setLeaflinkMessage(data.message || 'No products synced to LeafLink');
+          } else if (data.manualEntry) {
+            setLeaflinkStatus('success');
+            setLeaflinkMessage(data.message || 'Order received — will be entered manually into LeafLink.');
           } else {
             setLeaflinkStatus('success');
             const matchNote = data.customerMatched
               ? `Matched to "${data.customerName}"`
-              : 'Customer not matched — order created without buyer';
+              : 'Customer not matched — notification sent for manual entry';
             setLeaflinkMessage(
               `LeafLink order ${data.orderNumber} created! ${data.itemsSynced} item(s) synced. ${matchNote}`,
             );

@@ -442,10 +442,32 @@ export async function action({request, context}: ActionFunctionArgs) {
       customer ? `Found ${customer.name} (ID: ${customer.id})` : 'Not found',
     );
 
-    // Step 2: Create the order (with customer link if found)
+    // Step 2: If no customer found or customer not linked, skip LeafLink and notify
+    // LeafLink requires a valid customer field — orders can't be created without one
+    if (!customer) {
+      console.warn(`[api/leaflink-order] No customer match for "${dispensaryName}" — sending email notification`);
+      sendFailureNotification(env, {
+        dispensaryName,
+        reason: `Customer "${dispensaryName}" not found in LeafLink — order needs manual entry`,
+        items: eligibleItems,
+        notes,
+      }).catch(() => {});
+
+      return json({
+        ok: true,
+        skipped: false,
+        manualEntry: true,
+        message: `Order received — "${dispensaryName}" not found in LeafLink. Notification sent for manual entry.`,
+        customerMatched: false,
+        itemsSynced: 0,
+        itemsSkipped: eligibleItems.length,
+      });
+    }
+
+    // Step 3: Create the order with customer link
     let result = await createLeafLinkOrder(
       {
-        customerId: customer?.id ?? null,
+        customerId: customer.id,
         dispensaryName,
         lineItems: eligibleItems,
         notes: notes || '',
@@ -453,50 +475,41 @@ export async function action({request, context}: ActionFunctionArgs) {
       apiKey,
     );
 
-    // If order failed because customer isn't linked to our seller, retry without customer
-    if (!result.success && result.error?.includes('is not a customer of') && customer) {
+    // If order failed because customer isn't linked to our seller, fall back to email
+    if (!result.success && result.error?.includes('is not a customer of')) {
       console.warn(
-        `[api/leaflink-order] Customer ${customer.name} (${customer.id}) not linked to seller — retrying without customer`,
+        `[api/leaflink-order] Customer ${customer.name} (${customer.id}) not linked to seller — falling back to email`,
       );
-      result = await createLeafLinkOrder(
-        {
-          customerId: null,
-          dispensaryName,
-          lineItems: eligibleItems,
-          notes: notes || '',
-        },
-        apiKey,
-      );
-      // Notify that customer wasn't linked
       sendFailureNotification(env, {
         dispensaryName,
-        reason: `Customer "${customer.name}" (ID: ${customer.id}) exists in LeafLink but is not linked to Canfections NJ — order created without buyer link. Please add them as a customer in LeafLink.`,
+        reason: `Customer "${customer.name}" (ID: ${customer.id}) exists in LeafLink but is not linked to Canfections NJ as a buyer. Order needs manual entry. Please add them as a customer in LeafLink.`,
         items: eligibleItems,
         notes,
       }).catch(() => {});
-    }
-
-    if (result.success) {
-      // If order was created but customer wasn't matched at all, send notification
-      if (!customer) {
-        sendFailureNotification(env, {
-          dispensaryName,
-          reason: `Customer name "${dispensaryName}" not found in LeafLink — order created without buyer link`,
-          items: eligibleItems,
-          notes,
-        }).catch(() => {}); // fire-and-forget, don't block response
-      }
 
       return json({
         ok: true,
+        skipped: false,
+        manualEntry: true,
+        message: `Order received — "${customer.name}" is not yet linked as a Canfections NJ customer in LeafLink. Notification sent for manual entry.`,
+        customerMatched: false,
+        customerName: customer.name,
+        itemsSynced: 0,
+        itemsSkipped: eligibleItems.length,
+      });
+    }
+
+    if (result.success) {
+      return json({
+        ok: true,
         orderNumber: result.orderNumber,
-        customerMatched: !!customer,
-        customerName: customer?.name || null,
+        customerMatched: true,
+        customerName: customer.name,
         itemsSynced: eligibleItems.length,
         itemsSkipped: items.length - eligibleItems.length,
       });
     } else {
-      // Order creation failed — send failure notification
+      // Order creation failed for another reason — send failure notification
       sendFailureNotification(env, {
         dispensaryName,
         reason: result.error || 'LeafLink order creation failed',
