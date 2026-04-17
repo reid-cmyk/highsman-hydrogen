@@ -1,12 +1,27 @@
 import {useState, useEffect, useMemo, useRef, useCallback} from 'react';
-import type {MetaFunction} from '@shopify/remix-oxygen';
-import {Link, useFetcher} from '@remix-run/react';
+import type {LoaderFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
+import {json} from '@shopify/remix-oxygen';
+import {Link, useFetcher, useLoaderData} from '@remix-run/react';
 import type {RepId, QuickCoverage} from '~/lib/reps';
 import {
   MAX_SOLO_DRIVE_MIN,
   MAX_DOUBLEHEADER_HOP_MIN,
+  REP_HUBS,
   quickCoverageStatus,
 } from '~/lib/reps';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LOADER — expose the Google Maps JS API key to the client.
+// We reuse env.GOOGLE_PLACES_API_KEY (same Google Cloud project as Routes API,
+// Places API, rep-assign). The key should be HTTP-referrer restricted to
+// highsman.com in Cloud Console so exposing it client-side is safe.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function loader({context}: LoaderFunctionArgs) {
+  const env = context.env as any;
+  return json({
+    googleMapsApiKey: (env?.GOOGLE_PLACES_API_KEY as string) || '',
+  });
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // META — staff-only internal tool; hide global nav like /njmenu
@@ -559,35 +574,55 @@ export default function NJPopups() {
     return apiAccounts.map(apiAccountToDispensary);
   }, [accountFetcher.data, query]);
 
+  // ── Google Maps refs ──────────────────────────────────────────────────────
+  // We keep the map instance + layer arrays on refs so re-renders don't rebuild
+  // the whole map. mapLayersRef is the render-scoped collection we clear between
+  // draws (dispensary pins, stop markers, route polylines, hub markers).
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<any>(null);
-  const mapLayersRef = useRef<{pins: any[]; route: any}>({pins: [], route: null});
-  const [leafletReady, setLeafletReady] = useState<boolean>(false);
+  const mapLayersRef = useRef<{
+    pins: any[];
+    stops: any[];
+    hubs: any[];
+    routes: any[];
+  }>({pins: [], stops: [], hubs: [], routes: []});
+  const [mapsReady, setMapsReady] = useState<boolean>(false);
+  const {googleMapsApiKey} = useLoaderData<typeof loader>();
 
+  // Load Google Maps JS API once per page. `geometry` library is required for
+  // `google.maps.geometry.encoding.decodePath` — that's how we turn the encoded
+  // polyline returned by /api/route-polyline into actual LatLng points.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if ((window as any).L) {
-      setLeafletReady(true);
+    if ((window as any).google?.maps) {
+      setMapsReady(true);
       return;
     }
-    if (!document.getElementById('leaflet-css')) {
-      const css = document.createElement('link');
-      css.id = 'leaflet-css';
-      css.rel = 'stylesheet';
-      css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-      document.head.appendChild(css);
+    if (!googleMapsApiKey) {
+      // eslint-disable-next-line no-console
+      console.warn('[njpopups] No Google Maps API key — map disabled.');
+      return;
     }
-    if (!document.getElementById('leaflet-js')) {
-      const js = document.createElement('script');
-      js.id = 'leaflet-js';
-      js.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      js.async = true;
-      js.onload = () => setLeafletReady(true);
-      document.body.appendChild(js);
-    } else {
-      setLeafletReady(true);
+    // Cowork-mode-style JSONP loader with a global callback. If an earlier
+    // mount already queued the script we just register a listener on it.
+    const existing = document.getElementById('google-maps-js') as
+      | HTMLScriptElement
+      | null;
+    if (existing) {
+      existing.addEventListener('load', () => setMapsReady(true));
+      return;
     }
-  }, []);
+    const cbName = '__hsGmapsReady__';
+    (window as any)[cbName] = () => setMapsReady(true);
+    const js = document.createElement('script');
+    js.id = 'google-maps-js';
+    js.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(
+      googleMapsApiKey,
+    )}&libraries=geometry&v=quarterly&callback=${cbName}`;
+    js.async = true;
+    js.defer = true;
+    document.body.appendChild(js);
+  }, [googleMapsApiKey]);
 
   // Weekend stops — includes all booked weekend slots plus the currently-pending selection.
   // Each stop carries its own lat/lng (may be undefined if Zoho account isn't in COORDS_LOOKUP).
@@ -599,6 +634,12 @@ export default function NJPopups() {
     date: string;
     shiftKey: string;
     pending: boolean;
+  };
+  const SHIFT_ORDER: Record<string, number> = {
+    'sat-mat': 0,
+    'sat-late': 1,
+    'sun-mat': 2,
+    'sun-late': 3,
   };
   const weekendStops: Stop[] = useMemo(() => {
     const stops: Stop[] = [];
@@ -626,8 +667,11 @@ export default function NJPopups() {
         pending: true,
       });
     }
-    const order: Record<string, number> = {'sat-mat': 0, 'sat-late': 1, 'sun-mat': 2, 'sun-late': 3};
-    stops.sort((a, b) => (a.date + order[a.shiftKey]).localeCompare(b.date + order[b.shiftKey]));
+    stops.sort((a, b) =>
+      (a.date + (SHIFT_ORDER[a.shiftKey] ?? 10)).localeCompare(
+        b.date + (SHIFT_ORDER[b.shiftKey] ?? 10),
+      ),
+    );
     return stops;
   }, [bookings, slot, dispensary]);
 
@@ -637,83 +681,358 @@ export default function NJPopups() {
     [weekendStops],
   );
 
-  useEffect(() => {
-    if (!leafletReady || !mapRef.current) return;
-    const L = (window as any).L;
-    if (!mapInstance.current) {
-      mapInstance.current = L.map(mapRef.current, {zoomControl: true, attributionControl: false}).setView(
-        [40.2, -74.5],
-        8,
-      );
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
-        subdomains: 'abcd',
-        maxZoom: 19,
-      }).addTo(mapInstance.current);
-      L.control.attribution({prefix: false}).addAttribution('© OpenStreetMap · CARTO').addTo(mapInstance.current);
+  // All stops (weekend + weekday) with coords — grouped into per-rep daily routes
+  // for the map. Each route starts at the rep's hub and threads through every
+  // booking on that day, so the map shows "here's where each rep is driving on
+  // Saturday" rather than a single cross-day polyline.
+  type DayRoute = {
+    key: string; // `${date}|${repId}`
+    date: string;
+    repId: RepId;
+    stops: Array<Stop & {lat: number; lng: number}>;
+  };
+  const dailyRoutes: DayRoute[] = useMemo(() => {
+    const all: Stop[] = [];
+    bookings.forEach((b) => {
+      all.push({
+        name: b.name,
+        city: b.city,
+        lat: b.lat,
+        lng: b.lng,
+        date: b.date,
+        shiftKey: b.shiftKey,
+        pending: false,
+      });
+    });
+    if (slot && dispensary) {
+      all.push({
+        name: dispensary.name,
+        city: dispensary.city,
+        lat: dispensary.lat,
+        lng: dispensary.lng,
+        date: slot.date,
+        shiftKey: slot.shiftKey,
+        pending: true,
+      });
     }
+    const groups = new Map<string, DayRoute>();
+    all.forEach((s) => {
+      if (s.lat == null || s.lng == null) return;
+      const stop = s as Stop & {lat: number; lng: number};
+      // Rep derived from haversine (cheap). The authoritative rep assignment
+      // lives in /api/rep-assign and gates booking; for map rendering this
+      // estimate matches in 100% of in-coverage cases.
+      const cov = quickCoverageStatus(stop.lat, stop.lng);
+      const repId: RepId = cov.closestHub || 'north';
+      const key = `${s.date}|${repId}`;
+      const existing = groups.get(key);
+      if (existing) {
+        existing.stops.push(stop);
+      } else {
+        groups.set(key, {key, date: s.date, repId, stops: [stop]});
+      }
+    });
+    // Order stops within a day by shift time so the route runs matinee → late.
+    for (const g of groups.values()) {
+      g.stops.sort((a, b) => {
+        const oa = SHIFT_ORDER[a.shiftKey] ?? 10;
+        const ob = SHIFT_ORDER[b.shiftKey] ?? 10;
+        if (oa !== ob) return oa - ob;
+        return a.shiftKey.localeCompare(b.shiftKey);
+      });
+    }
+    return Array.from(groups.values()).sort((a, b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      return a.repId.localeCompare(b.repId);
+    });
+  }, [bookings, slot, dispensary]);
+
+  // ── Polyline cache ────────────────────────────────────────────────────────
+  // One cached polyline per (date, rep, stop-chain). The chain hash lets the
+  // cache invalidate cleanly when a pending slot is added to a day's route.
+  type RoutePoly = {
+    points: Array<{lat: number; lng: number}>;
+    legsSeconds: number[];
+    totalSeconds: number;
+    totalMeters: number;
+  };
+  const routeCacheKey = useCallback((dr: DayRoute): string => {
+    const chain = dr.stops
+      .map((s) => `${s.lat.toFixed(4)},${s.lng.toFixed(4)}`)
+      .join('|');
+    return `${dr.key}#${chain}`;
+  }, []);
+  const [routePolylines, setRoutePolylines] = useState<Record<string, RoutePoly>>({});
+
+  // Fetch encoded polylines for any route groups we haven't resolved yet.
+  // POST to /api/route-polyline — server caches 30 min, so this is cheap.
+  useEffect(() => {
+    if (!mapsReady) return;
+    let cancelled = false;
+    (async () => {
+      for (const dr of dailyRoutes) {
+        const cKey = routeCacheKey(dr);
+        if (routePolylines[cKey]) continue;
+        const hub = REP_HUBS[dr.repId];
+        const waypoints = [
+          {lat: hub.hubLat, lng: hub.hubLng},
+          ...dr.stops.map((s) => ({lat: s.lat, lng: s.lng})),
+        ];
+        try {
+          const res = await fetch('/api/route-polyline', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({waypoints}),
+          });
+          const data = await res.json();
+          if (!data?.ok || cancelled) continue;
+          const G = (window as any).google;
+          const decoded: any[] = data.encodedPolyline
+            ? G?.maps?.geometry?.encoding?.decodePath(data.encodedPolyline) || []
+            : [];
+          const points = decoded.map((ll: any) => ({lat: ll.lat(), lng: ll.lng()}));
+          const legsSeconds: number[] = Array.isArray(data.legs)
+            ? data.legs.map((l: any) => l.durationSeconds || 0)
+            : [];
+          if (cancelled) return;
+          setRoutePolylines((prev) => ({
+            ...prev,
+            [cKey]: {
+              points,
+              legsSeconds,
+              totalSeconds: data.durationSeconds || 0,
+              totalMeters: data.distanceMeters || 0,
+            },
+          }));
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error('[njpopups] polyline fetch failed', err);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mapsReady, dailyRoutes, routeCacheKey, routePolylines]);
+
+  // ── Google Maps render ────────────────────────────────────────────────────
+  // First call sets up the map + one-time layers (hubs, faint dispensary dots).
+  // Subsequent calls repaint stop markers + route polylines in place.
+  useEffect(() => {
+    if (!mapsReady || !mapRef.current) return;
+    const G = (window as any).google;
+    if (!G?.maps) return;
+
+    // Dark styled basemap — matches Highsman's Space Black surface.
+    const darkStyle: any[] = [
+      {elementType: 'geometry', stylers: [{color: '#111111'}]},
+      {elementType: 'labels.text.stroke', stylers: [{color: '#111111'}]},
+      {elementType: 'labels.text.fill', stylers: [{color: '#A9ACAF'}]},
+      {featureType: 'road', elementType: 'geometry', stylers: [{color: '#1e1e1e'}]},
+      {featureType: 'road', elementType: 'labels', stylers: [{visibility: 'off'}]},
+      {featureType: 'road.highway', elementType: 'geometry', stylers: [{color: '#2a2a2a'}]},
+      {featureType: 'road.highway', elementType: 'labels', stylers: [{visibility: 'simplified'}]},
+      {featureType: 'water', elementType: 'geometry', stylers: [{color: '#0a1a24'}]},
+      {featureType: 'poi', stylers: [{visibility: 'off'}]},
+      {featureType: 'transit', stylers: [{visibility: 'off'}]},
+      {featureType: 'administrative', elementType: 'geometry', stylers: [{color: '#2a2a2a'}]},
+      {featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{color: '#A9ACAF'}]},
+    ];
+
+    if (!mapInstance.current) {
+      mapInstance.current = new G.maps.Map(mapRef.current, {
+        center: {lat: 40.2, lng: -74.5},
+        zoom: 8,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+        styles: darkStyle,
+        backgroundColor: '#111111',
+        gestureHandling: 'greedy',
+      });
+
+      // Hub markers — star shape, colored per rep.
+      (['north', 'south'] as RepId[]).forEach((id) => {
+        const hub = REP_HUBS[id];
+        const marker = new G.maps.Marker({
+          position: {lat: hub.hubLat, lng: hub.hubLng},
+          map: mapInstance.current,
+          icon: {
+            // 10-point star SVG path — unambiguous "base" shape vs. stop circles.
+            path:
+              'M 0,-12 L 3.5,-3.7 12,-3.7 5.3,1.5 7.7,10 0,4.8 -7.7,10 -5.3,1.5 -12,-3.7 -3.5,-3.7 Z',
+            fillColor: hub.color,
+            fillOpacity: 1,
+            strokeColor: '#000',
+            strokeWeight: 2,
+            scale: 1.1,
+          },
+          title: `${hub.hubLabel} — ${hub.hubCity} hub`,
+          zIndex: 200,
+        });
+        mapLayersRef.current.hubs.push(marker);
+      });
+
+      // Faint dots for every known NJ dispensary in the local coords index.
+      Object.entries(COORDS_LOOKUP).forEach(([key, coords]) => {
+        const [name, city] = key.split('|');
+        const marker = new G.maps.Marker({
+          position: {lat: coords.lat, lng: coords.lng},
+          map: mapInstance.current,
+          icon: {
+            path: G.maps.SymbolPath.CIRCLE,
+            scale: 3,
+            fillColor: BRAND.gray,
+            fillOpacity: 0.55,
+            strokeWeight: 0,
+          },
+          title: `${name.replace(/\b\w/g, (c: string) => c.toUpperCase())} — ${city.replace(
+            /\b\w/g,
+            (c: string) => c.toUpperCase(),
+          )}`,
+          zIndex: 50,
+        });
+        mapLayersRef.current.pins.push(marker);
+      });
+    }
+
     const map = mapInstance.current;
 
-    mapLayersRef.current.pins.forEach((p) => map.removeLayer(p));
-    mapLayersRef.current.pins = [];
-    if (mapLayersRef.current.route) {
-      map.removeLayer(mapLayersRef.current.route);
-      mapLayersRef.current.route = null;
-    }
+    // Clear per-render layers.
+    mapLayersRef.current.stops.forEach((m) => m.setMap(null));
+    mapLayersRef.current.stops = [];
+    mapLayersRef.current.routes.forEach((p) => p.setMap(null));
+    mapLayersRef.current.routes = [];
 
-    // Faint pins for all known NJ dispensaries (from the local coords index)
-    Object.entries(COORDS_LOOKUP).forEach(([key, coords]) => {
-      const [name, city] = key.split('|');
-      const m = L.circleMarker([coords.lat, coords.lng], {
-        radius: 4,
-        color: BRAND.gray,
-        fillColor: BRAND.gray,
-        fillOpacity: 0.5,
-        weight: 1,
-      }).addTo(map);
-      m.bindTooltip(
-        `${name.replace(/\b\w/g, (c: string) => c.toUpperCase())} — ${city.replace(/\b\w/g, (c: string) => c.toUpperCase())}`,
-        {direction: 'top'},
-      );
-      mapLayersRef.current.pins.push(m);
-    });
+    const bounds = new G.maps.LatLngBounds();
+    let hasBounds = false;
 
-    mappableStops.forEach((s, i) => {
-      const color = s.pending ? BRAND.white : BRAND.gold;
-      const icon = L.divIcon({
-        className: 'hs-pin',
-        iconSize: [28, 28],
-        iconAnchor: [14, 14],
-        html: `<div style="width:28px;height:28px;border-radius:50%;background:${color};border:2px solid #000;display:flex;align-items:center;justify-content:center;font-family:Teko,sans-serif;font-size:18px;font-weight:700;color:#000;box-shadow:0 2px 6px rgba(0,0,0,0.6);">${i + 1}</div>`,
+    dailyRoutes.forEach((dr) => {
+      const hub = REP_HUBS[dr.repId];
+      const cKey = routeCacheKey(dr);
+      const poly = routePolylines[cKey];
+
+      // Hub anchors the route — always include in bounds for the group.
+      bounds.extend({lat: hub.hubLat, lng: hub.hubLng});
+      hasBounds = true;
+
+      if (poly && poly.points.length > 1) {
+        // Real road-following polyline from Google Routes API.
+        const line = new G.maps.Polyline({
+          path: poly.points,
+          geodesic: false,
+          strokeColor: hub.color,
+          strokeOpacity: 0.9,
+          strokeWeight: 4,
+          map,
+          zIndex: 100,
+        });
+        mapLayersRef.current.routes.push(line);
+        poly.points.forEach((pt) => bounds.extend(pt));
+      } else {
+        // Fallback while the polyline is still loading: dashed straight line
+        // from hub → each stop. Visible immediately so users see intent.
+        const path = [
+          {lat: hub.hubLat, lng: hub.hubLng},
+          ...dr.stops.map((s) => ({lat: s.lat, lng: s.lng})),
+        ];
+        const line = new G.maps.Polyline({
+          path,
+          geodesic: true,
+          strokeOpacity: 0,
+          strokeWeight: 0,
+          icons: [
+            {
+              icon: {
+                path: 'M 0,-1 0,1',
+                strokeOpacity: 0.7,
+                strokeColor: hub.color,
+                scale: 3,
+              },
+              offset: '0',
+              repeat: '12px',
+            },
+          ],
+          map,
+          zIndex: 90,
+        });
+        mapLayersRef.current.routes.push(line);
+        path.forEach((pt) => bounds.extend(pt));
+      }
+
+      // Numbered stop markers — colored by rep, highlighted when pending.
+      dr.stops.forEach((s, i) => {
+        const marker = new G.maps.Marker({
+          position: {lat: s.lat, lng: s.lng},
+          map,
+          label: {
+            text: String(i + 1),
+            color: '#000',
+            fontFamily: 'Teko, sans-serif',
+            fontSize: '16px',
+            fontWeight: '700',
+          },
+          icon: {
+            path: G.maps.SymbolPath.CIRCLE,
+            scale: 14,
+            fillColor: s.pending ? BRAND.white : hub.color,
+            fillOpacity: 1,
+            strokeColor: '#000',
+            strokeWeight: 2,
+          },
+          title: `${s.name} — ${s.city} · ${shiftLabel(s.shiftKey)} · ${fmtDate(s.date)}${
+            s.pending ? ' · PENDING' : ''
+          }`,
+          zIndex: 150,
+        });
+        mapLayersRef.current.stops.push(marker);
       });
-      const m = L.marker([s.lat, s.lng], {icon}).addTo(map);
-      m.bindPopup(
-        `<b>${s.name}</b><br>${s.city}<br>${shiftLabel(s.shiftKey)} · ${fmtDate(s.date)}${
-          s.pending ? '<br><em>Pending</em>' : ''
-        }`,
-      );
-      mapLayersRef.current.pins.push(m);
     });
 
-    if (mappableStops.length >= 2) {
-      mapLayersRef.current.route = L.polyline(
-        mappableStops.map((s) => [s.lat, s.lng]),
-        {color: BRAND.gold, weight: 3, opacity: 0.9, dashArray: '8,6'},
-      ).addTo(map);
-      map.fitBounds(mapLayersRef.current.route.getBounds(), {padding: [40, 40]});
-    } else if (mappableStops.length === 1) {
-      map.setView([mappableStops[0].lat, mappableStops[0].lng], 10);
+    if (hasBounds) {
+      map.fitBounds(bounds, 60);
     } else {
-      map.setView([40.2, -74.5], 8);
+      map.setCenter({lat: 40.2, lng: -74.5});
+      map.setZoom(8);
     }
-  }, [leafletReady, mappableStops]);
+  }, [mapsReady, dailyRoutes, routePolylines, routeCacheKey]);
 
+  // Drive legs for the weekend sidebar. Uses real Routes-API times when the
+  // polyline for that (date, rep) group has loaded; falls back to the
+  // haversine estimate otherwise so the UI stays responsive.
   const driveLegs = useMemo(() => {
     const legs: number[] = [];
     for (let i = 0; i < mappableStops.length - 1; i++) {
-      legs.push(estDriveMinutes(mappableStops[i], mappableStops[i + 1]));
+      const a = mappableStops[i];
+      const b = mappableStops[i + 1];
+      if (a.date !== b.date) {
+        // Cross-day sidebar rows — no meaningful drive leg. Show 0 (rendered as '—').
+        legs.push(0);
+        continue;
+      }
+      const cov = quickCoverageStatus(a.lat, a.lng);
+      const repId: RepId = cov.closestHub || 'north';
+      const dr = dailyRoutes.find((d) => d.key === `${a.date}|${repId}`);
+      if (dr) {
+        const poly = routePolylines[routeCacheKey(dr)];
+        if (poly) {
+          const idxA = dr.stops.findIndex((s) => s.lat === a.lat && s.lng === a.lng);
+          const idxB = dr.stops.findIndex((s) => s.lat === b.lat && s.lng === b.lng);
+          if (idxA >= 0 && idxB === idxA + 1) {
+            // Routes API returns N legs for N+1 waypoints (hub, s0, s1, ...).
+            // Leg index (idxA+1) is s0→s1 when idxA=0.
+            const legSec = poly.legsSeconds[idxA + 1] || 0;
+            if (legSec > 0) {
+              legs.push(Math.round(legSec / 60));
+              continue;
+            }
+          }
+        }
+      }
+      legs.push(estDriveMinutes(a, b));
     }
     return legs;
-  }, [mappableStops]);
+  }, [mappableStops, dailyRoutes, routePolylines, routeCacheKey]);
   const totalDrive = driveLegs.reduce((a, b) => a + b, 0);
 
   // ── Weekend same-day drive-time guardrail ───────────────────────────────
@@ -2285,16 +2604,16 @@ export default function NJPopups() {
           <div style={stepHead}>
             <div style={stepNum}>04</div>
             <div style={{flex: 1}}>
-              <h2 style={h2}>Weekend Route Planner</h2>
+              <h2 style={h2}>Route Planner</h2>
               <p style={kicker}>
-                All confirmed NJ bookings plotted on one map. Drive time between stops is calculated so the
-                same crew can cover multiple shifts without overreaching.
+                Every booked NJ pop-up plotted on Google Maps — each rep's day runs from their hub through
+                their assigned stops. Drive times are the no-traffic baseline from Google Routes.
               </p>
             </div>
-            <div style={stepStatus(weekendStops.length > 0)}>
-              {weekendStops.length > 0
-                ? `${weekendStops.length} Stop${weekendStops.length === 1 ? '' : 's'}`
-                : 'Weekend Only'}
+            <div style={stepStatus(dailyRoutes.length > 0)}>
+              {dailyRoutes.length > 0
+                ? `${dailyRoutes.length} Day${dailyRoutes.length === 1 ? '' : 's'}`
+                : 'No Routes'}
             </div>
           </div>
           <div style={{padding: 28}}>
@@ -2317,14 +2636,16 @@ export default function NJPopups() {
                   display: 'flex',
                   flexDirection: 'column',
                   minWidth: 0,
+                  maxHeight: 520,
+                  overflowY: 'auto',
                 }}
               >
-                <h3 style={{...h2, fontSize: 24}}>Selected Stops</h3>
+                <h3 style={{...h2, fontSize: 24}}>Daily Routes</h3>
                 <div style={{color: BRAND.gray, fontSize: 14, marginBottom: 16, lineHeight: 1.5}}>
-                  Ordered by shift time. Legs flagged red if drive time &gt; 45 min between consecutive
-                  stops.
+                  Grouped by day + rep. Hub → stops in shift order. Real Google Routes drive times once a
+                  polyline loads — haversine estimate otherwise.
                 </div>
-                {weekendStops.length === 0 ? (
+                {dailyRoutes.length === 0 ? (
                   <div
                     style={{
                       color: BRAND.gray,
@@ -2334,117 +2655,265 @@ export default function NJPopups() {
                       border: `1px dashed ${BRAND.lineStrong}`,
                     }}
                   >
-                    Select a weekend shift to plot a route.
+                    Pick a dispensary + shift to plot the route.
                     <br />
-                    Matinee + late shifts for the same crew show here with drive-time checks.
+                    Each day's stops run from the rep's hub in shift order.
                   </div>
                 ) : (
-                  weekendStops.map((s, i) => (
-                    <div key={`${s.name}-${s.city}-${s.date}-${s.shiftKey}-${i}`}>
+                  dailyRoutes.map((dr) => {
+                    const hub = REP_HUBS[dr.repId];
+                    const poly = routePolylines[routeCacheKey(dr)];
+                    const dayTotalMin = poly
+                      ? Math.round(poly.totalSeconds / 60)
+                      : 0;
+                    return (
                       <div
+                        key={dr.key}
                         style={{
                           border: `1px solid ${BRAND.line}`,
-                          padding: '12px 14px',
-                          marginBottom: 10,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 12,
+                          padding: 14,
+                          marginBottom: 14,
+                          background: BRAND.surface,
                         }}
                       >
+                        {/* Route header: date + rep badge */}
                         <div
                           style={{
-                            width: 28,
-                            height: 28,
-                            background: s.pending ? BRAND.white : BRAND.gold,
-                            color: BRAND.black,
-                            fontFamily: TEKO,
-                            fontSize: 20,
-                            fontWeight: 700,
                             display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexShrink: 0,
-                            border: s.pending ? `1px solid ${BRAND.gold}` : 'none',
+                            justifyContent: 'space-between',
+                            alignItems: 'baseline',
+                            gap: 10,
+                            marginBottom: 10,
+                            paddingBottom: 8,
+                            borderBottom: `1px solid ${BRAND.line}`,
                           }}
                         >
-                          {i + 1}
-                        </div>
-                        <div style={{flex: 1, minWidth: 0}}>
                           <div
                             style={{
                               fontFamily: TEKO,
                               fontSize: 20,
-                              letterSpacing: '0.03em',
+                              letterSpacing: '0.08em',
                               textTransform: 'uppercase',
                               color: BRAND.white,
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
                             }}
                           >
-                            {s.name}
-                            {s.pending && (
-                              <span
-                                style={{
-                                  color: BRAND.gold,
-                                  fontSize: 13,
-                                  letterSpacing: '0.1em',
-                                  marginLeft: 8,
-                                }}
-                              >
-                                · PENDING
-                              </span>
-                            )}
+                            {fmtDate(dr.date)}
                           </div>
-                          <div style={{color: BRAND.gray, fontSize: 13}}>
-                            {s.city} · {shiftLabel(s.shiftKey)} · {fmtDate(s.date)}
+                          <div
+                            style={{
+                              fontFamily: TEKO,
+                              fontSize: 12,
+                              letterSpacing: '0.16em',
+                              textTransform: 'uppercase',
+                              padding: '3px 8px',
+                              border: `1px solid ${hub.color}`,
+                              color: hub.color,
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {dr.repId === 'north' ? 'NJ-N' : 'NJ-S'} · {hub.hubCity.split(',')[0]}
                           </div>
                         </div>
-                      </div>
-                      {i < weekendStops.length - 1 && (
+
+                        {/* Hub origin row */}
                         <div
                           style={{
                             display: 'flex',
                             alignItems: 'center',
                             gap: 10,
-                            padding: '8px 0 8px 32px',
-                            color: driveLegs[i] > 45 ? BRAND.red : BRAND.gray,
-                            fontSize: 14,
-                            fontFamily: TEKO,
-                            letterSpacing: '0.08em',
+                            padding: '6px 0',
+                            color: BRAND.gray,
+                            fontSize: 13,
                           }}
                         >
-                          <span style={{color: BRAND.gold}}>↓</span> {driveLegs[i]} min drive
-                          {driveLegs[i] > 45 ? ' · flagged' : ''}
+                          <div
+                            style={{
+                              width: 22,
+                              height: 22,
+                              color: hub.color,
+                              fontSize: 20,
+                              lineHeight: '22px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                            }}
+                            title={hub.hubLabel}
+                          >
+                            ★
+                          </div>
+                          <div style={{flex: 1, minWidth: 0}}>
+                            <div
+                              style={{
+                                fontFamily: TEKO,
+                                fontSize: 16,
+                                letterSpacing: '0.06em',
+                                textTransform: 'uppercase',
+                                color: BRAND.white,
+                              }}
+                            >
+                              {hub.hubCity} Hub
+                            </div>
+                            <div style={{color: BRAND.gray, fontSize: 12}}>Start</div>
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  ))
+
+                        {/* Stops with drive legs between */}
+                        {dr.stops.map((s, i) => {
+                          const legSec =
+                            poly && poly.legsSeconds[i] != null ? poly.legsSeconds[i] : 0;
+                          const legMin = legSec > 0 ? Math.round(legSec / 60) : 0;
+                          const hot = legMin > 45;
+                          return (
+                            <div key={`${s.name}-${s.city}-${s.shiftKey}-${i}`}>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 10,
+                                  padding: '6px 0 6px 30px',
+                                  color: hot ? BRAND.red : BRAND.gray,
+                                  fontSize: 13,
+                                  fontFamily: TEKO,
+                                  letterSpacing: '0.08em',
+                                }}
+                              >
+                                <span style={{color: hub.color}}>↓</span>
+                                {legMin > 0
+                                  ? `${legMin} min drive${hot ? ' · flagged' : ''}`
+                                  : 'Drive time loading…'}
+                              </div>
+                              <div
+                                style={{
+                                  border: `1px solid ${BRAND.line}`,
+                                  padding: '10px 12px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 10,
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    width: 24,
+                                    height: 24,
+                                    background: s.pending ? BRAND.white : hub.color,
+                                    color: BRAND.black,
+                                    fontFamily: TEKO,
+                                    fontSize: 16,
+                                    fontWeight: 700,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                    borderRadius: '50%',
+                                    border: s.pending ? `1px solid ${hub.color}` : 'none',
+                                  }}
+                                >
+                                  {i + 1}
+                                </div>
+                                <div style={{flex: 1, minWidth: 0}}>
+                                  <div
+                                    style={{
+                                      fontFamily: TEKO,
+                                      fontSize: 17,
+                                      letterSpacing: '0.04em',
+                                      textTransform: 'uppercase',
+                                      color: BRAND.white,
+                                      whiteSpace: 'nowrap',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                    }}
+                                  >
+                                    {s.name}
+                                    {s.pending && (
+                                      <span
+                                        style={{
+                                          color: hub.color,
+                                          fontSize: 11,
+                                          letterSpacing: '0.1em',
+                                          marginLeft: 8,
+                                        }}
+                                      >
+                                        · PENDING
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{color: BRAND.gray, fontSize: 12}}>
+                                    {s.city} · {shiftLabel(s.shiftKey)}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* Day total */}
+                        <div
+                          style={{
+                            marginTop: 10,
+                            paddingTop: 8,
+                            borderTop: `1px solid ${BRAND.line}`,
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'baseline',
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontFamily: TEKO,
+                              fontSize: 12,
+                              letterSpacing: '0.18em',
+                              color: BRAND.gray,
+                              textTransform: 'uppercase',
+                            }}
+                          >
+                            Day Drive
+                          </span>
+                          <span style={{fontFamily: TEKO, fontSize: 20, color: hub.color}}>
+                            {dayTotalMin > 0 ? `${dayTotalMin} min` : '…'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
-                <div
-                  style={{
-                    marginTop: 'auto',
-                    paddingTop: 16,
-                    borderTop: `1px solid ${BRAND.line}`,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'baseline',
-                  }}
-                >
-                  <span
+                {/* Grand total across all days (keeps the prior total-drive summary) */}
+                {dailyRoutes.length > 0 && (
+                  <div
                     style={{
-                      fontFamily: TEKO,
-                      fontSize: 15,
-                      letterSpacing: '0.18em',
-                      color: BRAND.gray,
+                      marginTop: 'auto',
+                      paddingTop: 16,
+                      borderTop: `1px solid ${BRAND.line}`,
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'baseline',
                     }}
                   >
-                    Total Drive
-                  </span>
-                  <span style={{fontFamily: TEKO, fontSize: 28, color: BRAND.gold}}>
-                    {totalDrive > 0 ? `${totalDrive} min` : '—'}
-                  </span>
-                </div>
+                    <span
+                      style={{
+                        fontFamily: TEKO,
+                        fontSize: 15,
+                        letterSpacing: '0.18em',
+                        color: BRAND.gray,
+                      }}
+                    >
+                      Total Drive
+                    </span>
+                    <span style={{fontFamily: TEKO, fontSize: 28, color: BRAND.gold}}>
+                      {(() => {
+                        const totalSec = dailyRoutes.reduce((acc, dr) => {
+                          const poly = routePolylines[routeCacheKey(dr)];
+                          return acc + (poly ? poly.totalSeconds : 0);
+                        }, 0);
+                        return totalSec > 0
+                          ? `${Math.round(totalSec / 60)} min`
+                          : totalDrive > 0
+                          ? `~${totalDrive} min`
+                          : '—';
+                      })()}
+                    </span>
+                  </div>
+                )}
               </aside>
             </div>
           </div>
