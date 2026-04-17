@@ -1780,7 +1780,7 @@ export default function NJMenu() {
                         −1 Each
                       </button>
                       <button
-                        onClick={() => product.strains.forEach((s) => updateCart(product.id, s.name, 1))}
+                        onClick={() => product.strains.forEach((s) => { if (isInStock(s.sku)) updateCart(product.id, s.name, 1); })}
                         className="font-headline text-sm font-600 uppercase tracking-[0.1em] px-5 py-2.5 cursor-pointer transition-opacity hover:opacity-90"
                         style={{background: BRAND.gold, border: 'none', color: '#000'}}
                       >
