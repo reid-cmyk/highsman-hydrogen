@@ -15,36 +15,47 @@ export async function loader({context}: LoaderFunctionArgs) {
     return json({error: 'LEAFLINK_API_KEY not configured'}, {status: 500});
   }
 
-  const customers: Array<{id: number; name: string; nickname: string; license_number: string; licenses: any}> = [];
-  let page = 1;
+  // Use a map to deduplicate by ID
+  const customerMap = new Map<number, {id: number; name: string; nickname: string; license_number: string}>();
 
-  while (page <= 20) {
-    const url = `${LEAFLINK_API_BASE}/customers/?seller=${LEAFLINK_COMPANY_ID}&page_size=100&page=${page}`;
+  // Follow the `next` URL for proper cursor-based pagination
+  let url: string | null = `${LEAFLINK_API_BASE}/customers/?seller=${LEAFLINK_COMPANY_ID}&page_size=200`;
+  let pageCount = 0;
+
+  while (url && pageCount < 50) {
     const res = await fetch(url, {
       headers: {Authorization: `Token ${apiKey}`},
     });
 
     if (!res.ok) {
       const text = await res.text();
-      return json({error: `API error: ${res.status}`, body: text, customers}, {status: 500});
+      return json({error: `API error: ${res.status}`, body: text, count: customerMap.size}, {status: 500});
     }
 
     const data = await res.json();
     if (!data.results || data.results.length === 0) break;
 
     for (const c of data.results) {
-      customers.push({
-        id: c.id,
-        name: c.name || '',
-        nickname: c.nickname || '',
-        license_number: c.license_number || c.license || '',
-        licenses: c.licenses || c.retailer_licenses || null,
-      });
+      if (!customerMap.has(c.id)) {
+        customerMap.set(c.id, {
+          id: c.id,
+          name: c.name || '',
+          nickname: c.nickname || '',
+          license_number: c.license_number || '',
+        });
+      }
     }
 
-    if (!data.next) break;
-    page++;
+    url = data.next || null;
+    pageCount++;
   }
 
-  return json({count: customers.length, customers});
+  const customers = Array.from(customerMap.values());
+  customers.sort((a, b) => a.name.localeCompare(b.name));
+
+  return json({
+    count: customers.length,
+    pages_fetched: pageCount,
+    customers,
+  });
 }
