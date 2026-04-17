@@ -12,14 +12,21 @@ import {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LOADER — expose the Google Maps JS API key to the client.
-// We reuse env.GOOGLE_PLACES_API_KEY (same Google Cloud project as Routes API,
-// Places API, rep-assign). The key should be HTTP-referrer restricted to
-// highsman.com in Cloud Console so exposing it client-side is safe.
+// Prefer env.GOOGLE_MAPS_JS_KEY — a browser-only key restricted by HTTP
+// referrer to *.highsman.com in Cloud Console and scoped to the Maps
+// JavaScript API only. Falls back to GOOGLE_PLACES_API_KEY (the existing
+// server-side key) so the map keeps working if the new env var is not yet
+// set. Once GOOGLE_MAPS_JS_KEY is configured in Oxygen, the fallback can be
+// removed.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function loader({context}: LoaderFunctionArgs) {
   const env = context.env as any;
+  const browserKey =
+    (env?.GOOGLE_MAPS_JS_KEY as string) ||
+    (env?.GOOGLE_PLACES_API_KEY as string) ||
+    '';
   return json({
-    googleMapsApiKey: (env?.GOOGLE_PLACES_API_KEY as string) || '',
+    googleMapsApiKey: browserKey,
   });
 }
 
