@@ -809,6 +809,18 @@ export default function NJMenu() {
   const [buyerCreditLoading, setBuyerCreditLoading] = useState(false);
   const [buyerIdentified, setBuyerIdentified] = useState(false);
 
+  // ── Credit Redemption State ───────────────────────────────────────────────
+  const [redeemStatus, setRedeemStatus] = useState<'idle' | 'confirming' | 'loading' | 'success' | 'error'>('idle');
+  const [redeemResult, setRedeemResult] = useState<{
+    amount: number;
+    code: string;
+    lastChars: string;
+    newBalance: number;
+    emailSent: boolean;
+  } | null>(null);
+  const [redeemError, setRedeemError] = useState<string | null>(null);
+  const [redeemCodeCopied, setRedeemCodeCopied] = useState(false);
+
   // Pre-fill buyer info from localStorage
   useEffect(() => {
     try {
@@ -890,6 +902,63 @@ export default function NJMenu() {
       lookupBuyerCredit(buyerEmail.trim().toLowerCase(), selectedAccount.id);
     }
   }, [selectedAccount]);
+
+  // ── Redeem credit as Shopify gift card ────────────────────────────────────
+  const handleRedeemCredit = useCallback(async () => {
+    if (!buyerContactId || !buyerEmail || buyerCredit < 1) return;
+    setRedeemStatus('loading');
+    setRedeemError(null);
+    try {
+      const res = await fetch('/api/redeem-credit', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          contactId: buyerContactId,
+          email: buyerEmail.trim().toLowerCase(),
+          redeemAll: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setRedeemError(data?.error || 'Redemption failed. Please try again or email njsales@highsman.com.');
+        setRedeemStatus('error');
+        return;
+      }
+      setRedeemResult({
+        amount: data.amount || 0,
+        code: data.giftCardCode || '',
+        lastChars: data.giftCardLastChars || '',
+        newBalance: data.newBalance || 0,
+        emailSent: !!data.emailSent,
+      });
+      // Reflect the new balance in local state
+      setBuyerCredit(data.newBalance || 0);
+      setRedeemStatus('success');
+    } catch (err: any) {
+      console.error('[njmenu] Redeem error:', err);
+      setRedeemError('Network error — please try again.');
+      setRedeemStatus('error');
+    }
+  }, [buyerContactId, buyerEmail, buyerCredit]);
+
+  const copyRedeemCode = useCallback(async () => {
+    if (!redeemResult?.code) return;
+    try {
+      await navigator.clipboard.writeText(redeemResult.code);
+      setRedeemCodeCopied(true);
+      setTimeout(() => setRedeemCodeCopied(false), 2400);
+    } catch {
+      // Fallback for older browsers
+      const ta = document.createElement('textarea');
+      ta.value = redeemResult.code;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch { /* ignore */ }
+      document.body.removeChild(ta);
+      setRedeemCodeCopied(true);
+      setTimeout(() => setRedeemCodeCopied(false), 2400);
+    }
+  }, [redeemResult]);
 
   // Reset buyer state when dispensary changes
   useEffect(() => {
@@ -1454,9 +1523,10 @@ export default function NJMenu() {
                         Your total credit balance is now{' '}
                         <strong style={{color: BRAND.gold}}>${confirmedOrder.newCreditBalance.toFixed(2)}</strong>.
                       </p>
-                      <p className="font-body text-xs" style={{color: 'rgba(255,255,255,0.5)', lineHeight: '1.5'}}>
-                        You&#39;ll receive an email with your updated balance. Redeem your credit anytime as a
-                        store gift card at{' '}
+                      <p className="font-body text-xs mb-3" style={{color: 'rgba(255,255,255,0.5)', lineHeight: '1.5'}}>
+                        Redeem your credit as a Highsman gift card &mdash; we&rsquo;ll email the code to{' '}
+                        <strong style={{color: 'rgba(255,255,255,0.8)'}}>{confirmedOrder.buyerEmail}</strong>.
+                        Use it at checkout on{' '}
                         <a
                           href="https://highsman.com/apparel"
                           target="_blank"
@@ -1467,6 +1537,24 @@ export default function NJMenu() {
                         </a>
                         .
                       </p>
+                      {buyerContactId && buyerCredit > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRedeemStatus('confirming');
+                            setRedeemError(null);
+                            setRedeemResult(null);
+                            // Scroll to the redemption panel (lives in the buyer identity section)
+                            setTimeout(() => {
+                              window.scrollTo({top: 0, behavior: 'smooth'});
+                            }, 50);
+                          }}
+                          className="font-headline text-sm font-600 uppercase tracking-[0.12em] cursor-pointer transition-opacity hover:opacity-90"
+                          style={{background: BRAND.gold, color: '#000', border: 'none', borderRadius: 4, padding: '10px 18px'}}
+                        >
+                          Redeem ${buyerCredit.toFixed(2)} as Gift Card
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2136,19 +2224,31 @@ export default function NJMenu() {
                       </span>
                     </p>
                     {buyerCredit > 0 && (
-                      <p className="font-body text-xs mt-1.5" style={{color: BRAND.gold}}>
-                        You have <span style={{fontWeight: 700}}>${buyerCredit.toFixed(2)}</span> in store credit
-                        {' '}
-                        <a
-                          href="https://highsman.com/apparel"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="underline"
-                          style={{color: BRAND.gold, opacity: 0.8}}
+                      <div className="mt-1.5 flex flex-wrap items-center gap-3">
+                        <p className="font-body text-xs" style={{color: BRAND.gold, margin: 0}}>
+                          You have <span style={{fontWeight: 700}}>${buyerCredit.toFixed(2)}</span> in store credit
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRedeemStatus('confirming');
+                            setRedeemError(null);
+                            setRedeemResult(null);
+                          }}
+                          disabled={redeemStatus === 'loading'}
+                          className="font-headline text-[10px] font-600 uppercase tracking-[0.15em] cursor-pointer transition-opacity hover:opacity-90"
+                          style={{
+                            background: BRAND.gold,
+                            color: '#000',
+                            border: 'none',
+                            borderRadius: 3,
+                            padding: '6px 12px',
+                            letterSpacing: '0.12em',
+                          }}
                         >
-                          — shop apparel
-                        </a>
-                      </p>
+                          Redeem as Gift Card
+                        </button>
+                      </div>
                     )}
                     {buyerCredit === 0 && (
                       <p className="font-body text-xs mt-1.5" style={{color: 'rgba(255,255,255,0.4)'}}>
@@ -2268,6 +2368,173 @@ export default function NJMenu() {
                 </>
               )}
             </div>
+
+            {/* ── Credit Redemption Panel ───────────────────────────────── */}
+            {buyerIdentified && (redeemStatus !== 'idle' || redeemResult) && (
+              <div
+                className="mt-4"
+                style={{
+                  background: redeemStatus === 'success' ? 'rgba(245,228,0,0.08)' : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${redeemStatus === 'success' ? 'rgba(245,228,0,0.35)' : redeemStatus === 'error' ? 'rgba(255,80,80,0.35)' : 'rgba(255,255,255,0.15)'}`,
+                  borderRadius: 8,
+                  padding: '20px 24px',
+                }}
+              >
+                {/* Confirming — ask user to confirm redemption */}
+                {redeemStatus === 'confirming' && (
+                  <div>
+                    <p className="font-headline text-sm font-600 uppercase tracking-[0.12em] mb-2" style={{color: BRAND.gold}}>
+                      Confirm Redemption
+                    </p>
+                    <p className="font-body text-sm mb-4" style={{color: 'rgba(255,255,255,0.8)', lineHeight: '1.5'}}>
+                      Convert your full balance of{' '}
+                      <strong style={{color: BRAND.gold}}>${buyerCredit.toFixed(2)}</strong>{' '}
+                      into a Highsman gift card. We&rsquo;ll email the code to{' '}
+                      <strong style={{color: '#fff'}}>{buyerEmail}</strong> — use it at checkout on{' '}
+                      <a href="https://highsman.com/apparel" target="_blank" rel="noopener noreferrer" style={{color: BRAND.gold}}>
+                        highsman.com/apparel
+                      </a>.
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={handleRedeemCredit}
+                        className="font-headline text-sm font-600 uppercase tracking-[0.12em] cursor-pointer transition-opacity hover:opacity-90"
+                        style={{background: BRAND.gold, color: '#000', border: 'none', borderRadius: 4, padding: '10px 20px'}}
+                      >
+                        Yes, Redeem ${buyerCredit.toFixed(2)}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRedeemStatus('idle');
+                          setRedeemError(null);
+                        }}
+                        className="font-headline text-sm font-600 uppercase tracking-[0.12em] cursor-pointer transition-opacity hover:opacity-80"
+                        style={{background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.7)', borderRadius: 4, padding: '10px 20px'}}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Loading */}
+                {redeemStatus === 'loading' && (
+                  <p className="font-body text-sm" style={{color: 'rgba(255,255,255,0.7)'}}>
+                    Creating your gift card… this takes a few seconds.
+                  </p>
+                )}
+
+                {/* Error */}
+                {redeemStatus === 'error' && (
+                  <div>
+                    <p className="font-headline text-sm font-600 uppercase tracking-[0.12em] mb-2" style={{color: '#ff8080'}}>
+                      Redemption Failed
+                    </p>
+                    <p className="font-body text-sm mb-3" style={{color: 'rgba(255,255,255,0.8)'}}>
+                      {redeemError || 'Something went wrong. Please try again or contact njsales@highsman.com.'}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRedeemStatus('idle');
+                        setRedeemError(null);
+                      }}
+                      className="font-headline text-xs font-600 uppercase tracking-[0.15em] cursor-pointer transition-opacity hover:opacity-80"
+                      style={{background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.7)', borderRadius: 4, padding: '8px 16px'}}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
+
+                {/* Success — show the gift card code */}
+                {redeemStatus === 'success' && redeemResult && (
+                  <div>
+                    <div className="flex items-center gap-3 mb-3">
+                      <span style={{fontSize: 22, lineHeight: 1}}>&#9733;</span>
+                      <p className="font-headline text-base font-600 uppercase tracking-[0.12em]" style={{color: BRAND.gold, margin: 0}}>
+                        ${redeemResult.amount.toFixed(2)} Gift Card Created
+                      </p>
+                    </div>
+                    <p className="font-body text-sm mb-4" style={{color: 'rgba(255,255,255,0.75)', lineHeight: '1.5'}}>
+                      {redeemResult.emailSent
+                        ? <>We emailed your gift card code to <strong style={{color: '#fff'}}>{buyerEmail}</strong>. You can also copy it below.</>
+                        : <>Copy your gift card code below — save it somewhere safe.</>
+                      }
+                    </p>
+                    <div
+                      style={{
+                        background: 'rgba(0,0,0,0.35)',
+                        border: '1px dashed rgba(245,228,0,0.45)',
+                        borderRadius: 4,
+                        padding: '14px 18px',
+                        marginBottom: 16,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 12,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <code
+                        style={{
+                          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                          fontSize: 18,
+                          letterSpacing: '0.15em',
+                          color: BRAND.gold,
+                          wordBreak: 'break-all',
+                        }}
+                      >
+                        {redeemResult.code}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={copyRedeemCode}
+                        className="font-headline text-xs font-600 uppercase tracking-[0.15em] cursor-pointer transition-opacity hover:opacity-90"
+                        style={{
+                          background: redeemCodeCopied ? BRAND.gold : 'transparent',
+                          color: redeemCodeCopied ? '#000' : BRAND.gold,
+                          border: `1px solid ${BRAND.gold}`,
+                          borderRadius: 3,
+                          padding: '8px 14px',
+                          minWidth: 90,
+                        }}
+                      >
+                        {redeemCodeCopied ? 'Copied!' : 'Copy'}
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      <a
+                        href="https://highsman.com/apparel"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-headline text-sm font-600 uppercase tracking-[0.12em] cursor-pointer transition-opacity hover:opacity-90"
+                        style={{background: BRAND.gold, color: '#000', border: 'none', borderRadius: 4, padding: '10px 20px', textDecoration: 'none', display: 'inline-block'}}
+                      >
+                        Shop Apparel &rarr;
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRedeemStatus('idle');
+                          setRedeemResult(null);
+                          setRedeemCodeCopied(false);
+                        }}
+                        className="font-headline text-sm font-600 uppercase tracking-[0.12em] cursor-pointer transition-opacity hover:opacity-80"
+                        style={{background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.7)', borderRadius: 4, padding: '10px 20px'}}
+                      >
+                        Close
+                      </button>
+                    </div>
+                    <p className="font-body text-xs mt-3" style={{color: 'rgba(255,255,255,0.4)', lineHeight: '1.5'}}>
+                      Remaining credit balance: ${redeemResult.newBalance.toFixed(2)}. Use your code at checkout on highsman.com/apparel.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
