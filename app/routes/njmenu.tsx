@@ -551,9 +551,27 @@ const NJ_DISPENSARIES: Array<{id: string; name: string; city: string | null; pho
 // ─────────────────────────────────────────────────────────────────────────────
 // LOADER — Fetch LeafLink inventory server-side
 // ─────────────────────────────────────────────────────────────────────────────
+// LeafLink auto-generates SKUs (random hashes), so we match by Product ID
+// and map back to our internal SKUs.
 
 const LEAFLINK_API_BASE = 'https://app.leaflink.com/api/v2';
 const LEAFLINK_COMPANY_ID = 24087;
+
+// LeafLink Product ID → our internal SKU
+const PRODUCT_ID_TO_SKU: Record<number, string> = {
+  2554071: 'C-NJ-HSINF-BB', 2554859: 'C-NJ-HSINF-CQ', 2554839: 'C-NJ-HSINF-GG',
+  2554077: 'C-NJ-HSINF-TM', 2554845: 'C-NJ-HSINF-WW',
+  2642378: 'C-NJ-HSTIN-BB', 2642379: 'C-NJ-HSTIN-CQ', 2642381: 'C-NJ-HSTIN-GG',
+  2642380: 'C-NJ-HSTIN-TM', 2642382: 'C-NJ-HSTIN-WW',
+  2644313: 'C-NJ-HSTINFH-BB', 2644314: 'C-NJ-HSTINFH-CQ', 2644315: 'C-NJ-HSTINFH-GG',
+  2644316: 'C-NJ-HSTINFH-TM', 2644317: 'C-NJ-HSTINFH-WW',
+  2816205: 'C-NJ-HSTT-WW', 2816206: 'C-NJ-HSTT-GG', 2816207: 'C-NJ-HSTT-BB',
+  2816208: 'C-NJ-HSTT-TM', 2816209: 'C-NJ-HSTT-CQ',
+  2816210: 'C-NJ-HSGG-WW', 2816211: 'C-NJ-HSGG-GG', 2816212: 'C-NJ-HSGG-BB',
+  2816213: 'C-NJ-HSGG-TM', 2816214: 'C-NJ-HSGG-CQ',
+};
+const TRACKED_IDS = new Set(Object.keys(PRODUCT_ID_TO_SKU).map(Number));
+const ALL_SKUS = Object.values(PRODUCT_ID_TO_SKU);
 
 export async function loader({context}: LoaderFunctionArgs) {
   const env = context.env as any;
@@ -567,6 +585,7 @@ export async function loader({context}: LoaderFunctionArgs) {
   }
 
   try {
+    let matched = 0;
     let page = 1;
     let hasMore = true;
 
@@ -581,19 +600,30 @@ export async function loader({context}: LoaderFunctionArgs) {
       if (!data.results || data.results.length === 0) break;
 
       for (const product of data.results) {
-        if (!product.sku) continue;
-        // If listing_state is not "Available", treat as 0 stock
+        if (!product.id || !TRACKED_IDS.has(product.id)) continue;
+        const sku = PRODUCT_ID_TO_SKU[product.id];
+        if (!sku) continue;
+
+        const qty = parseFloat(product.quantity ?? '0');
+        const reserved = parseFloat(product.reserved_qty ?? '0');
         const available = product.listing_state === 'Available'
-          ? Math.max(0, Math.floor(parseFloat(product.available_inventory ?? '0')))
+          ? Math.max(0, Math.floor(qty - reserved))
           : 0;
-        inventory[product.sku] = available;
+        inventory[sku] = available;
+        matched++;
       }
 
+      if (matched >= ALL_SKUS.length) break;
       hasMore = !!data.next;
       page++;
     }
   } catch (err: any) {
     console.error('[njmenu] Inventory fetch error:', err.message);
+  }
+
+  // Fill unmatched SKUs with 0
+  for (const sku of ALL_SKUS) {
+    if (!(sku in inventory)) inventory[sku] = 0;
   }
 
   return json(

@@ -6,25 +6,52 @@ import {json} from '@shopify/remix-oxygen';
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/leaflink-inventory
 // Returns available inventory for all Highsman products in LeafLink.
-// Keyed by SKU, values are available unit counts.
+// Keyed by our internal SKU, values are available unit counts.
+//
+// NOTE: LeafLink auto-generates SKUs (random hashes), so we match by
+// LeafLink Product ID instead, then map back to our internal SKUs.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const LEAFLINK_API_BASE = 'https://app.leaflink.com/api/v2';
 const LEAFLINK_COMPANY_ID = 24087; // Canfections NJ, INC
 
-// All Highsman product SKUs we care about
-const TRACKED_SKUS = [
-  // Hit Stick Singles (Case 24)
-  'C-NJ-HSINF-BB', 'C-NJ-HSINF-CQ', 'C-NJ-HSINF-GG', 'C-NJ-HSINF-TM', 'C-NJ-HSINF-WW',
+// LeafLink Product ID → our internal SKU
+// (Reverse of the SKU_TO_PRODUCT_ID mapping in api.leaflink-order.tsx)
+const PRODUCT_ID_TO_SKU: Record<number, string> = {
+  // Hit Stick Singles (0.5g, Case 24)
+  2554071: 'C-NJ-HSINF-BB',
+  2554859: 'C-NJ-HSINF-CQ',
+  2554839: 'C-NJ-HSINF-GG',
+  2554077: 'C-NJ-HSINF-TM',
+  2554845: 'C-NJ-HSINF-WW',
   // Black Tin 5-Packs (Case 6)
-  'C-NJ-HSTIN-BB', 'C-NJ-HSTIN-CQ', 'C-NJ-HSTIN-GG', 'C-NJ-HSTIN-TM', 'C-NJ-HSTIN-WW',
+  2642378: 'C-NJ-HSTIN-BB',
+  2642379: 'C-NJ-HSTIN-CQ',
+  2642381: 'C-NJ-HSTIN-GG',
+  2642380: 'C-NJ-HSTIN-TM',
+  2642382: 'C-NJ-HSTIN-WW',
   // Fly High 5-Packs (Case 6)
-  'C-NJ-HSTINFH-BB', 'C-NJ-HSTINFH-CQ', 'C-NJ-HSTINFH-GG', 'C-NJ-HSTINFH-TM', 'C-NJ-HSTINFH-WW',
-  // Triple Threat Pre-Rolls (Case 12)
-  'C-NJ-HSTT-WW', 'C-NJ-HSTT-GG', 'C-NJ-HSTT-BB', 'C-NJ-HSTT-TM', 'C-NJ-HSTT-CQ',
-  // Ground Game Milled Flower (Case 6)
-  'C-NJ-HSGG-WW', 'C-NJ-HSGG-GG', 'C-NJ-HSGG-BB', 'C-NJ-HSGG-TM', 'C-NJ-HSGG-CQ',
-];
+  2644313: 'C-NJ-HSTINFH-BB',
+  2644314: 'C-NJ-HSTINFH-CQ',
+  2644315: 'C-NJ-HSTINFH-GG',
+  2644316: 'C-NJ-HSTINFH-TM',
+  2644317: 'C-NJ-HSTINFH-WW',
+  // Triple Threat Pre-Rolls (1.2g, Case 12)
+  2816205: 'C-NJ-HSTT-WW',
+  2816206: 'C-NJ-HSTT-GG',
+  2816207: 'C-NJ-HSTT-BB',
+  2816208: 'C-NJ-HSTT-TM',
+  2816209: 'C-NJ-HSTT-CQ',
+  // Ground Game Milled Flower (7g, Case 6)
+  2816210: 'C-NJ-HSGG-WW',
+  2816211: 'C-NJ-HSGG-GG',
+  2816212: 'C-NJ-HSGG-BB',
+  2816213: 'C-NJ-HSGG-TM',
+  2816214: 'C-NJ-HSGG-CQ',
+};
+
+const TRACKED_PRODUCT_IDS = new Set(Object.keys(PRODUCT_ID_TO_SKU).map(Number));
+const ALL_SKUS = Object.values(PRODUCT_ID_TO_SKU);
 
 export async function loader({context}: LoaderFunctionArgs) {
   const env = context.env as any;
@@ -36,10 +63,8 @@ export async function loader({context}: LoaderFunctionArgs) {
   }
 
   try {
-    // Fetch all products for this seller with inventory fields
-    // We paginate to ensure we get everything
     const inventory: Record<string, number> = {};
-    const debugInfo: any = {apiKeyPresent: !!apiKey, apiKeyLength: apiKey?.length, pages: 0, totalProducts: 0};
+    let matched = 0;
     let page = 1;
     let hasMore = true;
 
@@ -50,63 +75,48 @@ export async function loader({context}: LoaderFunctionArgs) {
       });
 
       if (!res.ok) {
-        const errText = await res.text().catch(() => '');
-        debugInfo.apiError = {status: res.status, body: errText.slice(0, 300)};
+        console.error(`[api/leaflink-inventory] API error (${res.status}):`, await res.text().catch(() => ''));
         break;
       }
 
       const data = await res.json();
-      debugInfo.pages = page;
-      debugInfo.resultCount = data.results?.length ?? 0;
-      debugInfo.dataCount = data.count;
-
-      if (!data.results || data.results.length === 0) {
-        debugInfo.emptyReason = 'no results on page ' + page;
-        break;
-      }
-
-      debugInfo.totalProducts += data.results.length;
-
-      // Capture first product's raw fields for debugging
-      if (!debugInfo.sample) {
-        const p = data.results[0];
-        debugInfo.sample = {
-          sku: p.sku,
-          listing_state: p.listing_state,
-          available_inventory: p.available_inventory,
-          quantity: p.quantity,
-          reserved_qty: p.reserved_qty,
-          name: p.name,
-          keys: Object.keys(p).slice(0, 40),
-        };
-      }
+      if (!data.results || data.results.length === 0) break;
 
       for (const product of data.results) {
-        const sku = product.sku;
-        if (!sku || !TRACKED_SKUS.includes(sku)) continue;
+        const productId = product.id;
+        if (!productId || !TRACKED_PRODUCT_IDS.has(productId)) continue;
 
-        // available_inventory is the count after reserved qty is subtracted
+        const sku = PRODUCT_ID_TO_SKU[productId];
+        if (!sku) continue;
+
+        // Use quantity minus reserved_qty as available count
         // If listing_state is not "Available", treat as 0
+        const qty = parseFloat(product.quantity ?? '0');
+        const reserved = parseFloat(product.reserved_qty ?? '0');
         const available = product.listing_state === 'Available'
-          ? Math.max(0, Math.floor(parseFloat(product.available_inventory ?? '0')))
+          ? Math.max(0, Math.floor(qty - reserved))
           : 0;
 
         inventory[sku] = available;
+        matched++;
       }
+
+      // Early exit if we've found all tracked products
+      if (matched >= ALL_SKUS.length) break;
 
       hasMore = !!data.next;
       page++;
     }
 
     // Fill in any tracked SKUs that weren't found (treat as 0)
-    for (const sku of TRACKED_SKUS) {
+    for (const sku of ALL_SKUS) {
       if (!(sku in inventory)) {
         inventory[sku] = 0;
       }
     }
 
     return json(
-      {ok: true, inventory, _debug: debugInfo},
+      {ok: true, inventory, _matched: matched},
       {
         headers: {
           // Cache for 5 minutes — inventory doesn't change that fast
