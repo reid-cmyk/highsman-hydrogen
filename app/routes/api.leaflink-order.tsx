@@ -448,12 +448,61 @@ async function createLeafLinkOrder(
 // ── TEMP: Diagnostic endpoint to verify LeafLink product IDs ──────────────
 export async function loader({request, context}: ActionFunctionArgs) {
   const url = new URL(request.url);
-  if (url.searchParams.get('debug') !== 'products') {
-    return json({error: 'Not found'}, {status: 404});
-  }
   const env = context.env as any;
   const apiKey = env.LEAFLINK_API_KEY;
   if (!apiKey) return json({error: 'No API key'});
+
+  // Fix products: set unit_multiplier and sell_in_unit_of_measure for TT and GG
+  if (url.searchParams.get('debug') === 'fix-products') {
+    // Triple Threat: case of 12, Ground Game: case of 6
+    const updates: Array<{id: number; sku: string; unit_multiplier: number}> = [
+      // Triple Threat — case of 12
+      {id: 2816205, sku: 'C-NJ-HSTT-WW', unit_multiplier: 12},
+      {id: 2816206, sku: 'C-NJ-HSTT-GG', unit_multiplier: 12},
+      {id: 2816207, sku: 'C-NJ-HSTT-BB', unit_multiplier: 12},
+      {id: 2816208, sku: 'C-NJ-HSTT-TM', unit_multiplier: 12},
+      {id: 2816209, sku: 'C-NJ-HSTT-CQ', unit_multiplier: 12},
+      // Ground Game — case of 6
+      {id: 2816210, sku: 'C-NJ-HSGG-WW', unit_multiplier: 6},
+      {id: 2816211, sku: 'C-NJ-HSGG-GG', unit_multiplier: 6},
+      {id: 2816212, sku: 'C-NJ-HSGG-BB', unit_multiplier: 6},
+      {id: 2816213, sku: 'C-NJ-HSGG-TM', unit_multiplier: 6},
+      {id: 2816214, sku: 'C-NJ-HSGG-CQ', unit_multiplier: 6},
+    ];
+
+    const results: any[] = [];
+    for (const u of updates) {
+      try {
+        const res = await fetch(`${LEAFLINK_API_BASE}/products/${u.id}/`, {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Token ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            unit_multiplier: u.unit_multiplier,
+            sell_in_unit_of_measure: 'Case',
+          }),
+        });
+        const body = await res.text();
+        results.push({
+          sku: u.sku,
+          id: u.id,
+          unit_multiplier: u.unit_multiplier,
+          status: res.status,
+          ok: res.ok,
+          response: body.slice(0, 300),
+        });
+      } catch (e: any) {
+        results.push({sku: u.sku, id: u.id, error: e.message});
+      }
+    }
+    return json({action: 'fix-products', results});
+  }
+
+  if (url.searchParams.get('debug') !== 'products') {
+    return json({error: 'Not found'}, {status: 404});
+  }
 
   // Collect all product IDs we reference
   const allProductIds = new Set<number>([
