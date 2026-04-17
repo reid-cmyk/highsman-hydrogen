@@ -160,12 +160,28 @@ function fmtDate(iso: string) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Lead-time rule: pop-ups must be booked at least MIN_LEAD_DAYS ahead so the
-// dispensary POC + our rep have time to confirm logistics, staffing, and any
-// portal paperwork. Enforced in the slot picker (gray-out), the Book button
-// (disabled), and as a safety net inside handleBook.
+// Booking window rules:
+//   LAUNCH_DATE   — the first day pop-ups can physically run. Hard floor; no
+//                    date before this is bookable even if the lead time clears.
+//   MIN_LEAD_DAYS — bookings must be at least this many days ahead so POC +
+//                    rep have time to confirm logistics/portal paperwork.
+//   WINDOW_WEEKS  — how many weeks of Thu/Fri/Sat/Sun shifts the picker shows.
+//                    ~2 months of rolling visibility; each week the last week
+//                    drops off and a new one appears at the far end.
+// Enforcement is layered: picker gray-out, Book button disabled, handleBook
+// safety net. `tooEarly` (before LAUNCH_DATE) and `tooSoon` (inside lead time)
+// are separate flags so staff see the right reason in each card.
 // ─────────────────────────────────────────────────────────────────────────────
+const LAUNCH_DATE = '2026-05-08';
 const MIN_LEAD_DAYS = 5;
+const WINDOW_WEEKS = 9;
+
+function isoLocal(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 function daysUntil(iso: string) {
   const [y, m, d] = iso.split('-').map((n) => parseInt(n, 10));
@@ -186,40 +202,86 @@ function shiftLabel(k: string) {
     } as Record<string, string>)[k] || k
   );
 }
-function buildWeekDays() {
+type Shift = {key: string; label: string; capacity: number};
+type Day = {iso: string; dow: string; date: Date; shifts: Shift[]};
+type Week = {weekIndex: number; weekLabel: string; days: Day[]};
+
+// Builds a rolling calendar of Thu/Fri/Sat/Sun shift days across WINDOW_WEEKS
+// consecutive weeks, anchored on the first week whose Sunday falls at or after
+// today's lead-time floor AND at or after LAUNCH_DATE. This gives staff ~2
+// months of forward visibility so they can plan paired weekend shifts and
+// catch early-bird bookings before dispensaries lock their calendars.
+function buildWeeks(): Week[] {
   const today = new Date();
-  const dow = today.getDay();
-  let offset = 4 - dow;
-  if (offset < 0) offset += 7;
-  // If the entire 4-day window (Thu → Sun) falls inside the lead-time window,
-  // roll forward one week so staff always sees at least one bookable day. The
-  // individual `tooSoon` flag still grays out the remaining too-close shifts.
-  if (offset + 3 < MIN_LEAD_DAYS) offset += 7;
-  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset);
-  const days: Array<{
-    iso: string;
-    dow: string;
-    date: Date;
-    shifts: Array<{key: string; label: string; capacity: number}>;
-  }> = [];
-  for (let i = 0; i < 4; i++) {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    const iso = d.toISOString().slice(0, 10);
-    const didx = d.getDay();
-    let shifts: Array<{key: string; label: string; capacity: number}> = [];
-    if (didx === 4 || didx === 5) {
-      shifts = [{key: didx === 4 ? 'thu-main' : 'fri-main', label: '3:00 – 7:00 PM', capacity: 2}];
-    } else if (didx === 6 || didx === 0) {
-      const p = didx === 6 ? 'sat' : 'sun';
-      shifts = [
-        {key: `${p}-mat`, label: '1:00 – 3:00 PM', capacity: 2},
-        {key: `${p}-late`, label: '4:00 – 6:00 PM', capacity: 2},
-      ];
-    }
-    days.push({iso, dow: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][didx], date: d, shifts});
+  today.setHours(0, 0, 0, 0);
+
+  // First viable calendar date = later of (today + lead) and LAUNCH_DATE.
+  const earliestByLead = new Date(today);
+  earliestByLead.setDate(today.getDate() + MIN_LEAD_DAYS);
+  const [ly, lm, ld] = LAUNCH_DATE.split('-').map((n) => parseInt(n, 10));
+  const launchDate = new Date(ly, (lm || 1) - 1, ld || 1);
+  const firstViable =
+    earliestByLead.getTime() > launchDate.getTime() ? earliestByLead : launchDate;
+
+  // Snap back to the Thursday of the week containing firstViable. If it's
+  // Mon–Wed, hop forward to that week's Thursday instead (no shift days
+  // before then).
+  const startThu = new Date(firstViable);
+  const fvDow = firstViable.getDay(); // 0=Sun .. 6=Sat
+  if (fvDow === 0) {
+    startThu.setDate(firstViable.getDate() - 3); // Sun → prev Thu
+  } else if (fvDow >= 4) {
+    startThu.setDate(firstViable.getDate() - (fvDow - 4)); // Thu/Fri/Sat → that week's Thu
+  } else {
+    startThu.setDate(firstViable.getDate() + (4 - fvDow)); // Mon/Tue/Wed → that week's Thu
   }
-  return days;
+
+  const weeks: Week[] = [];
+  for (let w = 0; w < WINDOW_WEEKS; w++) {
+    const days: Day[] = [];
+    for (let i = 0; i < 4; i++) {
+      const d = new Date(startThu);
+      d.setDate(startThu.getDate() + w * 7 + i);
+      const iso = isoLocal(d);
+      const didx = d.getDay();
+      let shifts: Shift[] = [];
+      if (didx === 4 || didx === 5) {
+        shifts = [
+          {
+            key: didx === 4 ? 'thu-main' : 'fri-main',
+            label: '3:00 – 7:00 PM',
+            capacity: 2,
+          },
+        ];
+      } else if (didx === 6 || didx === 0) {
+        const p = didx === 6 ? 'sat' : 'sun';
+        shifts = [
+          {key: `${p}-mat`, label: '1:00 – 3:00 PM', capacity: 2},
+          {key: `${p}-late`, label: '4:00 – 6:00 PM', capacity: 2},
+        ];
+      }
+      days.push({
+        iso,
+        dow: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][didx],
+        date: d,
+        shifts,
+      });
+    }
+    const startLbl = days[0].date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    });
+    const endLbl = days[3].date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    });
+    weeks.push({
+      weekIndex: w,
+      weekLabel: `${startLbl} – ${endLbl}`,
+      days,
+    });
+  }
+  return weeks;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -365,7 +427,7 @@ export default function NJPopups() {
     return {name: n, role: r || '—', email: e, phone: p, source: 'new' as const};
   }, [dispensary, mode, newContact]);
 
-  const week = useMemo(buildWeekDays, []);
+  const weeks = useMemo(buildWeeks, []);
   const countBookings = useCallback(
     (iso: string, key: string) => bookings.filter((b) => b.date === iso && b.shiftKey === key).length,
     [bookings],
@@ -630,15 +692,19 @@ export default function NJPopups() {
 
   const driveBlocked = driveCheck.status === 'blocked';
 
-  // 5-day lead-time rule. The picker already gray-outs too-close shifts, but we
-  // also defend here so a bypassed click (devtools, stale state) can't book.
+  // Booking-window checks. The picker already gray-outs disallowed shifts, but
+  // we also defend here so a bypassed click (devtools, stale state) can't book.
+  //   leadOk     → slot is at least MIN_LEAD_DAYS out from today
+  //   launchOk   → slot date >= LAUNCH_DATE (hard floor; no pre-launch bookings)
   const leadOk = !!slot && daysUntil(slot.date) >= MIN_LEAD_DAYS;
+  const launchOk = !!slot && slot.date >= LAUNCH_DATE;
+  const windowOk = leadOk && launchOk;
 
   const step1Done = !!dispensary;
   const step2Done = !!slot;
   // Link mode is "done" as soon as a slot is picked — the contact handoff happens in the portal.
   const step3Done = mode === 'link' ? !!slot : !!contact;
-  const step5Done = step1Done && step2Done && step3Done && !driveBlocked && leadOk;
+  const step5Done = step1Done && step2Done && step3Done && !driveBlocked && windowOk;
 
   // Fire a Zoho Event creation for every booking so the Account's Activities
   // timeline shows the pop-up history + upcoming stops on the Zoho calendar.
@@ -691,8 +757,8 @@ export default function NJPopups() {
     if (!dispensary || !slot) return;
     // Hard block: same-day weekend booking > 40 min drive from the existing stop.
     if (driveBlocked) return;
-    // Hard block: under the 5-day lead-time window.
-    if (!leadOk) return;
+    // Hard block: under the 5-day lead-time window or before LAUNCH_DATE.
+    if (!windowOk) return;
 
     // LINK MODE — hand off to the dispensary's own booking portal.
     // Copy a prefilled payload to clipboard so the staffer can paste it into the
@@ -1289,8 +1355,9 @@ export default function NJPopups() {
               <h2 style={h2}>Pick Time Slot</h2>
               <p style={kicker}>
                 All shifts cap at 2 simultaneous bookings statewide. Sat/Sun splits into matinee (1–3 PM)
-                and late (4–6 PM) — each with its own 2-spot cap. Bookings require a {MIN_LEAD_DAYS}-day
-                minimum lead time.
+                and late (4–6 PM) — each with its own 2-spot cap. Pop-ups officially launch{' '}
+                <strong>Fri May 8</strong>; bookings require a {MIN_LEAD_DAYS}-day minimum lead time. Window
+                rolls forward weekly so you can always plan ~2 months out.
               </p>
             </div>
             <div style={stepStatus(step2Done)}>{step2Done ? 'Locked In' : 'Pending'}</div>
@@ -1344,109 +1411,158 @@ export default function NJPopups() {
                 Pick a dispensary above to unlock time slots.
               </div>
             ) : (
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                  gap: 14,
-                }}
-              >
-                {week.map((day) => (
-                  <div key={day.iso} style={{border: `1px solid ${BRAND.line}`, background: BRAND.black}}>
+              <div style={{display: 'flex', flexDirection: 'column', gap: 22}}>
+                {weeks.map((wk) => (
+                  <div key={wk.weekIndex}>
                     <div
                       style={{
-                        padding: '14px 16px',
-                        borderBottom: `1px solid ${BRAND.line}`,
                         display: 'flex',
-                        justifyContent: 'space-between',
                         alignItems: 'baseline',
+                        gap: 14,
+                        marginBottom: 10,
+                        paddingBottom: 8,
+                        borderBottom: `1px solid ${BRAND.line}`,
                       }}
                     >
                       <div
                         style={{
                           fontFamily: TEKO,
-                          fontSize: 26,
-                          letterSpacing: '0.05em',
+                          fontSize: 20,
+                          letterSpacing: '0.18em',
                           textTransform: 'uppercase',
+                          color: BRAND.gold,
                         }}
                       >
-                        {day.dow}
+                        Week {wk.weekIndex + 1}
                       </div>
                       <div
                         style={{
-                          color: BRAND.gray,
-                          fontSize: 14,
                           fontFamily: TEKO,
+                          fontSize: 16,
                           letterSpacing: '0.1em',
+                          color: BRAND.gray,
+                          textTransform: 'uppercase',
                         }}
                       >
-                        {day.date.toLocaleDateString('en-US', {month: 'short', day: 'numeric'})}
+                        {wk.weekLabel}
                       </div>
                     </div>
-                    {day.shifts.map((s) => {
-                      const used = countBookings(day.iso, s.key);
-                      const full = used >= s.capacity;
-                      const daysOut = daysUntil(day.iso);
-                      const tooSoon = daysOut < MIN_LEAD_DAYS;
-                      const disabled = full || tooSoon;
-                      const remaining = s.capacity - used;
-                      const selected = slot && slot.date === day.iso && slot.shiftKey === s.key;
-                      return (
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                        gap: 14,
+                      }}
+                    >
+                      {wk.days.map((day) => (
                         <div
-                          key={s.key}
-                          onClick={() => {
-                            if (disabled) return;
-                            setSlot({
-                              date: day.iso,
-                              dateLabel: fmtDate(day.iso),
-                              dowLabel: day.dow,
-                              timeLabel: s.label,
-                              shiftKey: s.key,
-                            });
-                          }}
-                          style={{
-                            padding: 16,
-                            borderBottom: `1px solid ${BRAND.line}`,
-                            cursor: disabled ? 'not-allowed' : 'pointer',
-                            opacity: disabled ? 0.4 : 1,
-                            background: selected ? BRAND.gold : 'transparent',
-                            color: selected ? BRAND.black : BRAND.white,
-                          }}
+                          key={day.iso}
+                          style={{border: `1px solid ${BRAND.line}`, background: BRAND.black}}
                         >
                           <div
                             style={{
-                              fontFamily: TEKO,
-                              fontSize: 22,
-                              letterSpacing: '0.05em',
-                              textTransform: 'uppercase',
-                              color: selected ? BRAND.black : BRAND.white,
+                              padding: '14px 16px',
+                              borderBottom: `1px solid ${BRAND.line}`,
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'baseline',
                             }}
                           >
-                            {selected ? '● ' : ''}
-                            {s.label}
+                            <div
+                              style={{
+                                fontFamily: TEKO,
+                                fontSize: 26,
+                                letterSpacing: '0.05em',
+                                textTransform: 'uppercase',
+                              }}
+                            >
+                              {day.dow}
+                            </div>
+                            <div
+                              style={{
+                                color: BRAND.gray,
+                                fontSize: 14,
+                                fontFamily: TEKO,
+                                letterSpacing: '0.1em',
+                              }}
+                            >
+                              {day.date.toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                              })}
+                            </div>
                           </div>
-                          <div
-                            style={{
-                              fontFamily: TEKO,
-                              fontSize: 13,
-                              letterSpacing: '0.14em',
-                              color: selected
-                                ? BRAND.black
-                                : full || tooSoon
-                                  ? BRAND.red
-                                  : BRAND.gray,
-                              marginTop: 4,
-                            }}
-                          >
-                            {full
-                              ? 'Slot Full · Statewide Cap Hit'
-                              : tooSoon
-                                ? `Too Soon · ${MIN_LEAD_DAYS}-Day Lead Time`
-                                : `${remaining} of ${s.capacity} open`}
-                          </div>
+                          {day.shifts.map((s) => {
+                            const used = countBookings(day.iso, s.key);
+                            const full = used >= s.capacity;
+                            const daysOut = daysUntil(day.iso);
+                            const tooSoon = daysOut < MIN_LEAD_DAYS;
+                            const tooEarly = day.iso < LAUNCH_DATE;
+                            const disabled = full || tooEarly || tooSoon;
+                            const remaining = s.capacity - used;
+                            const selected =
+                              slot && slot.date === day.iso && slot.shiftKey === s.key;
+                            return (
+                              <div
+                                key={s.key}
+                                onClick={() => {
+                                  if (disabled) return;
+                                  setSlot({
+                                    date: day.iso,
+                                    dateLabel: fmtDate(day.iso),
+                                    dowLabel: day.dow,
+                                    timeLabel: s.label,
+                                    shiftKey: s.key,
+                                  });
+                                }}
+                                style={{
+                                  padding: 16,
+                                  borderBottom: `1px solid ${BRAND.line}`,
+                                  cursor: disabled ? 'not-allowed' : 'pointer',
+                                  opacity: disabled ? 0.4 : 1,
+                                  background: selected ? BRAND.gold : 'transparent',
+                                  color: selected ? BRAND.black : BRAND.white,
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontFamily: TEKO,
+                                    fontSize: 22,
+                                    letterSpacing: '0.05em',
+                                    textTransform: 'uppercase',
+                                    color: selected ? BRAND.black : BRAND.white,
+                                  }}
+                                >
+                                  {selected ? '● ' : ''}
+                                  {s.label}
+                                </div>
+                                <div
+                                  style={{
+                                    fontFamily: TEKO,
+                                    fontSize: 13,
+                                    letterSpacing: '0.14em',
+                                    color: selected
+                                      ? BRAND.black
+                                      : full || tooEarly || tooSoon
+                                        ? BRAND.red
+                                        : BRAND.gray,
+                                    marginTop: 4,
+                                  }}
+                                >
+                                  {full
+                                    ? 'Slot Full · Statewide Cap Hit'
+                                    : tooEarly
+                                      ? 'Pre-Launch · Opens May 8'
+                                      : tooSoon
+                                        ? `Too Soon · ${MIN_LEAD_DAYS}-Day Lead Time`
+                                        : `${remaining} of ${s.capacity} open`}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
