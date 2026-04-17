@@ -429,6 +429,57 @@ async function createLeafLinkOrder(
 // Action (POST /api/leaflink-order)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── TEMP: Diagnostic endpoint to verify LeafLink product IDs ──────────────
+export async function loader({request, context}: ActionFunctionArgs) {
+  const url = new URL(request.url);
+  if (url.searchParams.get('debug') !== 'products') {
+    return json({error: 'Not found'}, {status: 404});
+  }
+  const env = context.env as any;
+  const apiKey = env.LEAFLINK_API_KEY;
+  if (!apiKey) return json({error: 'No API key'});
+
+  // Collect all product IDs we reference
+  const allProductIds = new Set<number>([
+    ...Object.values(SKU_TO_PRODUCT_ID),
+    ...Object.values(SAMPLE_SKU_TO_PRODUCT_ID),
+  ]);
+
+  const results: any[] = [];
+  for (const pid of allProductIds) {
+    try {
+      const res = await fetch(`${LEAFLINK_API_BASE}/products/${pid}/`, {
+        headers: {Authorization: `Token ${apiKey}`},
+      });
+      if (res.ok) {
+        const p = await res.json();
+        results.push({
+          id: p.id,
+          name: p.name,
+          sku: p.sku,
+          unit_of_measure: p.unit_of_measure,
+          quantity_per_unit: p.quantity_per_unit,
+          unit_denomination: p.unit_denomination,
+          wholesale_price: p.wholesale_price,
+          category: p.category,
+          subcategory: p.subcategory,
+        });
+      } else {
+        results.push({id: pid, error: `HTTP ${res.status}`});
+      }
+    } catch (e: any) {
+      results.push({id: pid, error: e.message});
+    }
+  }
+
+  // Also show the SKU → ID mapping for cross-reference
+  return json({
+    skuMapping: SKU_TO_PRODUCT_ID,
+    sampleSkuMapping: SAMPLE_SKU_TO_PRODUCT_ID,
+    products: results,
+  });
+}
+
 export async function action({request, context}: ActionFunctionArgs) {
   if (request.method !== 'POST') {
     return json({ok: false, error: 'Method not allowed'}, {status: 405});
