@@ -892,6 +892,7 @@ export default function NJMenu() {
   // ── LeafLink Order Sync ─────────────────────────────────────────────────
   const [leaflinkStatus, setLeaflinkStatus] = useState<'idle' | 'sending' | 'success' | 'error' | 'skipped'>('idle');
   const [leaflinkMessage, setLeaflinkMessage] = useState<string | null>(null);
+  const [orderConfirmed, setOrderConfirmed] = useState(false);
 
   const submitToLeafLink = useCallback(() => {
     if (!selectedAccount || cartItems.length === 0) return;
@@ -1261,6 +1262,7 @@ export default function NJMenu() {
                   onClick={() => {
                     setSelectedAccount(null);
                     setAccountQuery('');
+                    setOrderConfirmed(false);
                     setTimeout(() => accountInputRef.current?.focus(), 50);
                   }}
                   className="font-body text-xs font-600 uppercase tracking-[0.15em] px-4 py-2 cursor-pointer transition-opacity hover:opacity-80"
@@ -2119,14 +2121,43 @@ export default function NJMenu() {
                     </span>
                   </div>
                 )}
+                {/* ── Order Confirmation Checkbox ──────────────────────── */}
+                {selectedAccount && (
+                  <label
+                    className="flex items-start gap-3 cursor-pointer mb-4"
+                    style={{padding: '12px 16px', background: 'rgba(255,255,255,0.04)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)'}}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={orderConfirmed}
+                      onChange={(e) => setOrderConfirmed(e.target.checked)}
+                      className="mt-0.5 cursor-pointer"
+                      style={{accentColor: BRAND.gold, width: 18, height: 18, flexShrink: 0}}
+                    />
+                    <span className="font-body text-sm" style={{color: 'rgba(255,255,255,0.7)', lineHeight: '1.5'}}>
+                      I confirm I am an authorized representative of{' '}
+                      <strong style={{color: '#fff'}}>{selectedAccount.name}</strong>{' '}
+                      and have permission to place this order on behalf of the store.
+                    </span>
+                  </label>
+                )}
                 <a
-                  href={buildOrderEmail()}
-                  onClick={() => {
+                  href={selectedAccount && orderConfirmed ? buildOrderEmail() : undefined}
+                  onClick={(e) => {
+                    if (!selectedAccount || !orderConfirmed) {
+                      e.preventDefault();
+                      return;
+                    }
                     // Fire LeafLink order in background when email is sent
                     submitToLeafLink();
                   }}
-                  className="block font-headline text-lg font-600 uppercase tracking-[0.15em] py-5 w-full text-center transition-opacity hover:opacity-90"
-                  style={{background: BRAND.gold, color: '#000'}}
+                  className="block font-headline text-lg font-600 uppercase tracking-[0.15em] py-5 w-full text-center transition-opacity"
+                  style={{
+                    background: selectedAccount && orderConfirmed ? BRAND.gold : 'rgba(245,228,0,0.3)',
+                    color: selectedAccount && orderConfirmed ? '#000' : 'rgba(0,0,0,0.4)',
+                    cursor: selectedAccount && orderConfirmed ? 'pointer' : 'not-allowed',
+                    pointerEvents: selectedAccount && orderConfirmed ? 'auto' : undefined,
+                  }}
                 >
                   Send Order{selectedAccount ? ` — ${selectedAccount.name}` : ' to Highsman'}
                 </a>
