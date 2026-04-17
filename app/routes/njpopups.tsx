@@ -523,7 +523,7 @@ export default function NJPopups() {
 
       <main style={{maxWidth: 1400, margin: '0 auto', padding: '40px 28px 80px'}}>
         {/* STEP 01 */}
-        <section style={stepBox}>
+        <section style={{...stepBox, overflow: 'visible', position: 'relative', zIndex: 30}}>
           <div style={stepHead}>
             <div style={stepNum}>01</div>
             <div style={{flex: 1}}>
@@ -571,7 +571,8 @@ export default function NJPopups() {
                       border: `1px solid ${BRAND.lineStrong}`,
                       maxHeight: 380,
                       overflowY: 'auto',
-                      zIndex: 20,
+                      zIndex: 40,
+                      boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
                     }}
                   >
                     {filtered.length === 0 ? (
