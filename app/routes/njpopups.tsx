@@ -1,6 +1,6 @@
 import {useState, useEffect, useMemo, useRef, useCallback} from 'react';
 import type {MetaFunction} from '@shopify/remix-oxygen';
-import {Link} from '@remix-run/react';
+import {Link, useFetcher} from '@remix-run/react';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // META — staff-only internal tool; hide global nav like /njmenu
@@ -38,18 +38,19 @@ const LOGO_WHITE = `${CDN}/Highsman_Logo_White.png?v=1775594430`;
 const SPARK_WHITE = `${CDN}/Spark_Greatness_White.png?v=1775594430`;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DISPENSARY DATA — local seed for map lat/lng; Zoho fields resolved live per selection.
-// When a dispensary is picked, the UI hits /api/accounts for the Zoho Account custom
-// fields (Email for Pop Ups, Link for Pop Ups, Data Collection Last Visit Date), then
-// hits /api/accounts?contactEmail=... to resolve the POC Contact record.
+// DISPENSARY DATA — Zoho CRM is the source of truth for the picker.
+// /api/accounts?scope=nj&q=X returns live Accounts (including pop-up custom fields).
+// The lat/lng for the map isn't stored in Zoho, so we keep a local COORDS_LOOKUP for
+// known NJ dispensaries. Accounts without coords get an "off-map" treatment — still
+// bookable, just no pin/route visualization for that stop.
 // ─────────────────────────────────────────────────────────────────────────────
 type Dispensary = {
   id: string;
   name: string;
   city: string;
-  lat: number;
-  lng: number;
-  // Seeded pop-up fields — used when demoing offline; real values come from Zoho.
+  lat?: number;
+  lng?: number;
+  // Zoho-resolved pop-up fields.
   popUpEmail?: string | null;
   popUpLink?: string | null;
   lastVisitDate?: string | null;
@@ -57,41 +58,81 @@ type Dispensary = {
   contact?: {name: string; role: string; email: string; phone: string} | null;
 };
 
-// Seed list — a few marked as Link mode, a few Email mode, a few Fallback so all three
-// UX branches are testable without live Zoho. Swap to live `/api/accounts?scope=nj` search
-// once Zoho accounts are populated with the pop-up fields.
-const DISPENSARIES: Dispensary[] = [
-  {id: 'bot-eh', name: 'The Botanist', city: 'Egg Harbor Twp', lat: 39.4136, lng: -74.5866, popUpEmail: 'mhale@botanist.com', lastVisitDate: '2026-02-12', contact: {name: 'Marcus Hale', role: 'GM', email: 'mhale@botanist.com', phone: '(609) 555-0182'}},
-  {id: 'cur-bm', name: 'Curaleaf', city: 'Bellmawr', lat: 39.8654, lng: -75.0935, popUpLink: 'https://curaleaf.com/vendor-events/book', lastVisitDate: '2026-03-04'},
-  {id: 'cur-bd', name: 'Curaleaf', city: 'Bordentown', lat: 40.1462, lng: -74.7118},
-  {id: 'cur-ep', name: 'Curaleaf', city: 'Edgewater Park', lat: 40.0376, lng: -74.9115, popUpLink: 'https://curaleaf.com/vendor-events/book', lastVisitDate: '2026-03-28'},
-  {id: 'ayr-et', name: 'Garden State Dispensary', city: 'Eatontown', lat: 40.2962, lng: -74.0568, popUpEmail: 'lauren@gsdispensary.com', lastVisitDate: '2026-01-22', contact: {name: 'Lauren Kim', role: 'Lead Budtender', email: 'lauren@gsdispensary.com', phone: '(732) 555-0217'}},
-  {id: 'ayr-un', name: 'Garden State Dispensary', city: 'Union', lat: 40.6976, lng: -74.2632},
-  {id: 'ayr-wd', name: 'Garden State Dispensary', city: 'Woodbridge', lat: 40.5576, lng: -74.2846, popUpEmail: 'truiz@gsdispensary.com', lastVisitDate: '2026-03-15', contact: {name: 'Tanya Ruiz', role: 'Store Manager', email: 'truiz@gsdispensary.com', phone: '(732) 555-0944'}},
-  {id: 'zen-el', name: 'Zen Leaf', city: 'Elizabeth', lat: 40.6640, lng: -74.2107},
-  {id: 'zen-la', name: 'Zen Leaf', city: 'Lawrence', lat: 40.2971, lng: -74.7293, popUpEmail: 'cbauer@zenleaf.com', lastVisitDate: '2026-02-26', contact: {name: 'Chris Bauer', role: 'Buyer', email: 'cbauer@zenleaf.com', phone: '(609) 555-0770'}},
-  {id: 'zen-np', name: 'Zen Leaf', city: 'Neptune', lat: 40.1987, lng: -74.0278, popUpEmail: 'mellis@zenleaf.com', lastVisitDate: '2026-03-19', contact: {name: 'Morgan Ellis', role: 'GM', email: 'mellis@zenleaf.com', phone: '(732) 555-0356'}},
-  {id: 'rise-bl', name: 'RISE', city: 'Bloomfield', lat: 40.8068, lng: -74.1854},
-  {id: 'rise-pt', name: 'RISE', city: 'Paterson', lat: 40.9168, lng: -74.1718, popUpLink: 'https://risecannabis.com/vendor-portal/book-event', lastVisitDate: '2026-03-08'},
-  {id: 'rise-pm', name: 'RISE', city: 'Paramus', lat: 40.9445, lng: -74.0754, popUpLink: 'https://risecannabis.com/vendor-portal/book-event', lastVisitDate: '2026-03-30'},
-  {id: 'col-dp', name: 'Columbia Care', city: 'Deptford', lat: 39.8412, lng: -75.1080},
-  {id: 'col-vl', name: 'Columbia Care', city: 'Vineland', lat: 39.4864, lng: -75.0263, popUpEmail: 'rpatel@col-care.com', lastVisitDate: '2026-02-02', contact: {name: 'Ray Patel', role: 'GM', email: 'rpatel@col-care.com', phone: '(856) 555-0602'}},
-  {id: 'apo-pb', name: 'The Apothecarium', city: 'Phillipsburg', lat: 40.6934, lng: -75.1904, popUpEmail: 'nina@apothecarium.com', lastVisitDate: '2026-03-11', contact: {name: 'Nina DeLuca', role: 'Buyer', email: 'nina@apothecarium.com', phone: '(908) 555-0198'}},
-  {id: 'apo-mw', name: 'The Apothecarium', city: 'Maplewood', lat: 40.7315, lng: -74.2735},
-  {id: 'apo-ld', name: 'The Apothecarium', city: 'Lodi', lat: 40.8820, lng: -74.0835, popUpEmail: 'sam@apothecarium.com', lastVisitDate: '2026-03-22', contact: {name: 'Sam Okafor', role: 'Assistant GM', email: 'sam@apothecarium.com', phone: '(973) 555-0450'}},
-  {id: 'got-jc', name: 'Gotham', city: 'Jersey City', lat: 40.7178, lng: -74.0431, popUpEmail: 'alex@gothamdispensary.com', lastVisitDate: '2026-04-02', contact: {name: 'Alex Romano', role: 'GM', email: 'alex@gothamdispensary.com', phone: '(201) 555-0322'}},
-  {id: 'val-rt', name: 'Valley Wellness', city: 'Raritan', lat: 40.5712, lng: -74.6335},
-  {id: 'asc-mc', name: 'Ascend', city: 'Montclair', lat: 40.8162, lng: -74.2029, popUpEmail: 'blin@ascendcannabis.com', lastVisitDate: '2026-03-17', contact: {name: 'Brooke Lin', role: 'Floor Lead', email: 'blin@ascendcannabis.com', phone: '(973) 555-0811'}},
-  {id: 'asc-rp', name: 'Ascend', city: 'Rochelle Park', lat: 40.9064, lng: -74.0741},
-];
+// Shape returned by /api/accounts?q=X (matches AccountResult in api.accounts.tsx).
+type ApiAccount = {
+  id: string;
+  name: string;
+  city: string | null;
+  state: string | null;
+  street: string | null;
+  phone: string | null;
+  popUpEmail: string | null;
+  popUpLink: string | null;
+  lastVisitDate: string | null;
+};
 
-type Booking = {dispId: string; date: string; shiftKey: string};
+// Local coords index for the map — keyed by `${name}|${city}` (case-insensitive).
+// Add to this list as more NJ dispensaries come online. Missing entries degrade
+// gracefully: the booking still works, it just doesn't get a map pin.
+const COORDS_LOOKUP: Record<string, {lat: number; lng: number}> = {
+  'the botanist|egg harbor twp': {lat: 39.4136, lng: -74.5866},
+  'curaleaf|bellmawr': {lat: 39.8654, lng: -75.0935},
+  'curaleaf|bordentown': {lat: 40.1462, lng: -74.7118},
+  'curaleaf|edgewater park': {lat: 40.0376, lng: -74.9115},
+  'garden state dispensary|eatontown': {lat: 40.2962, lng: -74.0568},
+  'garden state dispensary|union': {lat: 40.6976, lng: -74.2632},
+  'garden state dispensary|woodbridge': {lat: 40.5576, lng: -74.2846},
+  'zen leaf|elizabeth': {lat: 40.6640, lng: -74.2107},
+  'zen leaf|lawrence': {lat: 40.2971, lng: -74.7293},
+  'zen leaf|neptune': {lat: 40.1987, lng: -74.0278},
+  'rise|bloomfield': {lat: 40.8068, lng: -74.1854},
+  'rise|paterson': {lat: 40.9168, lng: -74.1718},
+  'rise|paramus': {lat: 40.9445, lng: -74.0754},
+  'columbia care|deptford': {lat: 39.8412, lng: -75.1080},
+  'columbia care|vineland': {lat: 39.4864, lng: -75.0263},
+  'the apothecarium|phillipsburg': {lat: 40.6934, lng: -75.1904},
+  'the apothecarium|maplewood': {lat: 40.7315, lng: -74.2735},
+  'the apothecarium|lodi': {lat: 40.8820, lng: -74.0835},
+  'gotham|jersey city': {lat: 40.7178, lng: -74.0431},
+  'valley wellness|raritan': {lat: 40.5712, lng: -74.6335},
+  'ascend|montclair': {lat: 40.8162, lng: -74.2029},
+  'ascend|rochelle park': {lat: 40.9064, lng: -74.0741},
+  // Premo + Shore House Canna — verified NJ rec locations
+  'premo cannabis|keyport': {lat: 40.4337, lng: -74.1996},
+  'shore house cannabis|long branch': {lat: 40.3037, lng: -73.9921},
+  'the cannabist|deptford': {lat: 39.8412, lng: -75.1080},
+  'the cannabist|vineland': {lat: 39.4864, lng: -75.0263},
+};
 
-const SEED_BOOKINGS: Booking[] = [
-  {dispId: 'rise-pm', date: '2026-04-18', shiftKey: 'sat-mat'},
-  {dispId: 'cur-bm', date: '2026-04-19', shiftKey: 'sun-late'},
-  {dispId: 'got-jc', date: '2026-04-17', shiftKey: 'fri-main'},
-];
+function coordsFor(name: string, city: string | null): {lat: number; lng: number} | null {
+  if (!city) return null;
+  const key = `${name.trim().toLowerCase()}|${city.trim().toLowerCase()}`;
+  return COORDS_LOOKUP[key] || null;
+}
+
+function apiAccountToDispensary(a: ApiAccount): Dispensary {
+  const coords = coordsFor(a.name, a.city);
+  return {
+    id: a.id,
+    name: a.name,
+    city: a.city || '',
+    lat: coords?.lat,
+    lng: coords?.lng,
+    popUpEmail: a.popUpEmail,
+    popUpLink: a.popUpLink,
+    lastVisitDate: a.lastVisitDate,
+  };
+}
+
+type Booking = {
+  dispId: string;
+  name: string;
+  city: string;
+  lat?: number;
+  lng?: number;
+  date: string;
+  shiftKey: string;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -175,10 +216,24 @@ export default function NJPopups() {
   } | null>(null);
   const [overrideContact, setOverrideContact] = useState(false);
   const [newContact, setNewContact] = useState({name: '', role: '', email: '', phone: ''});
-  const [bookings, setBookings] = useState<Booking[]>(SEED_BOOKINGS);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [query, setQuery] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [toast, setToast] = useState(false);
+
+  // Live Zoho account search — same pattern as /njmenu.
+  const accountFetcher = useFetcher<{accounts: ApiAccount[]; error?: string}>();
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2 || dispensary) return;
+    const t = setTimeout(() => {
+      accountFetcher.load(`/api/accounts?scope=nj&q=${encodeURIComponent(q)}`);
+    }, 220);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, dispensary]);
+  const isSearching = accountFetcher.state === 'loading';
+  const crmUnavailable = accountFetcher.data?.error === 'CRM not configured';
 
   // Suppress Klaviyo popup — staff-only page (matches /njmenu pattern)
   useEffect(() => {
@@ -270,11 +325,12 @@ export default function NJPopups() {
     [bookings],
   );
 
-  const filtered = useMemo(() => {
-    const t = query.trim().toLowerCase();
-    if (!t) return DISPENSARIES;
-    return DISPENSARIES.filter((d) => d.name.toLowerCase().includes(t) || d.city.toLowerCase().includes(t));
-  }, [query]);
+  // Live Zoho results, mapped to our Dispensary shape (coords filled in when known).
+  const filtered: Dispensary[] = useMemo(() => {
+    const apiAccounts = accountFetcher.data?.accounts || [];
+    if (query.trim().length < 2) return [];
+    return apiAccounts.map(apiAccountToDispensary);
+  }, [accountFetcher.data, query]);
 
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<any>(null);
@@ -306,22 +362,53 @@ export default function NJPopups() {
     }
   }, []);
 
-  const weekendStops = useMemo(() => {
-    const stops: Array<Dispensary & {date: string; shiftKey: string; pending: boolean}> = [];
+  // Weekend stops — includes all booked weekend slots plus the currently-pending selection.
+  // Each stop carries its own lat/lng (may be undefined if Zoho account isn't in COORDS_LOOKUP).
+  type Stop = {
+    name: string;
+    city: string;
+    lat?: number;
+    lng?: number;
+    date: string;
+    shiftKey: string;
+    pending: boolean;
+  };
+  const weekendStops: Stop[] = useMemo(() => {
+    const stops: Stop[] = [];
     bookings
       .filter((b) => /^sat-|^sun-/.test(b.shiftKey))
       .forEach((b) => {
-        const d = DISPENSARIES.find((x) => x.id === b.dispId);
-        if (!d) return;
-        stops.push({...d, date: b.date, shiftKey: b.shiftKey, pending: false});
+        stops.push({
+          name: b.name,
+          city: b.city,
+          lat: b.lat,
+          lng: b.lng,
+          date: b.date,
+          shiftKey: b.shiftKey,
+          pending: false,
+        });
       });
     if (slot && /^sat-|^sun-/.test(slot.shiftKey) && dispensary) {
-      stops.push({...dispensary, date: slot.date, shiftKey: slot.shiftKey, pending: true});
+      stops.push({
+        name: dispensary.name,
+        city: dispensary.city,
+        lat: dispensary.lat,
+        lng: dispensary.lng,
+        date: slot.date,
+        shiftKey: slot.shiftKey,
+        pending: true,
+      });
     }
     const order: Record<string, number> = {'sat-mat': 0, 'sat-late': 1, 'sun-mat': 2, 'sun-late': 3};
     stops.sort((a, b) => (a.date + order[a.shiftKey]).localeCompare(b.date + order[b.shiftKey]));
     return stops;
   }, [bookings, slot, dispensary]);
+
+  // Stops that actually have coords — used for map pins and drive-time calc.
+  const mappableStops = useMemo(
+    () => weekendStops.filter((s): s is Stop & {lat: number; lng: number} => s.lat != null && s.lng != null),
+    [weekendStops],
+  );
 
   useEffect(() => {
     if (!leafletReady || !mapRef.current) return;
@@ -346,19 +433,24 @@ export default function NJPopups() {
       mapLayersRef.current.route = null;
     }
 
-    DISPENSARIES.forEach((d) => {
-      const m = L.circleMarker([d.lat, d.lng], {
+    // Faint pins for all known NJ dispensaries (from the local coords index)
+    Object.entries(COORDS_LOOKUP).forEach(([key, coords]) => {
+      const [name, city] = key.split('|');
+      const m = L.circleMarker([coords.lat, coords.lng], {
         radius: 4,
         color: BRAND.gray,
         fillColor: BRAND.gray,
         fillOpacity: 0.5,
         weight: 1,
       }).addTo(map);
-      m.bindTooltip(`${d.name} — ${d.city}`, {direction: 'top'});
+      m.bindTooltip(
+        `${name.replace(/\b\w/g, (c: string) => c.toUpperCase())} — ${city.replace(/\b\w/g, (c: string) => c.toUpperCase())}`,
+        {direction: 'top'},
+      );
       mapLayersRef.current.pins.push(m);
     });
 
-    weekendStops.forEach((s, i) => {
+    mappableStops.forEach((s, i) => {
       const color = s.pending ? BRAND.white : BRAND.gold;
       const icon = L.divIcon({
         className: 'hs-pin',
@@ -375,26 +467,26 @@ export default function NJPopups() {
       mapLayersRef.current.pins.push(m);
     });
 
-    if (weekendStops.length >= 2) {
+    if (mappableStops.length >= 2) {
       mapLayersRef.current.route = L.polyline(
-        weekendStops.map((s) => [s.lat, s.lng]),
+        mappableStops.map((s) => [s.lat, s.lng]),
         {color: BRAND.gold, weight: 3, opacity: 0.9, dashArray: '8,6'},
       ).addTo(map);
       map.fitBounds(mapLayersRef.current.route.getBounds(), {padding: [40, 40]});
-    } else if (weekendStops.length === 1) {
-      map.setView([weekendStops[0].lat, weekendStops[0].lng], 10);
+    } else if (mappableStops.length === 1) {
+      map.setView([mappableStops[0].lat, mappableStops[0].lng], 10);
     } else {
       map.setView([40.2, -74.5], 8);
     }
-  }, [leafletReady, weekendStops]);
+  }, [leafletReady, mappableStops]);
 
   const driveLegs = useMemo(() => {
     const legs: number[] = [];
-    for (let i = 0; i < weekendStops.length - 1; i++) {
-      legs.push(estDriveMinutes(weekendStops[i], weekendStops[i + 1]));
+    for (let i = 0; i < mappableStops.length - 1; i++) {
+      legs.push(estDriveMinutes(mappableStops[i], mappableStops[i + 1]));
     }
     return legs;
-  }, [weekendStops]);
+  }, [mappableStops]);
   const totalDrive = driveLegs.reduce((a, b) => a + b, 0);
 
   const step1Done = !!dispensary;
@@ -445,7 +537,18 @@ export default function NJPopups() {
 
       // eslint-disable-next-line no-console
       console.log('[LINK HANDOFF]', {dispensary, slot, targetUrl, payload});
-      setBookings((b) => [...b, {dispId: dispensary.id, date: slot.date, shiftKey: slot.shiftKey}]);
+      setBookings((b) => [
+        ...b,
+        {
+          dispId: dispensary.id,
+          name: dispensary.name,
+          city: dispensary.city,
+          lat: dispensary.lat,
+          lng: dispensary.lng,
+          date: slot.date,
+          shiftKey: slot.shiftKey,
+        },
+      ]);
       setToast(true);
       setTimeout(() => setToast(false), 3200);
       setSlot(null);
@@ -458,7 +561,18 @@ export default function NJPopups() {
     // popups@highsman.com, invites contact + staff, upserts Zoho Contact.
     // eslint-disable-next-line no-console
     console.log('[MOCK BOOK]', {dispensary, slot, contact, calendar: 'popups@highsman.com'});
-    setBookings((b) => [...b, {dispId: dispensary.id, date: slot.date, shiftKey: slot.shiftKey}]);
+    setBookings((b) => [
+      ...b,
+      {
+        dispId: dispensary.id,
+        name: dispensary.name,
+        city: dispensary.city,
+        lat: dispensary.lat,
+        lng: dispensary.lng,
+        date: slot.date,
+        shiftKey: slot.shiftKey,
+      },
+    ]);
     setToast(true);
     setTimeout(() => setToast(false), 3200);
     setSlot(null);
@@ -682,9 +796,21 @@ export default function NJPopups() {
                       boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
                     }}
                   >
-                    {filtered.length === 0 ? (
+                    {query.trim().length < 2 ? (
                       <div style={{padding: '14px 20px', color: BRAND.gray}}>
-                        No matches — try another search.
+                        Type at least 2 characters to search NJ dispensaries.
+                      </div>
+                    ) : isSearching ? (
+                      <div style={{padding: '14px 20px', color: BRAND.gray}}>
+                        Searching Zoho CRM…
+                      </div>
+                    ) : crmUnavailable ? (
+                      <div style={{padding: '14px 20px', color: BRAND.red}}>
+                        CRM not configured — can't search live. Contact ops.
+                      </div>
+                    ) : filtered.length === 0 ? (
+                      <div style={{padding: '14px 20px', color: BRAND.gray}}>
+                        No NJ dispensaries found for "{query.trim()}". Check the spelling or try a city.
                       </div>
                     ) : (
                       filtered.map((d) => (
@@ -1278,7 +1404,7 @@ export default function NJPopups() {
                   </div>
                 ) : (
                   weekendStops.map((s, i) => (
-                    <div key={`${s.id}-${i}`}>
+                    <div key={`${s.name}-${s.city}-${s.date}-${s.shiftKey}-${i}`}>
                       <div
                         style={{
                           border: `1px solid ${BRAND.line}`,
