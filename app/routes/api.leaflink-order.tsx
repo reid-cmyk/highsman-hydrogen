@@ -15,9 +15,8 @@ const FAILURE_NOTIFY_EMAIL = 'njorders@highsman.com';
 const LEAFLINK_COMPANY_ID = 24087; // Canfections NJ, INC
 
 // SKU → LeafLink Product ID mapping
-// Only Hit Sticks singles, Black Tin 5-packs, and Fly High Tins are in LeafLink
 const SKU_TO_PRODUCT_ID: Record<string, number> = {
-  // Singles (0.5g)
+  // Hit Stick Singles (0.5g, Case 24)
   'C-NJ-HSINF-BB': 2554071,
   'C-NJ-HSINF-CQ': 2554859,
   'C-NJ-HSINF-GG': 2554839,
@@ -35,6 +34,18 @@ const SKU_TO_PRODUCT_ID: Record<string, number> = {
   'C-NJ-HSTINFH-GG': 2644315,
   'C-NJ-HSTINFH-TM': 2644316,
   'C-NJ-HSTINFH-WW': 2644317,
+  // Triple Threat Pre-Rolls (1.2g, Case 12)
+  'C-NJ-HSTT-WW': 2816205,
+  'C-NJ-HSTT-GG': 2816206,
+  'C-NJ-HSTT-BB': 2816207,
+  'C-NJ-HSTT-TM': 2816208,
+  'C-NJ-HSTT-CQ': 2816209,
+  // Ground Game Milled Flower (7g, Case 6)
+  'C-NJ-HSGG-WW': 2816210,
+  'C-NJ-HSGG-GG': 2816211,
+  'C-NJ-HSGG-BB': 2816212,
+  'C-NJ-HSGG-TM': 2816213,
+  'C-NJ-HSGG-CQ': 2816214,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import {useState, useRef, useCallback, useMemo, useEffect} from 'react';
-import type {MetaFunction} from '@shopify/remix-oxygen';
-import {Link, useFetcher} from '@remix-run/react';
+import type {MetaFunction, LoaderFunctionArgs} from '@shopify/remix-oxygen';
+import {json} from '@shopify/remix-oxygen';
+import {Link, useFetcher, useLoaderData} from '@remix-run/react';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // META
@@ -548,10 +549,77 @@ const NJ_DISPENSARIES: Array<{id: string; name: string; city: string | null; pho
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
+// LOADER — Fetch LeafLink inventory server-side
+// ─────────────────────────────────────────────────────────────────────────────
+
+const LEAFLINK_API_BASE = 'https://app.leaflink.com/api/v2';
+const LEAFLINK_COMPANY_ID = 24087;
+
+export async function loader({context}: LoaderFunctionArgs) {
+  const env = context.env as any;
+  const apiKey = env.LEAFLINK_API_KEY;
+
+  const inventory: Record<string, number> = {};
+
+  if (!apiKey) {
+    console.warn('[njmenu] LEAFLINK_API_KEY not configured — inventory unavailable');
+    return json({inventory});
+  }
+
+  try {
+    let page = 1;
+    let hasMore = true;
+
+    while (hasMore && page <= 10) {
+      const url = `${LEAFLINK_API_BASE}/products/?seller=${LEAFLINK_COMPANY_ID}&fields_include=id,sku,available_inventory,listing_state&page_size=100&page=${page}`;
+      const res = await fetch(url, {
+        headers: {Authorization: `Token ${apiKey}`},
+      });
+
+      if (!res.ok) break;
+      const data = await res.json();
+      if (!data.results || data.results.length === 0) break;
+
+      for (const product of data.results) {
+        if (!product.sku) continue;
+        // If listing_state is not "Available", treat as 0 stock
+        const available = product.listing_state === 'Available'
+          ? Math.max(0, Math.floor(parseFloat(product.available_inventory ?? '0')))
+          : 0;
+        inventory[product.sku] = available;
+      }
+
+      hasMore = !!data.next;
+      page++;
+    }
+  } catch (err: any) {
+    console.error('[njmenu] Inventory fetch error:', err.message);
+  }
+
+  return json(
+    {inventory},
+    {headers: {'Cache-Control': 'public, max-age=300, s-maxage=300'}},
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function NJMenu() {
+  const {inventory} = useLoaderData<typeof loader>();
+
+  // Helper: check if a strain SKU is in stock (available > 0)
+  // Returns true if no inventory data exists (graceful fallback)
+  const isInStock = useCallback(
+    (sku?: string): boolean => {
+      if (!sku) return true; // no SKU means not tracked
+      if (!(sku in inventory)) return true; // not in LeafLink = show as available
+      return inventory[sku] > 0;
+    },
+    [inventory],
+  );
+
   // Suppress Klaviyo popup — this is a B2B wholesale page, not consumer-facing
   useEffect(() => {
     const style = document.createElement('style');
@@ -1682,6 +1750,7 @@ export default function NJMenu() {
                       {product.strains.map((strain) => {
                         const cases = getCasesForItem(product.id, strain.name);
                         const imgSrc = product.fixedImageUrl ?? strainImage(strain.name, product.imageType);
+                        const outOfStock = !isInStock(strain.sku);
                         return (
                           <div
                             key={strain.name}
@@ -1690,6 +1759,8 @@ export default function NJMenu() {
                               borderTop: '1px solid rgba(255,255,255,0.05)',
                               paddingLeft: 0,
                               background: cases > 0 ? 'rgba(245,228,0,0.03)' : 'transparent',
+                              opacity: outOfStock ? 0.4 : 1,
+                              filter: outOfStock ? 'grayscale(100%)' : 'none',
                             }}
                           >
                             {/* Image — aligned with header thumbs */}
@@ -1739,7 +1810,17 @@ export default function NJMenu() {
                               <span className="font-body text-[10px] tracking-wider" style={{color: 'rgba(255,255,255,0.65)', fontFamily: 'monospace, monospace'}}>
                                 {strain.sku ? strain.sku.split('-').pop() : '—'}
                               </span>
-                              {/* Stepper */}
+                              {/* Stepper or Out of Stock */}
+                              {outOfStock ? (
+                                <div className="flex items-center justify-end">
+                                  <span
+                                    className="font-body text-[10px] font-700 uppercase tracking-wider px-3 py-1.5 rounded"
+                                    style={{background: 'rgba(255,60,60,0.15)', color: '#ff6b6b', border: '1px solid rgba(255,60,60,0.25)'}}
+                                  >
+                                    Out of Stock
+                                  </span>
+                                </div>
+                              ) : (
                               <div className="flex items-center justify-end gap-0">
                                 <button
                                   onClick={() => updateCart(product.id, strain.name, -1)}
@@ -1778,6 +1859,7 @@ export default function NJMenu() {
                                   +
                                 </button>
                               </div>
+                              )}
                             </div>
 
                             {/* Mobile layout */}
@@ -1788,6 +1870,16 @@ export default function NJMenu() {
                                   {strain.type} &middot; {product.thcDisplay ?? strain.thc}
                                 </span>
                               </div>
+                              {outOfStock ? (
+                                <div className="flex-shrink-0 ml-3">
+                                  <span
+                                    className="font-body text-[9px] font-700 uppercase tracking-wider px-2 py-1 rounded"
+                                    style={{background: 'rgba(255,60,60,0.15)', color: '#ff6b6b', border: '1px solid rgba(255,60,60,0.25)'}}
+                                  >
+                                    Out of Stock
+                                  </span>
+                                </div>
+                              ) : (
                               <div className="flex items-center gap-0 flex-shrink-0 ml-3">
                                 <button onClick={() => updateCart(product.id, strain.name, -1)} disabled={cases === 0}
                                   className="stepper-btn" style={{background: cases > 0 ? 'rgba(255,255,255,0.08)' : 'transparent', color: cases > 0 ? '#fff' : 'rgba(255,255,255,0.35)', width: 40, height: 40, fontSize: 18}}>−</button>
@@ -1798,6 +1890,7 @@ export default function NJMenu() {
                                 <button onClick={() => updateCart(product.id, strain.name, 1)}
                                   className="stepper-btn" style={{background: cases > 0 ? BRAND.gold : 'rgba(255,255,255,0.08)', color: cases > 0 ? '#000' : '#fff', width: 40, height: 40, fontSize: 18}}>+</button>
                               </div>
+                              )}
                             </div>
                           </div>
                         );
