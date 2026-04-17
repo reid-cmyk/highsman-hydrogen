@@ -36,11 +36,11 @@ export async function loader({context}: LoaderFunctionArgs) {
 export const handle = {hideHeader: true, hideFooter: true};
 
 export const meta: MetaFunction = () => [
-  {title: 'NJ Pop Up Booking · Staff Only · Highsman'},
+  {title: 'NJ D2C Spark Team Booking · Staff Only · Highsman'},
   {name: 'robots', content: 'noindex, nofollow'},
   {
     description:
-      'Internal staff tool for scheduling Highsman pop ups at NJ dispensaries.',
+      'Internal staff tool for scheduling Highsman D2C Spark Team visits at NJ dispensaries.',
   },
 ];
 
@@ -1669,7 +1669,7 @@ export default function NJPopups() {
             marginBottom: 8,
           }}
         >
-          New Jersey · Pop Up Booking
+          New Jersey · D2C Spark Team Booking
         </div>
         <h1
           style={{
@@ -1684,10 +1684,10 @@ export default function NJPopups() {
             marginBottom: 14,
           }}
         >
-          Book The <span style={{color: BRAND.gold}}>Pop Up</span>
+          Spark Team <span style={{color: BRAND.gold}}>Closer Bookings</span>
         </h1>
         <p style={{maxWidth: 720, margin: '0 auto', color: BRAND.gray, fontSize: 18, lineHeight: 1.55}}>
-          Staff tool for scheduling Highsman pop ups at licensed NJ dispensaries.{' '}
+          Staff tool for scheduling Highsman D2C Spark Team visits at licensed NJ dispensaries.{' '}
           <strong style={{color: BRAND.white, fontWeight: 600}}>Friday 3–7 PM</strong> (max 2
           simultaneous statewide) and{' '}
           <strong style={{color: BRAND.white, fontWeight: 600}}>
@@ -1937,7 +1937,7 @@ export default function NJPopups() {
               <h2 style={h2}>Pick Time Slot</h2>
               <p style={kicker}>
                 All shifts cap at 2 simultaneous bookings statewide. Saturday splits into matinee (1–3 PM)
-                and late (4–6 PM) — each with its own 2-spot cap. Pop-ups officially launch{' '}
+                and late (4–6 PM) — each with its own 2-spot cap. D2C Spark Team officially launches{' '}
                 <strong>Fri May 8</strong>; bookings require a {MIN_LEAD_DAYS}-day minimum lead time. Window
                 rolls forward weekly so you can always plan ~2 months out. Dispensaries must sit within{' '}
                 {MAX_SOLO_DRIVE_MIN} min of Newark (North Jersey Rep) or Collingswood (South Jersey Rep) — auto-assigned
@@ -2223,7 +2223,7 @@ export default function NJPopups() {
                       cursor: 'pointer',
                     }}
                   >
-                    Staff change for pop ups — update data here
+                    Staff change for D2C Spark Team — update data here
                   </button>
                   <span>
                     Wrong channel?{' '}
@@ -2337,7 +2337,7 @@ export default function NJPopups() {
                       cursor: 'pointer',
                     }}
                   >
-                    Staff change for pop ups — update data here
+                    Staff change for D2C Spark Team — update data here
                   </button>
                   <span>
                     Wrong contact?{' '}
@@ -2477,8 +2477,8 @@ export default function NJPopups() {
                       <strong style={{color: BRAND.white}}>
                         {dispensary.name} — {dispensary.city}
                       </strong>
-                      . "Last Pop Up Date" isn't changed here — that field updates
-                      automatically when a pop-up is booked.
+                      . "Last Spark Team Visit Date" isn't changed here — that field updates
+                      automatically when a Spark Team visit is booked.
                     </div>
                   </div>
                   <button
@@ -2508,7 +2508,7 @@ export default function NJPopups() {
                 >
                   {(
                     [
-                      {k: 'email' as const, l: 'Email for Pop Ups', p: 'buyer@dispensary.com', t: 'email'},
+                      {k: 'email' as const, l: 'Email for D2C Spark Team', p: 'buyer@dispensary.com', t: 'email'},
                       {k: 'link' as const, l: 'Booking Portal Link (optional)', p: 'https://portal.dispensary.com/vendor', t: 'url'},
                       {k: 'name' as const, l: 'Contact Name', p: 'Jane Doe', t: 'text'},
                       {k: 'role' as const, l: 'Role / Title', p: 'Buyer, GM, Events', t: 'text'},
@@ -2607,7 +2607,7 @@ export default function NJPopups() {
             <div style={{flex: 1}}>
               <h2 style={h2}>Route Planner</h2>
               <p style={kicker}>
-                Every booked NJ pop-up plotted on Google Maps — each rep's day runs from their hub through
+                Every booked NJ Spark Team visit plotted on Google Maps — each rep's day runs from their hub through
                 their assigned stops. Drive times are the no-traffic baseline from Google Routes.
               </p>
             </div>
@@ -3400,7 +3400,7 @@ export default function NJPopups() {
                     <>
                       Google Maps says <strong>{driveCheck.text}</strong> drive
                       between {driveCheck.otherName} and {dispensary?.name} —
-                      over the 40-minute limit for same-day weekend pop-ups.
+                      over the 40-minute limit for same-day Saturday Spark Team doubleheaders.
                       Pick a closer dispensary, a different day, or move one of
                       the bookings.
                     </>
@@ -3434,7 +3434,7 @@ export default function NJPopups() {
                   opacity: step5Done ? 1 : 0.5,
                 }}
               >
-                {mode === 'link' ? 'Open Dispensary Portal →' : 'Confirm & Book Pop Up'}
+                {mode === 'link' ? 'Open Dispensary Portal →' : 'Confirm & Book Spark Team Visit'}
               </button>
               <button
                 onClick={resetAll}
@@ -3512,7 +3512,7 @@ export default function NJPopups() {
             fontSize: 16,
           }}
         >
-          Pop Up Questions ·{' '}
+          D2C Spark Team Questions ·{' '}
           <a href="mailto:popups@highsman.com" style={{color: BRAND.white, textDecoration: 'none'}}>
             popups@highsman.com
           </a>
@@ -3544,7 +3544,7 @@ export default function NJPopups() {
           pointerEvents: 'none',
         }}
       >
-        ● Pop Up Booked — Calendar Invite Sent
+        ● Spark Team Visit Booked — Calendar Invite Sent
       </div>
 
       {/* Staff-edit toast */}
@@ -3568,7 +3568,7 @@ export default function NJPopups() {
           pointerEvents: 'none',
         }}
       >
-        ● Pop Up POC Updated in Zoho
+        ● Spark Team POC Updated in Zoho
       </div>
     </div>
   );
