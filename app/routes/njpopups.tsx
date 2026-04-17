@@ -509,6 +509,45 @@ export default function NJPopups() {
   const step3Done = mode === 'link' ? !!slot : !!contact;
   const step5Done = step1Done && step2Done && step3Done;
 
+  // Fire a Zoho Event creation for every booking so the Account's Activities
+  // timeline shows the pop-up history + upcoming stops on the Zoho calendar.
+  // Fire-and-forget — never block the local booking confirmation.
+  const postBookingEvent = (opts: {
+    channel: 'link' | 'email' | 'manual';
+    contactName?: string;
+    contactEmail?: string;
+    contactPhone?: string;
+    contactRole?: string;
+    portalUrl?: string;
+  }) => {
+    if (!dispensary || !slot) return;
+    if (!dispensary.id || dispensary.id.startsWith('local-')) return;
+    const fd = new FormData();
+    fd.append('accountId', dispensary.id);
+    fd.append('dispensaryName', dispensary.name);
+    fd.append('date', slot.date);
+    fd.append('shiftKey', slot.shiftKey);
+    fd.append('shiftLabel', shiftLabel(slot.shiftKey));
+    fd.append('channel', opts.channel);
+    if (opts.contactName) fd.append('contactName', opts.contactName);
+    if (opts.contactEmail) fd.append('contactEmail', opts.contactEmail);
+    if (opts.contactPhone) fd.append('contactPhone', opts.contactPhone);
+    if (opts.contactRole && opts.contactRole !== '—') fd.append('contactRole', opts.contactRole);
+    if (opts.portalUrl) fd.append('portalUrl', opts.portalUrl);
+    if (dispensary.city) fd.append('city', dispensary.city);
+    fetch('/api/popups-book', {method: 'POST', body: fd})
+      .then((r) => r.json().catch(() => null))
+      .then((data) => {
+        if (!data?.ok) {
+          console.warn('[njpopups] Event creation failed:', data?.error);
+        } else {
+          // eslint-disable-next-line no-console
+          console.log('[njpopups] Zoho Event created:', data.eventId);
+        }
+      })
+      .catch((err) => console.warn('[njpopups] Event creation error:', err));
+  };
+
   const handleBook = () => {
     if (!dispensary || !slot) return;
 
@@ -551,6 +590,10 @@ export default function NJPopups() {
 
       // eslint-disable-next-line no-console
       console.log('[LINK HANDOFF]', {dispensary, slot, targetUrl, payload});
+
+      // Log the Event on the Zoho Account's Activities timeline.
+      postBookingEvent({channel: 'link', portalUrl: dispensary.popUpLink});
+
       setBookings((b) => [
         ...b,
         {
@@ -616,6 +659,15 @@ export default function NJPopups() {
         })
         .catch((err) => console.warn('[njpopups] POC write-back error:', err));
     }
+
+    // Log the Event on the Zoho Account's Activities timeline.
+    postBookingEvent({
+      channel: mode === 'manual' ? 'manual' : 'email',
+      contactName: contact.name,
+      contactEmail: contact.email,
+      contactPhone: contact.phone,
+      contactRole: contact.role,
+    });
 
     setBookings((b) => [
       ...b,
