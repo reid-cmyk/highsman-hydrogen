@@ -115,8 +115,23 @@ export async function loader({context}: LoaderFunctionArgs) {
       }
     }
 
+    // Temp debug: collect some product IDs to verify what's in the API
+    const debugIds: Array<{id: number; name: string}> = [];
+    // Re-scan page 1 just for debug IDs (only in this temp build)
+    try {
+      const debugRes = await fetch(`${LEAFLINK_API_BASE}/products/?seller=${LEAFLINK_COMPANY_ID}&page_size=10&page=1`, {
+        headers: {Authorization: `Token ${apiKey}`},
+      });
+      if (debugRes.ok) {
+        const debugData = await debugRes.json();
+        for (const p of (debugData.results || [])) {
+          debugIds.push({id: p.id, name: p.name});
+        }
+      }
+    } catch {}
+
     return json(
-      {ok: true, inventory, _matched: matched},
+      {ok: true, inventory, _matched: matched, _sampleIds: debugIds, _trackedSample: Array.from(TRACKED_PRODUCT_IDS).slice(0, 5)},
       {
         headers: {
           // Cache for 5 minutes — inventory doesn't change that fast
