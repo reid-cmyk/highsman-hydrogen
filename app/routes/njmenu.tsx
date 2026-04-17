@@ -902,11 +902,11 @@ export default function NJMenu() {
       if (!product) return null;
       const strain = product.strains.find((s) => s.name === item.strainName);
       if (!strain?.sku) return null;
-      const unitPrice = applyDiscount(product.wholesale, product.discount);
+      const casePrice = applyDiscount(product.casePrice, product.discount);
       return {
         sku: strain.sku,
-        quantity: item.cases * product.caseSize, // total units, not cases
-        unitPrice,
+        quantity: item.cases, // cases, not individual units — LeafLink products are set up per case
+        unitPrice: casePrice,
       };
     }).filter(Boolean);
 
