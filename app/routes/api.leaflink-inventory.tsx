@@ -57,21 +57,24 @@ export async function loader({context}: LoaderFunctionArgs) {
       const data = await res.json();
       if (!data.results || data.results.length === 0) break;
 
+      // Capture first product for debugging (any product, not just tracked)
+      if (!debugSample && data.results.length > 0) {
+        const p = data.results[0];
+        debugSample = {
+          sku: p.sku,
+          listing_state: p.listing_state,
+          available_inventory: p.available_inventory,
+          quantity: p.quantity,
+          reserved_qty: p.reserved_qty,
+          name: p.name,
+          keys: Object.keys(p).slice(0, 40),
+          total_results: data.count || data.results.length,
+        };
+      }
+
       for (const product of data.results) {
         const sku = product.sku;
         if (!sku || !TRACKED_SKUS.includes(sku)) continue;
-
-        // Capture first tracked product for debugging
-        if (!debugSample) {
-          debugSample = {
-            sku: product.sku,
-            listing_state: product.listing_state,
-            available_inventory: product.available_inventory,
-            quantity: product.quantity,
-            reserved_qty: product.reserved_qty,
-            keys: Object.keys(product).slice(0, 30),
-          };
-        }
 
         // available_inventory is the count after reserved qty is subtracted
         // If listing_state is not "Available", treat as 0
