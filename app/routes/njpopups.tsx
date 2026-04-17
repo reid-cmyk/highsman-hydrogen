@@ -158,6 +158,22 @@ function fmtDate(iso: string) {
   const d = new Date(iso + 'T12:00:00');
   return d.toLocaleDateString('en-US', {weekday: 'short', month: 'short', day: 'numeric'});
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Lead-time rule: pop-ups must be booked at least MIN_LEAD_DAYS ahead so the
+// dispensary POC + our rep have time to confirm logistics, staffing, and any
+// portal paperwork. Enforced in the slot picker (gray-out), the Book button
+// (disabled), and as a safety net inside handleBook.
+// ─────────────────────────────────────────────────────────────────────────────
+const MIN_LEAD_DAYS = 5;
+
+function daysUntil(iso: string) {
+  const [y, m, d] = iso.split('-').map((n) => parseInt(n, 10));
+  const target = new Date(y, (m || 1) - 1, d || 1).getTime();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((target - today.getTime()) / 86_400_000);
+}
 function shiftLabel(k: string) {
   return (
     ({
@@ -175,6 +191,10 @@ function buildWeekDays() {
   const dow = today.getDay();
   let offset = 4 - dow;
   if (offset < 0) offset += 7;
+  // If the entire 4-day window (Thu → Sun) falls inside the lead-time window,
+  // roll forward one week so staff always sees at least one bookable day. The
+  // individual `tooSoon` flag still grays out the remaining too-close shifts.
+  if (offset + 3 < MIN_LEAD_DAYS) offset += 7;
   const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset);
   const days: Array<{
     iso: string;
@@ -610,11 +630,15 @@ export default function NJPopups() {
 
   const driveBlocked = driveCheck.status === 'blocked';
 
+  // 5-day lead-time rule. The picker already gray-outs too-close shifts, but we
+  // also defend here so a bypassed click (devtools, stale state) can't book.
+  const leadOk = !!slot && daysUntil(slot.date) >= MIN_LEAD_DAYS;
+
   const step1Done = !!dispensary;
   const step2Done = !!slot;
   // Link mode is "done" as soon as a slot is picked — the contact handoff happens in the portal.
   const step3Done = mode === 'link' ? !!slot : !!contact;
-  const step5Done = step1Done && step2Done && step3Done && !driveBlocked;
+  const step5Done = step1Done && step2Done && step3Done && !driveBlocked && leadOk;
 
   // Fire a Zoho Event creation for every booking so the Account's Activities
   // timeline shows the pop-up history + upcoming stops on the Zoho calendar.
@@ -667,6 +691,8 @@ export default function NJPopups() {
     if (!dispensary || !slot) return;
     // Hard block: same-day weekend booking > 40 min drive from the existing stop.
     if (driveBlocked) return;
+    // Hard block: under the 5-day lead-time window.
+    if (!leadOk) return;
 
     // LINK MODE — hand off to the dispensary's own booking portal.
     // Copy a prefilled payload to clipboard so the staffer can paste it into the
@@ -1263,7 +1289,8 @@ export default function NJPopups() {
               <h2 style={h2}>Pick Time Slot</h2>
               <p style={kicker}>
                 All shifts cap at 2 simultaneous bookings statewide. Sat/Sun splits into matinee (1–3 PM)
-                and late (4–6 PM) — each with its own 2-spot cap.
+                and late (4–6 PM) — each with its own 2-spot cap. Bookings require a {MIN_LEAD_DAYS}-day
+                minimum lead time.
               </p>
             </div>
             <div style={stepStatus(step2Done)}>{step2Done ? 'Locked In' : 'Pending'}</div>
@@ -1359,13 +1386,16 @@ export default function NJPopups() {
                     {day.shifts.map((s) => {
                       const used = countBookings(day.iso, s.key);
                       const full = used >= s.capacity;
+                      const daysOut = daysUntil(day.iso);
+                      const tooSoon = daysOut < MIN_LEAD_DAYS;
+                      const disabled = full || tooSoon;
                       const remaining = s.capacity - used;
                       const selected = slot && slot.date === day.iso && slot.shiftKey === s.key;
                       return (
                         <div
                           key={s.key}
                           onClick={() => {
-                            if (full) return;
+                            if (disabled) return;
                             setSlot({
                               date: day.iso,
                               dateLabel: fmtDate(day.iso),
@@ -1377,8 +1407,8 @@ export default function NJPopups() {
                           style={{
                             padding: 16,
                             borderBottom: `1px solid ${BRAND.line}`,
-                            cursor: full ? 'not-allowed' : 'pointer',
-                            opacity: full ? 0.4 : 1,
+                            cursor: disabled ? 'not-allowed' : 'pointer',
+                            opacity: disabled ? 0.4 : 1,
                             background: selected ? BRAND.gold : 'transparent',
                             color: selected ? BRAND.black : BRAND.white,
                           }}
@@ -1400,13 +1430,19 @@ export default function NJPopups() {
                               fontFamily: TEKO,
                               fontSize: 13,
                               letterSpacing: '0.14em',
-                              color: selected ? BRAND.black : full ? BRAND.red : BRAND.gray,
+                              color: selected
+                                ? BRAND.black
+                                : full || tooSoon
+                                  ? BRAND.red
+                                  : BRAND.gray,
                               marginTop: 4,
                             }}
                           >
                             {full
                               ? 'Slot Full · Statewide Cap Hit'
-                              : `${remaining} of ${s.capacity} open`}
+                              : tooSoon
+                                ? `Too Soon · ${MIN_LEAD_DAYS}-Day Lead Time`
+                                : `${remaining} of ${s.capacity} open`}
                           </div>
                         </div>
                       );
