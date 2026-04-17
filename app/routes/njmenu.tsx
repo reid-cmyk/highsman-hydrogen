@@ -650,6 +650,16 @@ export default function NJMenu() {
     [inventory],
   );
 
+  // Helper: get available cases for a strain (units ÷ caseSize)
+  const getAvailableCases = useCallback(
+    (sku: string | undefined, caseSize: number): number | null => {
+      if (!sku) return null;
+      if (!(sku in inventory)) return null; // no data
+      return Math.floor(inventory[sku] / caseSize);
+    },
+    [inventory],
+  );
+
   // Suppress Klaviyo popup — this is a B2B wholesale page, not consumer-facing
   useEffect(() => {
     const style = document.createElement('style');
@@ -1766,12 +1776,13 @@ export default function NJMenu() {
                     {/* Strain table header */}
                     <div
                       className="hidden md:grid items-center gap-4 px-0 md:pl-[120px] pb-3 mb-0 font-body text-[10px] font-600 tracking-[0.2em] uppercase"
-                      style={{color: 'rgba(255,255,255,0.65)', gridTemplateColumns: '1fr 80px 70px 56px 120px'}}
+                      style={{color: 'rgba(255,255,255,0.65)', gridTemplateColumns: '1fr 80px 70px 140px 60px 120px'}}
                     >
                       <span>Strain</span>
                       <span>Type</span>
                       <span>THC</span>
                       <span>SKU</span>
+                      <span>Avail.</span>
                       <span className="text-right">Cases</span>
                     </div>
 
@@ -1816,7 +1827,7 @@ export default function NJMenu() {
                             </div>
 
                             {/* Desktop grid row */}
-                            <div className="hidden md:grid flex-1 items-center gap-4" style={{gridTemplateColumns: '1fr 80px 70px 56px 120px'}}>
+                            <div className="hidden md:grid flex-1 items-center gap-4" style={{gridTemplateColumns: '1fr 80px 70px 140px 60px 120px'}}>
                               {/* Strain name */}
                               <div>
                                 <span className="font-headline font-600 text-2xl text-white uppercase leading-none tracking-tight block">
@@ -1836,9 +1847,17 @@ export default function NJMenu() {
                               <span className="font-body text-xs font-600" style={{color: 'rgba(255,255,255,0.7)'}}>
                                 {product.thcDisplay ?? strain.thc}
                               </span>
-                              {/* SKU */}
+                              {/* SKU (full) */}
                               <span className="font-body text-[10px] tracking-wider" style={{color: 'rgba(255,255,255,0.65)', fontFamily: 'monospace, monospace'}}>
-                                {strain.sku ? strain.sku.split('-').pop() : '—'}
+                                {strain.sku ?? '—'}
+                              </span>
+                              {/* Available cases */}
+                              <span className="font-body text-xs font-600" style={{color: outOfStock ? '#ff6b6b' : 'rgba(255,255,255,0.7)'}}>
+                                {(() => {
+                                  const avail = getAvailableCases(strain.sku, product.caseSize);
+                                  if (avail === null) return '—';
+                                  return avail === 0 ? '0' : avail.toLocaleString();
+                                })()}
                               </span>
                               {/* Stepper or Out of Stock */}
                               {outOfStock ? (
