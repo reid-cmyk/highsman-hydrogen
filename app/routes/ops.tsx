@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useState} from 'react';
+import {useEffect, useMemo} from 'react';
 import type {LoaderFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {Link, useLoaderData} from '@remix-run/react';
@@ -6,43 +6,100 @@ import {Link, useLoaderData} from '@remix-run/react';
 // ─────────────────────────────────────────────────────────────────────────────
 // /ops — Spark Team Ops Dashboard (field-staff only)
 // ─────────────────────────────────────────────────────────────────────────────
-// Mobile-first, dark, Klaviyo-suppressed. Built as modular card components so
-// future panels (sales health, D2C marketing, command center) can be grided
-// in without re-doing layout math. Pair with /shift-report for end-of-shift
-// reports.
+// Mobile-first, dark, Klaviyo-suppressed. Four data-driven cards pulling from
+// Zoho CRM (Events + Accounts) and Supabase (shift_reports views).
 //
-// Sections (Pop-Ups & Training Ops, v1):
-//   1. Today's Game Plan          — today's confirmed visits + trainings
-//   2. This Week at a Glance      — Fri/Sat shift strip for next 14 days
-//   3. Dispensary Coverage Pulse  — NJ accounts colored by days-since-visit
-//   4. Scoreboard                 — field KPIs this month/quarter
-//   5. Sticky Quick Actions       — mobile bottom bar (book / report / call)
+// Cards:
+//   1. Today's Game Plan    — today's confirmed Zoho Events (Pop Ups)
+//   2. This Week at a Glance — next 14 days, grouped by date
+//   3. Coverage Pulse        — NJ Accounts colored by Visit_Date age
+//   4. Scoreboard            — rolling 30-day rep stats from Supabase
 //
-// (Intentionally DROPPED: "Ready to Book" section from the original proposal.)
-//
-// Data wiring is staged in after skeleton lands. All cards degrade gracefully
-// with a "no data yet" empty state so the page ships usable day one.
+// Each data source is fetched in parallel with its own try/catch so an outage
+// in one system doesn't break the whole dashboard. "No data yet" empty states
+// render when a fetch fails OR when the backing data doesn't exist (eg. no
+// events booked today).
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// LOADER — runs server-side on every page load
+// ─────────────────────────────────────────────────────────────────────────────
+type Env = {
+  ZOHO_CLIENT_ID?: string;
+  ZOHO_CLIENT_SECRET?: string;
+  ZOHO_REFRESH_TOKEN?: string;
+  SUPABASE_URL?: string;
+  SUPABASE_SERVICE_KEY?: string;
+};
+
 export async function loader({context}: LoaderFunctionArgs) {
-  const env = context.env as any;
-  // Future: hydrate today's Events, Accounts, scoreboards server-side.
-  // For the skeleton we ship a static payload so the UI is testable.
+  const env = context.env as Env;
+
+  const hasZoho = Boolean(
+    env.ZOHO_CLIENT_ID && env.ZOHO_CLIENT_SECRET && env.ZOHO_REFRESH_TOKEN,
+  );
+  const hasSupabase = Boolean(env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY);
+
+  const now = new Date();
+  const todayIso = dateKeyNJ(now);
+  const windowEnd = addDays(todayIso, 14);
+  const startDateTime = `${todayIso}T00:00:00${njOffset(todayIso)}`;
+  const endDateTime = `${windowEnd}T23:59:59${njOffset(windowEnd)}`;
+
+  // Fetch in parallel, each in its own try/catch. A failing fetch returns null
+  // (not []), so cards can render distinct "error" vs "empty" states.
+  let accessToken: string | null = null;
+  if (hasZoho) {
+    try {
+      accessToken = await getZohoAccessToken(env as Required<Pick<Env, 'ZOHO_CLIENT_ID' | 'ZOHO_CLIENT_SECRET' | 'ZOHO_REFRESH_TOKEN'>>);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[ops] Zoho token fetch failed', err);
+    }
+  }
+
+  const [events, njAccounts, scoreboard] = await Promise.all([
+    accessToken
+      ? fetchEventsRange(accessToken, startDateTime, endDateTime).catch((err) => {
+          // eslint-disable-next-line no-console
+          console.warn('[ops] events fetch failed', err);
+          return null;
+        })
+      : Promise.resolve(null),
+    accessToken
+      ? fetchNJAccounts(accessToken).catch((err) => {
+          // eslint-disable-next-line no-console
+          console.warn('[ops] NJ accounts fetch failed', err);
+          return null;
+        })
+      : Promise.resolve(null),
+    hasSupabase
+      ? fetchScoreboard(env.SUPABASE_URL!, env.SUPABASE_SERVICE_KEY!).catch(
+          (err) => {
+            // eslint-disable-next-line no-console
+            console.warn('[ops] scoreboard fetch failed', err);
+            return null;
+          },
+        )
+      : Promise.resolve(null),
+  ]);
+
+  // Split events into today vs. week (events is ordered by Start_DateTime asc).
+  const allEvents = events || [];
+  const todayEvents = allEvents.filter((e) => e.date === todayIso);
+  const weekEvents = allEvents.filter((e) => e.date !== todayIso);
+
   return json({
-    nowIso: new Date().toISOString(),
-    // Feature flags so we can light up cards as their data wires in.
-    dataReady: {
-      today: false,
-      week: false,
-      coverage: false,
-      scoreboard: false,
+    nowIso: now.toISOString(),
+    today: {ok: events !== null, events: todayEvents},
+    week: {ok: events !== null, events: weekEvents},
+    coverage: {
+      ok: njAccounts !== null,
+      accounts: rankCoverage(njAccounts || [], todayIso),
     },
-    // Sanity check — avoids rendering the dashboard if env is missing entirely.
-    hasZoho: Boolean(
-      env?.ZOHO_CLIENT_ID &&
-        env?.ZOHO_CLIENT_SECRET &&
-        env?.ZOHO_REFRESH_TOKEN,
-    ),
+    scoreboard: {ok: scoreboard !== null, reps: scoreboard || []},
+    hasZoho,
+    hasSupabase,
   });
 }
 
@@ -58,7 +115,249 @@ export const meta: MetaFunction = () => [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BRAND TOKENS — identical to /njpopups so the two pages feel like one app.
+// ZOHO TOKEN — mirrors /api/rep-assign (kept inline for route isolation)
+// ─────────────────────────────────────────────────────────────────────────────
+let zohoCachedToken: string | null = null;
+let zohoTokenExpiresAt = 0;
+
+async function getZohoAccessToken(env: {
+  ZOHO_CLIENT_ID: string;
+  ZOHO_CLIENT_SECRET: string;
+  ZOHO_REFRESH_TOKEN: string;
+}): Promise<string> {
+  const now = Date.now();
+  if (zohoCachedToken && now < zohoTokenExpiresAt) return zohoCachedToken;
+  const res = await fetch('https://accounts.zoho.com/oauth/v2/token', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: env.ZOHO_CLIENT_ID,
+      client_secret: env.ZOHO_CLIENT_SECRET,
+      refresh_token: env.ZOHO_REFRESH_TOKEN,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Zoho token refresh failed (${res.status}): ${text.slice(0, 300)}`);
+  }
+  const data = await res.json();
+  zohoCachedToken = data.access_token;
+  zohoTokenExpiresAt = now + 55 * 60 * 1000;
+  return zohoCachedToken!;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EVENTS FETCH — 14-day Events window, parsed into a simpler shape
+// ─────────────────────────────────────────────────────────────────────────────
+type EventSummary = {
+  id: string;
+  title: string;
+  date: string; // yyyy-mm-dd
+  time: string; // "3:00 PM"
+  accountId: string | null;
+  accountName: string | null;
+  territory: 'NJ-N' | 'NJ-S' | null;
+  isOverride: boolean;
+  startIso: string;
+};
+
+async function fetchEventsRange(
+  accessToken: string,
+  start: string,
+  end: string,
+): Promise<EventSummary[]> {
+  // Zoho v7 criteria supports `between` with comma-separated range values.
+  const criteria = `(Start_DateTime:between:${start},${end})`;
+  const url = `https://www.zohoapis.com/crm/v7/Events/search?criteria=${encodeURIComponent(
+    criteria,
+  )}&fields=id,Event_Title,Start_DateTime,End_DateTime,What_Id&per_page=200&sort_by=Start_DateTime&sort_order=asc`;
+  const res = await fetch(url, {
+    headers: {Authorization: `Zoho-oauthtoken ${accessToken}`},
+  });
+  if (res.status === 204) return [];
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Zoho Events search failed (${res.status}): ${text.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  const rows: any[] = data.data || [];
+  return rows
+    .map<EventSummary | null>((ev) => {
+      const title = String(ev.Event_Title || '');
+      // Only surface Spark Team events — tagged with [NJ-N] or [NJ-S] by /api/popups-book
+      const nj = title.match(/^\[NJ-(N|S)\]/);
+      if (!nj) return null;
+      const territory: 'NJ-N' | 'NJ-S' = nj[1] === 'N' ? 'NJ-N' : 'NJ-S';
+      const isOverride = title.includes('[OVR]');
+      const startIso = String(ev.Start_DateTime || '');
+      const date = startIso.slice(0, 10);
+      const d = new Date(startIso);
+      const time = Number.isFinite(d.getTime())
+        ? d.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            timeZone: 'America/New_York',
+          })
+        : '';
+      const whatId = ev.What_Id?.id || null;
+      const accountName = ev.What_Id?.name || parseAccountFromTitle(title);
+      return {
+        id: String(ev.id),
+        title,
+        date,
+        time,
+        accountId: whatId,
+        accountName,
+        territory,
+        isOverride,
+        startIso,
+      };
+    })
+    .filter((x): x is EventSummary => x !== null);
+}
+
+// Fallback account-name extractor for when What_Id isn't expanded.
+// Title shape: "[NJ-N] Highsman Pop Up — <Dispensary Name> (Saturday matinee)"
+function parseAccountFromTitle(title: string): string | null {
+  const m = title.match(/—\s+(.+?)\s+\(/);
+  return m ? m[1] : null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NJ ACCOUNTS FETCH — for Coverage Pulse
+// ─────────────────────────────────────────────────────────────────────────────
+type NJAccount = {
+  id: string;
+  name: string;
+  city: string | null;
+  lastVisitDate: string | null;
+};
+
+async function fetchNJAccounts(accessToken: string): Promise<NJAccount[]> {
+  // Zoho supports equals on Billing_State — fetch all NJ accounts in one shot.
+  const criteria = `(Billing_State:equals:NJ)`;
+  const url = `https://www.zohoapis.com/crm/v7/Accounts/search?criteria=${encodeURIComponent(
+    criteria,
+  )}&fields=id,Account_Name,Billing_City,Visit_Date&per_page=200`;
+  const res = await fetch(url, {
+    headers: {Authorization: `Zoho-oauthtoken ${accessToken}`},
+  });
+  if (res.status === 204) return [];
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Zoho Accounts search failed (${res.status}): ${text.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  const rows: any[] = data.data || [];
+  return rows.map<NJAccount>((a) => ({
+    id: String(a.id),
+    name: String(a.Account_Name || ''),
+    city: a.Billing_City || null,
+    lastVisitDate: a.Visit_Date || null, // yyyy-mm-dd or null
+  }));
+}
+
+// Rank accounts by days-since-visit (oldest first), classify bucket for the pill.
+type CoverageRow = NJAccount & {
+  daysSince: number | null;
+  bucket: 'fresh' | 'aging' | 'cold' | 'never';
+};
+
+function rankCoverage(accounts: NJAccount[], todayIso: string): CoverageRow[] {
+  const today = new Date(`${todayIso}T12:00:00Z`);
+  return accounts
+    .map<CoverageRow>((a) => {
+      if (!a.lastVisitDate) {
+        return {...a, daysSince: null, bucket: 'never'};
+      }
+      const d = new Date(`${a.lastVisitDate}T12:00:00Z`);
+      const diff = Math.max(
+        0,
+        Math.round((today.getTime() - d.getTime()) / 86400000),
+      );
+      const bucket: CoverageRow['bucket'] =
+        diff < 30 ? 'fresh' : diff < 60 ? 'aging' : 'cold';
+      return {...a, daysSince: diff, bucket};
+    })
+    .sort((a, b) => {
+      // "never" first, then by days-since desc (oldest first).
+      const av = a.daysSince === null ? 99999 : a.daysSince;
+      const bv = b.daysSince === null ? 99999 : b.daysSince;
+      return bv - av;
+    });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUPABASE SCOREBOARD FETCH — rep_scoreboard_30d view
+// ─────────────────────────────────────────────────────────────────────────────
+type ScoreboardRep = {
+  rep_name: string;
+  reports: number;
+  total_intercepts: number;
+  total_closes: number;
+  avg_close_rate: number;
+  avg_aggression: number;
+  avg_grade_score: number | null;
+  mode_grade_letter: string | null;
+  last_shift_date: string | null;
+};
+
+async function fetchScoreboard(
+  supabaseUrl: string,
+  serviceKey: string,
+): Promise<ScoreboardRep[]> {
+  const url = `${supabaseUrl}/rest/v1/rep_scoreboard_30d?order=avg_grade_score.desc.nullslast`;
+  const res = await fetch(url, {
+    headers: {
+      apikey: serviceKey,
+      authorization: `Bearer ${serviceKey}`,
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Supabase scoreboard failed (${res.status}): ${text.slice(0, 200)}`);
+  }
+  return (await res.json()) as ScoreboardRep[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DATE UTILS (NJ-aware — matches /api/popups-book DST offset rules)
+// ─────────────────────────────────────────────────────────────────────────────
+function dateKeyNJ(d: Date): string {
+  // Format the current moment as a NJ-local yyyy-mm-dd.
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d);
+  const y = parts.find((p) => p.type === 'year')?.value;
+  const m = parts.find((p) => p.type === 'month')?.value;
+  const dd = parts.find((p) => p.type === 'day')?.value;
+  return `${y}-${m}-${dd}`;
+}
+
+function addDays(isoDate: string, days: number): string {
+  const d = new Date(`${isoDate}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function njOffset(isoDate: string): '-04:00' | '-05:00' {
+  const d = new Date(`${isoDate}T12:00:00Z`);
+  const year = d.getUTCFullYear();
+  const marchFirst = new Date(Date.UTC(year, 2, 1));
+  const marchFirstSunday = 1 + ((7 - marchFirst.getUTCDay()) % 7);
+  const dstStart = new Date(Date.UTC(year, 2, marchFirstSunday + 7, 7, 0, 0));
+  const novFirst = new Date(Date.UTC(year, 10, 1));
+  const novFirstSunday = 1 + ((7 - novFirst.getUTCDay()) % 7);
+  const dstEnd = new Date(Date.UTC(year, 10, novFirstSunday, 6, 0, 0));
+  return d >= dstStart && d < dstEnd ? '-04:00' : '-05:00';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BRAND TOKENS
 // ─────────────────────────────────────────────────────────────────────────────
 const BRAND = {
   black: '#000000',
@@ -82,9 +381,7 @@ const CDN = 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files';
 const LOGO_WHITE = `${CDN}/Highsman_Logo_White.png?v=1775594430`;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Shared "Card" shell — every dashboard section uses the same chrome.
-// Keeping this as a single component makes future merge into a Whole Business
-// Command Center trivial: just drop each card into a grid cell.
+// SHARED CARD SHELL
 // ─────────────────────────────────────────────────────────────────────────────
 function Card({
   kicker,
@@ -151,15 +448,14 @@ function Card({
   );
 }
 
-// Empty-state stub — used by every card until its data wires in.
 function EmptyState({message}: {message: string}) {
   return (
     <div
       style={{
-        padding: '28px 20px',
+        padding: '24px 20px',
         textAlign: 'center',
         fontFamily: BODY,
-        fontSize: 14,
+        fontSize: 13,
         color: BRAND.gray,
         background: BRAND.chip,
         border: `1px dashed ${BRAND.lineStrong}`,
@@ -171,7 +467,24 @@ function EmptyState({message}: {message: string}) {
   );
 }
 
-// Stat block for the scoreboard — Edo-SZ-style big numeric.
+function ErrorState({message}: {message: string}) {
+  return (
+    <div
+      style={{
+        padding: '14px 16px',
+        fontFamily: BODY,
+        fontSize: 12,
+        color: BRAND.red,
+        background: 'rgba(255,59,48,0.08)',
+        border: `1px solid ${BRAND.red}`,
+        letterSpacing: '0.03em',
+      }}
+    >
+      {message}
+    </div>
+  );
+}
+
 function Stat({label, value, caption}: {label: string; value: string; caption?: string}) {
   return (
     <div
@@ -220,10 +533,13 @@ function Stat({label, value, caption}: {label: string; value: string; caption?: 
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGE
+// ─────────────────────────────────────────────────────────────────────────────
 export default function OpsDashboard() {
-  const {nowIso, dataReady} = useLoaderData<typeof loader>();
+  const {nowIso, today, week, coverage, scoreboard, hasZoho, hasSupabase} =
+    useLoaderData<typeof loader>();
 
-  // Suppress Klaviyo popup on this B2B/staff page (matches /njpopups, /njmenu).
   useEffect(() => {
     const style = document.createElement('style');
     style.id = 'suppress-klaviyo-popup';
@@ -238,15 +554,40 @@ export default function OpsDashboard() {
     };
   }, []);
 
-  // Human-readable today string for the hero.
+  useEffect(() => {
+    if (document.getElementById('hs-ops-fonts')) return;
+    const link = document.createElement('link');
+    link.id = 'hs-ops-fonts';
+    link.rel = 'stylesheet';
+    link.href =
+      'https://fonts.googleapis.com/css2?family=Teko:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@300;400;500;600;700&display=swap';
+    document.head.appendChild(link);
+  }, []);
+
   const todayLabel = useMemo(() => {
     const d = new Date(nowIso);
     return d.toLocaleDateString('en-US', {
       weekday: 'long',
       month: 'long',
       day: 'numeric',
+      timeZone: 'America/New_York',
     });
   }, [nowIso]);
+
+  // Week events grouped by date for the strip.
+  const weekGroups = useMemo(() => {
+    const map = new Map<string, EventSummary[]>();
+    for (const ev of week.events) {
+      const arr = map.get(ev.date) || [];
+      arr.push(ev);
+      map.set(ev.date, arr);
+    }
+    return Array.from(map.entries()).sort(([a], [b]) => (a < b ? -1 : 1));
+  }, [week.events]);
+
+  // Scoreboard aggregate (top-line stats) derived from rep rows.
+  const agg = useMemo(() => aggregateScoreboard(scoreboard.reps), [scoreboard.reps]);
+  const todayIso = nowIso.slice(0, 10);
 
   return (
     <div
@@ -255,11 +596,10 @@ export default function OpsDashboard() {
         color: BRAND.white,
         minHeight: '100vh',
         fontFamily: BODY,
-        // Leave room for the sticky mobile action bar at the bottom.
         paddingBottom: 96,
       }}
     >
-      {/* ── Top bar — logo + identity ────────────────────────────────────── */}
+      {/* Top bar */}
       <div
         style={{
           display: 'flex',
@@ -310,7 +650,11 @@ export default function OpsDashboard() {
       </div>
 
       <main style={{maxWidth: 760, margin: '0 auto', padding: '20px 16px'}}>
-        {/* ── Hero: Today's Game Plan ─────────────────────────────────── */}
+        {!hasZoho && (
+          <ErrorState message="Zoho env vars missing — Today / This Week / Coverage cards can't hydrate until ZOHO_* vars land in Oxygen." />
+        )}
+
+        {/* ── Today's Game Plan ───────────────────────────────────────── */}
         <Card
           kicker={todayLabel}
           title="Today's Game Plan"
@@ -333,8 +677,16 @@ export default function OpsDashboard() {
             </Link>
           }
         >
-          {dataReady.today ? null : (
-            <EmptyState message="Today's confirmed pop-ups + trainings will appear here once wired to Zoho Events." />
+          {!today.ok ? (
+            <ErrorState message="Couldn't reach Zoho. Try a refresh — bookings are still safe." />
+          ) : today.events.length === 0 ? (
+            <EmptyState message="No confirmed shifts today. Time to book some pop-ups." />
+          ) : (
+            <div style={{display: 'flex', flexDirection: 'column', gap: 8}}>
+              {today.events.map((ev) => (
+                <EventRow key={ev.id} ev={ev} todayIso={todayIso} showReportLink />
+              ))}
+            </div>
           )}
         </Card>
 
@@ -344,12 +696,38 @@ export default function OpsDashboard() {
           title="This Week at a Glance"
           accent={BRAND.white}
         >
-          {dataReady.week ? null : (
-            <EmptyState message="Fri/Sat shift strip — color-coded by confirmed / pending / open — lands here once hydrated." />
+          {!week.ok ? (
+            <ErrorState message="Couldn't reach Zoho Events." />
+          ) : weekGroups.length === 0 ? (
+            <EmptyState message="Nothing booked in the next 14 days. Pipeline empty — add visits in /njpopups." />
+          ) : (
+            <div style={{display: 'flex', flexDirection: 'column', gap: 14}}>
+              {weekGroups.map(([date, events]) => (
+                <div key={date}>
+                  <div
+                    style={{
+                      fontFamily: TEKO,
+                      fontSize: 14,
+                      letterSpacing: '0.14em',
+                      textTransform: 'uppercase',
+                      color: BRAND.gray,
+                      marginBottom: 6,
+                    }}
+                  >
+                    {formatDateHeader(date)}
+                  </div>
+                  <div style={{display: 'flex', flexDirection: 'column', gap: 6}}>
+                    {events.map((ev) => (
+                      <EventRow key={ev.id} ev={ev} todayIso={todayIso} />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </Card>
 
-        {/* ── Dispensary Coverage Pulse ─────────────────────────────── */}
+        {/* ── Coverage Pulse ─────────────────────────────────────────── */}
         <Card
           kicker="NJ Accounts"
           title="Coverage Pulse"
@@ -373,40 +751,98 @@ export default function OpsDashboard() {
                 <span style={{color: BRAND.gold}}>●</span> 30–60
               </span>
               <span>
-                <span style={{color: BRAND.red}}>●</span> 60+
+                <span style={{color: BRAND.red}}>●</span> 60+ / Never
               </span>
             </div>
           }
         >
-          {dataReady.coverage ? null : (
-            <EmptyState message="Dispensary grid colored by last-visit date lands here — this is the 'who are we ghosting' radar." />
-          )}
-        </Card>
-
-        {/* ── Scoreboard ─────────────────────────────────────────────── */}
-        <Card kicker="This Month" title="Scoreboard" accent={BRAND.gold}>
-          {dataReady.scoreboard ? null : (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(2, 1fr)',
-                borderTop: `1px solid ${BRAND.line}`,
-                borderLeft: `1px solid ${BRAND.line}`,
-              }}
-            >
-              <Stat label="Pop-Ups" value="—" caption="Hydrated next" />
-              <Stat label="Trainings" value="—" caption="Hydrated next" />
-              <Stat label="Dispensaries Visited" value="—" caption="QTD" />
-              <Stat
-                label="Avg Days Between Visits"
-                value="—"
-                caption="Per account"
-              />
+          {!coverage.ok ? (
+            <ErrorState message="Couldn't reach Zoho Accounts." />
+          ) : coverage.accounts.length === 0 ? (
+            <EmptyState message="No NJ accounts in CRM yet." />
+          ) : (
+            <div style={{display: 'flex', flexDirection: 'column'}}>
+              {coverage.accounts.slice(0, 24).map((row, i) => (
+                <CoverageItem key={row.id} row={row} last={i === coverage.accounts.length - 1} />
+              ))}
+              {coverage.accounts.length > 24 && (
+                <div
+                  style={{
+                    padding: '12px 0 2px',
+                    fontSize: 11,
+                    color: BRAND.gray,
+                    textAlign: 'center',
+                    letterSpacing: '0.06em',
+                  }}
+                >
+                  Showing 24 of {coverage.accounts.length} — expand later
+                </div>
+              )}
             </div>
           )}
         </Card>
 
-        {/* ── Footer note ─────────────────────────────────────────────── */}
+        {/* ── Scoreboard ─────────────────────────────────────────────── */}
+        <Card kicker="Last 30 Days" title="Scoreboard" accent={BRAND.gold}>
+          {!hasSupabase ? (
+            <ErrorState message="Supabase not configured yet — run the setup in supabase/SETUP.md to light this up." />
+          ) : !scoreboard.ok ? (
+            <ErrorState message="Couldn't reach Supabase. Check service key + URL in Oxygen env." />
+          ) : scoreboard.reps.length === 0 ? (
+            <EmptyState message="No shift reports filed yet. First one unlocks the scoreboard." />
+          ) : (
+            <>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  borderTop: `1px solid ${BRAND.line}`,
+                  borderLeft: `1px solid ${BRAND.line}`,
+                  marginBottom: 16,
+                }}
+              >
+                <Stat
+                  label="Reports"
+                  value={String(agg.totalReports)}
+                  caption="Across all reps"
+                />
+                <Stat
+                  label="Closes"
+                  value={String(agg.totalCloses)}
+                  caption={`${agg.totalIntercepts} intercepts`}
+                />
+                <Stat
+                  label="Avg Close"
+                  value={`${Math.round(agg.avgCloseRate * 100)}%`}
+                  caption="Weighted"
+                />
+                <Stat
+                  label="Top Rep"
+                  value={agg.topRep?.initials || '—'}
+                  caption={
+                    agg.topRep
+                      ? `${agg.topRep.mode_grade_letter || '—'} · ${
+                          agg.topRep.rep_name
+                        }`
+                      : 'Tied'
+                  }
+                />
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}
+              >
+                {scoreboard.reps.map((r) => (
+                  <ScoreboardRow key={r.rep_name} rep={r} />
+                ))}
+              </div>
+            </>
+          )}
+        </Card>
+
         <div
           style={{
             padding: '18px 4px 8px',
@@ -417,11 +853,11 @@ export default function OpsDashboard() {
             letterSpacing: '0.04em',
           }}
         >
-          Staff tool · Highsman Spark Team · Data-wiring in progress
+          Staff tool · Highsman Spark Team · Pop-ups, reports, intel
         </div>
       </main>
 
-      {/* ── Sticky mobile quick-action bar ───────────────────────────── */}
+      {/* Sticky mobile action bar */}
       <nav
         style={{
           position: 'fixed',
@@ -491,4 +927,290 @@ export default function OpsDashboard() {
       </nav>
     </div>
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUB-COMPONENTS
+// ─────────────────────────────────────────────────────────────────────────────
+function EventRow({
+  ev,
+  todayIso,
+  showReportLink,
+}: {
+  ev: EventSummary;
+  todayIso: string;
+  showReportLink?: boolean;
+}) {
+  const territoryColor =
+    ev.territory === 'NJ-N' ? BRAND.gold : BRAND.orange;
+  const params = new URLSearchParams();
+  if (ev.accountId) params.set('accountId', ev.accountId);
+  if (ev.accountName) params.set('accountName', ev.accountName);
+  params.set('date', ev.date);
+  const reportHref = `/shift-report?${params.toString()}`;
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '10px 12px',
+        background: BRAND.chip,
+        border: `1px solid ${BRAND.line}`,
+        borderRadius: 8,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: TEKO,
+          fontSize: 18,
+          color: BRAND.white,
+          letterSpacing: '0.04em',
+          width: 70,
+          flexShrink: 0,
+        }}
+      >
+        {ev.time || '—'}
+      </div>
+      <div style={{flex: 1, minWidth: 0}}>
+        <div
+          style={{
+            fontFamily: TEKO,
+            fontSize: 18,
+            color: BRAND.white,
+            letterSpacing: '0.02em',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {ev.accountName || 'Unnamed'}
+        </div>
+        <div
+          style={{
+            fontSize: 11,
+            color: BRAND.gray,
+            letterSpacing: '0.1em',
+            marginTop: 2,
+          }}
+        >
+          <span style={{color: territoryColor}}>{ev.territory}</span>
+          {ev.isOverride && (
+            <span style={{color: BRAND.red, marginLeft: 8}}>• OVR</span>
+          )}
+        </div>
+      </div>
+      {showReportLink && ev.date === todayIso && (
+        <Link
+          to={reportHref}
+          style={{
+            fontFamily: TEKO,
+            fontSize: 12,
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            color: BRAND.black,
+            background: BRAND.gold,
+            padding: '6px 10px',
+            textDecoration: 'none',
+            borderRadius: 6,
+            flexShrink: 0,
+          }}
+        >
+          Report →
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function CoverageItem({row, last}: {row: CoverageRow; last: boolean}) {
+  const dotColor =
+    row.bucket === 'fresh'
+      ? BRAND.green
+      : row.bucket === 'aging'
+        ? BRAND.gold
+        : BRAND.red;
+  const right =
+    row.bucket === 'never'
+      ? 'Never'
+      : row.daysSince === 0
+        ? 'Today'
+        : `${row.daysSince}d`;
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '10px 0',
+        borderBottom: last ? 'none' : `1px solid ${BRAND.line}`,
+      }}
+    >
+      <span
+        style={{
+          color: dotColor,
+          fontSize: 14,
+          lineHeight: 1,
+        }}
+      >
+        ●
+      </span>
+      <div style={{flex: 1, minWidth: 0}}>
+        <div
+          style={{
+            fontFamily: BODY,
+            fontSize: 14,
+            color: BRAND.white,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {row.name}
+        </div>
+        {row.city && (
+          <div style={{fontSize: 11, color: BRAND.gray, marginTop: 1}}>
+            {row.city}
+          </div>
+        )}
+      </div>
+      <div
+        style={{
+          fontFamily: TEKO,
+          fontSize: 16,
+          color: dotColor,
+          letterSpacing: '0.06em',
+        }}
+      >
+        {right}
+      </div>
+    </div>
+  );
+}
+
+function ScoreboardRow({rep}: {rep: ScoreboardRep}) {
+  const cr = Math.round((rep.avg_close_rate || 0) * 100);
+  const crColor = cr >= 35 ? BRAND.green : cr >= 20 ? BRAND.gold : BRAND.red;
+  const gradeColor =
+    rep.mode_grade_letter === 'A' || rep.mode_grade_letter === 'B'
+      ? BRAND.green
+      : rep.mode_grade_letter === 'C'
+        ? BRAND.gold
+        : BRAND.red;
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '10px 12px',
+        background: BRAND.chip,
+        border: `1px solid ${BRAND.line}`,
+        borderRadius: 8,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: TEKO,
+          fontSize: 22,
+          color: BRAND.white,
+          letterSpacing: '0.04em',
+          flex: 1,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
+        {rep.rep_name}
+      </div>
+      <div style={{textAlign: 'right'}}>
+        <div
+          style={{
+            fontSize: 10,
+            color: BRAND.gray,
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+          }}
+        >
+          Close
+        </div>
+        <div style={{fontFamily: TEKO, fontSize: 18, color: crColor}}>
+          {cr}%
+        </div>
+      </div>
+      <div style={{textAlign: 'right', minWidth: 60}}>
+        <div
+          style={{
+            fontSize: 10,
+            color: BRAND.gray,
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+          }}
+        >
+          Grade
+        </div>
+        <div
+          style={{
+            fontFamily: TEKO,
+            fontSize: 22,
+            color: gradeColor,
+            letterSpacing: '0.04em',
+          }}
+        >
+          {rep.mode_grade_letter || '—'}
+        </div>
+      </div>
+      <div style={{textAlign: 'right', minWidth: 60}}>
+        <div
+          style={{
+            fontSize: 10,
+            color: BRAND.gray,
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+          }}
+        >
+          Shifts
+        </div>
+        <div style={{fontFamily: TEKO, fontSize: 18, color: BRAND.white}}>
+          {rep.reports}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AGGREGATION HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+function aggregateScoreboard(reps: ScoreboardRep[]) {
+  const totalReports = reps.reduce((s, r) => s + r.reports, 0);
+  const totalIntercepts = reps.reduce((s, r) => s + r.total_intercepts, 0);
+  const totalCloses = reps.reduce((s, r) => s + r.total_closes, 0);
+  const avgCloseRate =
+    totalIntercepts > 0 ? totalCloses / totalIntercepts : 0;
+  // Top rep by avg_grade_score (already sorted desc by the view).
+  const topRep = reps.length
+    ? {...reps[0], initials: initialsOf(reps[0].rep_name)}
+    : null;
+  return {totalReports, totalIntercepts, totalCloses, avgCloseRate, topRep};
+}
+
+function initialsOf(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() || '')
+    .join('');
+}
+
+function formatDateHeader(isoDate: string): string {
+  const d = new Date(`${isoDate}T12:00:00Z`);
+  return d.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'numeric',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
 }
