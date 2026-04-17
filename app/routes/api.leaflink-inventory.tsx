@@ -39,7 +39,7 @@ export async function loader({context}: LoaderFunctionArgs) {
     // Fetch all products for this seller with inventory fields
     // We paginate to ensure we get everything
     const inventory: Record<string, number> = {};
-    let debugSample: any = null; // temp: capture first tracked product's raw data
+    const debugInfo: any = {apiKeyPresent: !!apiKey, apiKeyLength: apiKey?.length, pages: 0, totalProducts: 0};
     let page = 1;
     let hasMore = true;
 
@@ -50,17 +50,27 @@ export async function loader({context}: LoaderFunctionArgs) {
       });
 
       if (!res.ok) {
-        console.error(`[api/leaflink-inventory] API error (${res.status}):`, await res.text().catch(() => ''));
+        const errText = await res.text().catch(() => '');
+        debugInfo.apiError = {status: res.status, body: errText.slice(0, 300)};
         break;
       }
 
       const data = await res.json();
-      if (!data.results || data.results.length === 0) break;
+      debugInfo.pages = page;
+      debugInfo.resultCount = data.results?.length ?? 0;
+      debugInfo.dataCount = data.count;
 
-      // Capture first product for debugging (any product, not just tracked)
-      if (!debugSample && data.results.length > 0) {
+      if (!data.results || data.results.length === 0) {
+        debugInfo.emptyReason = 'no results on page ' + page;
+        break;
+      }
+
+      debugInfo.totalProducts += data.results.length;
+
+      // Capture first product's raw fields for debugging
+      if (!debugInfo.sample) {
         const p = data.results[0];
-        debugSample = {
+        debugInfo.sample = {
           sku: p.sku,
           listing_state: p.listing_state,
           available_inventory: p.available_inventory,
@@ -68,7 +78,6 @@ export async function loader({context}: LoaderFunctionArgs) {
           reserved_qty: p.reserved_qty,
           name: p.name,
           keys: Object.keys(p).slice(0, 40),
-          total_results: data.count || data.results.length,
         };
       }
 
@@ -97,7 +106,7 @@ export async function loader({context}: LoaderFunctionArgs) {
     }
 
     return json(
-      {ok: true, inventory, _debug: debugSample},
+      {ok: true, inventory, _debug: debugInfo},
       {
         headers: {
           // Cache for 5 minutes — inventory doesn't change that fast
