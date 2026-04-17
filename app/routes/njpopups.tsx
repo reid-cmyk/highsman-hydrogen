@@ -193,8 +193,8 @@ function buildWeekDays() {
     } else if (didx === 6 || didx === 0) {
       const p = didx === 6 ? 'sat' : 'sun';
       shifts = [
-        {key: `${p}-mat`, label: '1:00 – 3:00 PM', capacity: 4},
-        {key: `${p}-late`, label: '4:00 – 6:00 PM', capacity: 4},
+        {key: `${p}-mat`, label: '1:00 – 3:00 PM', capacity: 2},
+        {key: `${p}-late`, label: '4:00 – 6:00 PM', capacity: 2},
       ];
     }
     days.push({iso, dow: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][didx], date: d, shifts});
@@ -958,8 +958,8 @@ export default function NJPopups() {
             <div style={{flex: 1}}>
               <h2 style={h2}>Pick Time Slot</h2>
               <p style={kicker}>
-                Thu/Fri allow up to 2 simultaneous bookings statewide. Sat/Sun split into matinee (1–3 PM)
-                and late (4–6 PM) shifts.
+                All shifts cap at 2 simultaneous bookings statewide. Sat/Sun splits into matinee (1–3 PM)
+                and late (4–6 PM) — each with its own 2-spot cap.
               </p>
             </div>
             <div style={stepStatus(step2Done)}>{step2Done ? 'Locked In' : 'Pending'}</div>
@@ -975,8 +975,8 @@ export default function NJPopups() {
             >
               {[
                 {l: 'Thu & Fri', v: '3:00 – 7:00 PM', s: 'Max 2 simultaneous · NJ statewide'},
-                {l: 'Sat & Sun · Matinee', v: '1:00 – 3:00 PM', s: 'Route-planned with late shift'},
-                {l: 'Sat & Sun · Late', v: '4:00 – 6:00 PM', s: 'Drive time auto-checked'},
+                {l: 'Sat & Sun · Matinee', v: '1:00 – 3:00 PM', s: 'Max 2 simultaneous · route-planned'},
+                {l: 'Sat & Sun · Late', v: '4:00 – 6:00 PM', s: 'Max 2 simultaneous · drive-time checked'},
                 {l: 'Lead Time', v: '72 Hours Min', s: 'For gear + ops prep'},
               ].map((r) => (
                 <div
