@@ -225,20 +225,23 @@ async function sendFailureNotification(
 // LeafLink Customer Search
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Search LeafLink customers by name to find the matching dispensary. */
+/** Search LeafLink customers by name to find the matching dispensary.
+ *  IMPORTANT: Filters by seller (LEAFLINK_COMPANY_ID) so we only match
+ *  customers that are actual buyers of Canfections NJ — not customers
+ *  belonging to other sellers that happen to share the same name.
+ */
 async function findCustomer(
   dispensaryName: string,
   apiKey: string,
 ): Promise<{id: number; name: string} | null> {
   try {
-    // Fetch all customers and search client-side (LeafLink doesn't have great search filters)
-    // We'll paginate through to find a match
+    // Fetch customers scoped to our seller (Canfections NJ) and search client-side
     const searchTerms = dispensaryName.toLowerCase().split(/\s+/).filter(t => t.length > 2);
     let page = 1;
     let bestMatch: {id: number; name: string; score: number} | null = null;
 
     while (page <= 10) { // max 10 pages (~200 customers per page)
-      const url = `${LEAFLINK_API_BASE}/customers/?fields_include=id,name,nickname&page_size=100&page=${page}`;
+      const url = `${LEAFLINK_API_BASE}/customers/?seller=${LEAFLINK_COMPANY_ID}&fields_include=id,name,nickname&page_size=100&page=${page}`;
       const res = await fetch(url, {
         headers: {Authorization: `Token ${apiKey}`},
       });
@@ -253,6 +256,7 @@ async function findCustomer(
 
         // Exact match
         if (custNameLower === dispensaryName.toLowerCase() || custNickLower === dispensaryName.toLowerCase()) {
+          console.log(`[api/leaflink-order] Exact customer match: "${cust.name}" (ID: ${cust.id}) for "${dispensaryName}"`);
           return {id: cust.id, name: cust.name};
         }
 
@@ -273,8 +277,11 @@ async function findCustomer(
 
     // Only return best match if it's a reasonable match (at least 2 term hits)
     if (bestMatch && bestMatch.score >= 2) {
+      console.log(`[api/leaflink-order] Best customer match: "${bestMatch.name}" (ID: ${bestMatch.id}, score: ${bestMatch.score}) for "${dispensaryName}"`);
       return {id: bestMatch.id, name: bestMatch.name};
     }
+
+    console.warn(`[api/leaflink-order] No customer match found for "${dispensaryName}" among Canfections NJ buyers`);
 
     return null;
   } catch (err) {
