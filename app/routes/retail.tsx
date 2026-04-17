@@ -869,7 +869,7 @@ export default function RetailMerchStore() {
           {/* ── Right Column: Merch Stack Visual ────────────────────── */}
           <div className="relative hidden md:block">
             <div className="relative aspect-[4/5] w-full max-w-md ml-auto">
-              {/* Main hero visual: Ricky cutout as the anchor */}
+              {/* Main hero visual: All Products Stand Up Sign as the anchor */}
               <div
                 className="absolute inset-0 overflow-hidden"
                 style={{
@@ -878,27 +878,11 @@ export default function RetailMerchStore() {
                 }}
               />
               <img
-                src="/retail/ricky-cutout.png"
-                alt="Ricky Williams cutout — Highsman retail display"
-                className="relative w-full h-full object-contain object-bottom z-10"
-                style={{filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.5))'}}
+                src="/retail/all-product-sign.png"
+                alt="All Products Stand Up Sign — Highsman countertop retail display"
+                className="relative w-full h-full object-contain object-center z-10 p-8"
+                style={{filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.35))'}}
               />
-              {/* Product stack callout — bottom right floating card */}
-              <div
-                className="absolute -bottom-4 -right-4 bg-black border border-[#F5E400]/30 px-5 py-4 z-20 shadow-2xl"
-                style={{minWidth: 190}}
-              >
-                <p className="font-headline text-[10px] font-bold tracking-[0.25em] text-[#F5E400] uppercase mb-1">
-                  Signature Merch
-                </p>
-                <p className="font-headline text-xl font-bold uppercase leading-tight text-white">
-                  Ricky Williams
-                  <br />
-                  <span className="text-[#A9ACAF] text-sm font-semibold normal-case tracking-normal">
-                    Cutouts, footballs + more
-                  </span>
-                </p>
-              </div>
               {/* Product stack callout — top left */}
               <div
                 className="absolute -top-3 -left-3 bg-[#F5E400] text-black px-4 py-2 z-20 shadow-xl"
@@ -914,7 +898,7 @@ export default function RetailMerchStore() {
 
       {/* ── Trust Strip ───────────────────────────────────────────────── */}
       <section className="border-y border-[#A9ACAF]/15 bg-[#0a0a0a]">
-        <div className="max-w-7xl mx-auto px-6 py-5 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8 text-center md:text-left">
+        <div className="max-w-7xl mx-auto px-6 py-5 grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6 text-center md:text-left">
           <div className="flex items-center justify-center md:justify-start gap-3">
             <span className="material-symbols-outlined text-2xl text-[#F5E400]">verified</span>
             <div>
@@ -926,7 +910,7 @@ export default function RetailMerchStore() {
               </p>
             </div>
           </div>
-          <div className="flex items-center justify-center md:justify-start gap-3 md:border-l md:border-r md:border-[#A9ACAF]/15 md:px-6">
+          <div className="flex items-center justify-center md:justify-start gap-3 md:border-l md:border-[#A9ACAF]/15 md:pl-6">
             <span className="material-symbols-outlined text-2xl text-[#F5E400]">local_shipping</span>
             <div>
               <p className="font-headline text-xs font-bold uppercase tracking-[0.15em] text-white leading-tight">
@@ -937,7 +921,7 @@ export default function RetailMerchStore() {
               </p>
             </div>
           </div>
-          <div className="flex items-center justify-center md:justify-start gap-3">
+          <div className="flex items-center justify-center md:justify-start gap-3 md:border-l md:border-[#A9ACAF]/15 md:pl-6">
             <span className="material-symbols-outlined text-2xl text-[#F5E400]">support_agent</span>
             <div>
               <p className="font-headline text-xs font-bold uppercase tracking-[0.15em] text-white leading-tight">
@@ -945,6 +929,17 @@ export default function RetailMerchStore() {
               </p>
               <p className="text-[11px] text-[#A9ACAF] leading-snug mt-0.5">
                 Direct line to the Highsman team
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center justify-center md:justify-start gap-3 md:border-l md:border-[#A9ACAF]/15 md:pl-6">
+            <span className="material-symbols-outlined text-2xl text-[#F5E400]">sports_football</span>
+            <div>
+              <p className="font-headline text-xs font-bold uppercase tracking-[0.15em] text-white leading-tight">
+                Signature Merch
+              </p>
+              <p className="text-[11px] text-[#A9ACAF] leading-snug mt-0.5">
+                Ricky Williams cutouts + more
               </p>
             </div>
           </div>
