@@ -59,13 +59,14 @@ export const REP_HUBS: Record<RepId, RepHub> = {
 export const MAX_SOLO_DRIVE_MIN = 60;
 
 // Max drive minutes between two same-day dispensaries for the doubleheader
-// exception. Applies only when the rep already has a booking that weekend day.
-export const MAX_DOUBLEHEADER_HOP_MIN = 60;
+// exception. Applies only when the rep already has a booking that Saturday —
+// the second stop must sit within this radius of the first stop, NOT from hub.
+export const MAX_DOUBLEHEADER_HOP_MIN = 40;
 
-// Weekend doubleheader exception is Sat/Sun only. Thu/Fri pop-ups must always
-// satisfy the solo hub-radius rule.
+// Saturday-only doubleheader exception. Friday visits must always satisfy
+// the solo hub-radius rule (60 min from home base).
 export function isWeekendShift(shiftKey: string): boolean {
-  return shiftKey.startsWith('sat-') || shiftKey.startsWith('sun-');
+  return shiftKey.startsWith('sat-');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -160,6 +160,9 @@ type Booking = {
   lng?: number;
   date: string;
   shiftKey: string;
+  // Which NJ rep's area this booking is in — used to enforce "one booking per
+  // rep per shift" (prevents both statewide slots landing in the same area).
+  rep?: RepId;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1038,6 +1041,26 @@ export default function NJPopups() {
   }, [mappableStops, dailyRoutes, routePolylines, routeCacheKey]);
   const totalDrive = driveLegs.reduce((a, b) => a + b, 0);
 
+  // ── One-per-rep-per-shift guardrail ─────────────────────────────────────
+  // Each shift caps at 2 bookings statewide, BUT both slots cannot fall in
+  // the same rep's area — we need one North + one South. If the slot's
+  // assigned rep already owns a booking on this date + shiftKey, block it.
+  const sameRepShiftConflict = useMemo(() => {
+    if (!slot || !dispensary) return null;
+    const assignedRep =
+      repCheck.status === 'assigned' ? repCheck.repId : null;
+    if (!assignedRep) return null;
+    return (
+      bookings.find(
+        (b) =>
+          b.date === slot.date &&
+          b.shiftKey === slot.shiftKey &&
+          b.dispId !== dispensary.id &&
+          b.rep === assignedRep,
+      ) || null
+    );
+  }, [slot, dispensary, bookings, repCheck]);
+
   // ── Saturday same-day drive-time guardrail ──────────────────────────────
   // Find any existing booking on the same Saturday at a different dispensary
   // with known coordinates. If there is one, we need to verify the drive time
@@ -1239,7 +1262,13 @@ export default function NJPopups() {
   // Link mode is "done" as soon as a slot is picked — the contact handoff happens in the portal.
   const step3Done = mode === 'link' ? !!slot : !!contact;
   const step5Done =
-    step1Done && step2Done && step3Done && !driveBlocked && !repBlocked && windowOk;
+    step1Done &&
+    step2Done &&
+    step3Done &&
+    !driveBlocked &&
+    !repBlocked &&
+    windowOk &&
+    !sameRepShiftConflict;
 
   // Fire a Zoho Event creation for every booking so the Account's Activities
   // timeline shows the pop-up history + upcoming stops on the Zoho calendar.
@@ -1373,6 +1402,7 @@ export default function NJPopups() {
           lng: dispensary.lng,
           date: slot.date,
           shiftKey: slot.shiftKey,
+          rep: repCheck.status === 'assigned' ? repCheck.repId : undefined,
         },
       ]);
       setToast(true);
@@ -1448,6 +1478,7 @@ export default function NJPopups() {
         lng: dispensary.lng,
         date: slot.date,
         shiftKey: slot.shiftKey,
+        rep: repCheck.status === 'assigned' ? repCheck.repId : undefined,
       },
     ]);
     setToast(true);
@@ -1688,12 +1719,12 @@ export default function NJPopups() {
         </h1>
         <p style={{maxWidth: 720, margin: '0 auto', color: BRAND.gray, fontSize: 18, lineHeight: 1.55}}>
           Staff tool for scheduling Highsman D2C Spark Team visits at licensed NJ dispensaries.{' '}
-          <strong style={{color: BRAND.white, fontWeight: 600}}>Friday 3–7 PM</strong> (max 2
-          simultaneous statewide) and{' '}
+          <strong style={{color: BRAND.white, fontWeight: 600}}>Friday 3–7 PM</strong> and{' '}
           <strong style={{color: BRAND.white, fontWeight: 600}}>
             Saturday 1–3 PM and 4–6 PM
           </strong>{' '}
-          shifts. Confirmed bookings auto-sync to Google Calendar and{' '}
+          shifts — <strong style={{color: BRAND.white, fontWeight: 600}}>one per rep area</strong>{' '}
+          (North + South Jersey). Confirmed bookings auto-sync to Google Calendar and{' '}
           <span style={{color: BRAND.gold}}>popups@highsman.com</span>.
         </p>
       </section>
@@ -1936,8 +1967,9 @@ export default function NJPopups() {
             <div style={{flex: 1}}>
               <h2 style={h2}>Pick Time Slot</h2>
               <p style={kicker}>
-                All shifts cap at 2 simultaneous bookings statewide. Saturday splits into matinee (1–3 PM)
-                and late (4–6 PM) — each with its own 2-spot cap. D2C Spark Team officially launches{' '}
+                Each shift caps at 2 bookings statewide — <strong>one per rep area</strong>{' '}
+                (North Jersey + South Jersey). Saturday splits into matinee (1–3 PM) and late
+                (4–6 PM), each with its own 1-per-area cap. D2C Spark Team officially launches{' '}
                 <strong>Fri May 8</strong>; bookings require a {MIN_LEAD_DAYS}-day minimum lead time. Window
                 rolls forward weekly so you can always plan ~2 months out. Dispensaries must sit within{' '}
                 {MAX_SOLO_DRIVE_MIN} min of Newark (North Jersey Rep) or Collingswood (South Jersey Rep) — auto-assigned
@@ -1956,9 +1988,9 @@ export default function NJPopups() {
               }}
             >
               {[
-                {l: 'Friday', v: '3:00 – 7:00 PM', s: 'Max 2 simultaneous · NJ statewide'},
-                {l: 'Saturday · Matinee', v: '1:00 – 3:00 PM', s: 'Max 2 simultaneous · route-planned'},
-                {l: 'Saturday · Late', v: '4:00 – 6:00 PM', s: 'Max 2 simultaneous · drive-time checked'},
+                {l: 'Friday', v: '3:00 – 7:00 PM', s: '1 North + 1 South · 60 min from hub'},
+                {l: 'Saturday · Matinee', v: '1:00 – 3:00 PM', s: '1 North + 1 South · 60 min from hub'},
+                {l: 'Saturday · Late', v: '4:00 – 6:00 PM', s: '1 per area · 40 min doubleheader'},
                 {l: 'Lead Time', v: '5 Days Min', s: 'For gear + ops prep'},
               ].map((r) => (
                 <div
@@ -3334,7 +3366,47 @@ export default function NJPopups() {
               </div>
             )}
 
-            {/* ── Drive-time guardrail banner (weekend same-day rule) ── */}
+            {/* ── One-per-rep-per-shift guardrail banner ── */}
+            {sameRepShiftConflict && (
+              <div
+                style={{
+                  marginTop: 20,
+                  padding: '16px 20px',
+                  border: `1px solid ${BRAND.red}`,
+                  background: 'rgba(220,53,69,0.08)',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: TEKO,
+                    fontSize: 14,
+                    letterSpacing: '0.18em',
+                    textTransform: 'uppercase',
+                    color: BRAND.red,
+                    marginBottom: 6,
+                  }}
+                >
+                  ✕ Area Already Covered This Shift
+                </div>
+                <div
+                  style={{
+                    fontFamily: BODY,
+                    fontSize: 15,
+                    color: BRAND.white,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {repCheck.status === 'assigned' ? repCheck.repName : 'This rep'} is
+                  already booked at{' '}
+                  <strong>{sameRepShiftConflict.name} — {sameRepShiftConflict.city}</strong>{' '}
+                  for this same shift. Only one Spark Team visit per rep area per
+                  shift — pick a dispensary in the other NJ area or a different
+                  time slot.
+                </div>
+              </div>
+            )}
+
+            {/* ── Drive-time guardrail banner (Saturday doubleheader rule) ── */}
             {driveCheck.status !== 'idle' && (
               <div
                 style={{
