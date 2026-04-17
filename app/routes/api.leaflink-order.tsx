@@ -341,21 +341,19 @@ async function createLeafLinkOrder(
   },
   apiKey: string,
 ): Promise<{success: boolean; orderNumber?: string; error?: string}> {
-  // Build regular line items
+  // Build regular line items — send quantity in individual units, let LeafLink use its own wholesale pricing
   const regularItems = params.lineItems
     .filter(item => !item.isSample && SKU_TO_PRODUCT_ID[item.sku])
-    .map(item => ({
-      product: SKU_TO_PRODUCT_ID[item.sku],
-      quantity: item.quantity.toString(),
-      ordered_unit_price: {
-        amount: item.unitPrice.toFixed(2),
-        currency: 'USD',
-      },
-      sale_price: {
-        amount: item.unitPrice.toFixed(2),
-        currency: 'USD',
-      },
-    }));
+    .map(item => {
+      const productId = SKU_TO_PRODUCT_ID[item.sku];
+      console.log(`[api/leaflink-order] Line item: SKU=${item.sku} → Product=${productId}, qty=${item.quantity} units`);
+      return {
+        product: productId,
+        quantity: item.quantity.toString(),
+        // Do NOT override ordered_unit_price — let LeafLink use its configured wholesale price
+        // Overriding with per-unit price ($7) was causing LeafLink to show $7/case instead of $168/case
+      };
+    });
 
   // Build sample line items — $0.01, 1 unit each, tagged as sample
   const sampleItems = params.lineItems
@@ -400,6 +398,8 @@ async function createLeafLinkOrder(
     orderPayload.customer = {id: params.customerId};
   }
 
+  console.log(`[api/leaflink-order] Submitting order payload:`, JSON.stringify(orderPayload, null, 2));
+
   const res = await fetch(`${LEAFLINK_API_BASE}/orders-received/`, {
     method: 'POST',
     headers: {
@@ -419,6 +419,16 @@ async function createLeafLinkOrder(
   }
 
   const data = await res.json();
+  console.log(`[api/leaflink-order] LeafLink order created:`, JSON.stringify({
+    number: data.number,
+    short_id: data.short_id,
+    line_items: data.line_items?.map((li: any) => ({
+      product: li.product,
+      quantity: li.quantity,
+      ordered_unit_price: li.ordered_unit_price,
+      sale_price: li.sale_price,
+    })),
+  }, null, 2));
   return {
     success: true,
     orderNumber: data.number || data.short_id || 'unknown',

@@ -904,9 +904,11 @@ export default function NJMenu() {
       const strain = product.strains.find((s) => s.name === item.strainName);
       if (!strain?.sku) return null;
       const unitPrice = applyDiscount(product.wholesale, product.discount);
+      const totalUnits = item.cases * product.caseSize;
+      console.log(`[njmenu] Cart item: ${product.name} ${product.subtitle} - ${strain.name}, SKU=${strain.sku}, cases=${item.cases}, caseSize=${product.caseSize}, totalUnits=${totalUnits}, unitPrice=${unitPrice}`);
       return {
         sku: strain.sku,
-        quantity: item.cases * product.caseSize, // total units — LeafLink does the case math internally
+        quantity: totalUnits, // total units — LeafLink does the case math internally
         unitPrice, // per-unit wholesale price (e.g. $7 per Hit Stick unit)
       };
     }).filter(Boolean);
