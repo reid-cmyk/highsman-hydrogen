@@ -48,6 +48,30 @@ const SKU_TO_PRODUCT_ID: Record<string, number> = {
   'C-NJ-HSGG-CQ': 2816214,
 };
 
+// Sample SKU → LeafLink Product ID mapping
+// Samples use the same underlying product (Hit Stick singles for all infused samples,
+// Triple Threat for pre-roll samples, Ground Game for flower samples)
+const SAMPLE_SKU_TO_PRODUCT_ID: Record<string, number> = {
+  // Hit Stick samples (all Hit Stick / Power Pack / Fly High samples = Hit Stick singles)
+  'C-S-NJ-HSINF-BB': 2554071,
+  'C-S-NJ-HSINF-CQ': 2554859,
+  'C-S-NJ-HSINF-GG': 2554839,
+  'C-S-NJ-HSINF-TM': 2554077,
+  'C-S-NJ-HSINF-WW': 2554845,
+  // Triple Threat samples
+  'C-S-NJ-HSTT-BB': 2816207,
+  'C-S-NJ-HSTT-CQ': 2816209,
+  'C-S-NJ-HSTT-GG': 2816206,
+  'C-S-NJ-HSTT-TM': 2816208,
+  'C-S-NJ-HSTT-WW': 2816205,
+  // Ground Game samples
+  'C-S-NJ-HSGG-BB': 2816212,
+  'C-S-NJ-HSGG-CQ': 2816214,
+  'C-S-NJ-HSGG-GG': 2816211,
+  'C-S-NJ-HSGG-TM': 2816213,
+  'C-S-NJ-HSGG-WW': 2816210,
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Gmail API — Failure Notification Email
 // ─────────────────────────────────────────────────────────────────────────────
@@ -264,14 +288,14 @@ async function createLeafLinkOrder(
   params: {
     customerId: number | null;
     dispensaryName: string;
-    lineItems: Array<{sku: string; quantity: number; unitPrice: number}>;
+    lineItems: Array<{sku: string; quantity: number; unitPrice: number; isSample?: boolean}>;
     notes: string;
   },
   apiKey: string,
 ): Promise<{success: boolean; orderNumber?: string; error?: string}> {
-  // Build line items — only include items with valid LeafLink product IDs
-  const leaflinkLineItems = params.lineItems
-    .filter(item => SKU_TO_PRODUCT_ID[item.sku])
+  // Build regular line items
+  const regularItems = params.lineItems
+    .filter(item => !item.isSample && SKU_TO_PRODUCT_ID[item.sku])
     .map(item => ({
       product: SKU_TO_PRODUCT_ID[item.sku],
       quantity: item.quantity.toString(),
@@ -285,16 +309,41 @@ async function createLeafLinkOrder(
       },
     }));
 
+  // Build sample line items — $0.01, 1 unit each, tagged as sample
+  const sampleItems = params.lineItems
+    .filter(item => item.isSample && SAMPLE_SKU_TO_PRODUCT_ID[item.sku])
+    .map(item => ({
+      product: SAMPLE_SKU_TO_PRODUCT_ID[item.sku],
+      quantity: item.quantity.toString(),
+      ordered_unit_price: {
+        amount: '0.01',
+        currency: 'USD',
+      },
+      sale_price: {
+        amount: '0.01',
+        currency: 'USD',
+      },
+      // Tag as sample via AVAILABLE_FOR_SAMPLES flag
+      AVAILABLE_FOR_SAMPLES: true,
+    }));
+
+  const leaflinkLineItems = [...regularItems, ...sampleItems];
+
   if (leaflinkLineItems.length === 0) {
     return {success: false, error: 'No matching LeafLink products found in cart'};
   }
+
+  // Build notes with sample callout
+  const sampleNote = sampleItems.length > 0
+    ? `\n[SAMPLES: ${sampleItems.length} sample line(s) included at $0.01 — tag as SAMPLE]`
+    : '';
 
   // Build order payload
   const orderPayload: Record<string, any> = {
     seller: LEAFLINK_COMPANY_ID,
     status: 'Submitted',
     line_items: leaflinkLineItems,
-    delivery_preferences: params.notes || `Order from NJ Menu — ${params.dispensaryName}`,
+    delivery_preferences: (params.notes || `Order from NJ Menu — ${params.dispensaryName}`) + sampleNote,
     external_id_seller: `NJMENU-${Date.now()}`,
   };
 
@@ -373,13 +422,15 @@ export async function action({request, context}: ActionFunctionArgs) {
     }
   }
 
-  // Check if any items are LeafLink-eligible
-  const eligibleItems = items.filter((item: any) => SKU_TO_PRODUCT_ID[item.sku]);
+  // Check if any items are LeafLink-eligible (regular products or samples)
+  const eligibleItems = items.filter((item: any) =>
+    SKU_TO_PRODUCT_ID[item.sku] || SAMPLE_SKU_TO_PRODUCT_ID[item.sku]
+  );
   if (eligibleItems.length === 0) {
     return json({
       ok: true,
       skipped: true,
-      message: 'No LeafLink-eligible products in cart (only Hit Sticks singles and 5-packs sync to LeafLink)',
+      message: 'No LeafLink-eligible products in cart',
     });
   }
 

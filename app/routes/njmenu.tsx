@@ -917,7 +917,22 @@ export default function NJMenu() {
       };
     }).filter(Boolean);
 
-    if (items.length === 0) {
+    // Build sample line items — $0.01 per unit, 1 unit each, tagged as sample
+    const sampleItems = earnedSamples.map((sample) => {
+      const strainName = sampleStrains[sample.id];
+      if (!strainName) return null;
+      const rule = SAMPLE_RULES.find((r) => r.id === sample.id);
+      const sampleSku = rule?.sampleSkus?.[strainName];
+      if (!sampleSku) return null;
+      return {
+        sku: sampleSku,
+        quantity: sample.qty,
+        unitPrice: 0.01,
+        isSample: true,
+      };
+    }).filter(Boolean);
+
+    if (items.length === 0 && sampleItems.length === 0) {
       setLeaflinkStatus('skipped');
       setLeaflinkMessage('No LeafLink-eligible products in cart');
       return;
@@ -932,7 +947,7 @@ export default function NJMenu() {
       body: JSON.stringify({
         dispensaryName: selectedAccount.name,
         dispensaryId: selectedAccount.id,
-        items,
+        items: [...items, ...sampleItems],
         notes: orderNote.trim() || undefined,
       }),
     })
@@ -961,7 +976,7 @@ export default function NJMenu() {
         setLeaflinkMessage('Network error — LeafLink order not sent');
         console.error('[njmenu] LeafLink submission error:', err);
       });
-  }, [selectedAccount, cartItems, orderNote]);
+  }, [selectedAccount, cartItems, orderNote, earnedSamples, sampleStrains]);
 
   // Build mailto order
   const buildOrderEmail = useCallback(() => {
@@ -2054,7 +2069,17 @@ export default function NJMenu() {
                           }}
                         >
                           <option value="">Choose strain</option>
-                          {STRAINS.map((s) => (<option key={s.name} value={s.name}>{s.name}</option>))}
+                          {STRAINS.map((s) => {
+                            // Check OOS using the underlying product line's real SKU
+                            const productLine = PRODUCT_LINES.find((p) => p.id === sample.productId);
+                            const realStrain = productLine?.strains.find((st) => st.name === s.name);
+                            const oos = realStrain?.sku ? !isInStock(realStrain.sku) : false;
+                            return (
+                              <option key={s.name} value={s.name} disabled={oos}>
+                                {s.name}{oos ? ' (Out of Stock)' : ''}
+                              </option>
+                            );
+                          })}
                         </select>
                       </div>
                     ))}
