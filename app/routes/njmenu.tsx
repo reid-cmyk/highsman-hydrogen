@@ -1717,7 +1717,7 @@ export default function NJMenu() {
                       {product.name} <span style={{color: BRAND.gold}}>{product.subtitle}</span>
                     </h2>
                     <p className="font-body text-sm mt-2" style={{color: 'rgba(255,255,255,0.6)'}}>
-                      {product.weight} &middot; {product.format} &middot; Min. order {product.caseSize} units
+                      {product.weight} &middot; {product.format} &middot; 1 Case = {product.caseSize} Units
                     </p>
                   </div>
 
@@ -1751,7 +1751,7 @@ export default function NJMenu() {
                     <div className="flex flex-wrap gap-x-10 gap-y-2 mb-8 pl-0 md:pl-[120px]">
                       {[
                         {l: 'Unit', v: formatCurrency(discountedWholesale)},
-                        {l: `${product.caseSize} Units`, v: formatCurrency(discountedCase)},
+                        {l: `Case (${product.caseSize} units)`, v: formatCurrency(discountedCase)},
                         {l: 'RRP', v: formatCurrency(product.rrp)},
                         {l: 'Margin', v: `${marginPct}%`, gold: true},
                       ].map((d) => (
