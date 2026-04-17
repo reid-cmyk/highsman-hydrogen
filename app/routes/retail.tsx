@@ -1,4 +1,4 @@
-import {useState, useRef, useEffect, useMemo, useCallback} from 'react';
+import {useState, useRef, useEffect, useMemo} from 'react';
 import type {MetaFunction} from '@shopify/remix-oxygen';
 import {useFetcher} from '@remix-run/react';
 
@@ -38,6 +38,35 @@ const CATEGORIES = [
   {id: 'stickers', label: 'Stickers', icon: 'sell'},
   {id: 'footballs', label: 'Footballs', icon: 'sports_football'},
 ];
+
+// Editorial section copy for each category — headline + selling intro.
+// Kept in Highsman voice: confident, athletic, no hedging.
+const CATEGORY_COPY: Record<string, {headline: string; intro: string}> = {
+  'pos-displays': {
+    headline: 'Counter Takeover',
+    intro: 'Turn your counter into the main event. Stadium stands, acrylic signs, and fixtures built to move product off the shelf.',
+  },
+  'display-packaging': {
+    headline: 'Shelf Presence. Zero Inventory.',
+    intro: 'Empty replicas of every pack — same shelf impact, nothing sellable tied up. Built for windows, counters, and product education.',
+  },
+  'cutouts': {
+    headline: 'Stopping Power',
+    intro: 'Life-size to shelf-top. Ricky Williams cutouts anchor the floor, spark photo ops, and stop customers mid-stride.',
+  },
+  'banners': {
+    headline: 'Big Brand Energy',
+    intro: 'Retractable banners for events, storefronts, and in-store backdrops. Quick setup, serious presence.',
+  },
+  'stickers': {
+    headline: 'Every Bag. Every Hand.',
+    intro: 'Packed in tens. Register counters, customer bags, budtender swag — every sticker is a brand touchpoint that follows the customer home.',
+  },
+  'footballs': {
+    headline: 'Grand Prize Energy',
+    intro: "Collector's-grade footballs — signed by Ricky or branded Highsman. Made for giveaways and top-tier customer moments.",
+  },
+};
 
 const MERCH_ITEMS: MerchItem[] = [
   // ── Point of Sale Displays ─────────────────────────────────────────────────
@@ -375,8 +404,6 @@ export default function RetailMerchStore() {
 
   // ── Cart & Product State ───────────────────────────────────────────────────
   const [cart, setCart] = useState<Record<string, number>>({});
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  const [catalogSearch, setCatalogSearch] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
@@ -399,17 +426,6 @@ export default function RetailMerchStore() {
       return {...prev, [id]: next};
     });
   };
-
-  const filteredItems = useMemo(() => {
-    const q = catalogSearch.trim().toLowerCase();
-    return MERCH_ITEMS.filter((i) => {
-      const catMatch = activeCategory ? i.category === activeCategory : true;
-      const searchMatch = q
-        ? `${i.name} ${i.description} ${i.dimensions || ''} ${i.tag || ''}`.toLowerCase().includes(q)
-        : true;
-      return catMatch && searchMatch;
-    });
-  }, [activeCategory, catalogSearch]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -949,245 +965,156 @@ export default function RetailMerchStore() {
       {/* ── Everything below only shows after dispensary is selected ─── */}
       {selectedAccount && (
         <>
-          {/* ── Category Filter + Catalog Search ──────────────────────── */}
-          <nav className="sticky top-[65px] z-40 bg-black/95 backdrop-blur-sm border-b border-[#A9ACAF]/20">
-            <div className="max-w-7xl mx-auto px-6 py-3 flex flex-col lg:flex-row gap-3 lg:items-center">
-              {/* Category pills — scrollable */}
-              <div className="flex gap-2 overflow-x-auto scrollbar-hide flex-1 min-w-0">
-                <button
-                  onClick={() => setActiveCategory(null)}
-                  className={`flex items-center gap-1.5 whitespace-nowrap px-4 py-2 font-headline text-xs font-bold uppercase tracking-wide border transition-colors ${
-                    !activeCategory
-                      ? 'bg-[#F5E400] text-black border-[#F5E400]'
-                      : 'bg-transparent text-[#A9ACAF] border-[#A9ACAF]/30 hover:border-[#F5E400]/60 hover:text-white'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-sm">grid_view</span>
-                  All ({MERCH_ITEMS.length})
-                </button>
-                {CATEGORIES.map((cat) => {
-                  const count = MERCH_ITEMS.filter((i) => i.category === cat.id).length;
-                  return (
-                    <button
-                      key={cat.id}
-                      onClick={() => setActiveCategory(activeCategory === cat.id ? null : cat.id)}
-                      className={`flex items-center gap-1.5 whitespace-nowrap px-4 py-2 font-headline text-xs font-bold uppercase tracking-wide border transition-colors ${
-                        activeCategory === cat.id
-                          ? 'bg-[#F5E400] text-black border-[#F5E400]'
-                          : 'bg-transparent text-[#A9ACAF] border-[#A9ACAF]/30 hover:border-[#F5E400]/60 hover:text-white'
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-sm">{cat.icon}</span>
-                      {cat.label} ({count})
-                    </button>
-                  );
-                })}
-              </div>
+          {/* ── Product Catalog — grouped by category, scroll-first ──── */}
+          <main className="max-w-7xl mx-auto px-6 py-12 md:py-16 space-y-20 md:space-y-28">
+            {CATEGORIES.map((cat) => {
+              const items = MERCH_ITEMS.filter((i) => i.category === cat.id);
+              if (items.length === 0) return null;
+              const copy = CATEGORY_COPY[cat.id];
+              return (
+                <section key={cat.id} id={cat.id} className="scroll-mt-24">
+                  {/* ── Section Header ─────────────────────────────── */}
+                  <div className="mb-8 md:mb-12 max-w-3xl">
+                    <p className="font-headline text-[11px] font-bold tracking-[0.4em] text-[#F5E400] uppercase mb-4 flex items-center gap-2">
+                      <span className="inline-block w-8 h-px bg-[#F5E400]" />
+                      {cat.label} · {items.length} {items.length === 1 ? 'Item' : 'Items'}
+                    </p>
+                    <h2 className="font-headline text-[34px] sm:text-[44px] md:text-[56px] font-bold uppercase leading-[0.95] tracking-tight mb-4">
+                      {copy.headline}
+                    </h2>
+                    <p className="text-base md:text-lg text-[#A9ACAF] leading-relaxed">
+                      {copy.intro}
+                    </p>
+                  </div>
 
-              {/* Catalog keyword search */}
-              <div className="relative lg:w-64 flex-shrink-0">
-                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#A9ACAF]/60 text-lg">search</span>
-                <input
-                  type="text"
-                  value={catalogSearch}
-                  onChange={(e) => setCatalogSearch(e.target.value)}
-                  placeholder="Search merch…"
-                  className="w-full text-sm bg-[#111] border border-[#A9ACAF]/25 pl-10 pr-8 py-2 text-white placeholder-[#A9ACAF]/50 focus:border-[#F5E400] focus:outline-none transition-colors"
-                  style={{borderRadius: 4}}
-                />
-                {catalogSearch && (
-                  <button
-                    type="button"
-                    aria-label="Clear search"
-                    onClick={() => setCatalogSearch('')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[#A9ACAF]/60 hover:text-white transition-colors bg-transparent border-0 cursor-pointer p-1"
-                  >
-                    <span className="material-symbols-outlined text-base">close</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          </nav>
-
-          {/* ── Product Grid ──────────────────────────────────────────── */}
-          <main className="max-w-7xl mx-auto px-6 py-10 md:py-14">
-            {/* Result count / active filter indicator */}
-            {(activeCategory || catalogSearch) && (
-              <div className="flex flex-wrap items-center gap-3 mb-6">
-                <p className="text-sm text-[#A9ACAF]">
-                  <span className="font-headline font-bold text-white">{filteredItems.length}</span>{' '}
-                  {filteredItems.length === 1 ? 'item' : 'items'}
-                  {activeCategory && (
-                    <>
-                      {' in '}
-                      <span className="font-headline font-bold uppercase tracking-wide text-white">
-                        {CATEGORIES.find((c) => c.id === activeCategory)?.label}
-                      </span>
-                    </>
-                  )}
-                  {catalogSearch && (
-                    <>
-                      {' matching '}
-                      <span className="font-headline font-bold text-white">"{catalogSearch}"</span>
-                    </>
-                  )}
-                </p>
-                <button
-                  onClick={() => {
-                    setActiveCategory(null);
-                    setCatalogSearch('');
-                  }}
-                  className="font-headline text-[11px] font-bold uppercase tracking-[0.15em] text-[#F5E400] hover:text-white transition-colors bg-transparent border-0 cursor-pointer underline underline-offset-4"
-                >
-                  Clear filters
-                </button>
-              </div>
-            )}
-
-            {/* Empty state */}
-            {filteredItems.length === 0 ? (
-              <div className="border border-[#A9ACAF]/15 bg-[#0a0a0a] py-16 px-6 text-center">
-                <span className="material-symbols-outlined text-5xl text-[#A9ACAF]/40 mb-3">search_off</span>
-                <h3 className="font-headline text-2xl font-bold uppercase mb-2">No matches</h3>
-                <p className="text-sm text-[#A9ACAF] mb-6 max-w-md mx-auto">
-                  Try a different keyword or clear your filters to see the full catalog.
-                </p>
-                <button
-                  onClick={() => {
-                    setActiveCategory(null);
-                    setCatalogSearch('');
-                  }}
-                  className="font-headline text-xs font-bold uppercase tracking-[0.15em] bg-[#F5E400] text-black px-6 py-2.5 hover:opacity-90 transition-opacity cursor-pointer border-0"
-                >
-                  Show all merch
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
-                {filteredItems.map((item) => {
-                  const qty = cart[item.id] || 0;
-                  const isInCart = qty > 0;
-                  const atMax = qty + (item.step ?? 1) > item.maxQty;
-                  const addLabel = item.step && item.step > 1 ? `Add ${item.step}-pack` : 'Add to Order';
-                  return (
-                    <article
-                      key={item.id}
-                      className={`group relative bg-[#111] border transition-all flex flex-col overflow-hidden ${
-                        isInCart
-                          ? 'border-[#F5E400]/60 shadow-[0_0_0_1px_rgba(245,228,0,0.25)]'
-                          : 'border-[#A9ACAF]/15 hover:border-[#F5E400]/40'
-                      }`}
-                    >
-                      {/* Tag — top left */}
-                      {item.tag && (
-                        <span className="absolute top-3 left-3 z-10 bg-white text-black font-headline text-[10px] font-bold tracking-widest uppercase px-2.5 py-1">
-                          {item.tag}
-                        </span>
-                      )}
-
-                      {/* FREE pill — top right */}
-                      <span className="absolute top-3 right-3 z-10 bg-[#F5E400] text-black font-headline text-[10px] font-bold tracking-widest uppercase px-2.5 py-1">
-                        Free
-                      </span>
-
-                      {/* In-cart badge — appears below tag/free when added */}
-                      {isInCart && (
-                        <span className="absolute top-11 right-3 z-10 flex items-center gap-1 bg-black text-[#F5E400] border border-[#F5E400]/50 font-headline text-[10px] font-bold tracking-widest uppercase px-2 py-1">
-                          <span className="material-symbols-outlined text-xs">check</span>
-                          In Order
-                        </span>
-                      )}
-
-                      {/* Image */}
-                      <div className="relative bg-white overflow-hidden" style={{aspectRatio: '4/3'}}>
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          className="absolute inset-0 w-full h-full object-contain p-5 group-hover:scale-[1.04] transition-transform duration-300"
-                          loading="lazy"
-                        />
-                      </div>
-
-                      {/* Content */}
-                      <div className="flex-1 p-5 flex flex-col">
-                        <h3 className="font-headline text-base md:text-lg font-bold uppercase tracking-wide leading-tight mb-2">
-                          {item.name}
-                        </h3>
-                        {item.dimensions && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-[#A9ACAF] bg-[#A9ACAF]/10 px-2 py-0.5 rounded-sm mb-2.5 w-fit">
-                            <span className="material-symbols-outlined text-[11px]">straighten</span>
-                            {item.dimensions}
-                          </span>
-                        )}
-                        <p className="text-[13px] text-[#A9ACAF] leading-relaxed flex-1 mb-4">
-                          {item.description}
-                        </p>
-
-                        {/* Quantity controls */}
-                        <div className="flex items-center gap-3">
-                          {qty === 0 ? (
-                            <button
-                              onClick={() => updateQty(item.id, 1)}
-                              className="w-full flex items-center justify-center gap-2 bg-transparent border border-[#F5E400] text-[#F5E400] font-headline text-xs font-bold uppercase tracking-wide py-3 hover:bg-[#F5E400] hover:text-black transition-colors"
-                            >
-                              <span className="material-symbols-outlined text-sm">add_shopping_cart</span>
-                              {addLabel}
-                            </button>
-                          ) : (
-                            <>
-                              <div className="flex items-center border border-[#A9ACAF]/30">
-                                <button
-                                  aria-label="Decrease quantity"
-                                  onClick={() => updateQty(item.id, -1)}
-                                  className="w-9 h-9 flex items-center justify-center text-white hover:bg-[#A9ACAF]/10 transition-colors"
-                                >
-                                  <span className="material-symbols-outlined text-sm">remove</span>
-                                </button>
-                                <span className="w-10 h-9 flex items-center justify-center font-headline text-sm font-bold border-x border-[#A9ACAF]/30">
-                                  {qty}
-                                </span>
-                                <button
-                                  aria-label="Increase quantity"
-                                  onClick={() => updateQty(item.id, 1)}
-                                  className={`w-9 h-9 flex items-center justify-center transition-colors ${
-                                    atMax
-                                      ? 'text-[#A9ACAF]/30 cursor-not-allowed'
-                                      : 'text-white hover:bg-[#A9ACAF]/10'
-                                  }`}
-                                  disabled={atMax}
-                                >
-                                  <span className="material-symbols-outlined text-sm">add</span>
-                                </button>
-                              </div>
-                              <div className="flex flex-col leading-tight">
-                                <span className="text-[10px] font-bold text-[#A9ACAF] uppercase tracking-wider">
-                                  Max {item.maxQty}
-                                </span>
-                                {item.step && item.step > 1 && (
-                                  <span className="text-[10px] text-[#F5E400]/80 uppercase tracking-wider">
-                                    Packs of {item.step}
-                                  </span>
-                                )}
-                              </div>
-                              <button
-                                aria-label="Remove from order"
-                                onClick={() => setCart((prev) => {
-                                  const {[item.id]: _, ...rest} = prev;
-                                  return rest;
-                                })}
-                                className="ml-auto text-[#A9ACAF]/60 hover:text-red-400 transition-colors"
-                              >
-                                <span className="material-symbols-outlined text-sm">delete</span>
-                              </button>
-                            </>
+                  {/* ── Product Grid for this category ─────────────── */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
+                    {items.map((item) => {
+                      const qty = cart[item.id] || 0;
+                      const isInCart = qty > 0;
+                      const atMax = qty + (item.step ?? 1) > item.maxQty;
+                      const addLabel = item.step && item.step > 1 ? `Add ${item.step}-pack` : 'Add to Order';
+                      return (
+                        <article
+                          key={item.id}
+                          className={`group relative bg-[#111] border transition-all flex flex-col overflow-hidden ${
+                            isInCart
+                              ? 'border-[#F5E400]/60 shadow-[0_0_0_1px_rgba(245,228,0,0.25)]'
+                              : 'border-[#A9ACAF]/15 hover:border-[#F5E400]/40'
+                          }`}
+                        >
+                          {/* Tag — top left */}
+                          {item.tag && (
+                            <span className="absolute top-3 left-3 z-10 bg-white text-black font-headline text-[10px] font-bold tracking-widest uppercase px-2.5 py-1">
+                              {item.tag}
+                            </span>
                           )}
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
+
+                          {/* FREE pill — top right */}
+                          <span className="absolute top-3 right-3 z-10 bg-[#F5E400] text-black font-headline text-[10px] font-bold tracking-widest uppercase px-2.5 py-1">
+                            Free
+                          </span>
+
+                          {/* In-cart badge — appears below tag/free when added */}
+                          {isInCart && (
+                            <span className="absolute top-11 right-3 z-10 flex items-center gap-1 bg-black text-[#F5E400] border border-[#F5E400]/50 font-headline text-[10px] font-bold tracking-widest uppercase px-2 py-1">
+                              <span className="material-symbols-outlined text-xs">check</span>
+                              In Order
+                            </span>
+                          )}
+
+                          {/* Image */}
+                          <div className="relative bg-white overflow-hidden" style={{aspectRatio: '4/3'}}>
+                            <img
+                              src={item.image}
+                              alt={item.name}
+                              className="absolute inset-0 w-full h-full object-contain p-5 group-hover:scale-[1.04] transition-transform duration-300"
+                              loading="lazy"
+                            />
+                          </div>
+
+                          {/* Content */}
+                          <div className="flex-1 p-5 flex flex-col">
+                            <h3 className="font-headline text-base md:text-lg font-bold uppercase tracking-wide leading-tight mb-2">
+                              {item.name}
+                            </h3>
+                            {item.dimensions && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-[#A9ACAF] bg-[#A9ACAF]/10 px-2 py-0.5 rounded-sm mb-2.5 w-fit">
+                                <span className="material-symbols-outlined text-[11px]">straighten</span>
+                                {item.dimensions}
+                              </span>
+                            )}
+                            <p className="text-[13px] text-[#A9ACAF] leading-relaxed flex-1 mb-4">
+                              {item.description}
+                            </p>
+
+                            {/* Quantity controls */}
+                            <div className="flex items-center gap-3">
+                              {qty === 0 ? (
+                                <button
+                                  onClick={() => updateQty(item.id, 1)}
+                                  className="w-full flex items-center justify-center gap-2 bg-transparent border border-[#F5E400] text-[#F5E400] font-headline text-xs font-bold uppercase tracking-wide py-3 hover:bg-[#F5E400] hover:text-black transition-colors"
+                                >
+                                  <span className="material-symbols-outlined text-sm">add_shopping_cart</span>
+                                  {addLabel}
+                                </button>
+                              ) : (
+                                <>
+                                  <div className="flex items-center border border-[#A9ACAF]/30">
+                                    <button
+                                      aria-label="Decrease quantity"
+                                      onClick={() => updateQty(item.id, -1)}
+                                      className="w-9 h-9 flex items-center justify-center text-white hover:bg-[#A9ACAF]/10 transition-colors"
+                                    >
+                                      <span className="material-symbols-outlined text-sm">remove</span>
+                                    </button>
+                                    <span className="w-10 h-9 flex items-center justify-center font-headline text-sm font-bold border-x border-[#A9ACAF]/30">
+                                      {qty}
+                                    </span>
+                                    <button
+                                      aria-label="Increase quantity"
+                                      onClick={() => updateQty(item.id, 1)}
+                                      className={`w-9 h-9 flex items-center justify-center transition-colors ${
+                                        atMax
+                                          ? 'text-[#A9ACAF]/30 cursor-not-allowed'
+                                          : 'text-white hover:bg-[#A9ACAF]/10'
+                                      }`}
+                                      disabled={atMax}
+                                    >
+                                      <span className="material-symbols-outlined text-sm">add</span>
+                                    </button>
+                                  </div>
+                                  <div className="flex flex-col leading-tight">
+                                    <span className="text-[10px] font-bold text-[#A9ACAF] uppercase tracking-wider">
+                                      Max {item.maxQty}
+                                    </span>
+                                    {item.step && item.step > 1 && (
+                                      <span className="text-[10px] text-[#F5E400]/80 uppercase tracking-wider">
+                                        Packs of {item.step}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <button
+                                    aria-label="Remove from order"
+                                    onClick={() => setCart((prev) => {
+                                      const {[item.id]: _, ...rest} = prev;
+                                      return rest;
+                                    })}
+                                    className="ml-auto text-[#A9ACAF]/60 hover:text-red-400 transition-colors"
+                                  >
+                                    <span className="material-symbols-outlined text-sm">delete</span>
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })}
           </main>
 
           {/* ── Order Review / Submit ──────────────────────────────────── */}
