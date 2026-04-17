@@ -162,8 +162,13 @@ export type RepAssignment =
       reason:
         | 'out_of_coverage'
         | 'doubleheader_too_far'
-        | 'drive_lookup_failed';
+        | 'drive_lookup_failed'
+        | 'rep_shift_taken';
       bestRepId?: RepId;
       bestDriveMin?: number;
       message: string;
+      // When reason === 'rep_shift_taken', identifies the existing Zoho Event
+      // that already covers this rep/shift slot.
+      conflictEventId?: string;
+      conflictEventTitle?: string;
     };

@@ -435,8 +435,12 @@ export default function NJPopups() {
       }
     | {
         status: 'blocked';
-        reason: 'out_of_coverage' | 'doubleheader_too_far';
+        reason: 'out_of_coverage' | 'doubleheader_too_far' | 'rep_shift_taken';
         message: string;
+        // When reason === 'rep_shift_taken', identifies the Zoho Event that
+        // already occupies this rep's slot — useful for the CRM audit trail.
+        conflictEventId?: string;
+        conflictEventTitle?: string;
       }
     | {status: 'error'; message: string}
   >({status: 'idle'});
@@ -1176,6 +1180,11 @@ export default function NJPopups() {
     fd.append('dispensaryName', dispensary.name);
     fd.append('shiftKey', slot.shiftKey);
     fd.append('date', slot.date);
+    // Pass the caller's Zoho Account ID (if real) so the server skips
+    // self-match when the same Account is re-checking a slot it already holds.
+    if (dispensary.id && !dispensary.id.startsWith('local-')) {
+      fd.append('accountId', dispensary.id);
+    }
 
     // Look for a same-day earlier booking at a different dispensary with
     // coords — that unlocks the doubleheader exception server-side.
@@ -1219,6 +1228,16 @@ export default function NJPopups() {
           setRepCheck({
             status: 'error',
             message: data?.message || 'Rep coverage check unavailable.',
+          });
+        } else if (data?.reason === 'rep_shift_taken') {
+          setRepCheck({
+            status: 'blocked',
+            reason: 'rep_shift_taken',
+            message:
+              data?.message ||
+              'Rep area already covered this shift. Only one Spark Team visit per rep area per shift.',
+            conflictEventId: data?.conflictEventId,
+            conflictEventTitle: data?.conflictEventTitle,
           });
         } else {
           setRepCheck({
@@ -3072,9 +3091,11 @@ export default function NJPopups() {
                   {repCheck.status === 'blocked' &&
                     (repCheck.reason === 'doubleheader_too_far'
                       ? '✕ Doubleheader too far — booking blocked'
-                      : repOverride.active
-                        ? '⚠ Snr Staff Override — Out of Coverage'
-                        : '✕ Out of NJ coverage — booking blocked')}
+                      : repCheck.reason === 'rep_shift_taken'
+                        ? '✕ Rep area already covered this shift'
+                        : repOverride.active
+                          ? '⚠ Snr Staff Override — Out of Coverage'
+                          : '✕ Out of NJ coverage — booking blocked')}
                   {repCheck.status === 'error' && 'Rep coverage check unavailable'}
                 </div>
                 <div
