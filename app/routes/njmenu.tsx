@@ -997,6 +997,16 @@ export default function NJMenu() {
   const [leaflinkStatus, setLeaflinkStatus] = useState<'idle' | 'sending' | 'success' | 'error' | 'skipped'>('idle');
   const [leaflinkMessage, setLeaflinkMessage] = useState<string | null>(null);
   const [orderConfirmed, setOrderConfirmed] = useState(false);
+  // Confirmation page data — captured at moment of successful order
+  const [confirmedOrder, setConfirmedOrder] = useState<{
+    dispensaryName: string;
+    items: Array<{name: string; strainName: string; qty: number; casePrice: number}>;
+    total: number;
+    creditEarned: number;
+    newCreditBalance: number;
+    buyerName: string;
+    buyerEmail: string;
+  } | null>(null);
 
   const submitToLeafLink = useCallback(() => {
     if (!selectedAccount || cartItems.length === 0) return;
@@ -1070,33 +1080,85 @@ export default function NJMenu() {
             setLeaflinkStatus('success');
             setLeaflinkMessage('Order placed successfully. Your rep will confirm shortly.');
 
+            // ── Capture order summary for confirmation page ────────
+            const orderTotal = cartItems.reduce((sum, item) => {
+              const product = PRODUCT_LINES.find((p) => p.id === item.productId);
+              if (!product) return sum;
+              const casePrice = applyDiscount(product.casePrice, product.discount);
+              return sum + item.cases * casePrice;
+            }, 0);
+            const orderItems = cartItems.map((item) => {
+              const product = PRODUCT_LINES.find((p) => p.id === item.productId);
+              if (!product) return null;
+              return {
+                name: product.name,
+                strainName: item.strainName,
+                qty: item.cases * product.caseSize,
+                casePrice: applyDiscount(product.casePrice, product.discount),
+              };
+            }).filter(Boolean) as Array<{name: string; strainName: string; qty: number; casePrice: number}>;
+
             // ── Accrue buyer store credit (menu orders only) ──────────
-            if (buyerContactId) {
-              const orderTotal = cartItems.reduce((sum, item) => {
-                const product = PRODUCT_LINES.find((p) => p.id === item.productId);
-                if (!product) return sum;
-                const casePrice = applyDiscount(product.casePrice, product.discount);
-                return sum + item.cases * casePrice;
-              }, 0);
-              if (orderTotal > 0) {
-                fetch('/api/buyer-credit', {
-                  method: 'POST',
-                  headers: {'Content-Type': 'application/json'},
-                  body: JSON.stringify({
-                    action: 'accrue',
-                    contactId: buyerContactId,
-                    orderTotal,
-                  }),
+            if (buyerContactId && orderTotal > 0) {
+              fetch('/api/buyer-credit', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                  action: 'accrue',
+                  contactId: buyerContactId,
+                  orderTotal,
+                }),
+              })
+                .then((r) => r.json())
+                .then((creditData: any) => {
+                  if (creditData.ok && creditData.action === 'accrued') {
+                    setBuyerCredit(creditData.newBalance);
+                    setConfirmedOrder({
+                      dispensaryName: selectedAccount!.name,
+                      items: orderItems,
+                      total: orderTotal,
+                      creditEarned: creditData.creditEarned || 0,
+                      newCreditBalance: creditData.newBalance || 0,
+                      buyerName: `${buyerFirstName} ${buyerLastName}`.trim(),
+                      buyerEmail: buyerEmail,
+                    });
+                    console.log(`[njmenu] Credit accrued: +$${creditData.creditEarned} → $${creditData.newBalance}`);
+                  } else {
+                    // Credit accrual failed but order succeeded — still show confirmation
+                    setConfirmedOrder({
+                      dispensaryName: selectedAccount!.name,
+                      items: orderItems,
+                      total: orderTotal,
+                      creditEarned: 0,
+                      newCreditBalance: buyerCredit,
+                      buyerName: `${buyerFirstName} ${buyerLastName}`.trim(),
+                      buyerEmail: buyerEmail,
+                    });
+                  }
                 })
-                  .then((r) => r.json())
-                  .then((creditData: any) => {
-                    if (creditData.ok && creditData.action === 'accrued') {
-                      setBuyerCredit(creditData.newBalance);
-                      console.log(`[njmenu] Credit accrued: +$${creditData.creditEarned} → $${creditData.newBalance}`);
-                    }
-                  })
-                  .catch((e) => console.error('[njmenu] Credit accrual error:', e));
-              }
+                .catch((e) => {
+                  console.error('[njmenu] Credit accrual error:', e);
+                  setConfirmedOrder({
+                    dispensaryName: selectedAccount!.name,
+                    items: orderItems,
+                    total: orderTotal,
+                    creditEarned: 0,
+                    newCreditBalance: buyerCredit,
+                    buyerName: `${buyerFirstName} ${buyerLastName}`.trim(),
+                    buyerEmail: buyerEmail,
+                  });
+                });
+            } else {
+              // No buyer contact — still show confirmation without credit
+              setConfirmedOrder({
+                dispensaryName: selectedAccount!.name,
+                items: orderItems,
+                total: orderTotal,
+                creditEarned: 0,
+                newCreditBalance: 0,
+                buyerName: `${buyerFirstName} ${buyerLastName}`.trim(),
+                buyerEmail: buyerEmail,
+              });
             }
           }
         } else {
@@ -1112,7 +1174,7 @@ export default function NJMenu() {
         setLeaflinkMessage(`Connection issue: ${err.message || err}`);
         console.error('[njmenu] LeafLink submission error:', err);
       });
-  }, [selectedAccount, cartItems, orderNote, earnedSamples, sampleStrains, buyerContactId]);
+  }, [selectedAccount, cartItems, orderNote, earnedSamples, sampleStrains, buyerContactId, buyerCredit, buyerFirstName, buyerLastName, buyerEmail]);
 
   // Build mailto order
   const buildOrderEmail = useCallback(() => {
@@ -1243,6 +1305,246 @@ export default function NJMenu() {
       />
 
       <div className="nj-menu">
+
+        {/* ══════════════════════════════════════════════════════════════════
+            ORDER CONFIRMATION VIEW — replaces page after successful order
+            ══════════════════════════════════════════════════════════════════ */}
+        {confirmedOrder ? (
+          <div style={{minHeight: '100vh', background: '#000', color: '#fff'}}>
+            {/* Top Bar */}
+            <nav
+              className="flex items-center justify-between px-6 md:px-10 py-3"
+              style={{background: '#000', borderBottom: '1px solid rgba(255,255,255,0.08)'}}
+            >
+              <Link to="/wholesale" className="font-body text-sm font-500" style={{color: BRAND.gray}}>
+                &larr; Wholesale Portal
+              </Link>
+              <a href="mailto:njsales@highsman.com" className="font-body text-sm" style={{color: 'rgba(255,255,255,0.5)'}}>
+                njsales@highsman.com
+              </a>
+            </nav>
+
+            <div className="max-w-2xl mx-auto px-6 md:px-10 py-16 md:py-24">
+              {/* Success Icon */}
+              <div className="text-center mb-10">
+                <div
+                  className="inline-flex items-center justify-center mb-6"
+                  style={{
+                    width: 72, height: 72, borderRadius: '50%',
+                    background: 'rgba(76,175,80,0.15)',
+                    border: '2px solid rgba(76,175,80,0.4)',
+                  }}
+                >
+                  <span style={{fontSize: 36, lineHeight: 1}}>&#10003;</span>
+                </div>
+                <h1 className="font-headline text-4xl md:text-5xl font-700 uppercase tracking-wide mb-3">
+                  Order Submitted
+                </h1>
+                <p className="font-body text-base" style={{color: 'rgba(255,255,255,0.6)', maxWidth: 440, margin: '0 auto'}}>
+                  Your order for <strong style={{color: '#fff'}}>{confirmedOrder.dispensaryName}</strong> has been
+                  submitted through LeafLink. Your Highsman rep will confirm and process everything from here.
+                </p>
+              </div>
+
+              {/* Order Summary Card */}
+              <div
+                className="mb-8"
+                style={{
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                }}
+              >
+                <div className="px-6 py-4" style={{borderBottom: '1px solid rgba(255,255,255,0.08)'}}>
+                  <p className="font-headline text-sm font-600 uppercase tracking-[0.15em]" style={{color: 'rgba(255,255,255,0.5)'}}>
+                    Order Summary
+                  </p>
+                </div>
+                <div className="px-6 py-4">
+                  {confirmedOrder.items.map((item, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between py-2.5"
+                      style={{borderBottom: i < confirmedOrder.items.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none'}}
+                    >
+                      <div>
+                        <span className="font-body text-sm font-600" style={{color: '#fff'}}>{item.name}</span>
+                        <span className="font-body text-sm ml-2" style={{color: 'rgba(255,255,255,0.45)'}}>{item.strainName}</span>
+                      </div>
+                      <span className="font-body text-sm" style={{color: 'rgba(255,255,255,0.7)'}}>
+                        {item.qty} units
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div
+                  className="flex items-center justify-between px-6 py-4"
+                  style={{background: 'rgba(255,255,255,0.03)', borderTop: '1px solid rgba(255,255,255,0.1)'}}
+                >
+                  <span className="font-headline text-lg font-600 uppercase tracking-wider">Total</span>
+                  <span className="font-headline text-2xl font-700" style={{color: BRAND.gold}}>
+                    {formatCurrency(confirmedOrder.total)}
+                  </span>
+                </div>
+              </div>
+
+              {/* What Happens Next */}
+              <div
+                className="mb-8"
+                style={{
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: 8,
+                  padding: '20px 24px',
+                }}
+              >
+                <p className="font-headline text-sm font-600 uppercase tracking-[0.15em] mb-4" style={{color: 'rgba(255,255,255,0.5)'}}>
+                  What Happens Next
+                </p>
+                <div className="space-y-3">
+                  <div className="flex gap-3">
+                    <span style={{color: BRAND.gold, fontSize: 16, lineHeight: '1.5', flexShrink: 0}}>1.</span>
+                    <p className="font-body text-sm" style={{color: 'rgba(255,255,255,0.7)', lineHeight: '1.5'}}>
+                      Your order is now in <strong style={{color: '#fff'}}>LeafLink</strong>. Your Highsman sales rep will review
+                      and confirm the order.
+                    </p>
+                  </div>
+                  <div className="flex gap-3">
+                    <span style={{color: BRAND.gold, fontSize: 16, lineHeight: '1.5', flexShrink: 0}}>2.</span>
+                    <p className="font-body text-sm" style={{color: 'rgba(255,255,255,0.7)', lineHeight: '1.5'}}>
+                      All communication, invoicing, and delivery coordination will be handled through LeafLink
+                      from this point forward.
+                    </p>
+                  </div>
+                  <div className="flex gap-3">
+                    <span style={{color: BRAND.gold, fontSize: 16, lineHeight: '1.5', flexShrink: 0}}>3.</span>
+                    <p className="font-body text-sm" style={{color: 'rgba(255,255,255,0.7)', lineHeight: '1.5'}}>
+                      Questions? Reach out to{' '}
+                      <a href="mailto:njsales@highsman.com" style={{color: BRAND.gold}}>njsales@highsman.com</a>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Store Credit Card */}
+              {(confirmedOrder.creditEarned > 0 || confirmedOrder.newCreditBalance > 0) && (
+                <div
+                  className="mb-8"
+                  style={{
+                    background: 'rgba(245,228,0,0.06)',
+                    border: '1px solid rgba(245,228,0,0.25)',
+                    borderRadius: 8,
+                    padding: '20px 24px',
+                  }}
+                >
+                  <div className="flex items-start gap-4">
+                    <span style={{fontSize: 28, lineHeight: 1}}>&#9733;</span>
+                    <div className="flex-1">
+                      <p className="font-headline text-lg font-600 uppercase tracking-wide mb-1" style={{color: BRAND.gold}}>
+                        Store Credit Earned
+                      </p>
+                      {confirmedOrder.creditEarned > 0 && (
+                        <p className="font-body text-sm mb-2" style={{color: 'rgba(255,255,255,0.8)'}}>
+                          You earned <strong style={{color: BRAND.gold}}>${confirmedOrder.creditEarned.toFixed(2)}</strong> in
+                          store credit on this order (0.5% of {formatCurrency(confirmedOrder.total)}).
+                        </p>
+                      )}
+                      <p className="font-body text-sm mb-3" style={{color: 'rgba(255,255,255,0.7)'}}>
+                        Your total credit balance is now{' '}
+                        <strong style={{color: BRAND.gold}}>${confirmedOrder.newCreditBalance.toFixed(2)}</strong>.
+                      </p>
+                      <p className="font-body text-xs" style={{color: 'rgba(255,255,255,0.5)', lineHeight: '1.5'}}>
+                        You&#39;ll receive an email with your updated balance. Redeem your credit anytime as a
+                        store gift card at{' '}
+                        <a
+                          href="https://highsman.com/apparel"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{color: BRAND.gold}}
+                        >
+                          highsman.com/apparel
+                        </a>
+                        .
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* No credit — buyer wasn't identified */}
+              {confirmedOrder.creditEarned === 0 && confirmedOrder.newCreditBalance === 0 && (
+                <div
+                  className="mb-8"
+                  style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: 8,
+                    padding: '16px 20px',
+                  }}
+                >
+                  <p className="font-body text-sm" style={{color: 'rgba(255,255,255,0.5)'}}>
+                    Identify yourself next time before ordering to earn 0.5% store credit on every order,
+                    redeemable at{' '}
+                    <a href="https://highsman.com/apparel" target="_blank" rel="noopener noreferrer" style={{color: BRAND.gold}}>
+                      highsman.com/apparel
+                    </a>
+                    .
+                  </p>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={() => {
+                    setConfirmedOrder(null);
+                    setCart({});
+                    setLeaflinkStatus('idle');
+                    setLeaflinkMessage(null);
+                    setOrderConfirmed(false);
+                    setSampleStrains({});
+                    window.scrollTo({top: 0, behavior: 'smooth'});
+                  }}
+                  className="flex-1 font-headline text-base font-600 uppercase tracking-[0.12em] py-4 cursor-pointer transition-opacity hover:opacity-90"
+                  style={{background: BRAND.gold, color: '#000', border: 'none', borderRadius: 4}}
+                >
+                  Place Another Order
+                </button>
+                <a
+                  href="https://highsman.com/apparel"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 font-headline text-base font-600 uppercase tracking-[0.12em] py-4 text-center cursor-pointer transition-opacity hover:opacity-90"
+                  style={{
+                    background: 'transparent',
+                    color: BRAND.gold,
+                    border: `1px solid ${BRAND.gold}`,
+                    borderRadius: 4,
+                  }}
+                >
+                  Shop Apparel
+                </a>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <footer className="px-6 md:px-10 pt-20 pb-12 text-center" style={{borderTop: '1px solid rgba(255,255,255,0.06)'}}>
+              <img
+                src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Spark_Greatness_White.png?v=1775594430"
+                alt="Spark Greatness™"
+                style={{height: 24, width: 'auto', margin: '0 auto 20px', display: 'block', opacity: 0.6}}
+              />
+              <p className="font-body text-sm mb-2" style={{color: 'rgba(255,255,255,0.6)'}}>
+                <a href="mailto:njsales@highsman.com" style={{color: 'rgba(255,255,255,0.65)'}}>njsales@highsman.com</a>
+              </p>
+              <p className="font-body text-xs" style={{color: 'rgba(255,255,255,0.45)'}}>
+                &copy; {new Date().getFullYear()} Highsman Inc. All rights reserved.
+              </p>
+            </footer>
+          </div>
+        ) : (
+        <>
         {/* ── Top Bar ────────────────────────────────────────────────────── */}
         <nav
           className="flex items-center justify-between px-6 md:px-10 py-3"
@@ -2521,6 +2823,8 @@ export default function NJMenu() {
           >
             <span className="font-body text-sm font-500">{toast}</span>
           </div>
+        )}
+        </>
         )}
       </div>
     </>
