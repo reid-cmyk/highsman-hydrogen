@@ -221,6 +221,20 @@ export default function NJPopups() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [toast, setToast] = useState(false);
 
+  // Staff-change override drawer state. When open, staff edits the pop-up POC
+  // fields on the current dispensary and the save PATCHes Zoho (override semantics).
+  const [staffEditOpen, setStaffEditOpen] = useState(false);
+  const [staffEdit, setStaffEdit] = useState({
+    email: '',
+    link: '',
+    name: '',
+    role: '',
+    phone: '',
+  });
+  const [staffSaving, setStaffSaving] = useState(false);
+  const [staffError, setStaffError] = useState<string | null>(null);
+  const [staffToast, setStaffToast] = useState(false);
+
   // Live Zoho account search — same pattern as /njmenu.
   const accountFetcher = useFetcher<{accounts: ApiAccount[]; error?: string}>();
   useEffect(() => {
@@ -561,6 +575,48 @@ export default function NJPopups() {
     // popups@highsman.com, invites contact + staff, upserts Zoho Contact.
     // eslint-disable-next-line no-console
     console.log('[MOCK BOOK]', {dispensary, slot, contact, calendar: 'popups@highsman.com'});
+
+    // If the staff entered a brand-new POC (MANUAL mode), push the override
+    // back to Zoho so the next booking for this Account uses the same contact.
+    // Fire-and-forget — a failure here shouldn't block the local confirmation.
+    if (mode === 'manual' && contact.source === 'new' && !dispensary.id.startsWith('local-')) {
+      const fd = new FormData();
+      fd.append('accountId', dispensary.id);
+      fd.append('popUpEmail', contact.email);
+      // Leave popUpLink untouched — manual mode is explicitly an email POC.
+      // (If staff wants to set a portal link, they use the "Staff change" drawer.)
+      fd.append('contactName', contact.name);
+      if (contact.role && contact.role !== '—') fd.append('contactRole', contact.role);
+      if (contact.phone) fd.append('contactPhone', contact.phone);
+      fd.append('stampVisit', 'true');
+      fetch('/api/popups-poc', {method: 'POST', body: fd})
+        .then((r) => r.json().catch(() => null))
+        .then((data) => {
+          if (data?.ok) {
+            // Mirror the new values onto the dispensary so the UI reflects Zoho.
+            const today = new Date().toISOString().slice(0, 10);
+            setDispensary((prev) =>
+              prev && prev.id === dispensary.id
+                ? {
+                    ...prev,
+                    popUpEmail: contact.email,
+                    lastVisitDate: today,
+                    contact: {
+                      name: contact.name,
+                      role: contact.role || '—',
+                      email: contact.email,
+                      phone: contact.phone || '—',
+                    },
+                  }
+                : prev,
+            );
+          } else {
+            console.warn('[njpopups] POC write-back failed:', data?.error);
+          }
+        })
+        .catch((err) => console.warn('[njpopups] POC write-back error:', err));
+    }
+
     setBookings((b) => [
       ...b,
       {
@@ -587,6 +643,86 @@ export default function NJPopups() {
     setNewContact({name: '', role: '', email: '', phone: ''});
     setQuery('');
     window.scrollTo({top: 0, behavior: 'smooth'});
+  };
+
+  // Open the "Staff change for pop ups" drawer pre-filled with the current
+  // Zoho values (email POC, portal link, and contact card fields when present).
+  const openStaffEdit = () => {
+    if (!dispensary) return;
+    setStaffEdit({
+      email: dispensary.popUpEmail || dispensary.contact?.email || '',
+      link: dispensary.popUpLink || '',
+      name: dispensary.contact?.name || '',
+      role: dispensary.contact?.role && dispensary.contact.role !== '—' ? dispensary.contact.role : '',
+      phone: dispensary.contact?.phone && dispensary.contact.phone !== '—' ? dispensary.contact.phone : '',
+    });
+    setStaffError(null);
+    setStaffEditOpen(true);
+  };
+
+  // Push the override to Zoho. Override semantics: whatever staff typed wins,
+  // including empty strings (which clear the field). Visit_Date is auto-stamped.
+  const saveStaffEdit = async () => {
+    if (!dispensary) return;
+    setStaffSaving(true);
+    setStaffError(null);
+    try {
+      const fd = new FormData();
+      fd.append('accountId', dispensary.id);
+      fd.append('popUpEmail', staffEdit.email.trim());
+      fd.append('popUpLink', staffEdit.link.trim());
+      if (staffEdit.name.trim()) fd.append('contactName', staffEdit.name.trim());
+      if (staffEdit.role.trim()) fd.append('contactRole', staffEdit.role.trim());
+      if (staffEdit.phone.trim()) fd.append('contactPhone', staffEdit.phone.trim());
+      fd.append('stampVisit', 'true');
+
+      const res = await fetch('/api/popups-poc', {method: 'POST', body: fd});
+      const data = await res.json().catch(() => ({ok: false, error: 'Bad response'}));
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || `Save failed (${res.status})`);
+      }
+
+      // Apply the new values to the local dispensary so the UI reflects reality
+      // without a full refetch.
+      const newEmail = staffEdit.email.trim();
+      const newLink = staffEdit.link.trim();
+      const newName = staffEdit.name.trim();
+      const newRole = staffEdit.role.trim();
+      const newPhone = staffEdit.phone.trim();
+      const today = new Date().toISOString().slice(0, 10);
+
+      setDispensary((prev) => {
+        if (!prev) return prev;
+        const contact =
+          newEmail && newName
+            ? {
+                name: newName,
+                role: newRole || '—',
+                email: newEmail,
+                phone: newPhone || '—',
+              }
+            : newEmail
+              ? prev.contact // keep existing resolved contact if only email changed
+              : null;
+        return {
+          ...prev,
+          popUpEmail: newEmail || null,
+          popUpLink: newLink || null,
+          lastVisitDate: today,
+          contact,
+        };
+      });
+
+      // Reset override-to-manual so the UI re-evaluates which mode to show.
+      setOverrideContact(false);
+      setStaffEditOpen(false);
+      setStaffToast(true);
+      setTimeout(() => setStaffToast(false), 3200);
+    } catch (err: any) {
+      setStaffError(err?.message || 'Could not save. Try again.');
+    } finally {
+      setStaffSaving(false);
+    }
   };
 
   const stepBox: React.CSSProperties = {
@@ -1157,23 +1293,52 @@ export default function NJPopups() {
                 <div style={{color: BRAND.gray, fontSize: 14, marginBottom: 14, wordBreak: 'break-all'}}>
                   {dispensary.popUpLink}
                 </div>
-                <div style={{fontSize: 14, color: BRAND.gray}}>
-                  Wrong channel?{' '}
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 18,
+                    rowGap: 8,
+                    alignItems: 'center',
+                    fontSize: 14,
+                    color: BRAND.gray,
+                  }}
+                >
                   <button
                     type="button"
-                    onClick={() => setOverrideContact(true)}
+                    onClick={openStaffEdit}
                     style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: BRAND.gold,
-                      textDecoration: 'underline',
+                      background: BRAND.gold,
+                      border: `1px solid ${BRAND.gold}`,
+                      color: BRAND.black,
+                      fontFamily: TEKO,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.14em',
+                      fontSize: 14,
+                      padding: '9px 14px',
                       cursor: 'pointer',
-                      font: 'inherit',
-                      padding: 0,
                     }}
                   >
-                    Use an email POC instead for this booking →
+                    Staff change for pop ups — update data here
                   </button>
+                  <span>
+                    Wrong channel?{' '}
+                    <button
+                      type="button"
+                      onClick={() => setOverrideContact(true)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: BRAND.gold,
+                        textDecoration: 'underline',
+                        cursor: 'pointer',
+                        font: 'inherit',
+                        padding: 0,
+                      }}
+                    >
+                      Use an email POC instead for this booking →
+                    </button>
+                  </span>
                 </div>
               </div>
             )}
@@ -1241,23 +1406,53 @@ export default function NJPopups() {
                     </div>
                   ))}
                 </div>
-                <div style={{marginTop: 14, fontSize: 14, color: BRAND.gray}}>
-                  Wrong contact?{' '}
+                <div
+                  style={{
+                    marginTop: 14,
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 18,
+                    rowGap: 8,
+                    alignItems: 'center',
+                    fontSize: 14,
+                    color: BRAND.gray,
+                  }}
+                >
                   <button
                     type="button"
-                    onClick={() => setOverrideContact(true)}
+                    onClick={openStaffEdit}
                     style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: BRAND.gold,
-                      textDecoration: 'underline',
+                      background: BRAND.gold,
+                      border: `1px solid ${BRAND.gold}`,
+                      color: BRAND.black,
+                      fontFamily: TEKO,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.14em',
+                      fontSize: 14,
+                      padding: '9px 14px',
                       cursor: 'pointer',
-                      font: 'inherit',
-                      padding: 0,
                     }}
                   >
-                    Use a different person for this booking →
+                    Staff change for pop ups — update data here
                   </button>
+                  <span>
+                    Wrong contact?{' '}
+                    <button
+                      type="button"
+                      onClick={() => setOverrideContact(true)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: BRAND.gold,
+                        textDecoration: 'underline',
+                        cursor: 'pointer',
+                        font: 'inherit',
+                        padding: 0,
+                      }}
+                    >
+                      Use a different person for this booking →
+                    </button>
+                  </span>
                 </div>
               </div>
             )}
@@ -1338,6 +1533,162 @@ export default function NJPopups() {
                   <strong style={{color: BRAND.gold}}>Auto-sync:</strong> Submitting creates a new Zoho
                   Contact, links it to the Account, and adds them to the Google Calendar invite alongside
                   popups@highsman.com.
+                </div>
+              </div>
+            )}
+            {dispensary && staffEditOpen && (
+              <div
+                style={{
+                  marginTop: 18,
+                  border: `1px solid ${BRAND.gold}`,
+                  padding: '22px 24px',
+                  background: 'linear-gradient(180deg, rgba(245,229,0,0.06), transparent)',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'baseline',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    flexWrap: 'wrap',
+                    marginBottom: 12,
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontFamily: TEKO,
+                        fontSize: 13,
+                        letterSpacing: '0.2em',
+                        color: BRAND.gold,
+                        marginBottom: 6,
+                      }}
+                    >
+                      ● Staff Change · Write Back to Zoho
+                    </div>
+                    <div style={{color: BRAND.white, fontSize: 15}}>
+                      Whatever you type here <strong style={{color: BRAND.gold}}>overwrites</strong> what's
+                      in Zoho for{' '}
+                      <strong style={{color: BRAND.white}}>
+                        {dispensary.name} — {dispensary.city}
+                      </strong>
+                      . Today's date will be stamped as the last visit.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStaffEditOpen(false)}
+                    style={{
+                      background: 'transparent',
+                      border: `1px solid ${BRAND.lineStrong}`,
+                      color: BRAND.gray,
+                      fontFamily: TEKO,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.14em',
+                      fontSize: 12,
+                      padding: '6px 10px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                    gap: 14,
+                  }}
+                >
+                  {(
+                    [
+                      {k: 'email' as const, l: 'Email for Pop Ups', p: 'buyer@dispensary.com', t: 'email'},
+                      {k: 'link' as const, l: 'Booking Portal Link (optional)', p: 'https://portal.dispensary.com/vendor', t: 'url'},
+                      {k: 'name' as const, l: 'Contact Name', p: 'Jane Doe', t: 'text'},
+                      {k: 'role' as const, l: 'Role / Title', p: 'Buyer, GM, Events', t: 'text'},
+                      {k: 'phone' as const, l: 'Phone', p: '(201) 555-0123', t: 'tel'},
+                    ]
+                  ).map((f) => (
+                    <div key={f.k} style={f.k === 'link' ? {gridColumn: '1 / -1'} : {}}>
+                      <label
+                        style={{
+                          display: 'block',
+                          fontFamily: TEKO,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.16em',
+                          fontSize: 13,
+                          color: BRAND.gray,
+                          marginBottom: 6,
+                        }}
+                      >
+                        {f.l}
+                      </label>
+                      <input
+                        type={f.t}
+                        value={staffEdit[f.k]}
+                        onChange={(e) =>
+                          setStaffEdit((p) => ({...p, [f.k]: e.target.value}))
+                        }
+                        placeholder={f.p}
+                        style={{
+                          width: '100%',
+                          background: BRAND.black,
+                          border: `1px solid ${BRAND.lineStrong}`,
+                          color: BRAND.white,
+                          padding: '12px 14px',
+                          fontFamily: BODY,
+                          fontSize: 16,
+                          outline: 'none',
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div style={{marginTop: 12, fontSize: 13, color: BRAND.gray, lineHeight: 1.5}}>
+                  Leave a field blank to <em>clear</em> it in Zoho. If a Link is set, the booking will route
+                  through the portal — otherwise it'll use the email POC.
+                </div>
+                {staffError && (
+                  <div style={{marginTop: 12, color: BRAND.red, fontSize: 14}}>{staffError}</div>
+                )}
+                <div style={{marginTop: 16, display: 'flex', gap: 12, flexWrap: 'wrap'}}>
+                  <button
+                    type="button"
+                    onClick={saveStaffEdit}
+                    disabled={staffSaving}
+                    style={{
+                      background: staffSaving ? BRAND.chip : BRAND.gold,
+                      border: `1px solid ${BRAND.gold}`,
+                      color: BRAND.black,
+                      fontFamily: TEKO,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.16em',
+                      fontSize: 15,
+                      padding: '12px 20px',
+                      cursor: staffSaving ? 'wait' : 'pointer',
+                      opacity: staffSaving ? 0.7 : 1,
+                    }}
+                  >
+                    {staffSaving ? 'Saving to Zoho…' : 'Save & Override Zoho'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStaffEditOpen(false)}
+                    style={{
+                      background: 'transparent',
+                      border: `1px solid ${BRAND.lineStrong}`,
+                      color: BRAND.gray,
+                      fontFamily: TEKO,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.16em',
+                      fontSize: 15,
+                      padding: '12px 20px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Discard
+                  </button>
                 </div>
               </div>
             )}
@@ -1710,6 +2061,30 @@ export default function NJPopups() {
         }}
       >
         ● Pop Up Booked — Calendar Invite Sent
+      </div>
+
+      {/* Staff-edit toast */}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 30,
+          left: '50%',
+          transform: `translateX(-50%) translateY(${staffToast ? '0' : '120%'})`,
+          background: BRAND.white,
+          color: BRAND.black,
+          padding: '18px 28px',
+          fontFamily: TEKO,
+          textTransform: 'uppercase',
+          letterSpacing: '0.12em',
+          fontSize: 20,
+          fontWeight: 700,
+          boxShadow: '0 18px 40px rgba(0,0,0,0.5)',
+          transition: 'transform .4s cubic-bezier(.22,1,.36,1)',
+          zIndex: 100,
+          pointerEvents: 'none',
+        }}
+      >
+        ● Pop Up POC Updated in Zoho
       </div>
     </div>
   );
