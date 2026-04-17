@@ -45,17 +45,23 @@ async function getAccessToken(env: {
   return cachedAccessToken!;
 }
 
-/** Search Zoho CRM Accounts by name (NJ — matches both "NJ" and "New Jersey"). */
+/** Search Zoho CRM Accounts by name. When scope='all', returns all states; otherwise NJ only. */
 async function searchAccounts(
   query: string,
   accessToken: string,
-): Promise<Array<{id: string; name: string; city: string | null; phone: string | null}>> {
-  // Use contains matching and OR on both state formats
+  scope: 'nj' | 'all' = 'nj',
+): Promise<Array<{id: string; name: string; city: string | null; state: string | null; phone: string | null}>> {
   const url = new URL('https://www.zohoapis.com/crm/v7/Accounts/search');
-  url.searchParams.set(
-    'criteria',
-    `((Account_Name:contains:${query})and((Billing_State:equals:NJ)or(Billing_State:equals:New Jersey)))`,
-  );
+  if (scope === 'all') {
+    // All accounts — no state filter
+    url.searchParams.set('criteria', `(Account_Name:contains:${query})`);
+  } else {
+    // NJ only — matches both "NJ" and "New Jersey"
+    url.searchParams.set(
+      'criteria',
+      `((Account_Name:contains:${query})and((Billing_State:equals:NJ)or(Billing_State:equals:New Jersey)))`,
+    );
+  }
   url.searchParams.set('fields', 'Account_Name,Billing_City,Billing_State,Phone');
   url.searchParams.set('per_page', '15');
 
@@ -78,6 +84,7 @@ async function searchAccounts(
     id: acct.id,
     name: acct.Account_Name,
     city: acct.Billing_City || null,
+    state: acct.Billing_State || null,
     phone: acct.Phone || null,
   }));
 }
@@ -96,7 +103,7 @@ async function createAccountWithContact(
     zip: string;
   },
   accessToken: string,
-): Promise<{id: string; name: string; city: string | null; phone: string | null}> {
+): Promise<{id: string; name: string; city: string | null; state: string | null; phone: string | null}> {
   // 1. Create the Account
   const accountRes = await fetch('https://www.zohoapis.com/crm/v7/Accounts', {
     method: 'POST',
@@ -175,7 +182,8 @@ async function createAccountWithContact(
   return {
     id: accountId,
     name: data.dispensaryName,
-    city: null,
+    city: data.city || null,
+    state: data.state || null,
     phone: data.phone || null,
   };
 }
@@ -187,6 +195,7 @@ async function createAccountWithContact(
 export async function loader({request, context}: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const query = (url.searchParams.get('q') || '').trim();
+  const scope = url.searchParams.get('scope') === 'all' ? 'all' as const : 'nj' as const;
 
   // Require at least 2 characters
   if (query.length < 2) {
@@ -216,7 +225,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       ZOHO_REFRESH_TOKEN: refreshToken,
     });
 
-    const accounts = await searchAccounts(query, accessToken);
+    const accounts = await searchAccounts(query, accessToken, scope);
     return json({accounts}, {
       headers: {
         'Cache-Control': 'public, max-age=300', // cache 5 min
@@ -277,6 +286,7 @@ export async function action({request, context}: ActionFunctionArgs) {
         id: `local-${Date.now()}`,
         name: dispensaryName,
         city: city || null,
+        state: state || null,
         phone: phone || null,
       },
       note: 'CRM not configured — account saved locally.',
