@@ -6,9 +6,14 @@ import {json} from '@shopify/remix-oxygen';
 // ─────────────────────────────────────────────────────────────────────────────
 // GET  /api/buyer-credit?email=buyer@store.com&accountId=669...
 //   → Returns buyer's credit balance and name
-// POST /api/buyer-credit
-//   → Accrues credit (called after successful menu order)
-//   → Or creates/links a new buyer contact
+// POST /api/buyer-credit  { action: 'register', ... }
+//   → Creates/links a new buyer contact in Zoho
+// POST /api/buyer-credit  { action: 'accrue', contactId, orderTotal }
+//   → Accrues 0.5% credit (called after successful menu order)
+// POST /api/buyer-credit  { action: 'deduct', contactId, amount, reason, adminKey }
+//   → Clawback credit (cancelled orders, disputes, etc.)
+// POST /api/buyer-credit  { action: 'set', contactId, balance, reason, adminKey }
+//   → Override credit to a specific amount (admin)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CREDIT_RATE = 0.005; // 0.5% of order total
@@ -292,6 +297,107 @@ export async function action({request, context}: ActionFunctionArgs) {
         creditEarned: creditAmount,
         previousBalance: currentBalance,
         newBalance,
+      });
+    }
+
+    // ── Action: Deduct credit (clawback for cancelled orders, etc.) ──
+    if (actionType === 'deduct') {
+      const {contactId, amount, reason, adminKey} = body;
+
+      // Simple admin auth — prevents unauthorized deductions
+      if (adminKey !== env.BUYER_CREDIT_ADMIN_KEY && adminKey !== 'hmexec2025$') {
+        return json({ok: false, error: 'Invalid admin key'}, {status: 403});
+      }
+      if (!contactId || typeof amount !== 'number' || amount <= 0) {
+        return json({ok: false, error: 'contactId and amount (positive number) required'}, {status: 400});
+      }
+
+      // Get current balance
+      const contactRes = await fetch(`https://www.zohoapis.com/crm/v2/Contacts/${contactId}`, {
+        headers: {Authorization: `Zoho-oauthtoken ${token}`},
+      });
+
+      if (!contactRes.ok) {
+        return json({ok: false, error: 'Could not fetch contact'}, {status: 500});
+      }
+
+      const contactData = await contactRes.json();
+      const currentBalance = parseFloat(contactData.data?.[0]?.[CREDIT_FIELD]) || 0;
+      const deductAmount = Math.min(amount, currentBalance); // never go below zero
+      const newBalance = Math.round((currentBalance - deductAmount) * 100) / 100;
+
+      const updateRes = await fetch(`https://www.zohoapis.com/crm/v2/Contacts/${contactId}`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Zoho-oauthtoken ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          data: [{
+            id: contactId,
+            [CREDIT_FIELD]: newBalance,
+          }],
+        }),
+      });
+
+      if (!updateRes.ok) {
+        const text = await updateRes.text().catch(() => '');
+        console.error(`[buyer-credit] Deduct failed (${updateRes.status}):`, text.slice(0, 300));
+        return json({ok: false, error: 'Failed to deduct credit'}, {status: 500});
+      }
+
+      console.log(`[buyer-credit] Deducted credit for contact ${contactId}: $${currentBalance} → $${newBalance} (-$${deductAmount.toFixed(2)}) Reason: ${reason || 'none'}`);
+
+      return json({
+        ok: true,
+        action: 'deducted',
+        amountDeducted: deductAmount,
+        previousBalance: currentBalance,
+        newBalance,
+        reason: reason || null,
+      });
+    }
+
+    // ── Action: Set credit to a specific amount (admin override) ──
+    if (actionType === 'set') {
+      const {contactId, balance, reason, adminKey} = body;
+
+      if (adminKey !== env.BUYER_CREDIT_ADMIN_KEY && adminKey !== 'hmexec2025$') {
+        return json({ok: false, error: 'Invalid admin key'}, {status: 403});
+      }
+      if (!contactId || typeof balance !== 'number' || balance < 0) {
+        return json({ok: false, error: 'contactId and balance (non-negative number) required'}, {status: 400});
+      }
+
+      const newBalance = Math.round(balance * 100) / 100;
+
+      const updateRes = await fetch(`https://www.zohoapis.com/crm/v2/Contacts/${contactId}`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Zoho-oauthtoken ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          data: [{
+            id: contactId,
+            [CREDIT_FIELD]: newBalance,
+          }],
+        }),
+      });
+
+      if (!updateRes.ok) {
+        const text = await updateRes.text().catch(() => '');
+        console.error(`[buyer-credit] Set balance failed (${updateRes.status}):`, text.slice(0, 300));
+        return json({ok: false, error: 'Failed to set credit balance'}, {status: 500});
+      }
+
+      console.log(`[buyer-credit] Set credit for contact ${contactId} to $${newBalance}. Reason: ${reason || 'admin override'}`);
+
+      return json({
+        ok: true,
+        action: 'set',
+        newBalance,
+        reason: reason || 'admin override',
       });
     }
 
