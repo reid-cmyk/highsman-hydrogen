@@ -943,16 +943,19 @@ export default function NJMenu() {
     setLeaflinkStatus('sending');
     setLeaflinkMessage(null);
 
+    const payload = {
+      dispensaryName: selectedAccount.name,
+      dispensaryId: selectedAccount.id,
+      dispensaryLicense: selectedAccount.license || undefined,
+      items: [...items, ...sampleItems],
+      notes: orderNote.trim() || undefined,
+    };
+    console.log('[njmenu] Submitting to LeafLink:', JSON.stringify(payload, null, 2));
+
     fetch('/api/leaflink-order', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        dispensaryName: selectedAccount.name,
-        dispensaryId: selectedAccount.id,
-        dispensaryLicense: selectedAccount.license || undefined,
-        items: [...items, ...sampleItems],
-        notes: orderNote.trim() || undefined,
-      }),
+      body: JSON.stringify(payload),
     })
       .then((res) => res.json())
       .then((data: any) => {
@@ -969,12 +972,15 @@ export default function NJMenu() {
           }
         } else {
           setLeaflinkStatus('error');
-          setLeaflinkMessage('There was an issue processing your order. Your rep has been notified.');
+          // Show actual error temporarily for debugging
+          const detail = data.error || 'Unknown error';
+          console.error('[njmenu] LeafLink order error:', detail);
+          setLeaflinkMessage(`Order issue: ${detail}`);
         }
       })
       .catch((err) => {
         setLeaflinkStatus('error');
-        setLeaflinkMessage('There was a connection issue. Your rep has been notified.');
+        setLeaflinkMessage(`Connection issue: ${err.message || err}`);
         console.error('[njmenu] LeafLink submission error:', err);
       });
   }, [selectedAccount, cartItems, orderNote, earnedSamples, sampleStrains]);
