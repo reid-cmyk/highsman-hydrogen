@@ -264,7 +264,7 @@ const SAMPLE_RULES: SampleRule[] = [
     id: 'sample-hit-stick-single',
     productId: 'hit-sticks-single',
     label: 'Hit Stick Single',
-    unit: '1 single unit per case',
+    unit: '1 single unit per 24 ordered',
     every: 1,
     color: BRAND.gold,
     icon: 'local_fire_department',
@@ -280,7 +280,7 @@ const SAMPLE_RULES: SampleRule[] = [
     id: 'sample-power-pack',
     productId: 'hit-sticks-5pack',
     label: 'Hit Stick Individual',
-    unit: '1 individual unit per Power Pack case',
+    unit: '1 individual unit per 6 ordered',
     every: 1,
     color: BRAND.gold,
     icon: 'local_fire_department',
@@ -296,7 +296,7 @@ const SAMPLE_RULES: SampleRule[] = [
     id: 'sample-fly-high-tin',
     productId: 'fly-high-tins',
     label: 'Hit Stick Individual (Fly High Tin)',
-    unit: '1 individual unit per Tin case',
+    unit: '1 individual unit per 6 ordered',
     every: 1,
     color: '#FF6B35',
     icon: 'workspace_premium',
@@ -859,8 +859,12 @@ export default function NJMenu() {
   const clearCart = useCallback(() => setCart({}), []);
 
   const cartItems = useMemo(() => Object.values(cart), [cart]);
+  // Cart count in total units (not cases)
   const cartCount = useMemo(
-    () => cartItems.reduce((sum, i) => sum + i.cases, 0),
+    () => cartItems.reduce((sum, i) => {
+      const product = PRODUCT_LINES.find((p) => p.id === i.productId);
+      return sum + i.cases * (product?.caseSize ?? 1);
+    }, 0),
     [cartItems],
   );
 
@@ -897,20 +901,19 @@ export default function NJMenu() {
   const submitToLeafLink = useCallback(() => {
     if (!selectedAccount || cartItems.length === 0) return;
 
-    // Build line items for LeafLink API
-    // Send quantity as NUMBER OF CASES and price as CASE PRICE
-    // LeafLink products are configured with wholesale_price = case price
+    // Build line items for LeafLink API — send individual units with per-unit price
     const items = cartItems.map((item) => {
       const product = PRODUCT_LINES.find((p) => p.id === item.productId);
       if (!product) return null;
       const strain = product.strains.find((s) => s.name === item.strainName);
       if (!strain?.sku) return null;
-      const casePrice = applyDiscount(product.casePrice, product.discount);
-      console.log(`[njmenu] Cart item: ${product.name} ${product.subtitle} - ${strain.name}, SKU=${strain.sku}, cases=${item.cases}, casePrice=${casePrice}`);
+      const unitPrice = applyDiscount(product.wholesale, product.discount);
+      const totalUnits = item.cases * product.caseSize;
+      console.log(`[njmenu] Cart item: ${product.name} ${product.subtitle} - ${strain.name}, SKU=${strain.sku}, units=${totalUnits}, unitPrice=${unitPrice}`);
       return {
         sku: strain.sku,
-        quantity: item.cases, // number of cases — matches LeafLink's unit = case
-        unitPrice: casePrice, // case price (e.g. $168 for Hit Stick Singles case of 24)
+        quantity: totalUnits, // individual units (e.g. 24 Hit Sticks = 1 case worth)
+        unitPrice, // per-unit wholesale price (e.g. $7 per Hit Stick)
       };
     }).filter(Boolean);
 
@@ -1003,11 +1006,9 @@ export default function NJMenu() {
       lines.push(
         `${product.name} ${product.subtitle} — ${item.strainName}${skuTag}`,
       );
+      const totalUnits = item.cases * product.caseSize;
       lines.push(
-        `  ${item.cases} case${item.cases > 1 ? 's' : ''} × ${formatCurrency(unitPrice)}/case = ${formatCurrency(lineTotal)}`,
-      );
-      lines.push(
-        `  (${item.cases * product.caseSize} units @ ${formatCurrency(applyDiscount(product.wholesale, product.discount))}/unit)`,
+        `  ${totalUnits} units × ${formatCurrency(applyDiscount(product.wholesale, product.discount))}/unit = ${formatCurrency(lineTotal)}`,
       );
       if (product.discount) {
         lines.push(`  💰 ${product.discount.label} applied`);
@@ -1716,7 +1717,7 @@ export default function NJMenu() {
                       {product.name} <span style={{color: BRAND.gold}}>{product.subtitle}</span>
                     </h2>
                     <p className="font-body text-sm mt-2" style={{color: 'rgba(255,255,255,0.6)'}}>
-                      {product.weight} &middot; {product.format} &middot; Case of {product.caseSize}
+                      {product.weight} &middot; {product.format} &middot; Min. order {product.caseSize} units
                     </p>
                   </div>
 
@@ -1750,7 +1751,7 @@ export default function NJMenu() {
                     <div className="flex flex-wrap gap-x-10 gap-y-2 mb-8 pl-0 md:pl-[120px]">
                       {[
                         {l: 'Unit', v: formatCurrency(discountedWholesale)},
-                        {l: `Case of ${product.caseSize}`, v: formatCurrency(discountedCase)},
+                        {l: `${product.caseSize} Units`, v: formatCurrency(discountedCase)},
                         {l: 'RRP', v: formatCurrency(product.rrp)},
                         {l: 'Margin', v: `${marginPct}%`, gold: true},
                       ].map((d) => (
@@ -1779,14 +1780,14 @@ export default function NJMenu() {
                         className="font-headline text-sm font-600 uppercase tracking-[0.1em] px-5 py-2.5 cursor-pointer transition-opacity hover:opacity-70"
                         style={{background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.65)'}}
                       >
-                        −1 Each
+                        −{product.caseSize} Each
                       </button>
                       <button
                         onClick={() => product.strains.forEach((s) => { if (isInStock(s.sku)) updateCart(product.id, s.name, 1); })}
                         className="font-headline text-sm font-600 uppercase tracking-[0.1em] px-5 py-2.5 cursor-pointer transition-opacity hover:opacity-90"
                         style={{background: BRAND.gold, border: 'none', color: '#000'}}
                       >
-                        +1 Each
+                        +{product.caseSize} Each
                       </button>
                     </div>
 
@@ -1800,7 +1801,7 @@ export default function NJMenu() {
                       <span>THC</span>
                       <span>SKU</span>
                       <span>Avail.</span>
-                      <span className="text-right">Cases</span>
+                      <span className="text-right">Units</span>
                     </div>
 
                     {/* Strain Rows */}
@@ -1852,7 +1853,7 @@ export default function NJMenu() {
                                 </span>
                                 {cases > 0 && (
                                   <span className="font-body text-xs font-500 mt-1 block" style={{color: BRAND.gold}}>
-                                    {cases * product.caseSize} units &middot; {formatCurrency(discountedCase * cases)}
+                                    {cases * product.caseSize} units &middot; {formatCurrency(discountedCase * cases)} total
                                   </span>
                                 )}
                               </div>
@@ -1871,9 +1872,9 @@ export default function NJMenu() {
                               {/* Available cases */}
                               <span className="font-body text-xs font-600" style={{color: outOfStock ? '#ff6b6b' : 'rgba(255,255,255,0.7)'}}>
                                 {(() => {
-                                  const avail = getAvailableCases(strain.sku, product.caseSize);
-                                  if (avail === null) return '—';
-                                  return avail === 0 ? '0' : avail.toLocaleString();
+                                  if (!strain.sku || !(strain.sku in inventory)) return '—';
+                                  const units = inventory[strain.sku];
+                                  return units === 0 ? '0' : units.toLocaleString();
                                 })()}
                               </span>
                               {/* Stepper or Out of Stock */}
@@ -1900,20 +1901,17 @@ export default function NJMenu() {
                                 >
                                   −
                                 </button>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  value={cases}
-                                  onChange={(e) => setCases(product.id, strain.name, parseInt(e.target.value, 10) || 0)}
-                                  className="font-headline text-base font-600 text-center"
+                                <span
+                                  className="font-headline text-base font-600 text-center inline-flex items-center justify-center"
                                   style={{
-                                    width: 44, height: 36,
+                                    width: 52, height: 36,
                                     background: 'rgba(255,255,255,0.04)',
                                     border: cases > 0 ? `1px solid ${BRAND.gold}50` : '1px solid rgba(255,255,255,0.08)',
                                     color: cases > 0 ? BRAND.gold : 'rgba(255,255,255,0.6)',
-                                    outline: 'none',
                                   }}
-                                />
+                                >
+                                  {cases * product.caseSize}
+                                </span>
                                 <button
                                   onClick={() => updateCart(product.id, strain.name, 1)}
                                   className="stepper-btn"
@@ -1949,10 +1947,12 @@ export default function NJMenu() {
                               <div className="flex items-center gap-0 flex-shrink-0 ml-3">
                                 <button onClick={() => updateCart(product.id, strain.name, -1)} disabled={cases === 0}
                                   className="stepper-btn" style={{background: cases > 0 ? 'rgba(255,255,255,0.08)' : 'transparent', color: cases > 0 ? '#fff' : 'rgba(255,255,255,0.35)', width: 40, height: 40, fontSize: 18}}>−</button>
-                                <input type="number" min={0} value={cases}
-                                  onChange={(e) => setCases(product.id, strain.name, parseInt(e.target.value, 10) || 0)}
-                                  className="font-headline text-sm font-600 text-center"
-                                  style={{width: 44, height: 40, background: 'rgba(255,255,255,0.04)', border: cases > 0 ? `1px solid ${BRAND.gold}50` : '1px solid rgba(255,255,255,0.08)', color: cases > 0 ? BRAND.gold : 'rgba(255,255,255,0.6)', outline: 'none'}} />
+                                <span
+                                  className="font-headline text-sm font-600 text-center inline-flex items-center justify-center"
+                                  style={{width: 52, height: 40, background: 'rgba(255,255,255,0.04)', border: cases > 0 ? `1px solid ${BRAND.gold}50` : '1px solid rgba(255,255,255,0.08)', color: cases > 0 ? BRAND.gold : 'rgba(255,255,255,0.6)'}}
+                                >
+                                  {cases * product.caseSize}
+                                </span>
                                 <button onClick={() => updateCart(product.id, strain.name, 1)}
                                   className="stepper-btn" style={{background: cases > 0 ? BRAND.gold : 'rgba(255,255,255,0.08)', color: cases > 0 ? '#000' : '#fff', width: 40, height: 40, fontSize: 18}}>+</button>
                               </div>
@@ -1982,7 +1982,7 @@ export default function NJMenu() {
               </h2>
               <div className="flex items-center gap-6">
                 <span className="font-body text-sm" style={{color: 'rgba(255,255,255,0.6)'}}>
-                  {cartCount} case{cartCount !== 1 ? 's' : ''}
+                  {cartCount} unit{cartCount !== 1 ? 's' : ''}
                 </span>
                 {cartCount > 0 && (
                   <button
@@ -2024,7 +2024,7 @@ export default function NJMenu() {
                           <div className="flex items-center gap-0">
                             <button onClick={() => updateCart(item.productId, item.strainName, -1)}
                               className="stepper-btn" style={{width: 36, height: 36, fontSize: 16, background: 'rgba(255,255,255,0.06)', color: '#fff'}}>−</button>
-                            <span className="font-headline text-sm font-600 w-8 text-center">{item.cases}</span>
+                            <span className="font-headline text-sm font-600 w-10 text-center">{item.cases * (product?.caseSize ?? 1)}</span>
                             <button onClick={() => updateCart(item.productId, item.strainName, 1)}
                               className="stepper-btn" style={{width: 36, height: 36, fontSize: 16, background: 'rgba(255,255,255,0.06)', color: '#fff'}}>+</button>
                           </div>
@@ -2187,7 +2187,7 @@ export default function NJMenu() {
           >
             <div className="max-w-5xl mx-auto flex items-center justify-between px-6 md:px-10 py-3">
               <span className="font-headline text-base font-600">
-                {cartCount} case{cartCount !== 1 ? 's' : ''} &middot;{' '}
+                {cartCount} unit{cartCount !== 1 ? 's' : ''} &middot;{' '}
                 <span style={{color: BRAND.gold}}>{formatCurrency(cartTotal)}</span>
               </span>
               <button

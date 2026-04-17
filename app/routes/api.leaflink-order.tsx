@@ -341,13 +341,12 @@ async function createLeafLinkOrder(
   },
   apiKey: string,
 ): Promise<{success: boolean; orderNumber?: string; error?: string}> {
-  // Build regular line items — quantity = number of cases, price = case price
-  // LeafLink products are configured with wholesale_price = case price
+  // Build regular line items — quantity = individual units, price = per-unit wholesale
   const regularItems = params.lineItems
     .filter(item => !item.isSample && SKU_TO_PRODUCT_ID[item.sku])
     .map(item => {
       const productId = SKU_TO_PRODUCT_ID[item.sku];
-      console.log(`[api/leaflink-order] Line item: SKU=${item.sku} → Product=${productId}, qty=${item.quantity} cases, price=$${item.unitPrice}/case`);
+      console.log(`[api/leaflink-order] Line item: SKU=${item.sku} → Product=${productId}, qty=${item.quantity} units, price=$${item.unitPrice}/unit`);
       return {
         product: productId,
         quantity: item.quantity.toString(),
