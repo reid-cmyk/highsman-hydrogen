@@ -193,7 +193,7 @@ function fmtDate(iso: string) {
 //                    date before this is bookable even if the lead time clears.
 //   MIN_LEAD_DAYS — bookings must be at least this many days ahead so POC +
 //                    rep have time to confirm logistics/portal paperwork.
-//   WINDOW_WEEKS  — how many weeks of Thu/Fri/Sat/Sun shifts the picker shows.
+//   WINDOW_WEEKS  — how many weeks of Fri/Sat shifts the picker shows.
 //                    ~2 months of rolling visibility; each week the last week
 //                    drops off and a new one appears at the far end.
 // Enforcement is layered: picker gray-out, Book button disabled, handleBook
@@ -223,9 +223,6 @@ function shiftLabel(k: string) {
     ({
       'sat-mat': 'Sat 1–3 PM',
       'sat-late': 'Sat 4–6 PM',
-      'sun-mat': 'Sun 1–3 PM',
-      'sun-late': 'Sun 4–6 PM',
-      'thu-main': 'Thu 3–7 PM',
       'fri-main': 'Fri 3–7 PM',
     } as Record<string, string>)[k] || k
   );
@@ -234,11 +231,11 @@ type Shift = {key: string; label: string; capacity: number};
 type Day = {iso: string; dow: string; date: Date; shifts: Shift[]};
 type Week = {weekIndex: number; weekLabel: string; days: Day[]};
 
-// Builds a rolling calendar of Thu/Fri/Sat/Sun shift days across WINDOW_WEEKS
-// consecutive weeks, anchored on the first week whose Sunday falls at or after
-// today's lead-time floor AND at or after LAUNCH_DATE. This gives staff ~2
-// months of forward visibility so they can plan paired weekend shifts and
-// catch early-bird bookings before dispensaries lock their calendars.
+// Builds a rolling calendar of Fri/Sat shift days across WINDOW_WEEKS
+// consecutive weeks, anchored on the first week whose Saturday falls at or
+// after today's lead-time floor AND at or after LAUNCH_DATE. This gives staff
+// ~2 months of forward visibility so they can plan weekend Spark Team closer
+// bookings before dispensaries lock their calendars.
 function buildWeeks(): Week[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -251,41 +248,42 @@ function buildWeeks(): Week[] {
   const firstViable =
     earliestByLead.getTime() > launchDate.getTime() ? earliestByLead : launchDate;
 
-  // Snap back to the Thursday of the week containing firstViable. If it's
-  // Mon–Wed, hop forward to that week's Thursday instead (no shift days
-  // before then).
-  const startThu = new Date(firstViable);
-  const fvDow = firstViable.getDay(); // 0=Sun .. 6=Sat
-  if (fvDow === 0) {
-    startThu.setDate(firstViable.getDate() - 3); // Sun → prev Thu
-  } else if (fvDow >= 4) {
-    startThu.setDate(firstViable.getDate() - (fvDow - 4)); // Thu/Fri/Sat → that week's Thu
+  // Snap to the Friday of the week containing firstViable. Day indices:
+  // Sun=0, Mon=1, Tue=2, Wed=3, Thu=4, Fri=5, Sat=6.
+  //   Fri (5)      → that Friday (offset 0).
+  //   Sat (6)      → that week's Friday (offset -1, already past / grayed).
+  //   Sun (0)      → next week's Friday (offset +5, because Fri/Sat of this
+  //                  week are already gone).
+  //   Mon–Thu (1–4)→ this week's Friday (offset +5-dow → +4..+1).
+  const startFri = new Date(firstViable);
+  const fvDow = firstViable.getDay();
+  if (fvDow === 5) {
+    // Already Friday — no shift.
+  } else if (fvDow === 6) {
+    startFri.setDate(firstViable.getDate() - 1); // Sat → that week's Fri
+  } else if (fvDow === 0) {
+    startFri.setDate(firstViable.getDate() + 5); // Sun → next Fri
   } else {
-    startThu.setDate(firstViable.getDate() + (4 - fvDow)); // Mon/Tue/Wed → that week's Thu
+    startFri.setDate(firstViable.getDate() + (5 - fvDow)); // Mon/Tue/Wed/Thu → this week's Fri
   }
 
   const weeks: Week[] = [];
   for (let w = 0; w < WINDOW_WEEKS; w++) {
     const days: Day[] = [];
-    for (let i = 0; i < 4; i++) {
-      const d = new Date(startThu);
-      d.setDate(startThu.getDate() + w * 7 + i);
+    for (let i = 0; i < 2; i++) {
+      const d = new Date(startFri);
+      d.setDate(startFri.getDate() + w * 7 + i);
       const iso = isoLocal(d);
       const didx = d.getDay();
       let shifts: Shift[] = [];
-      if (didx === 4 || didx === 5) {
+      if (didx === 5) {
         shifts = [
-          {
-            key: didx === 4 ? 'thu-main' : 'fri-main',
-            label: '3:00 – 7:00 PM',
-            capacity: 2,
-          },
+          {key: 'fri-main', label: '3:00 – 7:00 PM', capacity: 2},
         ];
-      } else if (didx === 6 || didx === 0) {
-        const p = didx === 6 ? 'sat' : 'sun';
+      } else if (didx === 6) {
         shifts = [
-          {key: `${p}-mat`, label: '1:00 – 3:00 PM', capacity: 2},
-          {key: `${p}-late`, label: '4:00 – 6:00 PM', capacity: 2},
+          {key: 'sat-mat', label: '1:00 – 3:00 PM', capacity: 2},
+          {key: 'sat-late', label: '4:00 – 6:00 PM', capacity: 2},
         ];
       }
       days.push({
@@ -299,7 +297,7 @@ function buildWeeks(): Week[] {
       month: 'short',
       day: 'numeric',
     });
-    const endLbl = days[3].date.toLocaleDateString('en-US', {
+    const endLbl = days[days.length - 1].date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
     });
@@ -398,8 +396,8 @@ export default function NJPopups() {
   const [staffError, setStaffError] = useState<string | null>(null);
   const [staffToast, setStaffToast] = useState(false);
 
-  // Drive-time guardrail (weekend same-day rule): if staff tries to book a
-  // second pop-up on a Sat/Sun at a dispensary more than 40 min driving from
+  // Drive-time guardrail (Saturday same-day rule): if staff tries to book a
+  // second pop-up on a Saturday at a dispensary more than 40 min driving from
   // the already-booked stop on that day, block the Book button. We compute
   // drive time server-side via Google Routes API (/api/route-time).
   const [driveCheck, setDriveCheck] = useState<
@@ -414,8 +412,8 @@ export default function NJPopups() {
   // Every NJ pop-up is run by either the North Jersey rep (Newark hub) or
   // South Jersey rep (Collingswood hub). The server figures out which rep
   // covers the dispensary based on drive time from each hub, and blocks
-  // bookings outside coverage. Weekend doubleheader exception: if the same
-  // rep already has an earlier booking that Sat/Sun, the second stop can
+  // bookings outside coverage. Saturday doubleheader exception: if the same
+  // rep already has an earlier booking that Saturday, the second stop can
   // be within MAX_DOUBLEHEADER_HOP_MIN of the earlier dispensary instead.
   const [repCheck, setRepCheck] = useState<
     | {status: 'idle'}
@@ -645,13 +643,11 @@ export default function NJPopups() {
   const SHIFT_ORDER: Record<string, number> = {
     'sat-mat': 0,
     'sat-late': 1,
-    'sun-mat': 2,
-    'sun-late': 3,
   };
   const weekendStops: Stop[] = useMemo(() => {
     const stops: Stop[] = [];
     bookings
-      .filter((b) => /^sat-|^sun-/.test(b.shiftKey))
+      .filter((b) => /^sat-/.test(b.shiftKey))
       .forEach((b) => {
         stops.push({
           name: b.name,
@@ -663,7 +659,7 @@ export default function NJPopups() {
           pending: false,
         });
       });
-    if (slot && /^sat-|^sun-/.test(slot.shiftKey) && dispensary) {
+    if (slot && /^sat-/.test(slot.shiftKey) && dispensary) {
       stops.push({
         name: dispensary.name,
         city: dispensary.city,
@@ -1042,15 +1038,14 @@ export default function NJPopups() {
   }, [mappableStops, dailyRoutes, routePolylines, routeCacheKey]);
   const totalDrive = driveLegs.reduce((a, b) => a + b, 0);
 
-  // ── Weekend same-day drive-time guardrail ───────────────────────────────
-  // Find any existing booking on the same weekend day at a different dispensary
+  // ── Saturday same-day drive-time guardrail ──────────────────────────────
+  // Find any existing booking on the same Saturday at a different dispensary
   // with known coordinates. If there is one, we need to verify the drive time
   // between the two stops before allowing this booking.
   const sameDayConflict = useMemo(() => {
     if (!slot || !dispensary) return null;
-    const isWeekend =
-      slot.shiftKey.startsWith('sat-') || slot.shiftKey.startsWith('sun-');
-    if (!isWeekend) return null;
+    const isSaturday = slot.shiftKey.startsWith('sat-');
+    if (!isSaturday) return null;
     return (
       bookings.find(
         (b) =>
@@ -1161,9 +1156,8 @@ export default function NJPopups() {
 
     // Look for a same-day earlier booking at a different dispensary with
     // coords — that unlocks the doubleheader exception server-side.
-    const isWeekend =
-      slot.shiftKey.startsWith('sat-') || slot.shiftKey.startsWith('sun-');
-    if (isWeekend) {
+    const isSaturday = slot.shiftKey.startsWith('sat-');
+    if (isSaturday) {
       const anchor = bookings.find(
         (b) =>
           b.date === slot.date &&
@@ -1694,10 +1688,10 @@ export default function NJPopups() {
         </h1>
         <p style={{maxWidth: 720, margin: '0 auto', color: BRAND.gray, fontSize: 18, lineHeight: 1.55}}>
           Staff tool for scheduling Highsman pop ups at licensed NJ dispensaries.{' '}
-          <strong style={{color: BRAND.white, fontWeight: 600}}>Thursday &amp; Friday 3–7 PM</strong> (max 2
-          simultaneous statewide),{' '}
+          <strong style={{color: BRAND.white, fontWeight: 600}}>Friday 3–7 PM</strong> (max 2
+          simultaneous statewide) and{' '}
           <strong style={{color: BRAND.white, fontWeight: 600}}>
-            Saturday &amp; Sunday 1–3 PM and 4–6 PM
+            Saturday 1–3 PM and 4–6 PM
           </strong>{' '}
           shifts. Confirmed bookings auto-sync to Google Calendar and{' '}
           <span style={{color: BRAND.gold}}>popups@highsman.com</span>.
@@ -1942,12 +1936,12 @@ export default function NJPopups() {
             <div style={{flex: 1}}>
               <h2 style={h2}>Pick Time Slot</h2>
               <p style={kicker}>
-                All shifts cap at 2 simultaneous bookings statewide. Sat/Sun splits into matinee (1–3 PM)
+                All shifts cap at 2 simultaneous bookings statewide. Saturday splits into matinee (1–3 PM)
                 and late (4–6 PM) — each with its own 2-spot cap. Pop-ups officially launch{' '}
                 <strong>Fri May 8</strong>; bookings require a {MIN_LEAD_DAYS}-day minimum lead time. Window
                 rolls forward weekly so you can always plan ~2 months out. Dispensaries must sit within{' '}
                 {MAX_SOLO_DRIVE_MIN} min of Newark (North Jersey Rep) or Collingswood (South Jersey Rep) — auto-assigned
-                on pick. Weekend doubleheaders allow up to {MAX_DOUBLEHEADER_HOP_MIN} min between stops.
+                on pick. Saturday doubleheaders allow up to {MAX_DOUBLEHEADER_HOP_MIN} min between stops.
               </p>
             </div>
             <div style={stepStatus(step2Done)}>{step2Done ? 'Locked In' : 'Pending'}</div>
@@ -1962,10 +1956,10 @@ export default function NJPopups() {
               }}
             >
               {[
-                {l: 'Thu & Fri', v: '3:00 – 7:00 PM', s: 'Max 2 simultaneous · NJ statewide'},
-                {l: 'Sat & Sun · Matinee', v: '1:00 – 3:00 PM', s: 'Max 2 simultaneous · route-planned'},
-                {l: 'Sat & Sun · Late', v: '4:00 – 6:00 PM', s: 'Max 2 simultaneous · drive-time checked'},
-                {l: 'Lead Time', v: '72 Hours Min', s: 'For gear + ops prep'},
+                {l: 'Friday', v: '3:00 – 7:00 PM', s: 'Max 2 simultaneous · NJ statewide'},
+                {l: 'Saturday · Matinee', v: '1:00 – 3:00 PM', s: 'Max 2 simultaneous · route-planned'},
+                {l: 'Saturday · Late', v: '4:00 – 6:00 PM', s: 'Max 2 simultaneous · drive-time checked'},
+                {l: 'Lead Time', v: '5 Days Min', s: 'For gear + ops prep'},
               ].map((r) => (
                 <div
                   key={r.l}
