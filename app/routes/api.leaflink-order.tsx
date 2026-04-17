@@ -529,12 +529,12 @@ export async function action({request, context}: ActionFunctionArgs) {
     // LeafLink requires a valid customer field — orders can't be created without one
     if (!customer) {
       console.warn(`[api/leaflink-order] No customer match for "${dispensaryName}" — sending email notification`);
-      sendFailureNotification(env, {
+      await sendFailureNotification(env, {
         dispensaryName,
         reason: `Customer "${dispensaryName}" not found in LeafLink — order needs manual entry`,
         items: eligibleItems,
         notes,
-      }).catch(() => {});
+      });
 
       return json({
         ok: true,
@@ -563,12 +563,12 @@ export async function action({request, context}: ActionFunctionArgs) {
       console.warn(
         `[api/leaflink-order] Customer ${customer.name} (${customer.id}) not linked to seller — falling back to email`,
       );
-      sendFailureNotification(env, {
+      await sendFailureNotification(env, {
         dispensaryName,
         reason: `Customer "${customer.name}" (ID: ${customer.id}) exists in LeafLink but is not linked to Canfections NJ as a buyer. Order needs manual entry. Please add them as a customer in LeafLink.`,
         items: eligibleItems,
         notes,
-      }).catch(() => {});
+      });
 
       return json({
         ok: true,
@@ -593,12 +593,12 @@ export async function action({request, context}: ActionFunctionArgs) {
       });
     } else {
       // Order creation failed for another reason — send failure notification
-      sendFailureNotification(env, {
+      await sendFailureNotification(env, {
         dispensaryName,
         reason: result.error || 'LeafLink order creation failed',
         items: eligibleItems,
         notes,
-      }).catch(() => {}); // fire-and-forget
+      });
 
       return json({
         ok: false,
@@ -609,12 +609,12 @@ export async function action({request, context}: ActionFunctionArgs) {
     console.error('[api/leaflink-order] Unexpected error:', err.message);
 
     // Unexpected error — send failure notification
-    sendFailureNotification(env, {
+    await sendFailureNotification(env, {
       dispensaryName,
       reason: `Unexpected error: ${err.message || 'Unknown'}`,
       items: eligibleItems,
       notes,
-    }).catch(() => {}); // fire-and-forget
+    });
 
     return json({
       ok: false,
