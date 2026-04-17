@@ -268,6 +268,10 @@ async function createLeafLinkOrder(
         amount: item.unitPrice.toFixed(2),
         currency: 'USD',
       },
+      sale_price: {
+        amount: item.unitPrice.toFixed(2),
+        currency: 'USD',
+      },
     }));
 
   if (leaflinkLineItems.length === 0) {
