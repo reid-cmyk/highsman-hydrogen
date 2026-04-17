@@ -235,6 +235,18 @@ export default function NJPopups() {
   const [staffError, setStaffError] = useState<string | null>(null);
   const [staffToast, setStaffToast] = useState(false);
 
+  // Drive-time guardrail (weekend same-day rule): if staff tries to book a
+  // second pop-up on a Sat/Sun at a dispensary more than 40 min driving from
+  // the already-booked stop on that day, block the Book button. We compute
+  // drive time server-side via Google Routes API (/api/route-time).
+  const [driveCheck, setDriveCheck] = useState<
+    | {status: 'idle'}
+    | {status: 'checking'; otherName: string}
+    | {status: 'ok'; minutes: number; text: string; otherName: string}
+    | {status: 'blocked'; minutes: number; text: string; otherName: string}
+    | {status: 'error'; message: string; otherName: string}
+  >({status: 'idle'});
+
   // Live Zoho account search — same pattern as /njmenu.
   const accountFetcher = useFetcher<{accounts: ApiAccount[]; error?: string}>();
   useEffect(() => {
@@ -503,11 +515,106 @@ export default function NJPopups() {
   }, [mappableStops]);
   const totalDrive = driveLegs.reduce((a, b) => a + b, 0);
 
+  // ── Weekend same-day drive-time guardrail ───────────────────────────────
+  // Find any existing booking on the same weekend day at a different dispensary
+  // with known coordinates. If there is one, we need to verify the drive time
+  // between the two stops before allowing this booking.
+  const sameDayConflict = useMemo(() => {
+    if (!slot || !dispensary) return null;
+    const isWeekend =
+      slot.shiftKey.startsWith('sat-') || slot.shiftKey.startsWith('sun-');
+    if (!isWeekend) return null;
+    return (
+      bookings.find(
+        (b) =>
+          b.date === slot.date &&
+          b.dispId !== dispensary.id &&
+          typeof b.lat === 'number' &&
+          typeof b.lng === 'number',
+      ) || null
+    );
+  }, [slot, dispensary, bookings]);
+
+  useEffect(() => {
+    if (
+      !sameDayConflict ||
+      !dispensary ||
+      typeof dispensary.lat !== 'number' ||
+      typeof dispensary.lng !== 'number' ||
+      !slot
+    ) {
+      setDriveCheck({status: 'idle'});
+      return;
+    }
+
+    // Hour map for departure (NJ local): *-mat = 13, *-late = 16.
+    // Route direction = earlier stop → later stop. Departure time = later shift.
+    const hourFor = (k: string) =>
+      k.endsWith('-mat') ? 13 : k.endsWith('-late') ? 16 : 15;
+    const currentHour = hourFor(slot.shiftKey);
+    const otherHour = hourFor(sameDayConflict.shiftKey);
+    const currentIsLater = currentHour >= otherHour;
+    const origin = currentIsLater
+      ? {lat: sameDayConflict.lat as number, lng: sameDayConflict.lng as number}
+      : {lat: dispensary.lat, lng: dispensary.lng};
+    const destination = currentIsLater
+      ? {lat: dispensary.lat, lng: dispensary.lng}
+      : {lat: sameDayConflict.lat as number, lng: sameDayConflict.lng as number};
+    const laterHour = Math.max(currentHour, otherHour);
+    const departureDateTime = `${slot.date}T${String(laterHour).padStart(2, '0')}:00:00`;
+
+    const otherName = sameDayConflict.name;
+    setDriveCheck({status: 'checking', otherName});
+
+    const fd = new FormData();
+    fd.append('originLat', String(origin.lat));
+    fd.append('originLng', String(origin.lng));
+    fd.append('destLat', String(destination.lat));
+    fd.append('destLng', String(destination.lng));
+    fd.append('departureDateTime', departureDateTime);
+
+    let cancelled = false;
+    fetch('/api/route-time', {method: 'POST', body: fd})
+      .then((r) => r.json().catch(() => null))
+      .then((data) => {
+        if (cancelled) return;
+        if (!data?.ok) {
+          setDriveCheck({
+            status: 'error',
+            message: data?.error || 'Could not verify drive time.',
+            otherName,
+          });
+          return;
+        }
+        const minutes = Number(data.minutes) || 0;
+        const text = String(data.text || `${minutes} min`);
+        if (minutes > 40) {
+          setDriveCheck({status: 'blocked', minutes, text, otherName});
+        } else {
+          setDriveCheck({status: 'ok', minutes, text, otherName});
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setDriveCheck({
+          status: 'error',
+          message: err?.message || 'Could not verify drive time.',
+          otherName,
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sameDayConflict, dispensary, slot]);
+
+  const driveBlocked = driveCheck.status === 'blocked';
+
   const step1Done = !!dispensary;
   const step2Done = !!slot;
   // Link mode is "done" as soon as a slot is picked — the contact handoff happens in the portal.
   const step3Done = mode === 'link' ? !!slot : !!contact;
-  const step5Done = step1Done && step2Done && step3Done;
+  const step5Done = step1Done && step2Done && step3Done && !driveBlocked;
 
   // Fire a Zoho Event creation for every booking so the Account's Activities
   // timeline shows the pop-up history + upcoming stops on the Zoho calendar.
@@ -558,6 +665,8 @@ export default function NJPopups() {
 
   const handleBook = () => {
     if (!dispensary || !slot) return;
+    // Hard block: same-day weekend booking > 40 min drive from the existing stop.
+    if (driveBlocked) return;
 
     // LINK MODE — hand off to the dispensary's own booking portal.
     // Copy a prefilled payload to clipboard so the staffer can paste it into the
@@ -1991,6 +2100,88 @@ export default function NJPopups() {
                 </div>
               ))}
             </div>
+
+            {/* ── Drive-time guardrail banner (weekend same-day rule) ── */}
+            {driveCheck.status !== 'idle' && (
+              <div
+                style={{
+                  marginTop: 20,
+                  padding: '16px 20px',
+                  border: `1px solid ${
+                    driveCheck.status === 'blocked'
+                      ? BRAND.red
+                      : driveCheck.status === 'ok'
+                        ? 'rgba(46,204,113,0.5)'
+                        : BRAND.lineStrong
+                  }`,
+                  background:
+                    driveCheck.status === 'blocked'
+                      ? 'rgba(220,53,69,0.08)'
+                      : driveCheck.status === 'ok'
+                        ? 'rgba(46,204,113,0.06)'
+                        : 'rgba(255,255,255,0.03)',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: TEKO,
+                    fontSize: 14,
+                    letterSpacing: '0.18em',
+                    textTransform: 'uppercase',
+                    color:
+                      driveCheck.status === 'blocked'
+                        ? BRAND.red
+                        : driveCheck.status === 'ok'
+                          ? BRAND.green
+                          : BRAND.gray,
+                    marginBottom: 6,
+                  }}
+                >
+                  {driveCheck.status === 'checking' && 'Checking drive time…'}
+                  {driveCheck.status === 'ok' && '✓ Route cleared'}
+                  {driveCheck.status === 'blocked' && '✕ Drive too long — booking blocked'}
+                  {driveCheck.status === 'error' && 'Drive-time check unavailable'}
+                </div>
+                <div
+                  style={{
+                    fontFamily: BODY,
+                    fontSize: 15,
+                    color: BRAND.white,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {driveCheck.status === 'checking' && (
+                    <>
+                      Verifying drive time between {driveCheck.otherName} and{' '}
+                      {dispensary?.name} via Google Maps…
+                    </>
+                  )}
+                  {driveCheck.status === 'ok' && (
+                    <>
+                      <strong>{driveCheck.text}</strong> between{' '}
+                      {driveCheck.otherName} and {dispensary?.name}. One rep can
+                      run both stops.
+                    </>
+                  )}
+                  {driveCheck.status === 'blocked' && (
+                    <>
+                      Google Maps says <strong>{driveCheck.text}</strong> drive
+                      between {driveCheck.otherName} and {dispensary?.name} —
+                      over the 40-minute limit for same-day weekend pop-ups.
+                      Pick a closer dispensary, a different day, or move one of
+                      the bookings.
+                    </>
+                  )}
+                  {driveCheck.status === 'error' && (
+                    <>
+                      Couldn't verify drive time right now
+                      {driveCheck.message ? ` (${driveCheck.message})` : ''}.
+                      Double-check the route manually before confirming.
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div style={{marginTop: 24, display: 'flex', gap: 14, flexWrap: 'wrap'}}>
               <button
