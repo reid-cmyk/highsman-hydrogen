@@ -24,6 +24,7 @@ interface MerchItem {
   maxQty: number;
   step?: number; // Order increment (defaults to 1). Use for items sold in packs (e.g., stickers in 10s).
   tag?: string;
+  imageZoom?: number; // Multiplier for tight-cropped tube/bag shots with heavy source whitespace (defaults to 1).
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -31,11 +32,10 @@ interface MerchItem {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CATEGORIES = [
-  {id: 'pos-displays', label: 'POS Displays', icon: 'storefront'},
+  {id: 'pos-displays', label: 'POP Display Stands', icon: 'storefront'},
   {id: 'display-packaging', label: 'Display Packaging', icon: 'inventory_2'},
   {id: 'cutouts', label: 'Cutouts', icon: 'person'},
   {id: 'banners', label: 'Banners', icon: 'flag'},
-  {id: 'signs', label: 'Signs', icon: 'display_settings'},
   {id: 'stickers', label: 'Stickers', icon: 'sell'},
   {id: 'footballs', label: 'Footballs', icon: 'sports_football'},
 ];
@@ -68,6 +68,7 @@ const MERCH_ITEMS: MerchItem[] = [
     image: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/HM_HitStick_Infused_White__800x360_1.png?v=1776435918',
     maxQty: 5,
     tag: 'New',
+    imageZoom: 3.2,
   },
   {
     id: 'display-hitstick-powerpack',
@@ -95,6 +96,7 @@ const MERCH_ITEMS: MerchItem[] = [
     image: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Untitled_design_14.png?v=1776436052',
     maxQty: 5,
     tag: 'New',
+    imageZoom: 1.9,
   },
   {
     id: 'display-groundgame-bag',
@@ -155,11 +157,11 @@ const MERCH_ITEMS: MerchItem[] = [
     tag: 'Popular',
   },
 
-  // ── In-Store Stand Up Signs ────────────────────────────────────────────────
+  // ── Stand-Up Sign Displays (grouped under POP Display Stands) ──────────────
   {
     id: 'sign-all-products',
-    name: 'All Products Display Stand',
-    category: 'signs',
+    name: 'All Products Stand Up Sign',
+    category: 'pos-displays',
     description: 'Full product lineup on a single countertop stand. Showcases Hit Sticks, Pre-Rolls, and Ground Game with all five flavors.',
     dimensions: '7.87 × 9.84 in',
     image: '/retail/all-product-sign.png',
@@ -169,7 +171,7 @@ const MERCH_ITEMS: MerchItem[] = [
   {
     id: 'sign-hitstick',
     name: 'Hit Stick Stand Up Sign',
-    category: 'signs',
+    category: 'pos-displays',
     description: 'Countertop display sign featuring the Hit Stick Dispose-A-Bowl with all five flavor badges.',
     dimensions: '7 × 7.76 in',
     image: '/retail/hitstick-sign.png',
@@ -179,7 +181,7 @@ const MERCH_ITEMS: MerchItem[] = [
   {
     id: 'sign-preroll',
     name: 'Pre-Roll Stand Up Sign',
-    category: 'signs',
+    category: 'pos-displays',
     description: 'Countertop display sign featuring the Triple Threat 1.2g Pre-Roll with all five flavor badges.',
     dimensions: '7 × 7.76 in',
     image: '/retail/preroll-sign.png',
@@ -189,7 +191,7 @@ const MERCH_ITEMS: MerchItem[] = [
   {
     id: 'sign-groundgame',
     name: 'Ground Game Stand Up Sign',
-    category: 'signs',
+    category: 'pos-displays',
     description: 'Countertop display sign featuring Ground Game 7g Ready-to-Roll Flower with all five flavor badges.',
     dimensions: '7 × 7.76 in',
     image: '/retail/groundgame-sign.png',
@@ -1106,12 +1108,15 @@ export default function RetailMerchStore() {
 
                       {/* Image */}
                       <div className="relative bg-white overflow-hidden" style={{aspectRatio: '4/3'}}>
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          className="w-full h-full object-contain p-5 group-hover:scale-[1.04] transition-transform duration-300"
-                          loading="lazy"
-                        />
+                        <div className="absolute inset-0 group-hover:scale-[1.04] transition-transform duration-300 flex items-center justify-center">
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className={`w-full h-full object-contain ${item.imageZoom ? 'p-0' : 'p-5'}`}
+                            style={item.imageZoom ? {transform: `scale(${item.imageZoom})`, transformOrigin: 'center'} : undefined}
+                            loading="lazy"
+                          />
+                        </div>
                       </div>
 
                       {/* Content */}
