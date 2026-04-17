@@ -45,12 +45,34 @@ async function getAccessToken(env: {
   return cachedAccessToken!;
 }
 
+/** Account shape returned to the client. Pop-up custom fields are included when present. */
+type AccountResult = {
+  id: string;
+  name: string;
+  city: string | null;
+  state: string | null;
+  street: string | null;
+  phone: string | null;
+  // Pop-up coordination custom fields (Highsman-specific on Accounts)
+  popUpEmail: string | null;
+  popUpLink: string | null;
+  lastVisitDate: string | null;
+};
+
+/** Read a custom field from a Zoho record tolerating multiple API-name conventions. */
+function readCustom(acct: any, ...candidates: string[]): string | null {
+  for (const key of candidates) {
+    if (acct[key] !== undefined && acct[key] !== null && acct[key] !== '') return acct[key];
+  }
+  return null;
+}
+
 /** Search Zoho CRM Accounts by name. When scope='all', returns all states; otherwise NJ only. */
 async function searchAccounts(
   query: string,
   accessToken: string,
   scope: 'nj' | 'all' = 'nj',
-): Promise<Array<{id: string; name: string; city: string | null; state: string | null; phone: string | null}>> {
+): Promise<AccountResult[]> {
   const url = new URL('https://www.zohoapis.com/crm/v7/Accounts/search');
   if (scope === 'all') {
     // All accounts — use 'word' param for broad name matching (Zoho doesn't
@@ -63,7 +85,21 @@ async function searchAccounts(
       `((Account_Name:contains:${query})and((Billing_State:equals:NJ)or(Billing_State:equals:New Jersey)))`,
     );
   }
-  url.searchParams.set('fields', 'Account_Name,Billing_City,Billing_State,Phone');
+  // Include custom pop-up fields. Zoho API names typically use underscores in place of
+  // spaces in the UI label — best-guess names plus a couple of variants for tolerance.
+  url.searchParams.set(
+    'fields',
+    [
+      'Account_Name',
+      'Billing_Street',
+      'Billing_City',
+      'Billing_State',
+      'Phone',
+      'Email_for_Pop_Ups',
+      'Link_for_Pop_Ups',
+      'Data_Collection_Last_Visit_Date',
+    ].join(','),
+  );
   url.searchParams.set('per_page', '15');
 
   const res = await fetch(url.toString(), {
@@ -81,13 +117,50 @@ async function searchAccounts(
   }
 
   const data = await res.json();
-  return (data.data || []).map((acct: any) => ({
+  return (data.data || []).map((acct: any): AccountResult => ({
     id: acct.id,
     name: acct.Account_Name,
     city: acct.Billing_City || null,
     state: acct.Billing_State || null,
+    street: acct.Billing_Street || null,
     phone: acct.Phone || null,
+    popUpEmail: readCustom(acct, 'Email_for_Pop_Ups', 'Email_For_Pop_Ups', 'Email_for_PopUps'),
+    popUpLink: readCustom(acct, 'Link_for_Pop_Ups', 'Link_For_Pop_Ups', 'Link_for_PopUps'),
+    lastVisitDate: readCustom(acct, 'Data_Collection_Last_Visit_Date', 'Data_Collection_Last_Visit'),
   }));
+}
+
+/** Look up a single Contact by email. Used to resolve `Email for Pop Ups` → full contact record. */
+async function findContactByEmail(
+  email: string,
+  accessToken: string,
+): Promise<{id: string; name: string; email: string; phone: string | null; title: string | null} | null> {
+  const url = new URL('https://www.zohoapis.com/crm/v7/Contacts/search');
+  url.searchParams.set('criteria', `(Email:equals:${email})`);
+  url.searchParams.set('fields', 'First_Name,Last_Name,Email,Phone,Title,Mobile');
+  url.searchParams.set('per_page', '1');
+
+  const res = await fetch(url.toString(), {
+    headers: {Authorization: `Zoho-oauthtoken ${accessToken}`},
+  });
+
+  if (res.status === 204) return null;
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Zoho contact search failed (${res.status}): ${text.slice(0, 300)}`);
+  }
+
+  const data = await res.json();
+  const c = (data.data || [])[0];
+  if (!c) return null;
+  const name = [c.First_Name, c.Last_Name].filter(Boolean).join(' ').trim();
+  return {
+    id: c.id,
+    name: name || c.Email,
+    email: c.Email,
+    phone: c.Phone || c.Mobile || null,
+    title: c.Title || null,
+  };
 }
 
 /** Create a new Account in Zoho CRM and attach a Contact. */
@@ -196,19 +269,46 @@ async function createAccountWithContact(
 export async function loader({request, context}: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const query = (url.searchParams.get('q') || '').trim();
+  const contactEmail = (url.searchParams.get('contactEmail') || '').trim();
   const scope = url.searchParams.get('scope') === 'all' ? 'all' as const : 'nj' as const;
-
-  // Require at least 2 characters
-  if (query.length < 2) {
-    return json({accounts: []}, {
-      headers: {'Cache-Control': 'no-store'},
-    });
-  }
 
   const env = context.env as any;
   const clientId = env.ZOHO_CLIENT_ID;
   const clientSecret = env.ZOHO_CLIENT_SECRET;
   const refreshToken = env.ZOHO_REFRESH_TOKEN;
+
+  // Dedicated contact-by-email lookup (for resolving `Email for Pop Ups` → full Contact)
+  if (contactEmail) {
+    if (!clientId || !clientSecret || !refreshToken) {
+      return json({contact: null, error: 'CRM not configured'}, {
+        headers: {'Cache-Control': 'no-store'},
+      });
+    }
+    try {
+      const accessToken = await getAccessToken({
+        ZOHO_CLIENT_ID: clientId,
+        ZOHO_CLIENT_SECRET: clientSecret,
+        ZOHO_REFRESH_TOKEN: refreshToken,
+      });
+      const contact = await findContactByEmail(contactEmail, accessToken);
+      return json({contact}, {
+        headers: {'Cache-Control': 'public, max-age=300'},
+      });
+    } catch (err: any) {
+      console.error('[api/accounts] Contact lookup error:', err.message);
+      return json({contact: null, error: 'Contact lookup unavailable'}, {
+        status: 200,
+        headers: {'Cache-Control': 'no-store'},
+      });
+    }
+  }
+
+  // Require at least 2 characters for account search
+  if (query.length < 2) {
+    return json({accounts: []}, {
+      headers: {'Cache-Control': 'no-store'},
+    });
+  }
 
   // If Zoho credentials aren't set, return empty (graceful degradation)
   if (!clientId || !clientSecret || !refreshToken) {

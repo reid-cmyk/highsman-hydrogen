@@ -38,7 +38,10 @@ const LOGO_WHITE = `${CDN}/Highsman_Logo_White.png?v=1775594430`;
 const SPARK_WHITE = `${CDN}/Spark_Greatness_White.png?v=1775594430`;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MOCK DATA — NJ Dispensaries (replace with Zoho /api/accounts in next pass)
+// DISPENSARY DATA — local seed for map lat/lng; Zoho fields resolved live per selection.
+// When a dispensary is picked, the UI hits /api/accounts for the Zoho Account custom
+// fields (Email for Pop Ups, Link for Pop Ups, Data Collection Last Visit Date), then
+// hits /api/accounts?contactEmail=... to resolve the POC Contact record.
 // ─────────────────────────────────────────────────────────────────────────────
 type Dispensary = {
   id: string;
@@ -46,32 +49,40 @@ type Dispensary = {
   city: string;
   lat: number;
   lng: number;
-  zoho: {name: string; role: string; email: string; phone: string} | null;
+  // Seeded pop-up fields — used when demoing offline; real values come from Zoho.
+  popUpEmail?: string | null;
+  popUpLink?: string | null;
+  lastVisitDate?: string | null;
+  // Resolved contact (populated after Contact-by-email lookup).
+  contact?: {name: string; role: string; email: string; phone: string} | null;
 };
 
+// Seed list — a few marked as Link mode, a few Email mode, a few Fallback so all three
+// UX branches are testable without live Zoho. Swap to live `/api/accounts?scope=nj` search
+// once Zoho accounts are populated with the pop-up fields.
 const DISPENSARIES: Dispensary[] = [
-  {id: 'bot-eh', name: 'The Botanist', city: 'Egg Harbor Twp', lat: 39.4136, lng: -74.5866, zoho: {name: 'Marcus Hale', role: 'GM', email: 'mhale@botanist.com', phone: '(609) 555-0182'}},
-  {id: 'cur-bm', name: 'Curaleaf', city: 'Bellmawr', lat: 39.8654, lng: -75.0935, zoho: {name: 'Priya Shah', role: 'Buyer', email: 'pshah@curaleaf.com', phone: '(856) 555-0411'}},
-  {id: 'cur-bd', name: 'Curaleaf', city: 'Bordentown', lat: 40.1462, lng: -74.7118, zoho: null},
-  {id: 'cur-ep', name: 'Curaleaf', city: 'Edgewater Park', lat: 40.0376, lng: -74.9115, zoho: {name: 'Derrick Jones', role: 'Assistant GM', email: 'djones@curaleaf.com', phone: '(609) 555-0633'}},
-  {id: 'ayr-et', name: 'Garden State Dispensary', city: 'Eatontown', lat: 40.2962, lng: -74.0568, zoho: {name: 'Lauren Kim', role: 'Lead Budtender', email: 'lauren@gsdispensary.com', phone: '(732) 555-0217'}},
-  {id: 'ayr-un', name: 'Garden State Dispensary', city: 'Union', lat: 40.6976, lng: -74.2632, zoho: null},
-  {id: 'ayr-wd', name: 'Garden State Dispensary', city: 'Woodbridge', lat: 40.5576, lng: -74.2846, zoho: {name: 'Tanya Ruiz', role: 'Store Manager', email: 'truiz@gsdispensary.com', phone: '(732) 555-0944'}},
-  {id: 'zen-el', name: 'Zen Leaf', city: 'Elizabeth', lat: 40.6640, lng: -74.2107, zoho: null},
-  {id: 'zen-la', name: 'Zen Leaf', city: 'Lawrence', lat: 40.2971, lng: -74.7293, zoho: {name: 'Chris Bauer', role: 'Buyer', email: 'cbauer@zenleaf.com', phone: '(609) 555-0770'}},
-  {id: 'zen-np', name: 'Zen Leaf', city: 'Neptune', lat: 40.1987, lng: -74.0278, zoho: {name: 'Morgan Ellis', role: 'GM', email: 'mellis@zenleaf.com', phone: '(732) 555-0356'}},
-  {id: 'rise-bl', name: 'RISE', city: 'Bloomfield', lat: 40.8068, lng: -74.1854, zoho: null},
-  {id: 'rise-pt', name: 'RISE', city: 'Paterson', lat: 40.9168, lng: -74.1718, zoho: {name: 'Jalen Carter', role: 'Floor Lead', email: 'jcarter@risecannabis.com', phone: '(973) 555-0129'}},
-  {id: 'rise-pm', name: 'RISE', city: 'Paramus', lat: 40.9445, lng: -74.0754, zoho: {name: 'Kelsey Nguyen', role: 'Store Manager', email: 'kelsey@risecannabis.com', phone: '(201) 555-0877'}},
-  {id: 'col-dp', name: 'Columbia Care', city: 'Deptford', lat: 39.8412, lng: -75.1080, zoho: null},
-  {id: 'col-vl', name: 'Columbia Care', city: 'Vineland', lat: 39.4864, lng: -75.0263, zoho: {name: 'Ray Patel', role: 'GM', email: 'rpatel@col-care.com', phone: '(856) 555-0602'}},
-  {id: 'apo-pb', name: 'The Apothecarium', city: 'Phillipsburg', lat: 40.6934, lng: -75.1904, zoho: {name: 'Nina DeLuca', role: 'Buyer', email: 'nina@apothecarium.com', phone: '(908) 555-0198'}},
-  {id: 'apo-mw', name: 'The Apothecarium', city: 'Maplewood', lat: 40.7315, lng: -74.2735, zoho: null},
-  {id: 'apo-ld', name: 'The Apothecarium', city: 'Lodi', lat: 40.8820, lng: -74.0835, zoho: {name: 'Sam Okafor', role: 'Assistant GM', email: 'sam@apothecarium.com', phone: '(973) 555-0450'}},
-  {id: 'got-jc', name: 'Gotham', city: 'Jersey City', lat: 40.7178, lng: -74.0431, zoho: {name: 'Alex Romano', role: 'GM', email: 'alex@gothamdispensary.com', phone: '(201) 555-0322'}},
-  {id: 'val-rt', name: 'Valley Wellness', city: 'Raritan', lat: 40.5712, lng: -74.6335, zoho: null},
-  {id: 'asc-mc', name: 'Ascend', city: 'Montclair', lat: 40.8162, lng: -74.2029, zoho: {name: 'Brooke Lin', role: 'Floor Lead', email: 'blin@ascendcannabis.com', phone: '(973) 555-0811'}},
-  {id: 'asc-rp', name: 'Ascend', city: 'Rochelle Park', lat: 40.9064, lng: -74.0741, zoho: null},
+  {id: 'bot-eh', name: 'The Botanist', city: 'Egg Harbor Twp', lat: 39.4136, lng: -74.5866, popUpEmail: 'mhale@botanist.com', lastVisitDate: '2026-02-12', contact: {name: 'Marcus Hale', role: 'GM', email: 'mhale@botanist.com', phone: '(609) 555-0182'}},
+  {id: 'cur-bm', name: 'Curaleaf', city: 'Bellmawr', lat: 39.8654, lng: -75.0935, popUpLink: 'https://curaleaf.com/vendor-events/book', lastVisitDate: '2026-03-04'},
+  {id: 'cur-bd', name: 'Curaleaf', city: 'Bordentown', lat: 40.1462, lng: -74.7118},
+  {id: 'cur-ep', name: 'Curaleaf', city: 'Edgewater Park', lat: 40.0376, lng: -74.9115, popUpLink: 'https://curaleaf.com/vendor-events/book', lastVisitDate: '2026-03-28'},
+  {id: 'ayr-et', name: 'Garden State Dispensary', city: 'Eatontown', lat: 40.2962, lng: -74.0568, popUpEmail: 'lauren@gsdispensary.com', lastVisitDate: '2026-01-22', contact: {name: 'Lauren Kim', role: 'Lead Budtender', email: 'lauren@gsdispensary.com', phone: '(732) 555-0217'}},
+  {id: 'ayr-un', name: 'Garden State Dispensary', city: 'Union', lat: 40.6976, lng: -74.2632},
+  {id: 'ayr-wd', name: 'Garden State Dispensary', city: 'Woodbridge', lat: 40.5576, lng: -74.2846, popUpEmail: 'truiz@gsdispensary.com', lastVisitDate: '2026-03-15', contact: {name: 'Tanya Ruiz', role: 'Store Manager', email: 'truiz@gsdispensary.com', phone: '(732) 555-0944'}},
+  {id: 'zen-el', name: 'Zen Leaf', city: 'Elizabeth', lat: 40.6640, lng: -74.2107},
+  {id: 'zen-la', name: 'Zen Leaf', city: 'Lawrence', lat: 40.2971, lng: -74.7293, popUpEmail: 'cbauer@zenleaf.com', lastVisitDate: '2026-02-26', contact: {name: 'Chris Bauer', role: 'Buyer', email: 'cbauer@zenleaf.com', phone: '(609) 555-0770'}},
+  {id: 'zen-np', name: 'Zen Leaf', city: 'Neptune', lat: 40.1987, lng: -74.0278, popUpEmail: 'mellis@zenleaf.com', lastVisitDate: '2026-03-19', contact: {name: 'Morgan Ellis', role: 'GM', email: 'mellis@zenleaf.com', phone: '(732) 555-0356'}},
+  {id: 'rise-bl', name: 'RISE', city: 'Bloomfield', lat: 40.8068, lng: -74.1854},
+  {id: 'rise-pt', name: 'RISE', city: 'Paterson', lat: 40.9168, lng: -74.1718, popUpLink: 'https://risecannabis.com/vendor-portal/book-event', lastVisitDate: '2026-03-08'},
+  {id: 'rise-pm', name: 'RISE', city: 'Paramus', lat: 40.9445, lng: -74.0754, popUpLink: 'https://risecannabis.com/vendor-portal/book-event', lastVisitDate: '2026-03-30'},
+  {id: 'col-dp', name: 'Columbia Care', city: 'Deptford', lat: 39.8412, lng: -75.1080},
+  {id: 'col-vl', name: 'Columbia Care', city: 'Vineland', lat: 39.4864, lng: -75.0263, popUpEmail: 'rpatel@col-care.com', lastVisitDate: '2026-02-02', contact: {name: 'Ray Patel', role: 'GM', email: 'rpatel@col-care.com', phone: '(856) 555-0602'}},
+  {id: 'apo-pb', name: 'The Apothecarium', city: 'Phillipsburg', lat: 40.6934, lng: -75.1904, popUpEmail: 'nina@apothecarium.com', lastVisitDate: '2026-03-11', contact: {name: 'Nina DeLuca', role: 'Buyer', email: 'nina@apothecarium.com', phone: '(908) 555-0198'}},
+  {id: 'apo-mw', name: 'The Apothecarium', city: 'Maplewood', lat: 40.7315, lng: -74.2735},
+  {id: 'apo-ld', name: 'The Apothecarium', city: 'Lodi', lat: 40.8820, lng: -74.0835, popUpEmail: 'sam@apothecarium.com', lastVisitDate: '2026-03-22', contact: {name: 'Sam Okafor', role: 'Assistant GM', email: 'sam@apothecarium.com', phone: '(973) 555-0450'}},
+  {id: 'got-jc', name: 'Gotham', city: 'Jersey City', lat: 40.7178, lng: -74.0431, popUpEmail: 'alex@gothamdispensary.com', lastVisitDate: '2026-04-02', contact: {name: 'Alex Romano', role: 'GM', email: 'alex@gothamdispensary.com', phone: '(201) 555-0322'}},
+  {id: 'val-rt', name: 'Valley Wellness', city: 'Raritan', lat: 40.5712, lng: -74.6335},
+  {id: 'asc-mc', name: 'Ascend', city: 'Montclair', lat: 40.8162, lng: -74.2029, popUpEmail: 'blin@ascendcannabis.com', lastVisitDate: '2026-03-17', contact: {name: 'Brooke Lin', role: 'Floor Lead', email: 'blin@ascendcannabis.com', phone: '(973) 555-0811'}},
+  {id: 'asc-rp', name: 'Ascend', city: 'Rochelle Park', lat: 40.9064, lng: -74.0741},
 ];
 
 type Booking = {dispId: string; date: string; shiftKey: string};
@@ -195,9 +206,55 @@ export default function NJPopups() {
     document.head.appendChild(link);
   }, []);
 
+  // Resolution modes, driven by Zoho Account custom fields:
+  //   'link'   → `Link for Pop Ups` is set; booking goes via dispensary portal, skip contact card
+  //   'email'  → `Email for Pop Ups` resolved to a Contact; auto-fill the card
+  //   'manual' → neither set, or user chose to override; collect contact inline
+  const mode: 'link' | 'email' | 'manual' = useMemo(() => {
+    if (!dispensary) return 'manual';
+    if (dispensary.popUpLink && !overrideContact) return 'link';
+    if (dispensary.contact && !overrideContact) return 'email';
+    return 'manual';
+  }, [dispensary, overrideContact]);
+
+  // When a dispensary has `popUpEmail` but no resolved contact yet, fetch it from Zoho.
+  // In the seeded demo data, `contact` is already present so this no-ops; against live
+  // Zoho, this populates the POC card from the Email-for-Pop-Ups field.
+  useEffect(() => {
+    if (!dispensary || dispensary.contact || !dispensary.popUpEmail) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/accounts?contactEmail=${encodeURIComponent(dispensary.popUpEmail!)}`);
+        if (!res.ok) return;
+        const data = (await res.json()) as {contact: {name: string; email: string; phone: string | null; title: string | null} | null};
+        if (cancelled || !data.contact) return;
+        setDispensary((prev) =>
+          prev && prev.id === dispensary.id
+            ? {
+                ...prev,
+                contact: {
+                  name: data.contact!.name,
+                  role: data.contact!.title || '—',
+                  email: data.contact!.email,
+                  phone: data.contact!.phone || '—',
+                },
+              }
+            : prev,
+        );
+      } catch (err) {
+        console.warn('[njpopups] Contact resolution failed:', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dispensary]);
+
   const contact = useMemo(() => {
     if (!dispensary) return null;
-    if (dispensary.zoho && !overrideContact) return {...dispensary.zoho, source: 'zoho' as const};
+    if (mode === 'email' && dispensary.contact) return {...dispensary.contact, source: 'zoho' as const};
+    if (mode === 'link') return null; // booking goes via dispensary portal
     const n = newContact.name.trim();
     const e = newContact.email.trim();
     const p = newContact.phone.trim();
@@ -205,7 +262,7 @@ export default function NJPopups() {
     const ok = n && /.+@.+\..+/.test(e) && p.replace(/\D/g, '').length >= 10;
     if (!ok) return null;
     return {name: n, role: r || '—', email: e, phone: p, source: 'new' as const};
-  }, [dispensary, overrideContact, newContact]);
+  }, [dispensary, mode, newContact]);
 
   const week = useMemo(buildWeekDays, []);
   const countBookings = useCallback(
@@ -342,11 +399,61 @@ export default function NJPopups() {
 
   const step1Done = !!dispensary;
   const step2Done = !!slot;
-  const step3Done = !!contact;
+  // Link mode is "done" as soon as a slot is picked — the contact handoff happens in the portal.
+  const step3Done = mode === 'link' ? !!slot : !!contact;
   const step5Done = step1Done && step2Done && step3Done;
 
   const handleBook = () => {
-    if (!dispensary || !slot || !contact) return;
+    if (!dispensary || !slot) return;
+
+    // LINK MODE — hand off to the dispensary's own booking portal.
+    // Copy a prefilled payload to clipboard so the staffer can paste it into the
+    // portal's form. Open the portal in a new tab with common hints as query params
+    // (portals ignore unknown params safely).
+    if (mode === 'link' && dispensary.popUpLink) {
+      const slotLabel = `${fmtDate(slot.date)} — ${shiftLabel(slot.shiftKey)}`;
+      const payload = [
+        `Vendor: Highsman`,
+        `Dispensary: ${dispensary.name} — ${dispensary.city}, NJ`,
+        `Requested Slot: ${slotLabel}`,
+        `Contact From Highsman: popups@highsman.com`,
+        `Products: Hit Stick, Pre-Rolls, Ground Game`,
+        ``,
+        `Notes: Pop-up booking requested via Highsman staff tool.`,
+      ].join('\n');
+
+      try {
+        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+          navigator.clipboard.writeText(payload).catch(() => {});
+        }
+      } catch {
+        // ignore — clipboard is best-effort
+      }
+
+      const params = new URLSearchParams({
+        vendor: 'Highsman',
+        dispensary: dispensary.name,
+        city: dispensary.city,
+        date: slot.date,
+        slot: shiftLabel(slot.shiftKey),
+        email: 'popups@highsman.com',
+      });
+      const sep = dispensary.popUpLink.includes('?') ? '&' : '?';
+      const targetUrl = `${dispensary.popUpLink}${sep}${params.toString()}`;
+
+      if (typeof window !== 'undefined') window.open(targetUrl, '_blank', 'noopener,noreferrer');
+
+      // eslint-disable-next-line no-console
+      console.log('[LINK HANDOFF]', {dispensary, slot, targetUrl, payload});
+      setBookings((b) => [...b, {dispId: dispensary.id, date: slot.date, shiftKey: slot.shiftKey}]);
+      setToast(true);
+      setTimeout(() => setToast(false), 3200);
+      setSlot(null);
+      return;
+    }
+
+    // EMAIL / MANUAL MODE — standard calendar-invite flow.
+    if (!contact) return;
     // In production: POST /api/popups/book → creates Google Calendar event on
     // popups@highsman.com, invites contact + staff, upserts Zoho Contact.
     // eslint-disable-next-line no-console
@@ -614,18 +721,24 @@ export default function NJPopups() {
                             </div>
                             <div style={{color: BRAND.gray, fontSize: 14}}>{d.city}, NJ</div>
                           </div>
-                          <span
-                            style={{
-                              fontFamily: TEKO,
-                              fontSize: 12,
-                              letterSpacing: '0.15em',
-                              padding: '2px 8px',
-                              border: `1px solid ${d.zoho ? BRAND.green : BRAND.gray}`,
-                              color: d.zoho ? BRAND.green : BRAND.gray,
-                            }}
-                          >
-                            {d.zoho ? 'Zoho ✓' : 'No POC'}
-                          </span>
+                          {(() => {
+                            const label = d.popUpLink ? 'Portal' : d.contact || d.popUpEmail ? 'Email POC' : 'No POC';
+                            const color = d.popUpLink ? BRAND.gold : d.contact || d.popUpEmail ? BRAND.green : BRAND.gray;
+                            return (
+                              <span
+                                style={{
+                                  fontFamily: TEKO,
+                                  fontSize: 12,
+                                  letterSpacing: '0.15em',
+                                  padding: '2px 8px',
+                                  border: `1px solid ${color}`,
+                                  color,
+                                }}
+                              >
+                                {label}
+                              </span>
+                            );
+                          })()}
                         </div>
                       ))
                     )}
@@ -658,8 +771,33 @@ export default function NJPopups() {
                     {dispensary.name}
                   </div>
                   <div style={{color: BRAND.gray, fontSize: 15, marginTop: 2}}>
-                    {dispensary.city}, NJ · {dispensary.lat.toFixed(3)}, {dispensary.lng.toFixed(3)}
+                    {dispensary.city}, NJ
+                    {dispensary.lastVisitDate && (
+                      <>
+                        {' · '}
+                        <span style={{color: BRAND.white}}>
+                          Last visit {fmtDate(dispensary.lastVisitDate)}
+                        </span>
+                      </>
+                    )}
                   </div>
+                  {dispensary.popUpLink && (
+                    <div
+                      style={{
+                        marginTop: 8,
+                        display: 'inline-block',
+                        fontFamily: TEKO,
+                        fontSize: 12,
+                        letterSpacing: '0.18em',
+                        textTransform: 'uppercase',
+                        color: BRAND.gold,
+                        border: `1px solid ${BRAND.gold}`,
+                        padding: '3px 8px',
+                      }}
+                    >
+                      Books via dispensary portal
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => {
@@ -867,7 +1005,53 @@ export default function NJPopups() {
             {!dispensary && (
               <div style={{color: BRAND.gray}}>Pick a dispensary above to see contact details.</div>
             )}
-            {dispensary && dispensary.zoho && !overrideContact && (
+            {dispensary && mode === 'link' && (
+              <div
+                style={{
+                  border: `1px solid ${BRAND.gold}`,
+                  padding: '22px 24px',
+                  background: 'linear-gradient(180deg, rgba(245,229,0,0.08), transparent)',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: TEKO,
+                    fontSize: 13,
+                    letterSpacing: '0.2em',
+                    color: BRAND.gold,
+                    marginBottom: 8,
+                  }}
+                >
+                  ● Direct Booking Portal
+                </div>
+                <div style={{color: BRAND.white, fontSize: 16, marginBottom: 6}}>
+                  {dispensary.name} uses their own vendor-event portal. We'll hand you off there at the final step —
+                  no email invite needed from our side.
+                </div>
+                <div style={{color: BRAND.gray, fontSize: 14, marginBottom: 14, wordBreak: 'break-all'}}>
+                  {dispensary.popUpLink}
+                </div>
+                <div style={{fontSize: 14, color: BRAND.gray}}>
+                  Wrong channel?{' '}
+                  <button
+                    type="button"
+                    onClick={() => setOverrideContact(true)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: BRAND.gold,
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                      font: 'inherit',
+                      padding: 0,
+                    }}
+                  >
+                    Use an email POC instead for this booking →
+                  </button>
+                </div>
+              </div>
+            )}
+            {dispensary && mode === 'email' && dispensary.contact && (
               <div
                 style={{
                   border: `1px solid ${BRAND.lineStrong}`,
@@ -898,10 +1082,10 @@ export default function NJPopups() {
                   }}
                 >
                   {[
-                    ['Contact Name', dispensary.zoho.name],
-                    ['Role', dispensary.zoho.role],
-                    ['Email', dispensary.zoho.email],
-                    ['Phone', dispensary.zoho.phone],
+                    ['Contact Name', dispensary.contact.name],
+                    ['Role', dispensary.contact.role],
+                    ['Email', dispensary.contact.email],
+                    ['Phone', dispensary.contact.phone],
                   ].map(([l, v]) => (
                     <div key={l}>
                       <label
@@ -951,7 +1135,7 @@ export default function NJPopups() {
                 </div>
               </div>
             )}
-            {dispensary && (!dispensary.zoho || overrideContact) && (
+            {dispensary && mode === 'manual' && (
               <div
                 style={{
                   border: `1px solid ${BRAND.lineStrong}`,
@@ -1231,8 +1415,10 @@ export default function NJPopups() {
                   ['City / State', dispensary ? `${dispensary.city}, NJ` : '—'],
                   ['Date', slot?.dateLabel || '—'],
                   ['Shift', slot?.timeLabel || '—'],
-                  ['Contact', contact ? `${contact.name}${contact.source === 'new' ? ' · New' : ''}` : '—'],
-                  ['Calendar', 'popups@highsman.com'],
+                  mode === 'link'
+                    ? ['Booking Channel', dispensary?.popUpLink ? 'Dispensary Portal' : '—']
+                    : ['Contact', contact ? `${contact.name}${contact.source === 'new' ? ' · New' : ''}` : '—'],
+                  ['Calendar', mode === 'link' ? 'Via dispensary portal' : 'popups@highsman.com'],
                 ] as Array<[string, string]>
               ).map(([k, v]) => (
                 <div
@@ -1287,7 +1473,7 @@ export default function NJPopups() {
                   opacity: step5Done ? 1 : 0.5,
                 }}
               >
-                Confirm &amp; Book Pop Up
+                {mode === 'link' ? 'Open Dispensary Portal →' : 'Confirm & Book Pop Up'}
               </button>
               <button
                 onClick={resetAll}
