@@ -115,23 +115,31 @@ export async function loader({context}: LoaderFunctionArgs) {
       }
     }
 
-    // Temp debug: collect some product IDs to verify what's in the API
-    const debugIds: Array<{id: number; name: string}> = [];
-    // Re-scan page 1 just for debug IDs (only in this temp build)
+    // Temp debug: find all Highsman-related products
+    const highsmanProducts: Array<{id: number; name: string; listing_state: string; qty: string}> = [];
     try {
-      const debugRes = await fetch(`${LEAFLINK_API_BASE}/products/?seller=${LEAFLINK_COMPANY_ID}&page_size=10&page=1`, {
-        headers: {Authorization: `Token ${apiKey}`},
-      });
-      if (debugRes.ok) {
-        const debugData = await debugRes.json();
-        for (const p of (debugData.results || [])) {
-          debugIds.push({id: p.id, name: p.name});
+      let dp = 1;
+      let dMore = true;
+      while (dMore && dp <= 10) {
+        const dRes = await fetch(`${LEAFLINK_API_BASE}/products/?seller=${LEAFLINK_COMPANY_ID}&page_size=100&page=${dp}`, {
+          headers: {Authorization: `Token ${apiKey}`},
+        });
+        if (!dRes.ok) break;
+        const dData = await dRes.json();
+        if (!dData.results || dData.results.length === 0) break;
+        for (const p of dData.results) {
+          const name = (p.name || '').toLowerCase();
+          if (name.includes('highsman') || name.includes('hit stick') || name.includes('triple threat') || name.includes('ground game') || name.includes('fly high') || name.includes('blueberry blitz') || name.includes('watermelon') || name.includes('grape') || name.includes('mango') || name.includes('cake quake')) {
+            highsmanProducts.push({id: p.id, name: p.name, listing_state: p.listing_state, qty: p.quantity});
+          }
         }
+        dMore = !!dData.next;
+        dp++;
       }
     } catch {}
 
     return json(
-      {ok: true, inventory, _matched: matched, _sampleIds: debugIds, _trackedSample: Array.from(TRACKED_PRODUCT_IDS).slice(0, 5)},
+      {ok: true, inventory, _matched: matched, _highsman: highsmanProducts},
       {
         headers: {
           // Cache for 5 minutes — inventory doesn't change that fast
