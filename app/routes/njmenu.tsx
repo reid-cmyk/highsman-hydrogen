@@ -571,7 +571,7 @@ export async function loader({context}: LoaderFunctionArgs) {
     let hasMore = true;
 
     while (hasMore && page <= 10) {
-      const url = `${LEAFLINK_API_BASE}/products/?seller=${LEAFLINK_COMPANY_ID}&fields_include=id,sku,available_inventory,listing_state&page_size=100&page=${page}`;
+      const url = `${LEAFLINK_API_BASE}/products/?seller=${LEAFLINK_COMPANY_ID}&page_size=100&page=${page}`;
       const res = await fetch(url, {
         headers: {Authorization: `Token ${apiKey}`},
       });

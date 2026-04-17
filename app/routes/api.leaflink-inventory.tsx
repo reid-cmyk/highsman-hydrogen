@@ -39,11 +39,12 @@ export async function loader({context}: LoaderFunctionArgs) {
     // Fetch all products for this seller with inventory fields
     // We paginate to ensure we get everything
     const inventory: Record<string, number> = {};
+    let debugSample: any = null; // temp: capture first tracked product's raw data
     let page = 1;
     let hasMore = true;
 
     while (hasMore && page <= 10) {
-      const url = `${LEAFLINK_API_BASE}/products/?seller=${LEAFLINK_COMPANY_ID}&fields_include=id,sku,quantity,reserved_qty,available_inventory,listing_state&page_size=100&page=${page}`;
+      const url = `${LEAFLINK_API_BASE}/products/?seller=${LEAFLINK_COMPANY_ID}&page_size=100&page=${page}`;
       const res = await fetch(url, {
         headers: {Authorization: `Token ${apiKey}`},
       });
@@ -59,6 +60,18 @@ export async function loader({context}: LoaderFunctionArgs) {
       for (const product of data.results) {
         const sku = product.sku;
         if (!sku || !TRACKED_SKUS.includes(sku)) continue;
+
+        // Capture first tracked product for debugging
+        if (!debugSample) {
+          debugSample = {
+            sku: product.sku,
+            listing_state: product.listing_state,
+            available_inventory: product.available_inventory,
+            quantity: product.quantity,
+            reserved_qty: product.reserved_qty,
+            keys: Object.keys(product).slice(0, 30),
+          };
+        }
 
         // available_inventory is the count after reserved qty is subtracted
         // If listing_state is not "Available", treat as 0
@@ -81,7 +94,7 @@ export async function loader({context}: LoaderFunctionArgs) {
     }
 
     return json(
-      {ok: true, inventory},
+      {ok: true, inventory, _debug: debugSample},
       {
         headers: {
           // Cache for 5 minutes — inventory doesn't change that fast
