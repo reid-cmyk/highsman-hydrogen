@@ -45,8 +45,7 @@ const MERCH_ITEMS: MerchItem[] = [
     category: 'pos-displays',
     description: 'Transform your counter into the main event. This stadium-shaped display holds the full range of Hit Stick products — an unmissable focal point that drives impulse buys and product education.',
     image: '/retail/stadium-display.png',
-    maxQty: 3,
-    tag: 'Most Popular',
+    maxQty: 2,
   },
   {
     id: 'acrylic-display',
@@ -54,7 +53,7 @@ const MERCH_ITEMS: MerchItem[] = [
     category: 'pos-displays',
     description: 'Sleek acrylic sign holder detailing each Hit Stick tier — Exotic Indoor, Infused Indoor, and Rosin. Premium build, compact footprint, perfect for educating consumers at point of purchase.',
     image: '/retail/acrylic-display.png',
-    maxQty: 5,
+    maxQty: 3,
   },
 
   // ── Cutouts & Standees ─────────────────────────────────────────────────────
@@ -65,7 +64,7 @@ const MERCH_ITEMS: MerchItem[] = [
     description: 'The life-sized classic. Guaranteed to stop customers in their tracks. Ideal for entryways and high-traffic areas — creates the ultimate photo opportunity and drives social media engagement.',
     dimensions: '6ft tall',
     image: '/retail/ricky-cutout.png',
-    maxQty: 2,
+    maxQty: 1,
     tag: 'Fan Favorite',
   },
   {
@@ -75,7 +74,7 @@ const MERCH_ITEMS: MerchItem[] = [
     description: 'Perfect for smaller spaces, countertops, or creating layered displays. All the impact of the full-size cutout in a space-friendly format.',
     dimensions: '3ft tall',
     image: '/retail/ricky-cutout.png',
-    maxQty: 3,
+    maxQty: 2,
   },
   {
     id: 'cutout-10in',
@@ -84,7 +83,7 @@ const MERCH_ITEMS: MerchItem[] = [
     description: 'Versatile mini cutout for shelf displays and accenting product arrangements. Great for case-top and register areas.',
     dimensions: '10in tall',
     image: '/retail/ricky-cutout.png',
-    maxQty: 5,
+    maxQty: 4,
   },
 
   // ── Banners ────────────────────────────────────────────────────────────────
@@ -94,7 +93,7 @@ const MERCH_ITEMS: MerchItem[] = [
     category: 'banners',
     description: 'Command attention with this full-size, easy-to-assemble retractable banner. Perfect for events, storefronts, or as a major in-store backdrop.',
     image: '/retail/retractable-banner.png',
-    maxQty: 2,
+    maxQty: 1,
   },
   {
     id: 'banner-small',
@@ -102,7 +101,8 @@ const MERCH_ITEMS: MerchItem[] = [
     category: 'banners',
     description: 'All the impact in a smaller package. Ideal for tighter spaces, pop-up events, or complementing larger displays.',
     image: '/retail/retractable-banner.png',
-    maxQty: 3,
+    maxQty: 1,
+    tag: 'Popular',
   },
 
   // ── In-Store Stand Up Signs ────────────────────────────────────────────────
@@ -124,6 +124,7 @@ const MERCH_ITEMS: MerchItem[] = [
     dimensions: '7 × 7.76 in',
     image: '/retail/hitstick-sign.png',
     maxQty: 5,
+    tag: 'New',
   },
   {
     id: 'sign-preroll',
@@ -133,6 +134,7 @@ const MERCH_ITEMS: MerchItem[] = [
     dimensions: '7 × 7.76 in',
     image: '/retail/preroll-sign.png',
     maxQty: 5,
+    tag: 'New',
   },
   {
     id: 'sign-groundgame',
@@ -142,6 +144,7 @@ const MERCH_ITEMS: MerchItem[] = [
     dimensions: '7 × 7.76 in',
     image: '/retail/groundgame-sign.png',
     maxQty: 5,
+    tag: 'New',
   },
 
   // ── Branded Footballs ──────────────────────────────────────────────────────
@@ -160,7 +163,7 @@ const MERCH_ITEMS: MerchItem[] = [
     category: 'footballs',
     description: 'Premium branded football — a fantastic giveaway item. Perfect for building brand loyalty and engaging the sports-loving cannabis consumer.',
     image: '/retail/branded-football.png',
-    maxQty: 3,
+    maxQty: 1,
   },
 ];
 
