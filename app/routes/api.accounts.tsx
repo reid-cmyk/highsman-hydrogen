@@ -233,7 +233,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     });
   } catch (err: any) {
     console.error('[api/accounts] Error:', err.message);
-    return json({accounts: [], error: 'Search unavailable'}, {
+    return json({accounts: [], error: 'Search unavailable', debug: err.message}, {
       status: 200, // don't break the UI — degrade gracefully
       headers: {'Cache-Control': 'no-store'},
     });
