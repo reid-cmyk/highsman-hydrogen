@@ -954,24 +954,19 @@ export default function NJMenu() {
             setLeaflinkMessage(data.message || 'No products synced to LeafLink');
           } else if (data.manualEntry) {
             setLeaflinkStatus('success');
-            setLeaflinkMessage(data.message || 'Order received — will be entered manually into LeafLink.');
+            setLeaflinkMessage('Order received — your rep will confirm shortly.');
           } else {
             setLeaflinkStatus('success');
-            const matchNote = data.customerMatched
-              ? `Matched to "${data.customerName}"`
-              : 'Customer not matched — notification sent for manual entry';
-            setLeaflinkMessage(
-              `LeafLink order ${data.orderNumber} created! ${data.itemsSynced} item(s) synced. ${matchNote}`,
-            );
+            setLeaflinkMessage('Order placed successfully. Your rep will confirm shortly.');
           }
         } else {
           setLeaflinkStatus('error');
-          setLeaflinkMessage(data.error || 'Failed to create LeafLink order');
+          setLeaflinkMessage('There was an issue processing your order. Your rep has been notified.');
         }
       })
       .catch((err) => {
         setLeaflinkStatus('error');
-        setLeaflinkMessage('Network error — LeafLink order not sent');
+        setLeaflinkMessage('There was a connection issue. Your rep has been notified.');
         console.error('[njmenu] LeafLink submission error:', err);
       });
   }, [selectedAccount, cartItems, orderNote, earnedSamples, sampleStrains]);
@@ -2163,7 +2158,7 @@ export default function NJMenu() {
                 </a>
                 {leaflinkStatus === 'sending' && (
                   <p className="font-body text-xs text-center mt-3" style={{color: BRAND.gold}}>
-                    Syncing to LeafLink...
+                    Processing order...
                   </p>
                 )}
                 {leaflinkStatus === 'success' && leaflinkMessage && (
@@ -2173,11 +2168,6 @@ export default function NJMenu() {
                 )}
                 {leaflinkStatus === 'error' && leaflinkMessage && (
                   <p className="font-body text-xs text-center mt-3" style={{color: '#ef4444'}}>
-                    ✗ {leaflinkMessage}
-                  </p>
-                )}
-                {leaflinkStatus === 'skipped' && leaflinkMessage && (
-                  <p className="font-body text-xs text-center mt-3" style={{color: 'rgba(255,255,255,0.45)'}}>
                     {leaflinkMessage}
                   </p>
                 )}
