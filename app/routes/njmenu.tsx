@@ -2181,9 +2181,6 @@ export default function NJMenu() {
                     {leaflinkMessage}
                   </p>
                 )}
-                <p className="font-body text-xs text-center mt-3" style={{color: 'rgba(255,255,255,0.55)'}}>
-                  Opens your email client with the order pre-filled. Your rep will confirm.
-                </p>
               </>
             )}
           </div>
