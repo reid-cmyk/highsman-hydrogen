@@ -903,11 +903,11 @@ export default function NJMenu() {
       if (!product) return null;
       const strain = product.strains.find((s) => s.name === item.strainName);
       if (!strain?.sku) return null;
-      const casePrice = applyDiscount(product.casePrice, product.discount);
+      const unitPrice = applyDiscount(product.wholesale, product.discount);
       return {
         sku: strain.sku,
-        quantity: item.cases, // cases, not individual units — LeafLink products are set up per case
-        unitPrice: casePrice,
+        quantity: item.cases * product.caseSize, // total units — LeafLink does the case math internally
+        unitPrice, // per-unit wholesale price (e.g. $7 per Hit Stick unit)
       };
     }).filter(Boolean);
 
