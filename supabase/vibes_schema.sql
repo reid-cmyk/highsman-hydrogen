@@ -84,9 +84,17 @@ create table if not exists public.brand_visits (
   gps_lng         numeric(9,6),
 
   -- ─── Audit ────────────────────────────────────────────────────────────────
+  -- Legacy shelf-based fields (kept for historic visits, unused for new flow).
   skus_on_shelf           text[] not null default '{}',
   skus_missing            text[] not null default '{}',
   shelf_position_rating   int check (shelf_position_rating between 1 and 5),
+
+  -- New merchandising-first audit model:
+  --   sku_stock      — { [formatSlug]: { [strainSlug]: true } }
+  --   merch_visible  — { [merchItemId]: count }  (from MERCH_ITEMS catalog)
+  sku_stock                    jsonb   not null default '{}'::jsonb,
+  merch_visible                jsonb   not null default '{}'::jsonb,
+  merch_visible_photo_urls     text[]  not null default '{}',
 
   -- ─── Training ─────────────────────────────────────────────────────────────
   decks_taught            text[] not null default '{}',
@@ -94,7 +102,11 @@ create table if not exists public.brand_visits (
 
   -- ─── Drop ─────────────────────────────────────────────────────────────────
   goodie_total_spent      numeric(10,2) not null default 0,
-  merch_installed         jsonb not null default '{}'::jsonb,
+  merch_installed         jsonb not null default '{}'::jsonb, -- legacy
+  -- Physical drop-offs this visit: { [merchItemId]: count }. Feeds per-store
+  -- merch inventory tracking.
+  dropoffs                jsonb   not null default '{}'::jsonb,
+  dropoff_photo_urls      text[]  not null default '{}',
 
   -- ─── Vibes ────────────────────────────────────────────────────────────────
   vibes_score             int check (vibes_score between 1 and 10),
@@ -108,6 +120,14 @@ create table if not exists public.brand_visits (
   selfie_url              text,
   ugc_post_url            text
 );
+
+-- Idempotent column adds for existing installations (pre-merch-audit schema).
+alter table public.brand_visits
+  add column if not exists sku_stock                jsonb  not null default '{}'::jsonb,
+  add column if not exists merch_visible            jsonb  not null default '{}'::jsonb,
+  add column if not exists merch_visible_photo_urls text[] not null default '{}',
+  add column if not exists dropoffs                 jsonb  not null default '{}'::jsonb,
+  add column if not exists dropoff_photo_urls       text[] not null default '{}';
 
 create index if not exists brand_visits_rep_date_idx
   on public.brand_visits (rep_id, visit_date desc);

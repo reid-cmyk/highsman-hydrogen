@@ -6,10 +6,17 @@ import {AwsClient} from 'aws4fetch';
 // POST /api/vibes-visit-submit
 // ─────────────────────────────────────────────────────────────────────────────
 // Accepts the 5-screen Vibes Team check-in submission (Arrive / Audit / Train /
-// Drop / Vibes). Uploads photos to Cloudflare R2, writes the visit row to
-// Supabase (`brand_visits`), appends the live-training log rows
-// (`budtender_training` with method='live'), appends the goodie spend
-// (`goodie_log`), and decrements merch_inventory counts.
+// Drop / Vibes). Because dispensaries do not display live cannabis on open
+// shelves, the Audit focuses on:
+//   • SKUs in stock   — JSONB map { [formatSlug]: { [strainSlug]: true } }
+//   • Merch visible   — JSONB map { [merchItemId]: count } of Highsman
+//                        merchandising on the floor (from MERCH_ITEMS catalog)
+//   • 1–3 photos      — shots of Highsman merch actually in-store
+// The Drop step tracks goodie spend and what the rep physically dropped off
+// (counts + up to 3 photos) so per-store merch inventory stays accurate.
+//
+// Uploads photos to Cloudflare R2, writes to Supabase `brand_visits`, appends
+// training and goodie log rows.
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Env = {
@@ -40,13 +47,16 @@ type Payload = {
   checkedOutAt: string | null;
   gpsLat: number | null;
   gpsLng: number | null;
-  skusOnShelf: string[];
-  skusMissing: string[];
-  shelfPositionRating: number | null;
+  // New merchandising-first audit model
+  skuStock: Record<string, Record<string, boolean>>;
+  merchVisible: Record<string, number>;
+  // Training
   decksTaught: string[];
   budtendersTrained: Array<{name: string; email?: string; moduleSlug?: string}>;
+  // Drop
   goodieItems: Array<{item: string; cost: number}>;
-  merchInstalled: Record<string, number>;
+  dropoffs: Record<string, number>;
+  // Vibes
   vibesScore: number | null;
   notesToSales: string;
   spokeWithManager: boolean;
@@ -60,6 +70,10 @@ const ALLOWED_VISIT_TYPES: Payload['visitType'][] = [
   'training',
   'other',
 ];
+
+// Accept up to 3 pics per indexed photo slot. Keep conservative to avoid
+// runaway uploads on a flaky cell signal.
+const MAX_INDEXED_PHOTOS = 3;
 
 export async function action({request, context}: ActionFunctionArgs) {
   if (request.method !== 'POST') {
@@ -127,34 +141,52 @@ export async function action({request, context}: ActionFunctionArgs) {
     checkedOutAt: (form.get('checkedOutAt') as string) || null,
     gpsLat: form.get('gpsLat') ? Number(form.get('gpsLat')) : null,
     gpsLng: form.get('gpsLng') ? Number(form.get('gpsLng')) : null,
-    skusOnShelf: parseJson<string[]>('skusOnShelf', []),
-    skusMissing: parseJson<string[]>('skusMissing', []),
-    shelfPositionRating: form.get('shelfPositionRating')
-      ? Number(form.get('shelfPositionRating'))
-      : null,
+    skuStock: parseJson<Record<string, Record<string, boolean>>>('skuStock', {}),
+    merchVisible: parseJson<Record<string, number>>('merchVisible', {}),
     decksTaught: parseJson<string[]>('decksTaught', []),
     budtendersTrained: parseJson<Payload['budtendersTrained']>('budtendersTrained', []),
     goodieItems: parseJson<Payload['goodieItems']>('goodieItems', []),
-    merchInstalled: parseJson<Record<string, number>>('merchInstalled', {}),
+    dropoffs: parseJson<Record<string, number>>('dropoffs', {}),
     vibesScore: form.get('vibesScore') ? Number(form.get('vibesScore')) : null,
     notesToSales: String(form.get('notesToSales') || ''),
     spokeWithManager: form.get('spokeWithManager') === 'true',
     ugcPostUrl: String(form.get('ugcPostUrl') || ''),
   };
 
-  // Collect photos
-  const photos: Array<{slot: string; file: File}> = [];
-  const slots = ['shelf', 'before', 'after', 'selfie'] as const;
-  for (const slot of slots) {
-    const f = form.get(`${slot}Photo`);
-    if (f instanceof File && f.size > 0) photos.push({slot, file: f});
+  // ─── Collect photos ──────────────────────────────────────────────────────
+  // Two indexed multi-photo groups + a single selfie slot.
+  type PhotoTask = {group: string; index: number; file: File};
+  const photos: PhotoTask[] = [];
+
+  // Indexed groups: merchVisiblePhoto_0..N and dropoffPhoto_0..N
+  const indexedGroups = ['merchVisiblePhoto', 'dropoffPhoto'] as const;
+  for (const group of indexedGroups) {
+    for (let i = 0; i < MAX_INDEXED_PHOTOS; i++) {
+      const f = form.get(`${group}_${i}`);
+      if (f instanceof File && f.size > 0) {
+        photos.push({group, index: i, file: f});
+      }
+    }
+  }
+
+  // Single selfie slot
+  const selfieField = form.get('selfiePhoto');
+  const selfieFile =
+    selfieField instanceof File && selfieField.size > 0 ? selfieField : null;
+  if (selfieFile) {
+    photos.push({group: 'selfie', index: 0, file: selfieFile});
   }
 
   // ─── STUB mode ────────────────────────────────────────────────────────────
   if (!storageReady) {
     console.log('[vibes-visit] stub submission', {
       payload,
-      photos: photos.map((p) => ({slot: p.slot, name: p.file.name, size: p.file.size})),
+      photos: photos.map((p) => ({
+        group: p.group,
+        index: p.index,
+        name: p.file.name,
+        size: p.file.size,
+      })),
     });
     return json({
       ok: true,
@@ -170,11 +202,10 @@ export async function action({request, context}: ActionFunctionArgs) {
       : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
   // ─── Upload photos to R2 ──────────────────────────────────────────────────
-  const photoUrls: Record<string, string> = {};
+  let uploaded: Array<{group: string; index: number; url: string}> = [];
   if (photos.length) {
     try {
-      const uploaded = await uploadAllToR2(env, visitId, payload.visitDate, photos);
-      for (const {slot, url} of uploaded) photoUrls[slot] = url;
+      uploaded = await uploadAllToR2(env, visitId, payload.visitDate, photos);
     } catch (err) {
       console.error('[vibes-visit] R2 upload failed', err);
       return json(
@@ -183,6 +214,17 @@ export async function action({request, context}: ActionFunctionArgs) {
       );
     }
   }
+
+  // Group uploaded URLs
+  const merchVisiblePhotoUrls = uploaded
+    .filter((u) => u.group === 'merchVisiblePhoto')
+    .sort((a, b) => a.index - b.index)
+    .map((u) => u.url);
+  const dropoffPhotoUrls = uploaded
+    .filter((u) => u.group === 'dropoffPhoto')
+    .sort((a, b) => a.index - b.index)
+    .map((u) => u.url);
+  const selfieUrl = uploaded.find((u) => u.group === 'selfie')?.url || null;
 
   // ─── Insert brand_visits ──────────────────────────────────────────────────
   const goodieTotal = payload.goodieItems.reduce(
@@ -204,22 +246,24 @@ export async function action({request, context}: ActionFunctionArgs) {
     checked_out_at: payload.checkedOutAt,
     gps_lat: payload.gpsLat,
     gps_lng: payload.gpsLng,
-    skus_on_shelf: payload.skusOnShelf,
-    skus_missing: payload.skusMissing,
-    shelf_position_rating: payload.shelfPositionRating,
+    // Merchandising-first audit
+    sku_stock: payload.skuStock || {},
+    merch_visible: payload.merchVisible || {},
+    merch_visible_photo_urls: merchVisiblePhotoUrls,
+    // Training
     decks_taught: payload.decksTaught,
     budtenders_trained: payload.budtendersTrained.map((b) =>
       typeof b === 'string' ? b : b.name,
     ),
+    // Drop
     goodie_total_spent: goodieTotal,
-    merch_installed: payload.merchInstalled || {},
+    dropoffs: payload.dropoffs || {},
+    dropoff_photo_urls: dropoffPhotoUrls,
+    // Vibes
     vibes_score: payload.vibesScore,
     notes_to_sales_team: payload.notesToSales || null,
     spoke_with_manager: payload.spokeWithManager,
-    shelf_photo_url: photoUrls.shelf || null,
-    before_photo_url: photoUrls.before || null,
-    after_photo_url: photoUrls.after || null,
-    selfie_url: photoUrls.selfie || null,
+    selfie_url: selfieUrl,
     ugc_post_url: payload.ugcPostUrl || null,
   };
 
@@ -299,47 +343,6 @@ export async function action({request, context}: ActionFunctionArgs) {
     }
   }
 
-  // ─── Decrement merch_inventory ────────────────────────────────────────────
-  if (payload.merchInstalled && Object.keys(payload.merchInstalled).length) {
-    for (const [slug, qty] of Object.entries(payload.merchInstalled)) {
-      if (!qty || qty <= 0) continue;
-      try {
-        // Find current row
-        const curRes = await fetch(
-          `${env.SUPABASE_URL}/rest/v1/merch_inventory?rep_id=eq.${encodeURIComponent(
-            payload.repId,
-          )}&item_slug=eq.${encodeURIComponent(slug)}&select=id,qty_on_hand`,
-          {
-            headers: {
-              apikey: env.SUPABASE_SERVICE_KEY!,
-              Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY!}`,
-            },
-          },
-        );
-        if (!curRes.ok) continue;
-        const rows = await curRes.json();
-        const cur = rows?.[0];
-        if (!cur) continue;
-        const newQty = Math.max(0, (cur.qty_on_hand || 0) - qty);
-        await fetch(
-          `${env.SUPABASE_URL}/rest/v1/merch_inventory?id=eq.${cur.id}`,
-          {
-            method: 'PATCH',
-            headers: {
-              'content-type': 'application/json',
-              apikey: env.SUPABASE_SERVICE_KEY!,
-              Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY!}`,
-              prefer: 'return=minimal',
-            },
-            body: JSON.stringify({qty_on_hand: newQty, updated_at: new Date().toISOString()}),
-          },
-        );
-      } catch (err) {
-        console.warn('[vibes-visit] merch decrement failed', slug, err);
-      }
-    }
-  }
-
   // ─── UGC review queue (only if @highsman tagged — rep self-reports) ───────
   if (payload.ugcPostUrl) {
     try {
@@ -381,8 +384,8 @@ async function uploadAllToR2(
   env: Env,
   visitId: string,
   visitDate: string,
-  photos: Array<{slot: string; file: File}>,
-): Promise<Array<{slot: string; url: string}>> {
+  photos: Array<{group: string; index: number; file: File}>,
+): Promise<Array<{group: string; index: number; url: string}>> {
   const client = new AwsClient({
     accessKeyId: env.R2_ACCESS_KEY_ID!,
     secretAccessKey: env.R2_SECRET_ACCESS_KEY!,
@@ -395,9 +398,12 @@ async function uploadAllToR2(
   const publicBase = env.R2_PUBLIC_URL!.replace(/\/+$/, '');
   const yyyyMm = visitDate.slice(0, 7);
 
-  const tasks = photos.map(async ({slot, file}) => {
+  const tasks = photos.map(async ({group, index, file}) => {
     const ext = pickExtension(file);
-    const key = `brand-visits/${yyyyMm}/${visitId}/${slot}.${ext}`;
+    // Single slots (selfie) keep a clean filename; indexed slots include an index.
+    const filename =
+      group === 'selfie' ? `selfie.${ext}` : `${group}-${index}.${ext}`;
+    const key = `brand-visits/${yyyyMm}/${visitId}/${filename}`;
     const body = await file.arrayBuffer();
     const putUrl = `https://${accountId}.r2.cloudflarestorage.com/${bucket}/${encodeURI(key)}`;
     const signed = await client.sign(putUrl, {
@@ -413,7 +419,7 @@ async function uploadAllToR2(
       const errText = await res.text().catch(() => '');
       throw new Error(`R2 PUT failed (${res.status}) for ${key}: ${errText}`);
     }
-    return {slot, url: `${publicBase}/${key}`};
+    return {group, index, url: `${publicBase}/${key}`};
   });
   return Promise.all(tasks);
 }

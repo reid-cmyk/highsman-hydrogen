@@ -2,12 +2,22 @@ import {useEffect, useMemo, useState} from 'react';
 import type {LoaderFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {Link, useLoaderData, useSearchParams, useFetcher} from '@remix-run/react';
+import {STRAINS, FORMATS} from '~/data/highsman-skus';
+import {MERCH_ITEMS, CATEGORIES} from '~/data/merch-catalog';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // /vibes/visit/new — Vibes Team Check-In Flow (5 screens)
 // ─────────────────────────────────────────────────────────────────────────────
 // Sequence: Arrive → Audit → Train → Drop → Vibes → Submit
+//
 // Designed for phone, one-thumb friendly. Submits to /api/vibes-visit-submit.
+// Because dispensaries do not display live cannabis product on open shelves,
+// the Audit step focuses on:
+//   (1) SKUs in stock  — what the store has on hand, per format × strain
+//   (2) Merchandising  — which Highsman POP/merch items are visible on floor
+//   (3) Photos         — 1-3 shots of the merchandising in the store
+// The Drop step then tracks what the rep physically dropped off, so per-store
+// merch inventory stays accurate.
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Env = {
@@ -20,13 +30,6 @@ type Deck = {
   title: string;
   module_slug: string;
   duration_minutes: number;
-};
-
-type MerchItem = {
-  id: string;
-  item_slug: string;
-  item_label: string;
-  qty_on_hand: number;
 };
 
 type VibesRep = {
@@ -43,7 +46,6 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   let decks: Deck[] = [];
   let reps: VibesRep[] = [];
   let rep: VibesRep | null = null;
-  let merch: MerchItem[] = [];
 
   if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
     try {
@@ -70,25 +72,12 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       if (decksRes.ok) decks = await decksRes.json();
       if (repsRes.ok) reps = await repsRes.json();
       rep = reps.find((r) => r.id === repIdParam) || reps[0] || null;
-
-      if (rep) {
-        const mRes = await fetch(
-          `${env.SUPABASE_URL}/rest/v1/merch_inventory?rep_id=eq.${rep.id}&select=id,item_slug,item_label,qty_on_hand&order=item_label.asc`,
-          {
-            headers: {
-              apikey: env.SUPABASE_SERVICE_KEY,
-              Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-            },
-          },
-        );
-        if (mRes.ok) merch = await mRes.json();
-      }
     } catch (err) {
       console.warn('[vibes/visit/new] Supabase fetch failed', err);
     }
   }
 
-  return json({decks, reps, rep, merch});
+  return json({decks, reps, rep});
 }
 
 export const handle = {hideHeader: true, hideFooter: true};
@@ -118,13 +107,12 @@ const BODY = `'Barlow Semi Condensed', system-ui, -apple-system, sans-serif`;
 const CDN = 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files';
 const LOGO_WHITE = `${CDN}/Highsman_Logo_White.png?v=1775594430`;
 
-const SKUS = [
-  'Hit Stick 0.5g — Indica',
-  'Hit Stick 0.5g — Sativa',
-  'Hit Stick 0.5g — Hybrid',
-  'Triple Threat Pre-Roll 1.2g',
-  'Ground Game Flower 7g',
-];
+// SKU stock is now tracked as a nested map: { [formatSlug]: { [strainSlug]: true } }
+// Source of truth lives in app/data/highsman-skus.ts.
+type SkuStockMap = Record<string, Record<string, boolean>>;
+
+// Merch visible / drop-off counts are keyed by MerchItem.id.
+type MerchCountMap = Record<string, number>;
 
 const STEPS = [
   {key: 'arrive', label: 'Arrive', color: BRAND.gold},
@@ -140,7 +128,7 @@ type StepKey = (typeof STEPS)[number]['key'];
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 export default function VibesVisitNew() {
-  const {decks, reps, rep, merch} = useLoaderData<typeof loader>();
+  const {decks, rep} = useLoaderData<typeof loader>();
   const [params] = useSearchParams();
   const fetcher = useFetcher<{ok: boolean; id?: string; message?: string; goodieTotal?: number}>();
 
@@ -181,11 +169,12 @@ export default function VibesVisitNew() {
   const [checkedInAt, setCheckedInAt] = useState<string | null>(null);
 
   // Audit
-  const [skusOnShelf, setSkusOnShelf] = useState<string[]>([]);
-  const [skusMissing, setSkusMissing] = useState<string[]>([]);
-  const [shelfRating, setShelfRating] = useState<number | null>(null);
-  const [shelfPhoto, setShelfPhoto] = useState<File | null>(null);
-  const [beforePhoto, setBeforePhoto] = useState<File | null>(null);
+  // SKUs in stock — nested map of format → strain → true
+  const [skuStock, setSkuStock] = useState<SkuStockMap>({});
+  // Merchandising visible in-store — count per MerchItem.id
+  const [merchVisible, setMerchVisible] = useState<MerchCountMap>({});
+  // Photos of Highsman merchandising visible in the store — min 1, max 3
+  const [merchVisiblePhotos, setMerchVisiblePhotos] = useState<File[]>([]);
 
   // Train
   const [decksTaught, setDecksTaught] = useState<string[]>([]);
@@ -201,8 +190,10 @@ export default function VibesVisitNew() {
   );
   const [goodItem, setGoodItem] = useState('');
   const [goodCost, setGoodCost] = useState('');
-  const [merchInstalled, setMerchInstalled] = useState<Record<string, number>>({});
-  const [afterPhoto, setAfterPhoto] = useState<File | null>(null);
+  // Dropped off merch — per MerchItem.id count of physically handed to store today
+  const [dropoffs, setDropoffs] = useState<MerchCountMap>({});
+  // Photos of what was dropped off — up to 3 shots for inventory-tracking
+  const [dropoffPhotos, setDropoffPhotos] = useState<File[]>([]);
 
   // Vibes
   const [vibesScore, setVibesScore] = useState<number | null>(null);
@@ -249,7 +240,8 @@ export default function VibesVisitNew() {
       case 'arrive':
         return Boolean(accountId && accountName && rep && checkedInAt);
       case 'audit':
-        return Boolean(shelfPhoto);
+        // Require at least one Highsman-merch-in-store photo.
+        return merchVisiblePhotos.length >= 1;
       case 'train':
         return true;
       case 'drop':
@@ -257,7 +249,15 @@ export default function VibesVisitNew() {
       case 'vibes':
         return vibesScore !== null;
     }
-  }, [step, accountId, accountName, rep, checkedInAt, shelfPhoto, vibesScore]);
+  }, [
+    step,
+    accountId,
+    accountName,
+    rep,
+    checkedInAt,
+    merchVisiblePhotos.length,
+    vibesScore,
+  ]);
 
   const stepIdx = STEPS.findIndex((s) => s.key === step);
 
@@ -290,20 +290,23 @@ export default function VibesVisitNew() {
       form.set('gpsLat', String(gps.lat));
       form.set('gpsLng', String(gps.lng));
     }
-    form.set('skusOnShelf', JSON.stringify(skusOnShelf));
-    form.set('skusMissing', JSON.stringify(skusMissing));
-    if (shelfRating) form.set('shelfPositionRating', String(shelfRating));
+    // SKU stock + merch audit
+    form.set('skuStock', JSON.stringify(skuStock));
+    form.set('merchVisible', JSON.stringify(merchVisible));
+    // Training
     form.set('decksTaught', JSON.stringify(decksTaught));
     form.set('budtendersTrained', JSON.stringify(budtenders));
+    // Drop
     form.set('goodieItems', JSON.stringify(goodieItems));
-    form.set('merchInstalled', JSON.stringify(merchInstalled));
+    form.set('dropoffs', JSON.stringify(dropoffs));
+    // Vibes
     if (vibesScore !== null) form.set('vibesScore', String(vibesScore));
     form.set('notesToSales', notesToSales);
     form.set('spokeWithManager', spokeWithManager ? 'true' : 'false');
     form.set('ugcPostUrl', ugcPostUrl);
-    if (shelfPhoto) form.set('shelfPhoto', shelfPhoto);
-    if (beforePhoto) form.set('beforePhoto', beforePhoto);
-    if (afterPhoto) form.set('afterPhoto', afterPhoto);
+    // Photos — multi-slot append
+    merchVisiblePhotos.forEach((f, i) => form.append(`merchVisiblePhoto_${i}`, f));
+    dropoffPhotos.forEach((f, i) => form.append(`dropoffPhoto_${i}`, f));
     if (selfiePhoto) form.set('selfiePhoto', selfiePhoto);
 
     fetcher.submit(form, {
@@ -426,16 +429,12 @@ export default function VibesVisitNew() {
             )}
             {step === 'audit' && (
               <StepAudit
-                skusOnShelf={skusOnShelf}
-                setSkusOnShelf={setSkusOnShelf}
-                skusMissing={skusMissing}
-                setSkusMissing={setSkusMissing}
-                shelfRating={shelfRating}
-                setShelfRating={setShelfRating}
-                shelfPhoto={shelfPhoto}
-                setShelfPhoto={setShelfPhoto}
-                beforePhoto={beforePhoto}
-                setBeforePhoto={setBeforePhoto}
+                skuStock={skuStock}
+                setSkuStock={setSkuStock}
+                merchVisible={merchVisible}
+                setMerchVisible={setMerchVisible}
+                merchVisiblePhotos={merchVisiblePhotos}
+                setMerchVisiblePhotos={setMerchVisiblePhotos}
               />
             )}
             {step === 'train' && (
@@ -459,11 +458,10 @@ export default function VibesVisitNew() {
                 setGoodItem={setGoodItem}
                 goodCost={goodCost}
                 setGoodCost={setGoodCost}
-                merch={merch}
-                merchInstalled={merchInstalled}
-                setMerchInstalled={setMerchInstalled}
-                afterPhoto={afterPhoto}
-                setAfterPhoto={setAfterPhoto}
+                dropoffs={dropoffs}
+                setDropoffs={setDropoffs}
+                dropoffPhotos={dropoffPhotos}
+                setDropoffPhotos={setDropoffPhotos}
                 dailyBudget={dailyBudget}
                 total={goodieTotal}
               />
@@ -750,115 +748,333 @@ function StepArrive(props: {
 // ─────────────────────────────────────────────────────────────────────────────
 // Step 2 · Audit
 // ─────────────────────────────────────────────────────────────────────────────
+// Two audit blocks, since dispensaries don't display live cannabis on open
+// shelves:
+//   1. SKUs in Stock      — format × strain, what the store has on hand
+//   2. Merchandising      — Highsman POP/merch visible in-store (live list)
+//   3. Merch Visible Pics — 1-3 photos of what's actually on the floor
+// ─────────────────────────────────────────────────────────────────────────────
 function StepAudit(props: {
-  skusOnShelf: string[];
-  setSkusOnShelf: (v: string[]) => void;
-  skusMissing: string[];
-  setSkusMissing: (v: string[]) => void;
-  shelfRating: number | null;
-  setShelfRating: (n: number | null) => void;
-  shelfPhoto: File | null;
-  setShelfPhoto: (f: File | null) => void;
-  beforePhoto: File | null;
-  setBeforePhoto: (f: File | null) => void;
+  skuStock: SkuStockMap;
+  setSkuStock: (v: SkuStockMap) => void;
+  merchVisible: MerchCountMap;
+  setMerchVisible: (v: MerchCountMap) => void;
+  merchVisiblePhotos: File[];
+  setMerchVisiblePhotos: (v: File[]) => void;
 }) {
-  function toggleOn(sku: string) {
-    const set = new Set(props.skusOnShelf);
-    set.has(sku) ? set.delete(sku) : set.add(sku);
-    props.setSkusOnShelf(Array.from(set));
-    const mset = new Set(props.skusMissing);
-    mset.delete(sku);
-    props.setSkusMissing(Array.from(mset));
-  }
-  function toggleMissing(sku: string) {
-    const set = new Set(props.skusMissing);
-    set.has(sku) ? set.delete(sku) : set.add(sku);
-    props.setSkusMissing(Array.from(set));
-    const oset = new Set(props.skusOnShelf);
-    oset.delete(sku);
-    props.setSkusOnShelf(Array.from(oset));
+  function toggleStrain(formatSlug: string, strainSlug: string) {
+    const next: SkuStockMap = {...props.skuStock};
+    const row = {...(next[formatSlug] || {})};
+    if (row[strainSlug]) delete row[strainSlug];
+    else row[strainSlug] = true;
+    if (Object.keys(row).length === 0) delete next[formatSlug];
+    else next[formatSlug] = row;
+    props.setSkuStock(next);
   }
 
+  function setMerchCount(itemId: string, n: number) {
+    const next: MerchCountMap = {...props.merchVisible};
+    if (n <= 0) delete next[itemId];
+    else next[itemId] = n;
+    props.setMerchVisible(next);
+  }
+
+  const merchTotal = Object.values(props.merchVisible).reduce(
+    (s, n) => s + (Number(n) || 0),
+    0,
+  );
+
   return (
-    <div style={{display: 'grid', gap: 14}}>
+    <div style={{display: 'grid', gap: 18}}>
       <SectionTitle index="02" title="Audit" color={BRAND.purple} />
-      <Field label="SKUs on shelf">
-        <div style={{display: 'grid', gap: 4}}>
-          {SKUS.map((sku) => {
-            const isOn = props.skusOnShelf.includes(sku);
-            const isMissing = props.skusMissing.includes(sku);
+
+      {/* ─── SKUs in Stock ─────────────────────────────────────────────────── */}
+      <div>
+        <div
+          style={{
+            fontFamily: TEKO,
+            fontSize: 22,
+            color: BRAND.white,
+            textTransform: 'uppercase',
+            letterSpacing: '0.02em',
+            marginBottom: 4,
+          }}
+        >
+          SKUs in Stock
+        </div>
+        <div style={{fontSize: 12, color: BRAND.gray, marginBottom: 10}}>
+          Tap every strain the store has on hand today — what they can sell.
+        </div>
+
+        <div style={{display: 'grid', gap: 12}}>
+          {FORMATS.map((fmt) => {
+            const row = props.skuStock[fmt.slug] || {};
+            const stockedCount = Object.values(row).filter(Boolean).length;
             return (
               <div
-                key={sku}
+                key={fmt.slug}
                 style={{
-                  display: 'flex',
-                  gap: 4,
-                  alignItems: 'center',
+                  padding: '10px 12px',
+                  background: BRAND.chip,
+                  border: `1px solid ${BRAND.line}`,
+                  borderRadius: 8,
                 }}
               >
-                <div style={{flex: 1, fontSize: 13}}>{sku}</div>
-                <button
-                  type="button"
-                  onClick={() => toggleOn(sku)}
+                <div
                   style={{
-                    ...chipStyle(isOn),
-                    padding: '4px 10px',
-                    fontSize: 11,
-                    borderColor: isOn ? BRAND.green : BRAND.line,
-                    background: isOn ? BRAND.green : 'transparent',
-                    color: isOn ? BRAND.black : BRAND.gray,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'baseline',
+                    marginBottom: 8,
                   }}
                 >
-                  ON
-                </button>
-                <button
-                  type="button"
-                  onClick={() => toggleMissing(sku)}
-                  style={{
-                    ...chipStyle(isMissing),
-                    padding: '4px 10px',
-                    fontSize: 11,
-                    borderColor: isMissing ? BRAND.red : BRAND.line,
-                    background: isMissing ? BRAND.red : 'transparent',
-                    color: isMissing ? BRAND.white : BRAND.gray,
-                  }}
-                >
-                  MISSING
-                </button>
+                  <div>
+                    <div
+                      style={{
+                        fontFamily: TEKO,
+                        fontSize: 20,
+                        color: BRAND.white,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
+                        lineHeight: 1,
+                      }}
+                    >
+                      {fmt.name}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: BRAND.gray,
+                        marginTop: 2,
+                      }}
+                    >
+                      {fmt.sizeLabel}
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: TEKO,
+                      fontSize: 14,
+                      color: stockedCount > 0 ? BRAND.gold : BRAND.gray,
+                      letterSpacing: '0.12em',
+                    }}
+                  >
+                    {stockedCount}/{STRAINS.length} IN
+                  </div>
+                </div>
+
+                <div style={{display: 'grid', gap: 4}}>
+                  {STRAINS.map((s) => {
+                    const on = Boolean(row[s.slug]);
+                    return (
+                      <button
+                        type="button"
+                        key={s.slug}
+                        onClick={() => toggleStrain(fmt.slug, s.slug)}
+                        style={{
+                          textAlign: 'left',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: 8,
+                          padding: '8px 10px',
+                          background: on
+                            ? 'rgba(46,204,113,0.15)'
+                            : 'transparent',
+                          border: `1px solid ${on ? BRAND.green : BRAND.line}`,
+                          borderRadius: 6,
+                          color: BRAND.white,
+                          cursor: 'pointer',
+                          fontFamily: BODY,
+                          fontSize: 13,
+                        }}
+                      >
+                        <span style={{display: 'flex', gap: 6, alignItems: 'center'}}>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              width: 16,
+                              textAlign: 'center',
+                              color: on ? BRAND.green : BRAND.gray,
+                              fontFamily: TEKO,
+                              fontSize: 14,
+                            }}
+                          >
+                            {on ? '✓' : ''}
+                          </span>
+                          <span style={{color: BRAND.white}}>{s.name}</span>
+                          <span
+                            style={{
+                              color: BRAND.gray,
+                              fontSize: 11,
+                              fontFamily: TEKO,
+                              letterSpacing: '0.1em',
+                              marginLeft: 4,
+                            }}
+                          >
+                            {s.profile.toUpperCase()}
+                          </span>
+                        </span>
+                        <span
+                          style={{
+                            fontFamily: TEKO,
+                            fontSize: 11,
+                            color: on ? BRAND.green : BRAND.gray,
+                            letterSpacing: '0.12em',
+                          }}
+                        >
+                          {on ? 'STOCKED' : 'TAP TO MARK'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             );
           })}
         </div>
-      </Field>
+      </div>
 
-      <Field label="Shelf position rating (1–5)">
-        <div style={{display: 'flex', gap: 6}}>
-          {[1, 2, 3, 4, 5].map((n) => (
-            <button
-              type="button"
-              key={n}
-              onClick={() => props.setShelfRating(n)}
-              style={chipStyle(props.shelfRating === n)}
-            >
-              {n}
-            </button>
-          ))}
+      {/* ─── Merchandising Visible ──────────────────────────────────────────── */}
+      <div>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'baseline',
+            marginBottom: 4,
+          }}
+        >
+          <div
+            style={{
+              fontFamily: TEKO,
+              fontSize: 22,
+              color: BRAND.white,
+              textTransform: 'uppercase',
+              letterSpacing: '0.02em',
+            }}
+          >
+            Merchandising Visible
+          </div>
+          <div
+            style={{
+              fontFamily: TEKO,
+              fontSize: 14,
+              color: merchTotal > 0 ? BRAND.gold : BRAND.gray,
+              letterSpacing: '0.12em',
+            }}
+          >
+            {merchTotal} TOTAL
+          </div>
         </div>
-      </Field>
+        <div style={{fontSize: 12, color: BRAND.gray, marginBottom: 10}}>
+          Count every Highsman merch piece you can see on the floor. Live list
+          — stays in sync with /retail.
+        </div>
 
-      <Field label="Shelf photo" required>
-        <PhotoPicker
-          file={props.shelfPhoto}
-          setFile={props.setShelfPhoto}
-          label="Snap the Highsman shelf"
-        />
-      </Field>
+        <div style={{display: 'grid', gap: 12}}>
+          {CATEGORIES.map((cat) => {
+            const items = MERCH_ITEMS.filter((i) => i.category === cat.id);
+            if (items.length === 0) return null;
+            return (
+              <div
+                key={cat.id}
+                style={{
+                  padding: '10px 12px',
+                  background: BRAND.chip,
+                  border: `1px solid ${BRAND.line}`,
+                  borderRadius: 8,
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: TEKO,
+                    fontSize: 13,
+                    color: BRAND.purple,
+                    letterSpacing: '0.18em',
+                    textTransform: 'uppercase',
+                    marginBottom: 8,
+                  }}
+                >
+                  {cat.label}
+                </div>
+                <div style={{display: 'grid', gap: 4}}>
+                  {items.map((m) => {
+                    const q = props.merchVisible[m.id] || 0;
+                    return (
+                      <div
+                        key={m.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 8,
+                          padding: '8px 10px',
+                          background: q > 0 ? 'rgba(184,132,255,0.10)' : 'transparent',
+                          border: `1px solid ${q > 0 ? BRAND.purple : BRAND.line}`,
+                          borderRadius: 6,
+                        }}
+                      >
+                        <div style={{fontSize: 13, flex: 1}}>
+                          <div style={{color: BRAND.white}}>{m.name}</div>
+                          {m.dimensions ? (
+                            <div style={{color: BRAND.gray, fontSize: 10}}>
+                              {m.dimensions}
+                            </div>
+                          ) : null}
+                        </div>
+                        <div style={{display: 'flex', gap: 4, alignItems: 'center'}}>
+                          <button
+                            type="button"
+                            onClick={() => setMerchCount(m.id, Math.max(0, q - 1))}
+                            style={qtyBtn()}
+                          >
+                            −
+                          </button>
+                          <span
+                            style={{
+                              width: 26,
+                              textAlign: 'center',
+                              fontFamily: TEKO,
+                              fontSize: 18,
+                              color: q > 0 ? BRAND.white : BRAND.gray,
+                            }}
+                          >
+                            {q}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setMerchCount(m.id, q + 1)}
+                            style={qtyBtn()}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
-      <Field label="Before photo (merch / display state)">
-        <PhotoPicker
-          file={props.beforePhoto}
-          setFile={props.setBeforePhoto}
-          label="Before anything gets reset"
+      {/* ─── Merch Visible Photos ───────────────────────────────────────────── */}
+      <Field
+        label={`Merch visible photos (${props.merchVisiblePhotos.length}/3)`}
+        required
+      >
+        <div style={{fontSize: 11, color: BRAND.gray, marginBottom: 6, fontFamily: BODY}}>
+          Snap at least 1, up to 3 pics of Highsman merchandising in this store —
+          stands, cutouts, signs, banners. Proof it's on the floor.
+        </div>
+        <MultiPhotoPicker
+          files={props.merchVisiblePhotos}
+          setFiles={props.setMerchVisiblePhotos}
+          minRequired={1}
+          maxAllowed={3}
+          label="Snap merch in-store"
         />
       </Field>
     </div>
@@ -1017,7 +1233,12 @@ function StepTrain(props: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Step 4 · Drop (goodies + merch + after photo)
+// Step 4 · Drop (goodies + dropped-off merch + dropoff photos)
+// ─────────────────────────────────────────────────────────────────────────────
+// Tracks what the rep physically handed over today so we can keep per-store
+// merch inventory accurate over time. Items + categories come from the shared
+// MERCH_ITEMS catalog in app/data/merch-catalog.ts, so anything added to
+// /retail automatically shows up here.
 // ─────────────────────────────────────────────────────────────────────────────
 function StepDrop(props: {
   goodieItems: Array<{item: string; cost: number}>;
@@ -1026,11 +1247,10 @@ function StepDrop(props: {
   setGoodItem: (v: string) => void;
   goodCost: string;
   setGoodCost: (v: string) => void;
-  merch: MerchItem[];
-  merchInstalled: Record<string, number>;
-  setMerchInstalled: (v: Record<string, number>) => void;
-  afterPhoto: File | null;
-  setAfterPhoto: (f: File | null) => void;
+  dropoffs: MerchCountMap;
+  setDropoffs: (v: MerchCountMap) => void;
+  dropoffPhotos: File[];
+  setDropoffPhotos: (v: File[]) => void;
   dailyBudget: number;
   total: number;
 }) {
@@ -1048,19 +1268,24 @@ function StepDrop(props: {
     props.setGoodieItems(props.goodieItems.filter((_, j) => j !== i));
   }
 
-  function setMerchQty(slug: string, qty: number) {
-    const next = {...props.merchInstalled};
-    if (qty <= 0) delete next[slug];
-    else next[slug] = qty;
-    props.setMerchInstalled(next);
+  function setDropoffCount(itemId: string, n: number) {
+    const next: MerchCountMap = {...props.dropoffs};
+    if (n <= 0) delete next[itemId];
+    else next[itemId] = n;
+    props.setDropoffs(next);
   }
 
   const over = props.total > props.dailyBudget;
+  const dropoffTotal = Object.values(props.dropoffs).reduce(
+    (s, n) => s + (Number(n) || 0),
+    0,
+  );
 
   return (
-    <div style={{display: 'grid', gap: 14}}>
+    <div style={{display: 'grid', gap: 18}}>
       <SectionTitle index="04" title="Drop" color={BRAND.orange} />
 
+      {/* ─── Goodies ────────────────────────────────────────────────────────── */}
       <Field label={`Goodies dropped ($${props.total.toFixed(0)} / $${props.dailyBudget})`}>
         <div style={{display: 'flex', gap: 6}}>
           <input
@@ -1135,81 +1360,142 @@ function StepDrop(props: {
         ) : null}
       </Field>
 
-      <Field label="Merch installed (from your car stock)">
-        {props.merch.length === 0 ? (
+      {/* ─── Dropped Off ────────────────────────────────────────────────────── */}
+      <div>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'baseline',
+            marginBottom: 4,
+          }}
+        >
           <div
             style={{
-              color: BRAND.gray,
-              fontSize: 12,
-              fontStyle: 'italic',
+              fontFamily: TEKO,
+              fontSize: 22,
+              color: BRAND.white,
+              textTransform: 'uppercase',
+              letterSpacing: '0.02em',
             }}
           >
-            Your inventory is empty — seed merch_inventory in Supabase.
+            Dropped Off
           </div>
-        ) : (
-          <div style={{display: 'grid', gap: 4}}>
-            {props.merch.map((m) => {
-              const q = props.merchInstalled[m.item_slug] || 0;
-              const maxAvail = m.qty_on_hand;
-              return (
+          <div
+            style={{
+              fontFamily: TEKO,
+              fontSize: 14,
+              color: dropoffTotal > 0 ? BRAND.orange : BRAND.gray,
+              letterSpacing: '0.12em',
+            }}
+          >
+            {dropoffTotal} DROPPED
+          </div>
+        </div>
+        <div style={{fontSize: 12, color: BRAND.gray, marginBottom: 10}}>
+          What you handed off today. Counts update this store's merch inventory
+          so we always know who has what on the floor.
+        </div>
+
+        <div style={{display: 'grid', gap: 12}}>
+          {CATEGORIES.map((cat) => {
+            const items = MERCH_ITEMS.filter((i) => i.category === cat.id);
+            if (items.length === 0) return null;
+            return (
+              <div
+                key={cat.id}
+                style={{
+                  padding: '10px 12px',
+                  background: BRAND.chip,
+                  border: `1px solid ${BRAND.line}`,
+                  borderRadius: 8,
+                }}
+              >
                 <div
-                  key={m.id}
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '6px 10px',
-                    background: BRAND.chip,
-                    border: `1px solid ${BRAND.line}`,
-                    borderRadius: 4,
+                    fontFamily: TEKO,
+                    fontSize: 13,
+                    color: BRAND.orange,
+                    letterSpacing: '0.18em',
+                    textTransform: 'uppercase',
+                    marginBottom: 8,
                   }}
                 >
-                  <div style={{fontSize: 13}}>
-                    <div style={{color: BRAND.white}}>{m.item_label}</div>
-                    <div style={{color: BRAND.gray, fontSize: 10}}>
-                      {maxAvail} on hand
-                    </div>
-                  </div>
-                  <div style={{display: 'flex', gap: 4, alignItems: 'center'}}>
-                    <button
-                      type="button"
-                      onClick={() => setMerchQty(m.item_slug, Math.max(0, q - 1))}
-                      style={qtyBtn()}
-                    >
-                      −
-                    </button>
-                    <span
-                      style={{
-                        width: 26,
-                        textAlign: 'center',
-                        fontFamily: TEKO,
-                        fontSize: 16,
-                      }}
-                    >
-                      {q}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setMerchQty(m.item_slug, Math.min(maxAvail, q + 1))
-                      }
-                      style={qtyBtn()}
-                    >
-                      +
-                    </button>
-                  </div>
+                  {cat.label}
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </Field>
+                <div style={{display: 'grid', gap: 4}}>
+                  {items.map((m) => {
+                    const q = props.dropoffs[m.id] || 0;
+                    return (
+                      <div
+                        key={m.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 8,
+                          padding: '8px 10px',
+                          background: q > 0 ? 'rgba(255,138,0,0.12)' : 'transparent',
+                          border: `1px solid ${q > 0 ? BRAND.orange : BRAND.line}`,
+                          borderRadius: 6,
+                        }}
+                      >
+                        <div style={{fontSize: 13, flex: 1}}>
+                          <div style={{color: BRAND.white}}>{m.name}</div>
+                          {m.dimensions ? (
+                            <div style={{color: BRAND.gray, fontSize: 10}}>
+                              {m.dimensions}
+                            </div>
+                          ) : null}
+                        </div>
+                        <div style={{display: 'flex', gap: 4, alignItems: 'center'}}>
+                          <button
+                            type="button"
+                            onClick={() => setDropoffCount(m.id, Math.max(0, q - 1))}
+                            style={qtyBtn()}
+                          >
+                            −
+                          </button>
+                          <span
+                            style={{
+                              width: 26,
+                              textAlign: 'center',
+                              fontFamily: TEKO,
+                              fontSize: 18,
+                              color: q > 0 ? BRAND.white : BRAND.gray,
+                            }}
+                          >
+                            {q}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setDropoffCount(m.id, q + 1)}
+                            style={qtyBtn()}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
-      <Field label="After photo (display reset)">
-        <PhotoPicker
-          file={props.afterPhoto}
-          setFile={props.setAfterPhoto}
-          label="Snap what looks fresh"
+      {/* ─── Dropoff Photos ─────────────────────────────────────────────────── */}
+      <Field label={`Dropoff photos (${props.dropoffPhotos.length}/3)`}>
+        <div style={{fontSize: 11, color: BRAND.gray, marginBottom: 6, fontFamily: BODY}}>
+          Optional — up to 3 shots of what was dropped off. Helps Reid verify
+          per-store inventory.
+        </div>
+        <MultiPhotoPicker
+          files={props.dropoffPhotos}
+          setFiles={props.setDropoffPhotos}
+          maxAllowed={3}
+          label="Snap what you dropped"
         />
       </Field>
     </div>
@@ -1572,6 +1858,157 @@ function PhotoPicker({
           />
         </label>
       )}
+    </div>
+  );
+}
+
+function MultiPhotoPicker({
+  files,
+  setFiles,
+  minRequired,
+  maxAllowed,
+  label,
+}: {
+  files: File[];
+  setFiles: (f: File[]) => void;
+  minRequired?: number;
+  maxAllowed: number;
+  label: string;
+}) {
+  const canAddMore = files.length < maxAllowed;
+
+  function addFiles(newFiles: FileList | null) {
+    if (!newFiles || newFiles.length === 0) return;
+    const toAdd = Array.from(newFiles).slice(0, maxAllowed - files.length);
+    setFiles([...files, ...toAdd]);
+  }
+
+  function removeAt(i: number) {
+    setFiles(files.filter((_, j) => j !== i));
+  }
+
+  return (
+    <div style={{display: 'grid', gap: 8}}>
+      {files.length > 0 ? (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: 6,
+          }}
+        >
+          {files.map((f, i) => {
+            const url = typeof URL !== 'undefined' ? URL.createObjectURL(f) : '';
+            return (
+              <div
+                key={`${f.name}-${i}`}
+                style={{
+                  position: 'relative',
+                  aspectRatio: '1 / 1',
+                  background: BRAND.chip,
+                  border: `1px solid ${BRAND.line}`,
+                  borderRadius: 6,
+                  overflow: 'hidden',
+                }}
+              >
+                {url ? (
+                  <img
+                    src={url}
+                    alt={f.name}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                    }}
+                  />
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => removeAt(i)}
+                  style={{
+                    position: 'absolute',
+                    top: 4,
+                    right: 4,
+                    width: 24,
+                    height: 24,
+                    borderRadius: 12,
+                    border: 'none',
+                    background: 'rgba(0,0,0,0.7)',
+                    color: BRAND.white,
+                    fontFamily: TEKO,
+                    fontSize: 14,
+                    cursor: 'pointer',
+                    lineHeight: 1,
+                  }}
+                  aria-label="Remove photo"
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {canAddMore ? (
+        <label
+          style={{
+            display: 'block',
+            padding: 12,
+            background: BRAND.chip,
+            border: `1px dashed ${
+              minRequired && files.length < minRequired ? BRAND.gold : BRAND.line
+            }`,
+            borderRadius: 6,
+            textAlign: 'center',
+            cursor: 'pointer',
+            color: BRAND.gray,
+            fontSize: 12,
+          }}
+        >
+          <div style={{fontSize: 28, marginBottom: 2}}>📷</div>
+          <div>
+            {label}{' '}
+            <span style={{color: BRAND.gray, fontSize: 11}}>
+              ({files.length}/{maxAllowed})
+            </span>
+          </div>
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            multiple
+            onChange={(e) => {
+              addFiles(e.target.files);
+              // Reset so re-picking same file still triggers change
+              e.target.value = '';
+            }}
+            style={{display: 'none'}}
+          />
+        </label>
+      ) : (
+        <div
+          style={{
+            padding: 8,
+            background: BRAND.chip,
+            border: `1px solid ${BRAND.line}`,
+            borderRadius: 6,
+            textAlign: 'center',
+            color: BRAND.gray,
+            fontSize: 11,
+            fontFamily: BODY,
+          }}
+        >
+          Max {maxAllowed} photos reached — remove one to add another.
+        </div>
+      )}
+
+      {minRequired && files.length < minRequired ? (
+        <div style={{fontSize: 11, color: BRAND.gold, fontFamily: BODY}}>
+          Need at least {minRequired} photo{minRequired > 1 ? 's' : ''} to
+          continue.
+        </div>
+      ) : null}
     </div>
   );
 }
