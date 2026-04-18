@@ -98,11 +98,15 @@ function money(n: number): string {
 
 // ── Zoho Inventory API ─────────────────────────────────────────────────────
 async function getZohoAccessToken(env: any): Promise<string> {
+  // Prefer Inventory-scoped credentials; fall back to general Zoho creds
+  const clientId = env.ZOHO_INVENTORY_CLIENT_ID || env.ZOHO_CLIENT_ID;
+  const clientSecret = env.ZOHO_INVENTORY_CLIENT_SECRET || env.ZOHO_CLIENT_SECRET;
+  const refreshToken = env.ZOHO_INVENTORY_REFRESH_TOKEN || env.ZOHO_REFRESH_TOKEN;
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
-    client_id: env.ZOHO_CLIENT_ID,
-    client_secret: env.ZOHO_CLIENT_SECRET,
-    refresh_token: env.ZOHO_REFRESH_TOKEN,
+    client_id: clientId,
+    client_secret: clientSecret,
+    refresh_token: refreshToken,
   });
   const res = await fetch('https://accounts.zoho.com/oauth/v2/token', {
     method: 'POST',
@@ -230,9 +234,12 @@ export async function loader({request, context}: LoaderFunctionArgs) {
 
   const env = context.env as any;
   const missing: string[] = [];
-  if (!env.ZOHO_CLIENT_ID) missing.push('ZOHO_CLIENT_ID');
-  if (!env.ZOHO_CLIENT_SECRET) missing.push('ZOHO_CLIENT_SECRET');
-  if (!env.ZOHO_REFRESH_TOKEN) missing.push('ZOHO_REFRESH_TOKEN');
+  const hasClientId = env.ZOHO_INVENTORY_CLIENT_ID || env.ZOHO_CLIENT_ID;
+  const hasClientSecret = env.ZOHO_INVENTORY_CLIENT_SECRET || env.ZOHO_CLIENT_SECRET;
+  const hasRefreshToken = env.ZOHO_INVENTORY_REFRESH_TOKEN || env.ZOHO_REFRESH_TOKEN;
+  if (!hasClientId) missing.push('ZOHO_INVENTORY_CLIENT_ID (or ZOHO_CLIENT_ID)');
+  if (!hasClientSecret) missing.push('ZOHO_INVENTORY_CLIENT_SECRET (or ZOHO_CLIENT_SECRET)');
+  if (!hasRefreshToken) missing.push('ZOHO_INVENTORY_REFRESH_TOKEN (or ZOHO_REFRESH_TOKEN)');
   // ZOHO_INVENTORY_ORG_ID has a hardcoded fallback (882534504), env var override only
   if (missing.length) {
     return json({
