@@ -1139,74 +1139,68 @@ export default function NJMenu() {
       .then((res) => res.json())
       .then((data: any) => {
         if (data.ok) {
+          // `skipped` = no products synced (not a real order) → no confirmation view.
+          // `manualEntry` = order IS placed (email fallback) → show confirmation + accrue credit.
+          // Normal success path also shows confirmation.
           if (data.skipped) {
             setLeaflinkStatus('skipped');
             setLeaflinkMessage(data.message || 'No products synced to LeafLink');
-          } else if (data.manualEntry) {
+            return;
+          }
+
+          if (data.manualEntry) {
             setLeaflinkStatus('success');
             setLeaflinkMessage('Order received — your rep will confirm shortly.');
           } else {
             setLeaflinkStatus('success');
             setLeaflinkMessage('Order placed successfully. Your rep will confirm shortly.');
+          }
 
-            // ── Capture order summary for confirmation page ────────
-            const orderTotal = cartItems.reduce((sum, item) => {
-              const product = PRODUCT_LINES.find((p) => p.id === item.productId);
-              if (!product) return sum;
-              const casePrice = applyDiscount(product.casePrice, product.discount);
-              return sum + item.cases * casePrice;
-            }, 0);
-            const orderItems = cartItems.map((item) => {
-              const product = PRODUCT_LINES.find((p) => p.id === item.productId);
-              if (!product) return null;
-              return {
-                name: product.name,
-                strainName: item.strainName,
-                qty: item.cases * product.caseSize,
-                casePrice: applyDiscount(product.casePrice, product.discount),
-              };
-            }).filter(Boolean) as Array<{name: string; strainName: string; qty: number; casePrice: number}>;
+          // ── Capture order summary for confirmation page (both real + manualEntry success) ─
+          const orderTotal = cartItems.reduce((sum, item) => {
+            const product = PRODUCT_LINES.find((p) => p.id === item.productId);
+            if (!product) return sum;
+            const casePrice = applyDiscount(product.casePrice, product.discount);
+            return sum + item.cases * casePrice;
+          }, 0);
+          const orderItems = cartItems.map((item) => {
+            const product = PRODUCT_LINES.find((p) => p.id === item.productId);
+            if (!product) return null;
+            return {
+              name: product.name,
+              strainName: item.strainName,
+              qty: item.cases * product.caseSize,
+              casePrice: applyDiscount(product.casePrice, product.discount),
+            };
+          }).filter(Boolean) as Array<{name: string; strainName: string; qty: number; casePrice: number}>;
 
-            // ── Accrue buyer store credit (menu orders only) ──────────
-            if (buyerContactId && orderTotal > 0) {
-              fetch('/api/buyer-credit', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                  action: 'accrue',
-                  contactId: buyerContactId,
-                  orderTotal,
-                }),
-              })
-                .then((r) => r.json())
-                .then((creditData: any) => {
-                  if (creditData.ok && creditData.action === 'accrued') {
-                    setBuyerCredit(creditData.newBalance);
-                    setConfirmedOrder({
-                      dispensaryName: selectedAccount!.name,
-                      items: orderItems,
-                      total: orderTotal,
-                      creditEarned: creditData.creditEarned || 0,
-                      newCreditBalance: creditData.newBalance || 0,
-                      buyerName: `${buyerFirstName} ${buyerLastName}`.trim(),
-                      buyerEmail: buyerEmail,
-                    });
-                    console.log(`[njmenu] Credit accrued: +$${creditData.creditEarned} → $${creditData.newBalance}`);
-                  } else {
-                    // Credit accrual failed but order succeeded — still show confirmation
-                    setConfirmedOrder({
-                      dispensaryName: selectedAccount!.name,
-                      items: orderItems,
-                      total: orderTotal,
-                      creditEarned: 0,
-                      newCreditBalance: buyerCredit,
-                      buyerName: `${buyerFirstName} ${buyerLastName}`.trim(),
-                      buyerEmail: buyerEmail,
-                    });
-                  }
-                })
-                .catch((e) => {
-                  console.error('[njmenu] Credit accrual error:', e);
+          // ── Accrue buyer store credit (menu orders only) ──────────
+          if (buyerContactId && orderTotal > 0) {
+            fetch('/api/buyer-credit', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({
+                action: 'accrue',
+                contactId: buyerContactId,
+                orderTotal,
+              }),
+            })
+              .then((r) => r.json())
+              .then((creditData: any) => {
+                if (creditData.ok && creditData.action === 'accrued') {
+                  setBuyerCredit(creditData.newBalance);
+                  setConfirmedOrder({
+                    dispensaryName: selectedAccount!.name,
+                    items: orderItems,
+                    total: orderTotal,
+                    creditEarned: creditData.creditEarned || 0,
+                    newCreditBalance: creditData.newBalance || 0,
+                    buyerName: `${buyerFirstName} ${buyerLastName}`.trim(),
+                    buyerEmail: buyerEmail,
+                  });
+                  console.log(`[njmenu] Credit accrued: +$${creditData.creditEarned} → $${creditData.newBalance}`);
+                } else {
+                  // Credit accrual failed but order succeeded — still show confirmation
                   setConfirmedOrder({
                     dispensaryName: selectedAccount!.name,
                     items: orderItems,
@@ -1216,19 +1210,31 @@ export default function NJMenu() {
                     buyerName: `${buyerFirstName} ${buyerLastName}`.trim(),
                     buyerEmail: buyerEmail,
                   });
+                }
+              })
+              .catch((e) => {
+                console.error('[njmenu] Credit accrual error:', e);
+                setConfirmedOrder({
+                  dispensaryName: selectedAccount!.name,
+                  items: orderItems,
+                  total: orderTotal,
+                  creditEarned: 0,
+                  newCreditBalance: buyerCredit,
+                  buyerName: `${buyerFirstName} ${buyerLastName}`.trim(),
+                  buyerEmail: buyerEmail,
                 });
-            } else {
-              // No buyer contact — still show confirmation without credit
-              setConfirmedOrder({
-                dispensaryName: selectedAccount!.name,
-                items: orderItems,
-                total: orderTotal,
-                creditEarned: 0,
-                newCreditBalance: 0,
-                buyerName: `${buyerFirstName} ${buyerLastName}`.trim(),
-                buyerEmail: buyerEmail,
               });
-            }
+          } else {
+            // No buyer contact — still show confirmation without credit
+            setConfirmedOrder({
+              dispensaryName: selectedAccount!.name,
+              items: orderItems,
+              total: orderTotal,
+              creditEarned: 0,
+              newCreditBalance: 0,
+              buyerName: `${buyerFirstName} ${buyerLastName}`.trim(),
+              buyerEmail: buyerEmail,
+            });
           }
         } else {
           setLeaflinkStatus('error');
