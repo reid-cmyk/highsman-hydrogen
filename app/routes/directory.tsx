@@ -523,9 +523,11 @@ export default function Directory() {
               {section.pages.map((p) => {
                 const badge = accessBadge(p.access);
                 return (
-                  <Link
+                  <a
                     key={p.path}
-                    to={p.path}
+                    href={p.path}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     style={{
                       display: 'block',
                       background: BRAND.surface,
@@ -639,11 +641,14 @@ export default function Directory() {
                         letterSpacing: 1.5,
                         textTransform: 'uppercase',
                         fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
                       }}
                     >
-                      Open →
+                      Open in new tab ↗
                     </div>
-                  </Link>
+                  </a>
                 );
               })}
             </div>
