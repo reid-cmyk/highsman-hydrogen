@@ -413,9 +413,9 @@ export default function VibesDashboard() {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
+          gridTemplateColumns: 'repeat(2, 1fr)',
           gap: 8,
-          padding: '12px 16px',
+          padding: '12px 16px 0',
         }}
       >
         <QuickTile
@@ -424,6 +424,20 @@ export default function VibesDashboard() {
           sub="GPS-gated"
           primary
         />
+        <QuickTile
+          href="/vibes/receipts"
+          label="File Receipt"
+          sub="→ Bill.com"
+        />
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, 1fr)',
+          gap: 8,
+          padding: '8px 16px 12px',
+        }}
+      >
         <QuickTile
           href="/vibes/decks"
           label="Decks"

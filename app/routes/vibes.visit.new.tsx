@@ -259,6 +259,17 @@ export default function VibesVisitNew() {
   const [dropoffs, setDropoffs] = useState<MerchCountMap>({});
   // Photos of what was dropped off — up to 3 shots for inventory-tracking
   const [dropoffPhotos, setDropoffPhotos] = useState<File[]>([]);
+  // Filed goodies receipts (sent live to /api/goodies-receipt-submit → Bill.com)
+  const [filedReceipts, setFiledReceipts] = useState<
+    Array<{
+      id: string;
+      amount: number;
+      vendor: string;
+      photoName: string;
+      status: 'sending' | 'filed' | 'saved_no_email' | 'error';
+      message?: string;
+    }>
+  >([]);
 
   // Vibes
   const [vibesScore, setVibesScore] = useState<number | null>(null);
@@ -634,6 +645,12 @@ export default function VibesVisitNew() {
                 setDropoffPhotos={setDropoffPhotos}
                 dailyBudget={dailyBudget}
                 total={goodieTotal}
+                rep={rep}
+                accountId={accountId}
+                accountName={accountName}
+                accountState={accountState}
+                filedReceipts={filedReceipts}
+                setFiledReceipts={setFiledReceipts}
               />
             )}
             {step === 'vibes' && (
@@ -2524,6 +2541,28 @@ function StepDrop(props: {
   setDropoffPhotos: (v: File[]) => void;
   dailyBudget: number;
   total: number;
+  rep: {id: string; full_name: string; daily_goodie_budget: number} | null;
+  accountId: string;
+  accountName: string;
+  accountState: string;
+  filedReceipts: Array<{
+    id: string;
+    amount: number;
+    vendor: string;
+    photoName: string;
+    status: 'sending' | 'filed' | 'saved_no_email' | 'error';
+    message?: string;
+  }>;
+  setFiledReceipts: (
+    v: Array<{
+      id: string;
+      amount: number;
+      vendor: string;
+      photoName: string;
+      status: 'sending' | 'filed' | 'saved_no_email' | 'error';
+      message?: string;
+    }>,
+  ) => void;
 }) {
   function addGoodie() {
     const cost = Number(props.goodCost);
@@ -2630,6 +2669,17 @@ function StepDrop(props: {
           </div>
         ) : null}
       </Field>
+
+      {/* ─── Bill.com Receipts ──────────────────────────────────────────────── */}
+      <ReceiptsSubmitter
+        rep={props.rep}
+        accountId={props.accountId}
+        accountName={props.accountName}
+        accountState={props.accountState}
+        filedReceipts={props.filedReceipts}
+        setFiledReceipts={props.setFiledReceipts}
+        suggestedAmount={props.total}
+      />
 
       {/* ─── Dropped Off ────────────────────────────────────────────────────── */}
       <div>
@@ -2771,6 +2821,396 @@ function StepDrop(props: {
       </Field>
     </div>
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ReceiptsSubmitter — inline "snap goodies receipt → Bill.com" block.
+// Fires POST /api/goodies-receipt-submit IMMEDIATELY when the rep taps File.
+// Independent from the main visit submit so a receipt is always persisted /
+// emailed the moment it's captured (even if she abandons the visit).
+// ─────────────────────────────────────────────────────────────────────────────
+function ReceiptsSubmitter(props: {
+  rep: {id: string; full_name: string; daily_goodie_budget: number} | null;
+  accountId: string;
+  accountName: string;
+  accountState: string;
+  suggestedAmount: number;
+  filedReceipts: Array<{
+    id: string;
+    amount: number;
+    vendor: string;
+    photoName: string;
+    status: 'sending' | 'filed' | 'saved_no_email' | 'error';
+    message?: string;
+  }>;
+  setFiledReceipts: (
+    v: Array<{
+      id: string;
+      amount: number;
+      vendor: string;
+      photoName: string;
+      status: 'sending' | 'filed' | 'saved_no_email' | 'error';
+      message?: string;
+    }>,
+  ) => void;
+}) {
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [amount, setAmount] = useState<string>('');
+  const [vendor, setVendor] = useState<string>('');
+  const [notes, setNotes] = useState<string>('');
+  const [sending, setSending] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const canFile =
+    !sending &&
+    !!props.rep &&
+    !!props.accountName &&
+    !!photo &&
+    Number.isFinite(Number(amount)) &&
+    Number(amount) > 0;
+
+  async function fileReceipt() {
+    if (!canFile || !props.rep || !photo) return;
+    setSending(true);
+    setErrorMsg(null);
+    const tempId = `r_${Date.now()}`;
+    const snapshot = {
+      id: tempId,
+      amount: Number(amount),
+      vendor: vendor.trim(),
+      photoName: photo.name,
+      status: 'sending' as const,
+    };
+    props.setFiledReceipts([snapshot, ...props.filedReceipts]);
+
+    try {
+      const fd = new FormData();
+      fd.set('repId', props.rep.id);
+      fd.set('repName', props.rep.full_name);
+      fd.set('accountId', props.accountId || '');
+      fd.set('accountName', props.accountName);
+      fd.set('accountState', props.accountState || '');
+      fd.set('amount', String(Number(amount)));
+      if (vendor.trim()) fd.set('vendor', vendor.trim());
+      if (notes.trim()) fd.set('notes', notes.trim());
+      fd.set('receiptPhoto', photo);
+
+      const res = await fetch('/api/goodies-receipt-submit', {
+        method: 'POST',
+        body: fd,
+      });
+      const data: {
+        ok?: boolean;
+        emailed?: boolean;
+        emailError?: string;
+        message?: string;
+      } = await res.json().catch(() => ({}));
+
+      if (!res.ok || data.ok === false) {
+        props.setFiledReceipts(
+          [snapshot, ...props.filedReceipts].map((r) =>
+            r.id === tempId
+              ? {
+                  ...r,
+                  status: 'error',
+                  message: data.message || `HTTP ${res.status}`,
+                }
+              : r,
+          ),
+        );
+        setErrorMsg(data.message || `Upload failed (HTTP ${res.status})`);
+        return;
+      }
+
+      const nextStatus: 'filed' | 'saved_no_email' = data.emailed
+        ? 'filed'
+        : 'saved_no_email';
+      props.setFiledReceipts(
+        [snapshot, ...props.filedReceipts].map((r) =>
+          r.id === tempId
+            ? {
+                ...r,
+                status: nextStatus,
+                message: data.emailError || undefined,
+              }
+            : r,
+        ),
+      );
+
+      // Reset form for the next receipt
+      setPhoto(null);
+      setAmount('');
+      setVendor('');
+      setNotes('');
+    } catch (e: any) {
+      props.setFiledReceipts(
+        [snapshot, ...props.filedReceipts].map((r) =>
+          r.id === tempId
+            ? {...r, status: 'error', message: e?.message || 'Network error'}
+            : r,
+        ),
+      );
+      setErrorMsg(e?.message || 'Network error');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  // Helpful prefill: tap to copy the Goodies total into the amount field
+  function usePrefill() {
+    if (props.suggestedAmount > 0) {
+      setAmount(String(props.suggestedAmount.toFixed(2)));
+    }
+  }
+
+  return (
+    <div
+      style={{
+        border: `1px solid ${BRAND.line}`,
+        borderRadius: 8,
+        padding: 12,
+        background: BRAND.chip,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          marginBottom: 4,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: TEKO,
+            fontSize: 22,
+            color: BRAND.white,
+            textTransform: 'uppercase',
+            letterSpacing: '0.02em',
+          }}
+        >
+          File receipt → Bill.com
+        </div>
+        <div
+          style={{
+            fontFamily: TEKO,
+            fontSize: 12,
+            color: BRAND.gray,
+            letterSpacing: '0.18em',
+            textTransform: 'uppercase',
+          }}
+        >
+          {props.filedReceipts.length} FILED
+        </div>
+      </div>
+      <div
+        style={{
+          fontSize: 12,
+          color: BRAND.gray,
+          marginBottom: 10,
+          fontFamily: BODY,
+        }}
+      >
+        Snap the receipt → auto-emails spark@highsman.com → Bill.com tagged
+        with the rep + dispensary for reimbursement.
+      </div>
+
+      <div style={{display: 'grid', gap: 10}}>
+        <Field label={`Receipt photo${photo ? '' : ' (required)'}`}>
+          <PhotoPicker
+            file={photo}
+            setFile={setPhoto}
+            label="Snap receipt"
+          />
+        </Field>
+
+        <div style={{display: 'flex', gap: 8}}>
+          <div style={{flex: 1}}>
+            <Field label="Amount ($)">
+              <input
+                type="number"
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                style={inputStyle()}
+              />
+              {props.suggestedAmount > 0 && amount === '' ? (
+                <button
+                  type="button"
+                  onClick={usePrefill}
+                  style={{
+                    marginTop: 4,
+                    background: 'transparent',
+                    color: BRAND.orange,
+                    border: 'none',
+                    fontFamily: TEKO,
+                    fontSize: 11,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    padding: 0,
+                    letterSpacing: '0.08em',
+                  }}
+                >
+                  USE GOODIES TOTAL (${props.suggestedAmount.toFixed(2)})
+                </button>
+              ) : null}
+            </Field>
+          </div>
+          <div style={{flex: 1}}>
+            <Field label="Vendor (optional)">
+              <input
+                type="text"
+                value={vendor}
+                onChange={(e) => setVendor(e.target.value)}
+                placeholder="Target, Costco…"
+                style={inputStyle()}
+              />
+            </Field>
+          </div>
+        </div>
+
+        <Field label="Notes (optional)">
+          <input
+            type="text"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="What was bought — pizza, donuts, swag…"
+            style={inputStyle()}
+          />
+        </Field>
+
+        <button
+          type="button"
+          onClick={fileReceipt}
+          disabled={!canFile}
+          style={{
+            padding: '12px 14px',
+            background: canFile ? BRAND.orange : BRAND.line,
+            color: canFile ? BRAND.black : BRAND.gray,
+            border: 'none',
+            borderRadius: 6,
+            fontFamily: TEKO,
+            fontSize: 18,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            cursor: canFile ? 'pointer' : 'not-allowed',
+          }}
+        >
+          {sending ? 'Filing…' : 'File receipt → Bill.com'}
+        </button>
+
+        {errorMsg ? (
+          <div
+            style={{
+              fontSize: 12,
+              color: BRAND.red,
+              fontFamily: BODY,
+            }}
+          >
+            {errorMsg}
+          </div>
+        ) : null}
+
+        {props.accountName ? null : (
+          <div
+            style={{
+              fontSize: 11,
+              color: BRAND.gray,
+              fontFamily: BODY,
+            }}
+          >
+            Tag the dispensary in the Arrive step first — Bill.com needs to know
+            which store this receipt is for.
+          </div>
+        )}
+      </div>
+
+      {/* ─── Filed receipts list ──────────────────────────────────────────── */}
+      {props.filedReceipts.length > 0 ? (
+        <div style={{marginTop: 12, display: 'grid', gap: 6}}>
+          {props.filedReceipts.map((r) => {
+            const {color, label} = receiptStatusPresentation(r.status);
+            return (
+              <div
+                key={r.id}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '8px 10px',
+                  background: BRAND.black,
+                  border: `1px solid ${BRAND.line}`,
+                  borderRadius: 6,
+                  fontSize: 12,
+                }}
+              >
+                <div style={{display: 'grid', gap: 2}}>
+                  <div
+                    style={{
+                      fontFamily: TEKO,
+                      fontSize: 16,
+                      color: BRAND.gold,
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    ${r.amount.toFixed(2)}
+                    {r.vendor ? (
+                      <span
+                        style={{
+                          color: BRAND.gray,
+                          marginLeft: 8,
+                          fontSize: 12,
+                        }}
+                      >
+                        · {r.vendor}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div style={{color: BRAND.gray, fontSize: 11}}>
+                    {r.photoName}
+                  </div>
+                  {r.message ? (
+                    <div style={{color: BRAND.red, fontSize: 10}}>
+                      {r.message}
+                    </div>
+                  ) : null}
+                </div>
+                <div
+                  style={{
+                    fontFamily: TEKO,
+                    fontSize: 11,
+                    color,
+                    letterSpacing: '0.16em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {label}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function receiptStatusPresentation(status: string): {
+  color: string;
+  label: string;
+} {
+  switch (status) {
+    case 'filed':
+      return {color: BRAND.green, label: '✓ Filed'};
+    case 'saved_no_email':
+      return {color: BRAND.gold, label: '↻ Saved · Email retry'};
+    case 'error':
+      return {color: BRAND.red, label: '! Error'};
+    case 'sending':
+    default:
+      return {color: BRAND.gray, label: 'Sending…'};
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
