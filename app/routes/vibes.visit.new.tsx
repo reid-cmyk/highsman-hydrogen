@@ -282,7 +282,15 @@ export default function VibesVisitNew() {
         // Require at least one Highsman-merch-in-store photo.
         return merchVisiblePhotos.length >= 1;
       case 'train':
-        return true;
+        // Hard gate: we MUST know how many budtenders work at this store so
+        // the Vibes program has a real training target and can measure
+        // coverage. If Zoho didn't have a value and the rep hasn't entered
+        // one, block advance until she does.
+        return (
+          numberOfBudtenders != null &&
+          Number.isFinite(numberOfBudtenders) &&
+          numberOfBudtenders > 0
+        );
       case 'drop':
         return true;
       case 'vibes':
@@ -296,6 +304,7 @@ export default function VibesVisitNew() {
     checkedInAt,
     merchVisiblePhotos.length,
     vibesScore,
+    numberOfBudtenders,
   ]);
 
   const stepIdx = STEPS.findIndex((s) => s.key === step);
@@ -538,6 +547,34 @@ export default function VibesVisitNew() {
                 setUgcPostUrl={setUgcPostUrl}
               />
             )}
+
+            {/* Why-blocked hint — lives just above the sticky action bar so
+                Serena always sees *why* Continue is grey. */}
+            {!canAdvance && !submitting ? (
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: '8px 10px',
+                  background: 'rgba(255,59,48,0.1)',
+                  border: `1px solid ${BRAND.red}`,
+                  borderRadius: 6,
+                  color: BRAND.red,
+                  fontFamily: BODY,
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                {step === 'arrive'
+                  ? 'Pick a store and tap Check In to continue.'
+                  : step === 'audit'
+                    ? 'Take at least 1 photo of Highsman merch in-store to continue.'
+                    : step === 'train'
+                      ? "Enter the number of budtenders on staff above — we can't continue without it."
+                      : step === 'vibes'
+                        ? 'Give this store a Vibes Score (0–10) to submit.'
+                        : 'Please complete this step to continue.'}
+              </div>
+            ) : null}
 
             {/* Action bar */}
             <div
@@ -1208,12 +1245,22 @@ function StepTrain(props: {
       <SectionTitle index="03" title="Train" color={BRAND.green} />
 
       {/* ─── Training Goal + Progress ──────────────────────────────────────── */}
+      {/*
+        Required gate: if Zoho didn't return a budtender count we go full red
+        to make it impossible to miss. The parent canAdvance() also blocks
+        Continue until this is filled in.
+      */}
       <div
         style={{
           padding: 14,
-          background: 'rgba(46,204,113,0.08)',
-          border: `1px solid ${BRAND.green}`,
+          background: goalKnown
+            ? 'rgba(46,204,113,0.08)'
+            : 'rgba(255,59,48,0.12)',
+          border: `2px solid ${goalKnown ? BRAND.green : BRAND.red}`,
           borderRadius: 8,
+          boxShadow: goalKnown
+            ? 'none'
+            : `0 0 0 4px rgba(255,59,48,0.15)`,
         }}
       >
         <div
@@ -1229,7 +1276,7 @@ function StepTrain(props: {
             style={{
               fontFamily: TEKO,
               fontSize: 13,
-              color: BRAND.green,
+              color: goalKnown ? BRAND.green : BRAND.red,
               letterSpacing: '0.18em',
               textTransform: 'uppercase',
             }}
@@ -1240,13 +1287,36 @@ function StepTrain(props: {
             style={{
               fontFamily: TEKO,
               fontSize: 11,
-              color: BRAND.gray,
+              color: goalKnown ? BRAND.gray : BRAND.red,
               letterSpacing: '0.1em',
+              fontWeight: goalKnown ? 400 : 700,
             }}
           >
-            EDITABLE
+            {goalKnown ? 'EDITABLE' : '★ REQUIRED'}
           </div>
         </div>
+
+        {!goalKnown ? (
+          <div
+            style={{
+              marginBottom: 10,
+              padding: '8px 10px',
+              background: 'rgba(0,0,0,0.35)',
+              border: `1px dashed ${BRAND.red}`,
+              borderRadius: 6,
+              color: BRAND.white,
+              fontFamily: BODY,
+              fontSize: 13,
+              lineHeight: 1.4,
+            }}
+          >
+            <strong style={{color: BRAND.red}}>
+              Ask the manager how many budtenders work here.
+            </strong>{' '}
+            We need this number to set a training target — it saves back to
+            Zoho automatically. You can't continue until it's filled in.
+          </div>
+        ) : null}
 
         <div
           style={{
@@ -1275,11 +1345,12 @@ function StepTrain(props: {
               props.setNumberOfBudtenders(Number.isFinite(n) ? n : null);
             }}
             placeholder="?"
+            autoFocus={!goalKnown}
             style={{
               width: 64,
               padding: '6px 8px',
               background: BRAND.black,
-              border: `1px solid ${BRAND.green}`,
+              border: `2px solid ${goalKnown ? BRAND.green : BRAND.red}`,
               color: BRAND.white,
               borderRadius: 6,
               fontFamily: TEKO,
@@ -1289,8 +1360,15 @@ function StepTrain(props: {
             }}
           />
           {!goalKnown ? (
-            <div style={{fontSize: 11, color: BRAND.gold, fontFamily: BODY}}>
-              ← ask the manager, we'll save it back to Zoho
+            <div
+              style={{
+                fontSize: 12,
+                color: BRAND.red,
+                fontFamily: BODY,
+                fontWeight: 600,
+              }}
+            >
+              ← required before Continue
             </div>
           ) : null}
         </div>

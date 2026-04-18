@@ -135,6 +135,11 @@ export async function action({request, context}: ActionFunctionArgs) {
   // `budtenderCount` is the (possibly edited) value the rep saw on screen;
   // `budtenderCountOriginal` is what was loaded from Zoho. If they differ,
   // we PATCH the Zoho Account below.
+  //
+  // This is a hard requirement: every Vibes visit must leave the store with
+  // a known budtender headcount so the program has a measurable training
+  // target. The client also blocks Continue on this, but we enforce it
+  // server-side as a belt-and-suspenders safety net.
   const budtenderCountRaw = form.get('budtenderCount');
   const budtenderCountOrigRaw = form.get('budtenderCountOriginal');
   const budtenderCount =
@@ -145,6 +150,21 @@ export async function action({request, context}: ActionFunctionArgs) {
     budtenderCountOrigRaw != null && budtenderCountOrigRaw !== ''
       ? Number(budtenderCountOrigRaw)
       : null;
+
+  if (
+    budtenderCount == null ||
+    !Number.isFinite(budtenderCount) ||
+    budtenderCount <= 0
+  ) {
+    return json(
+      {
+        ok: false,
+        message:
+          "Please ask the manager how many budtenders work at this store — that's the training target.",
+      },
+      {status: 400},
+    );
+  }
 
   // Robust JSON helper
   const parseJson = <T,>(key: string, fallback: T): T => {
