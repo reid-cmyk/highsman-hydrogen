@@ -412,9 +412,9 @@ function pickExtension(file: File): string {
 // ─────────────────────────────────────────────────────────────────────────────
 // GRADING
 // ─────────────────────────────────────────────────────────────────────────────
-// Rubric (per Reid 2026-04-17):
+// Rubric (per Reid 2026-04-17, volume ceiling raised 20→50 on 2026-04-17):
 //   Close rate    35%   — closes / intercepts (0% → 0, 50%+ → full)
-//   Volume        20%   — absolute closes vs. 20-close baseline
+//   Volume        20%   — absolute closes vs. 50-close baseline
 //   Aggression    15%   — self-reported 1-10 flame rating
 //   Job complete  15%   — required fields + photos (100% if we got here)
 //   Retail intel  15%   — count of filled retail-intel fields / 7 possible
@@ -429,7 +429,7 @@ function gradeShift(input: {
   intelFilled: number; // 0..7
 }): Grade {
   const closeScore = Math.min(input.closeRate / 0.5, 1) * 35;
-  const volScore = Math.min(input.closes / 20, 1) * 20;
+  const volScore = Math.min(input.closes / 50, 1) * 20;
   const aggScore = (input.aggression / 10) * 15;
   const jobScore = 15; // reached action = required fields present
   const intelScore = Math.min(input.intelFilled / 7, 1) * 15;

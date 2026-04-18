@@ -78,18 +78,19 @@ const COMPONENTS = [
     label: 'Volume',
     weight: 20,
     accent: BRAND.orange,
-    oneLiner: 'Total closes on the shift. 20 closes is the ceiling.',
+    oneLiner: 'Total closes on the shift. 50 closes is the ceiling.',
     detail:
-      'Close rate without volume is theory. Volume without close rate is churn. We score the raw number of bags you moved so traffic-heavy shifts don\u2019t get penalized for a diluted rate. 20 closes on the shift = full 20.',
+      'Close rate without volume is theory. Volume without close rate is churn. We score the raw number of bags you moved so traffic-heavy shifts don\u2019t get penalized for a diluted rate. 50 closes on the shift = full 20.',
     thresholds: [
-      {range: '20 +', pts: '20 / 20', note: 'Full throttle.'},
-      {range: '15', pts: '15', note: 'Solid shift.'},
-      {range: '10', pts: '10', note: 'Respectable — can we get 5 more?'},
-      {range: '5', pts: '5', note: 'Slow day or slow pitch.'},
+      {range: '50 +', pts: '20 / 20', note: 'Full throttle.'},
+      {range: '40', pts: '16', note: 'Top-tier shift.'},
+      {range: '30', pts: '12', note: 'Solid shift.'},
+      {range: '20', pts: '8', note: 'On pace — push it.'},
+      {range: '10', pts: '4', note: 'Slow day or slow pitch.'},
       {range: '0', pts: '0', note: 'Something broke — log the why.'},
     ],
     howToMove:
-      'Own the first hour. Most reps get half their closes in the first 90 minutes because the budtender is fresh and the floor has energy. Lock that window and the rest of the shift runs downhill.',
+      'Own the first hour. Most reps get a third of their closes in the first 90 minutes because the budtender is fresh and the floor has energy. Lock that window, then hunt the second traffic wave to clear 40+.',
   },
   {
     key: 'aggression',
@@ -784,15 +785,15 @@ function ComponentBlock({component: c}: {component: (typeof COMPONENTS)[number]}
 // LIVE SCORER — mirrors gradeShift() from /api/shift-report-submit.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 function Scorer() {
-  const [intercepts, setIntercepts] = useState(30);
-  const [closes, setCloses] = useState(9);
+  const [intercepts, setIntercepts] = useState(60);
+  const [closes, setCloses] = useState(18);
   const [aggression, setAggression] = useState(8);
   const [intel, setIntel] = useState(6);
 
   const result = useMemo(() => {
     const closeRate = intercepts > 0 ? closes / intercepts : 0;
     const closeScore = Math.min(closeRate / 0.5, 1) * 35;
-    const volScore = Math.min(closes / 20, 1) * 20;
+    const volScore = Math.min(closes / 50, 1) * 20;
     const aggScore = (aggression / 10) * 15;
     const jobScore = 15;
     const intelScore = Math.min(intel / 7, 1) * 15;
@@ -861,7 +862,7 @@ function Scorer() {
           label="Intercepts"
           value={intercepts}
           min={0}
-          max={80}
+          max={200}
           step={1}
           onChange={setIntercepts}
           suffix=""
@@ -870,7 +871,7 @@ function Scorer() {
           label="Closes"
           value={closes}
           min={0}
-          max={Math.max(intercepts, 30)}
+          max={Math.max(intercepts, 60)}
           step={1}
           onChange={(v) => setCloses(Math.min(v, intercepts || v))}
           suffix=""
