@@ -195,37 +195,56 @@ async function fetchSalesOrders(env: any, accessToken: string, startDate: Date, 
   const orgId = env.ZOHO_INVENTORY_ORG_ID || DEFAULT_ZOHO_INVENTORY_ORG_ID;
   if (!orgId) throw new Error('ZOHO_INVENTORY_ORG_ID not configured');
 
-  const orders: any[] = [];
-  let page = 1;
-  const perPage = 200;
   const dateStart = ymd(startDate);
   const dateEnd = ymd(endDate);
+  const perPage = 200;
 
-  while (true) {
-    const url =
-      `https://www.zohoapis.com/inventory/v1/salesorders` +
-      `?organization_id=${orgId}` +
-      `&date_start=${dateStart}` +
-      `&date_end=${dateEnd}` +
-      `&per_page=${perPage}` +
-      `&page=${page}`;
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Zoho-oauthtoken ${accessToken}`,
-        Accept: 'application/json',
-      },
-    });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '');
-      throw new Error(`Zoho Inventory list error: ${res.status} — ${txt.slice(0, 200)}`);
+  // We fetch only real, booked sales orders — excluding Draft / Void / Onhold.
+  // Zoho Inventory's filter_by parameter takes a single status, so we do two
+  // passes: Status.Confirmed (approved, not yet fully shipped) +
+  // Status.Closed (approved AND fully invoiced & shipped). Both represent
+  // confirmed revenue; together they're the right dataset for a sales
+  // dashboard. Draft / Void / Onhold are intentionally excluded.
+  const statusFilters = ['Status.Confirmed', 'Status.Closed'];
+
+  const orders: any[] = [];
+  const seen = new Set<string>();
+
+  for (const statusFilter of statusFilters) {
+    let page = 1;
+    while (true) {
+      const url =
+        `https://www.zohoapis.com/inventory/v1/salesorders` +
+        `?organization_id=${orgId}` +
+        `&date_start=${dateStart}` +
+        `&date_end=${dateEnd}` +
+        `&filter_by=${statusFilter}` +
+        `&per_page=${perPage}` +
+        `&page=${page}`;
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Zoho-oauthtoken ${accessToken}`,
+          Accept: 'application/json',
+        },
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(`Zoho Inventory list error: ${res.status} — ${txt.slice(0, 200)}`);
+      }
+      const data: any = await res.json();
+      for (const so of data.salesorders || []) {
+        const id = so.salesorder_id || so.id;
+        if (id && seen.has(id)) continue;
+        if (id) seen.add(id);
+        orders.push(so);
+      }
+      const hasMore = data.page_context?.has_more_page;
+      if (!hasMore) break;
+      page += 1;
+      if (page > 50) break; // safety cap (10k orders per status)
     }
-    const data: any = await res.json();
-    orders.push(...(data.salesorders || []));
-    const hasMore = data.page_context?.has_more_page;
-    if (!hasMore) break;
-    page += 1;
-    if (page > 50) break; // safety cap (10k orders)
   }
+
   return orders;
 }
 
