@@ -16,7 +16,7 @@ import {json} from '@shopify/remix-oxygen';
 //   dispensaryName   — for Event_Title (required)
 //   date             — YYYY-MM-DD, the pop-up date (required)
 //   shiftKey         — e.g. 'thu-main', 'sat-mat', 'sat-late' (required)
-//   shiftLabel       — human-readable, e.g. "1:00 – 3:00 PM" (optional; for Description)
+//   shiftLabel       — human-readable, e.g. "1:00 – 4:00 PM" (optional; for Description)
 //   channel          — "email" | "link" | "manual" (for Description)
 //   contactName      — optional, for Description
 //   contactEmail     — optional, for Description
@@ -66,11 +66,13 @@ async function getAccessToken(env: {
 }
 
 // Shift key → start/end hours in 24h local time.
-// Thu/Fri main: 15:00–19:00. Sat/Sun matinee: 13:00–15:00. Sat/Sun late: 16:00–18:00.
+// Thu/Fri main: 15:00–19:00. Sat matinee: 13:00–16:00. Sat late: 17:00–20:00.
+// Saturday shifts locked to 1–4 PM / 5–8 PM per Reid on 2026-04-17 — gives the
+// rep a 1-hour breather to reset between stops instead of a back-to-back hop.
 function shiftHours(shiftKey: string): {startH: number; endH: number} {
   if (shiftKey.endsWith('-main')) return {startH: 15, endH: 19};
-  if (shiftKey.endsWith('-mat')) return {startH: 13, endH: 15};
-  if (shiftKey.endsWith('-late')) return {startH: 16, endH: 18};
+  if (shiftKey.endsWith('-mat')) return {startH: 13, endH: 16};
+  if (shiftKey.endsWith('-late')) return {startH: 17, endH: 20};
   // Fallback — 2 PM to 4 PM
   return {startH: 14, endH: 16};
 }

@@ -53,8 +53,8 @@ async function getZohoAccessToken(env: {
 // ─────────────────────────────────────────────────────────────────────────────
 function shiftStartEndHours(shiftKey: string): {startH: number; endH: number} {
   if (shiftKey.endsWith('-main')) return {startH: 15, endH: 19};
-  if (shiftKey.endsWith('-mat')) return {startH: 13, endH: 15};
-  if (shiftKey.endsWith('-late')) return {startH: 16, endH: 18};
+  if (shiftKey.endsWith('-mat')) return {startH: 13, endH: 16};
+  if (shiftKey.endsWith('-late')) return {startH: 17, endH: 20};
   return {startH: 14, endH: 16};
 }
 
@@ -224,8 +224,8 @@ async function lookupDrive(args: RouteLookupArgs): Promise<RouteLookupResult> {
 // Hour bucket for departureDateTime — mirrors the convention in /api/popups-book.
 function shiftHour(shiftKey: string): number {
   if (shiftKey.endsWith('-main')) return 15; // Thu/Fri 3 PM
-  if (shiftKey.endsWith('-mat')) return 13; // Sat/Sun 1 PM matinee
-  if (shiftKey.endsWith('-late')) return 16; // Sat/Sun 4 PM late
+  if (shiftKey.endsWith('-mat')) return 13; // Sat 1 PM matinee (1–4 PM)
+  if (shiftKey.endsWith('-late')) return 17; // Sat 5 PM late (5–8 PM)
   return 14;
 }
 

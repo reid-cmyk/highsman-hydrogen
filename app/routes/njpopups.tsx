@@ -224,8 +224,8 @@ function daysUntil(iso: string) {
 function shiftLabel(k: string) {
   return (
     ({
-      'sat-mat': 'Sat 1–3 PM',
-      'sat-late': 'Sat 4–6 PM',
+      'sat-mat': 'Sat 1–4 PM',
+      'sat-late': 'Sat 5–8 PM',
       'fri-main': 'Fri 3–7 PM',
     } as Record<string, string>)[k] || k
   );
@@ -285,8 +285,8 @@ function buildWeeks(): Week[] {
         ];
       } else if (didx === 6) {
         shifts = [
-          {key: 'sat-mat', label: '1:00 – 3:00 PM', capacity: 2},
-          {key: 'sat-late', label: '4:00 – 6:00 PM', capacity: 2},
+          {key: 'sat-mat', label: '1:00 – 4:00 PM', capacity: 2},
+          {key: 'sat-late', label: '5:00 – 8:00 PM', capacity: 2},
         ];
       }
       days.push({
@@ -1740,7 +1740,7 @@ export default function NJPopups() {
           Staff tool for scheduling Highsman D2C Spark Team visits at licensed NJ dispensaries.{' '}
           <strong style={{color: BRAND.white, fontWeight: 600}}>Friday 3–7 PM</strong> and{' '}
           <strong style={{color: BRAND.white, fontWeight: 600}}>
-            Saturday 1–3 PM and 4–6 PM
+            Saturday 1–4 PM and 5–8 PM
           </strong>{' '}
           shifts — <strong style={{color: BRAND.white, fontWeight: 600}}>one per rep area</strong>{' '}
           (North + South Jersey). Confirmed bookings auto-sync to Google Calendar and{' '}
@@ -1987,8 +1987,8 @@ export default function NJPopups() {
               <h2 style={h2}>Pick Time Slot</h2>
               <p style={kicker}>
                 Each shift caps at 2 bookings statewide — <strong>one per rep area</strong>{' '}
-                (North Jersey + South Jersey). Saturday splits into matinee (1–3 PM) and late
-                (4–6 PM), each with its own 1-per-area cap. D2C Spark Team officially launches{' '}
+                (North Jersey + South Jersey). Saturday splits into matinee (1–4 PM) and late
+                (5–8 PM), each with its own 1-per-area cap. D2C Spark Team officially launches{' '}
                 <strong>Fri May 8</strong>; bookings require a {MIN_LEAD_DAYS}-day minimum lead time. Window
                 rolls forward weekly so you can always plan ~2 months out. Dispensaries must sit within{' '}
                 {MAX_SOLO_DRIVE_MIN} min of Newark (North Jersey Rep) or Collingswood (South Jersey Rep) — auto-assigned
@@ -2008,8 +2008,8 @@ export default function NJPopups() {
             >
               {[
                 {l: 'Friday', v: '3:00 – 7:00 PM', s: '1 North + 1 South · 60 min from hub'},
-                {l: 'Saturday · Matinee', v: '1:00 – 3:00 PM', s: '1 North + 1 South · 60 min from hub'},
-                {l: 'Saturday · Late', v: '4:00 – 6:00 PM', s: '1 per area · 40 min doubleheader'},
+                {l: 'Saturday · Matinee', v: '1:00 – 4:00 PM', s: '1 North + 1 South · 60 min from hub'},
+                {l: 'Saturday · Late', v: '5:00 – 8:00 PM', s: '1 per area · 40 min doubleheader'},
                 {l: 'Lead Time', v: '5 Days Min', s: 'For gear + ops prep'},
               ].map((r) => (
                 <div
