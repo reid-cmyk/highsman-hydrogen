@@ -435,14 +435,28 @@ export default function VibesDashboard() {
           display: 'grid',
           gridTemplateColumns: 'repeat(2, 1fr)',
           gap: 8,
-          padding: '8px 16px 12px',
+          padding: '8px 16px 4px',
         }}
       >
+        <QuickTile
+          href="/vibes/lead-visit"
+          label="Sampling Drop-in"
+          sub="Prospect → Zoho Lead"
+        />
         <QuickTile
           href="/vibes/decks"
           label="Decks"
           sub="Train budtenders"
         />
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(1, 1fr)',
+          gap: 8,
+          padding: '4px 16px 12px',
+        }}
+      >
         <QuickTile
           href="/vibes/store"
           label="Store Search"
