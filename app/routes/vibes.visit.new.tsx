@@ -122,9 +122,8 @@ const SKUS = [
   'Hit Stick 0.5g — Indica',
   'Hit Stick 0.5g — Sativa',
   'Hit Stick 0.5g — Hybrid',
-  'Pre-Roll 1.2g — Hall Pass',
-  'Pre-Roll 1.2g — Triple Infusion',
-  'Ground Game 7g',
+  'Triple Threat Pre-Roll 1.2g',
+  'Ground Game Flower 7g',
 ];
 
 const STEPS = [
