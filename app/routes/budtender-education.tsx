@@ -5,7 +5,7 @@ import React, {useState, useEffect, useRef, useCallback} from 'react';
 
 export const meta: MetaFunction = () => {
   return [
-    {title: 'HIGHSMAN | Budtender Education'},
+    {title: 'HIGHSMAN | Budtender Training Camp'},
     {name: 'robots', content: 'noindex, nofollow'},
   ];
 };
@@ -1729,7 +1729,7 @@ export default function BudtenderEducation() {
           {/* Header */}
           <div className="text-center mb-6 sm:mb-8">
             <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-              Budtender Education Portal
+              Budtender Training Camp
             </h1>
             <div className="w-12 h-0.5 bg-[#c8a84b] mx-auto mt-3 mb-4" />
             <p className="text-[#A9ACAF] text-sm leading-relaxed">
@@ -2084,7 +2084,7 @@ export default function BudtenderEducation() {
       <div className="bg-[#081510] border-b border-[#A9ACAF]/15">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] sm:text-xs font-semibold text-[#A9ACAF] tracking-wide">Budtender Education</span>
+            <span className="text-[10px] sm:text-xs font-semibold text-[#A9ACAF] tracking-wide">Budtender Training Camp</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-[#A9ACAF]">{completedCourses.size}/{COURSES.length}</span>

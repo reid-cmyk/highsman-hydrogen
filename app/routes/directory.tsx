@@ -181,17 +181,9 @@ const SECTIONS: Section[] = [
       },
       {
         path: '/budtender-education',
-        name: 'Budtender Education',
+        name: 'Budtender Training Camp',
         description:
-          'The full budtender training program. Brand story, product knowledge, approved pitches, closing scripts.',
-        audience: 'Budtenders',
-        access: 'public',
-      },
-      {
-        path: '/budtender-quiz',
-        name: 'Budtender Training Quiz',
-        description:
-          'Quick-hit quiz to test product knowledge and unlock perks. Required for championship entry.',
+          'The full budtender training program and portal. Brand story, product knowledge, approved pitches, closing scripts — plus all course quizzes built right in.',
         audience: 'Budtenders',
         access: 'public',
       },
