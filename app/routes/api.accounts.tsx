@@ -330,6 +330,28 @@ async function createAccountWithContact(
   };
 }
 
+/** Add tags to an Account record in Zoho CRM. Non-fatal if it fails. */
+async function tagAccount(
+  accountId: string,
+  tags: string[],
+  accessToken: string,
+): Promise<void> {
+  try {
+    await fetch(`https://www.zohoapis.com/crm/v7/Accounts/${accountId}/actions/add_tags`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Zoho-oauthtoken ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        tags: tags.map((t) => ({name: t})),
+      }),
+    });
+  } catch (err) {
+    console.error('[api/accounts] Tag failed (non-fatal):', err);
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Loader (GET /api/accounts?q=...)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -459,6 +481,8 @@ export async function action({request, context}: ActionFunctionArgs) {
   // Normalize state to 2-letter abbreviation (Google Places may return full name)
   const state = rawState.toLowerCase() === 'new jersey' ? 'NJ' : (rawState || 'NJ');
   const zip = (formData.get('zip') as string || '').trim();
+  const tagsRaw = (formData.get('tags') as string || '').trim(); // comma-separated tags
+  const tags = tagsRaw ? tagsRaw.split(',').map((t) => t.trim()).filter(Boolean) : [];
 
   // Validate required fields
   if (!dispensaryName) {
@@ -502,6 +526,11 @@ export async function action({request, context}: ActionFunctionArgs) {
       {dispensaryName, contactName, jobRole, phone, email, street, city, state, zip},
       accessToken,
     );
+
+    // Apply tags if provided (e.g. "Budtender Education Portal")
+    if (tags.length > 0) {
+      await tagAccount(account.id, tags, accessToken);
+    }
 
     return json({ok: true, account});
   } catch (err: any) {

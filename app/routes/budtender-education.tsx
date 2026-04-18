@@ -1466,34 +1466,55 @@ export default function BudtenderEducation() {
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
     setErrors({});
     setSubmitting(true);
-    callAction({
-      intent: 'register',
-      name: name.trim(),
-      email: email.trim(),
-      password,
-      state,
-      dispensary: resolvedDispensary,
-    })
-      .then((res) => {
-        if (!res.ok) {
-          setErrors({email: res.error || 'Registration failed.'});
-          return;
-        }
-        // Track signup event for Klaviyo automation (client-side for real-time flow triggers)
-        trackKlaviyoEvent(email.trim(), 'Budtender Education Signup', {
-          budtender_name: name.trim(),
-          dispensary: resolvedDispensary,
-          state,
-          signup_points: POINTS_SIGNUP,
-          first_course_title: COURSE_ORDER[0].title,
-          first_course_id: COURSE_ORDER[0].id,
-          portal_url: 'https://highsman.com/pages/budtender-education',
-        });
-        // Reload — loader will read the auth cookie
-        window.location.reload();
+
+    // If adding a new dispensary, create it in Zoho CRM as a lead first
+    const zohoCreatePromise = showNewDispensaryForm
+      ? fetch('/api/accounts', {
+          method: 'POST',
+          body: (() => {
+            const fd = new FormData();
+            fd.append('dispensaryName', newDispensaryName.trim());
+            fd.append('contactName', name.trim());
+            fd.append('jobRole', 'Budtender');
+            fd.append('email', email.trim());
+            fd.append('street', newDispensaryAddress.trim());
+            fd.append('state', state);
+            fd.append('tags', 'Budtender Education Portal');
+            return fd;
+          })(),
+        }).then((r) => r.json()).catch(() => null)
+      : Promise.resolve(null);
+
+    zohoCreatePromise.then(() => {
+      callAction({
+        intent: 'register',
+        name: name.trim(),
+        email: email.trim(),
+        password,
+        state,
+        dispensary: resolvedDispensary,
       })
-      .catch(() => setErrors({email: 'Network error. Please try again.'}))
-      .finally(() => setSubmitting(false));
+        .then((res) => {
+          if (!res.ok) {
+            setErrors({email: res.error || 'Registration failed.'});
+            return;
+          }
+          // Track signup event for Klaviyo automation (client-side for real-time flow triggers)
+          trackKlaviyoEvent(email.trim(), 'Budtender Education Signup', {
+            budtender_name: name.trim(),
+            dispensary: resolvedDispensary,
+            state,
+            signup_points: POINTS_SIGNUP,
+            first_course_title: COURSE_ORDER[0].title,
+            first_course_id: COURSE_ORDER[0].id,
+            portal_url: 'https://highsman.com/pages/budtender-education',
+          });
+          // Reload — loader will read the auth cookie
+          window.location.reload();
+        })
+        .catch(() => setErrors({email: 'Network error. Please try again.'}))
+        .finally(() => setSubmitting(false));
+    });
   }
 
   // ── Logout (server-side — clears cookie) ────────────────────────────────
