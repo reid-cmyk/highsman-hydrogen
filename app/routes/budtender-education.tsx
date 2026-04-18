@@ -1,7 +1,7 @@
 import type {MetaFunction, LoaderFunctionArgs, ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
-import {useLoaderData} from '@remix-run/react';
-import React, {useState, useEffect, useRef, useCallback} from 'react';
+import {useLoaderData, useFetcher} from '@remix-run/react';
+import React, {useState, useEffect, useRef, useCallback, useMemo} from 'react';
 
 export const meta: MetaFunction = () => {
   return [
@@ -1273,6 +1273,18 @@ export default function BudtenderEducation() {
   const [dispensary, setDispensary] = useState('');
   const [dispensaryOther, setDispensaryOther] = useState('');
   const [consent, setConsent] = useState(false);
+
+  // ── Dispensary Autofill (Zoho CRM) ──────────────────────────────────────
+  const accountFetcher = useFetcher<{accounts: Array<{id: string; name: string; city: string | null; state: string | null}>; error?: string}>();
+  const [accountQuery, setAccountQuery] = useState('');
+  const [selectedAccount, setSelectedAccount] = useState<{id: string; name: string; city: string | null} | null>(null);
+  const [showAccountDropdown, setShowAccountDropdown] = useState(false);
+  const [showNewDispensaryForm, setShowNewDispensaryForm] = useState(false);
+  const [newDispensaryName, setNewDispensaryName] = useState('');
+  const [newDispensaryAddress, setNewDispensaryAddress] = useState('');
+  const [useLiveSearch, setUseLiveSearch] = useState(true);
+  const accountInputRef = useRef<HTMLInputElement>(null);
+  const accountDropdownRef = useRef<HTMLDivElement>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -1388,6 +1400,56 @@ export default function BudtenderEducation() {
       .finally(() => setSubmitting(false));
   }
 
+  // ── Dispensary Autofill Effects ───────────────────────────────────────────
+  // Debounced live search — query Zoho CRM accounts
+  useEffect(() => {
+    if (accountQuery.length < 2 || selectedAccount || !useLiveSearch) return;
+    const timer = setTimeout(() => {
+      accountFetcher.load(`/api/accounts?q=${encodeURIComponent(accountQuery)}&scope=all`);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [accountQuery, selectedAccount, useLiveSearch]);
+
+  // If API returns "CRM not configured" error, fall back to static list
+  useEffect(() => {
+    if (accountFetcher.data?.error === 'CRM not configured') {
+      setUseLiveSearch(false);
+    }
+  }, [accountFetcher.data]);
+
+  // Compute results: live API results when available, static DISPENSARIES_BY_STATE fallback
+  const accountResults = useMemo(() => {
+    if (accountQuery.length < 2 || selectedAccount) return [];
+    if (useLiveSearch && accountFetcher.data?.accounts && !accountFetcher.data?.error) {
+      return accountFetcher.data.accounts.map((a) => ({id: a.id, name: a.name, city: a.city, state: a.state}));
+    }
+    // Fallback: filter from the static list for the selected state
+    const q = accountQuery.toLowerCase();
+    const stateList = state ? (DISPENSARIES_BY_STATE[state] || []) : Object.values(DISPENSARIES_BY_STATE).flat();
+    return stateList
+      .filter((d) => d.toLowerCase().includes(q))
+      .slice(0, 15)
+      .map((d, i) => ({id: `static-${i}`, name: d, city: null as string | null, state: state || null as string | null}));
+  }, [accountQuery, selectedAccount, useLiveSearch, accountFetcher.data, state]);
+
+  const isSearchingAccounts = useLiveSearch && accountFetcher.state === 'loading';
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        accountDropdownRef.current &&
+        !accountDropdownRef.current.contains(e.target as Node) &&
+        accountInputRef.current &&
+        !accountInputRef.current.contains(e.target as Node)
+      ) {
+        setShowAccountDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // ── Register (server-side via Klaviyo) ───────────────────────────────────
   function handleGateSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -1396,8 +1458,9 @@ export default function BudtenderEducation() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       newErrors.email = 'Enter a valid email.';
     if (!password || password.length < 6) newErrors.password = 'Password must be at least 6 characters.';
-    const resolvedDispensary = dispensary === '__other__' ? dispensaryOther.trim() : dispensary.trim();
-    if (!resolvedDispensary) newErrors.dispensary = dispensary === '__other__' ? 'Enter your dispensary name.' : 'Select your dispensary.';
+    const resolvedDispensary = showNewDispensaryForm ? newDispensaryName.trim() : (selectedAccount ? selectedAccount.name : accountQuery.trim());
+    if (!resolvedDispensary) newErrors.dispensary = showNewDispensaryForm ? 'Enter your dispensary name.' : 'Search for and select your dispensary.';
+    if (showNewDispensaryForm && !newDispensaryAddress.trim()) newErrors.dispensaryAddress = 'Enter the dispensary address.';
     if (!state) newErrors.state = 'Select your state.';
     if (!consent) newErrors.consent = 'You must agree to continue.';
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
@@ -1982,49 +2045,144 @@ export default function BudtenderEducation() {
                     {errors.state && <p className="text-red-500 text-xs mt-1">{errors.state}</p>}
                   </div>
 
-                  {/* Dispensary */}
+                  {/* Dispensary — Autofill from Zoho CRM */}
                   <div>
                     <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#666666] mb-1">
                       Dispensary Name
                     </label>
-                    {state && (DISPENSARIES_BY_STATE[state]?.length ?? 0) > 0 ? (
-                      <>
-                        <select
-                          value={dispensary}
+                    {!showNewDispensaryForm ? (
+                      <div className="relative">
+                        <input
+                          ref={accountInputRef}
+                          type="text"
+                          value={selectedAccount ? selectedAccount.name : accountQuery}
                           onChange={(e) => {
-                            setDispensary(e.target.value);
-                            if (e.target.value !== '__other__') setDispensaryOther('');
+                            if (selectedAccount) {
+                              setSelectedAccount(null);
+                            }
+                            setAccountQuery(e.target.value);
+                            setShowAccountDropdown(true);
                           }}
+                          onFocus={() => { if (accountQuery.length >= 2 && !selectedAccount) setShowAccountDropdown(true); }}
+                          placeholder="Start typing your dispensary name..."
                           className={`w-full px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors bg-[#000000] ${
                             errors.dispensary ? 'border-red-400' : 'border-[#A9ACAF]/20 focus:border-[#A9ACAF]'
                           }`}
-                        >
-                          <option value="" style={{color: '#000'}}>Select your dispensary</option>
-                          {DISPENSARIES_BY_STATE[state].map((d) => (
-                            <option key={d} value={d} style={{color: '#000'}}>{d}</option>
-                          ))}
-                          <option value="__other__" style={{color: '#000'}}>Other (not listed)</option>
-                        </select>
-                        {dispensary === '__other__' && (
-                          <input
-                            type="text"
-                            value={dispensaryOther}
-                            onChange={(e) => setDispensaryOther(e.target.value)}
-                            placeholder="Enter your dispensary name"
-                            className="w-full mt-2 px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors bg-[#000000] border-[#A9ACAF]/20 focus:border-[#A9ACAF]"
-                          />
+                          autoComplete="off"
+                        />
+                        {/* Loading indicator */}
+                        {isSearchingAccounts && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <div className="w-4 h-4 border-2 border-[#A9ACAF]/30 border-t-[#A9ACAF] rounded-full animate-spin" />
+                          </div>
                         )}
-                      </>
+                        {/* Selected checkmark */}
+                        {selectedAccount && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2 text-green-400 text-sm">✓</div>
+                        )}
+
+                        {/* Dropdown results */}
+                        {showAccountDropdown && accountResults.length > 0 && !selectedAccount && (
+                          <div
+                            ref={accountDropdownRef}
+                            className="absolute left-0 right-0 z-50 mt-1 overflow-hidden rounded-lg border border-[#A9ACAF]/20"
+                            style={{background: '#111', maxHeight: 200, overflowY: 'auto'}}
+                          >
+                            {accountResults.map((acct) => (
+                              <button
+                                key={acct.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedAccount({id: acct.id, name: acct.name, city: acct.city});
+                                  setAccountQuery(acct.name);
+                                  setShowAccountDropdown(false);
+                                  setDispensary(acct.name);
+                                  setShowNewDispensaryForm(false);
+                                }}
+                                className="w-full text-left px-3 py-2 hover:bg-[#222] transition-colors border-b border-[#A9ACAF]/10 last:border-0"
+                              >
+                                <span className="text-sm text-white">{acct.name}</span>
+                                {acct.city && (
+                                  <span className="text-xs text-[#A9ACAF] ml-2">— {acct.city}{acct.state ? `, ${acct.state}` : ''}</span>
+                                )}
+                              </button>
+                            ))}
+                            {/* Add New option at bottom of results */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowNewDispensaryForm(true);
+                                setShowAccountDropdown(false);
+                                setSelectedAccount(null);
+                                setNewDispensaryName(accountQuery);
+                              }}
+                              className="w-full text-left px-3 py-2.5 hover:bg-[#222] transition-colors"
+                              style={{borderTop: '1px solid rgba(169,172,175,0.2)'}}
+                            >
+                              <span className="text-sm text-[#FFEB3B] font-semibold">+ Add New Dispensary</span>
+                            </button>
+                          </div>
+                        )}
+
+                        {/* No results — prompt to add new */}
+                        {showAccountDropdown && !selectedAccount && accountQuery.length >= 2 && accountResults.length === 0 && !isSearchingAccounts && (
+                          <div
+                            className="absolute left-0 right-0 z-50 mt-1 rounded-lg border border-[#A9ACAF]/20 overflow-hidden"
+                            style={{background: '#111'}}
+                          >
+                            <div className="px-3 py-2 text-xs text-[#A9ACAF]">No dispensaries found for "{accountQuery}"</div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowNewDispensaryForm(true);
+                                setShowAccountDropdown(false);
+                                setSelectedAccount(null);
+                                setNewDispensaryName(accountQuery);
+                              }}
+                              className="w-full text-left px-3 py-2.5 hover:bg-[#222] transition-colors"
+                              style={{borderTop: '1px solid rgba(169,172,175,0.2)'}}
+                            >
+                              <span className="text-sm text-[#FFEB3B] font-semibold">+ Add New Dispensary</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     ) : (
-                      <input
-                        type="text"
-                        value={dispensary}
-                        onChange={(e) => setDispensary(e.target.value)}
-                        placeholder="Where do you work?"
-                        className={`w-full px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors bg-[#000000] ${
-                          errors.dispensary ? 'border-red-400' : 'border-[#A9ACAF]/20 focus:border-[#A9ACAF]'
-                        }`}
-                      />
+                      /* ── Add New Dispensary Form ─────────────────────── */
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={newDispensaryName}
+                          onChange={(e) => setNewDispensaryName(e.target.value)}
+                          placeholder="Store / Dispensary Name"
+                          className={`w-full px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors bg-[#000000] ${
+                            errors.dispensary ? 'border-red-400' : 'border-[#A9ACAF]/20 focus:border-[#A9ACAF]'
+                          }`}
+                        />
+                        <input
+                          type="text"
+                          value={newDispensaryAddress}
+                          onChange={(e) => setNewDispensaryAddress(e.target.value)}
+                          placeholder="Address (street, city, state)"
+                          className={`w-full px-3 py-2.5 border rounded-lg text-sm text-white outline-none transition-colors bg-[#000000] ${
+                            errors.dispensaryAddress ? 'border-red-400' : 'border-[#A9ACAF]/20 focus:border-[#A9ACAF]'
+                          }`}
+                        />
+                        {errors.dispensaryAddress && <p className="text-red-500 text-xs mt-1">{errors.dispensaryAddress}</p>}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowNewDispensaryForm(false);
+                            setNewDispensaryName('');
+                            setNewDispensaryAddress('');
+                            setAccountQuery('');
+                            setSelectedAccount(null);
+                          }}
+                          className="text-xs text-[#A9ACAF] hover:text-white transition-colors"
+                        >
+                          ← Back to search
+                        </button>
+                      </div>
                     )}
                     {errors.dispensary && <p className="text-red-500 text-xs mt-1">{errors.dispensary}</p>}
                   </div>
