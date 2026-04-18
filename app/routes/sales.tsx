@@ -487,9 +487,19 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       range: {key: rangeKey, label, start: ymd(start), end: ymd(end)},
     });
   } catch (err: any) {
+    const msg = String(err?.message || '');
+    // Detect Zoho's transient rate-limit block and surface a friendlier message
+    const rateLimited =
+      msg.includes('too many requests continuously') ||
+      msg.includes('Access Denied') ||
+      /token refresh failed:\s*400/.test(msg);
+    const friendly = rateLimited
+      ? 'Zoho is temporarily rate-limiting our API key (this clears itself in 15–30 minutes). The dashboard will come back automatically — refresh the page later. This won\'t recur because access tokens are now cached for 55 minutes per worker.'
+      : `Failed to fetch Zoho Inventory data: ${msg}`;
     return json({
       authenticated: true,
-      error: `Failed to fetch Zoho Inventory data: ${err.message}`,
+      error: friendly,
+      errorKind: rateLimited ? 'rate_limit' : 'other',
       stores: [],
       metrics: null,
       range: {key: rangeKey, label, start: ymd(start), end: ymd(end)},
@@ -522,14 +532,37 @@ export default function SalesDashboard() {
   if (!isAuth) return <LoginScreen error={actionData?.error} />;
 
   const err = (loaderData as any).error;
+  const errorKind = (loaderData as any).errorKind;
   if (err) {
+    const isRateLimit = errorKind === 'rate_limit';
     return (
       <Shell>
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-6">
-          <p className="text-red-400 text-lg font-bold mb-2" style={{fontFamily: 'Teko, sans-serif'}}>
-            CONFIGURATION ERROR
+        <div
+          className={
+            isRateLimit
+              ? 'bg-[#c8a84b]/10 border border-[#c8a84b]/40 rounded-lg p-6'
+              : 'bg-red-500/10 border border-red-500/30 rounded-lg p-6'
+          }
+        >
+          <p
+            className={
+              isRateLimit
+                ? 'text-[#c8a84b] text-xl font-bold mb-2 tracking-wider'
+                : 'text-red-400 text-xl font-bold mb-2 tracking-wider'
+            }
+            style={{fontFamily: 'Teko, sans-serif'}}
+          >
+            {isRateLimit ? 'ZOHO COOLING DOWN' : 'CONFIGURATION ERROR'}
           </p>
-          <p className="text-[#A9ACAF] text-sm whitespace-pre-wrap">{err}</p>
+          <p className="text-[#A9ACAF] text-sm whitespace-pre-wrap leading-relaxed">{err}</p>
+          {isRateLimit ? (
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 px-4 py-2 bg-[#c8a84b] text-black font-bold text-sm rounded hover:bg-[#b09338] transition-colors"
+            >
+              TRY AGAIN
+            </button>
+          ) : null}
         </div>
       </Shell>
     );
