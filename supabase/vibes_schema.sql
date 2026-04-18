@@ -275,10 +275,12 @@ insert into public.vibes_reps
    territory_states, ig_handle, start_date, onboarding_through_date,
    schedule_days, daily_goodie_budget)
 values
-  ('Serena','Rep','serena@highsman.com','07083', null,'Entire NJ',
+  ('Serena','Gonzalez','serena@highsman.com','07083', null,'Entire NJ',
    array['NJ']::text[],'serenahighsman','2026-05-06','2026-05-13',
    array[1,2,3,4,5]::int[], 60)
 on conflict (email) do update set
+  first_name = excluded.first_name,
+  last_name = excluded.last_name,
   home_zip = excluded.home_zip,
   max_drive_minutes = excluded.max_drive_minutes,
   territory_label = excluded.territory_label,

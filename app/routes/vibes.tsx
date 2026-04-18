@@ -288,11 +288,13 @@ export default function VibesDashboard() {
           <div>
             <div
               style={{
-                color: BRAND.gray,
-                fontSize: 11,
-                letterSpacing: '0.18em',
+                color: BRAND.gold,
+                fontSize: 22,
+                letterSpacing: '0.22em',
                 textTransform: 'uppercase',
                 fontFamily: TEKO,
+                fontWeight: 600,
+                lineHeight: 1,
               }}
             >
               Vibes Team · Rep
@@ -300,12 +302,12 @@ export default function VibesDashboard() {
             <div
               style={{
                 fontFamily: TEKO,
-                fontSize: 40,
+                fontSize: 44,
                 lineHeight: 1,
                 color: BRAND.white,
                 letterSpacing: '0.02em',
                 textTransform: 'uppercase',
-                marginTop: 2,
+                marginTop: 6,
               }}
             >
               {rep.full_name}
