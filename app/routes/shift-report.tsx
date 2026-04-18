@@ -316,6 +316,58 @@ export default function ShiftReportPage() {
       ? Math.round((Number(closes) / Number(intercepts)) * 100)
       : null;
 
+  // ─── Live grade preview (mirrors gradeShift in /api/shift-report-submit) ──
+  // Runs client-side on every keystroke so the rep sees their projected
+  // letter tick as they fill the form. Intel count uses the same thresholds
+  // as countIntelFilled() server-side (10-char floors on the two free-text
+  // intel fields). jobScore is flat 15 — you earn it the moment you submit.
+  const gradePreview = useMemo(() => {
+    const i = Number(intercepts) || 0;
+    const c = Number(closes) || 0;
+    const rate = i > 0 ? c / i : 0;
+    const closeScore = Math.min(rate / 0.5, 1) * 35;
+    const volScore = Math.min(c / 50, 1) * 20;
+    const aggScore = aggression > 0 ? (aggression / 10) * 15 : 0;
+    const jobScore = 15;
+    const intelCount =
+      (menuVisibility ? 1 : 0) +
+      (merchSetup ? 1 : 0) +
+      (merchOpportunity.trim().length >= 10 ? 1 : 0) +
+      (promosSetup ? 1 : 0) +
+      (managerFirst || managerLast ? 1 : 0) +
+      (budtenderRating > 0 ? 1 : 0) +
+      (productNotes.trim().length >= 10 ? 1 : 0);
+    const intelScore = Math.min(intelCount / 7, 1) * 15;
+    const total = closeScore + volScore + aggScore + jobScore + intelScore;
+    const letter =
+      total >= 90 ? 'A' : total >= 80 ? 'B' : total >= 70 ? 'C' : total >= 60 ? 'D' : 'F';
+    const touched =
+      i > 0 || c > 0 || aggression > 0 || intelCount > 0;
+    return {
+      total: Math.round(total),
+      letter,
+      intelCount,
+      touched,
+      closeScore,
+      volScore,
+      aggScore,
+      jobScore,
+      intelScore,
+    };
+  }, [
+    intercepts,
+    closes,
+    aggression,
+    menuVisibility,
+    merchSetup,
+    merchOpportunity,
+    promosSetup,
+    managerFirst,
+    managerLast,
+    budtenderRating,
+    productNotes,
+  ]);
+
   // ────────────────────────────────────────────────────────────────────────
   return (
     <div
@@ -405,6 +457,9 @@ export default function ShiftReportPage() {
         <SuccessPanel id={submitFetcher.data?.id} />
       ) : (
         <form onSubmit={handleSubmit} style={{padding: '0 16px'}}>
+          {/* Sticky grade meter — updates live as rep fills intercepts/closes/intel/agg */}
+          <LiveGradeMeter g={gradePreview} />
+
           {/* ───────────── SECTION 1: Shift Logistics ───────────── */}
           <Section title="Shift Logistics" index="01">
             <Field label="Rep name" required>
@@ -756,6 +811,220 @@ export default function ShiftReportPage() {
           </div>
         </form>
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LIVE GRADE METER — sticky card showing projected A/B/C as the rep fills the
+// form. Mirrors gradeShift() in /api/shift-report-submit exactly. Shows the
+// per-line breakdown so reps can SEE which buckets are leaving points on the
+// table (intel is usually the easy jumpball). Pre-touch state shows an empty
+// scorecard with a short "let's go" line instead of an F — no reason to shame
+// a blank form.
+// ─────────────────────────────────────────────────────────────────────────────
+type GradePreview = {
+  total: number;
+  letter: string;
+  intelCount: number;
+  touched: boolean;
+  closeScore: number;
+  volScore: number;
+  aggScore: number;
+  jobScore: number;
+  intelScore: number;
+};
+
+function LiveGradeMeter({g}: {g: GradePreview}) {
+  // Letter color maps: green for A, gold for B/C, orange for D, red for F.
+  const letterColor =
+    g.letter === 'A'
+      ? BRAND.green
+      : g.letter === 'B' || g.letter === 'C'
+        ? BRAND.gold
+        : g.letter === 'D'
+          ? BRAND.orange
+          : BRAND.red;
+
+  // Soft copy when the form hasn't been touched — encourage, don't shame.
+  const coachLine = !g.touched
+    ? 'Projected grade locks in as you log intercepts, closes, intel.'
+    : g.letter === 'A'
+      ? 'Scoreboard territory. Don\'t let up — close the intel fields for the bonus.'
+      : g.letter === 'B'
+        ? 'Solid shift. Push close rate or finish the intel block to move up.'
+        : g.letter === 'C'
+          ? 'On pace. One more close or full intel gets you to B.'
+          : g.letter === 'D'
+            ? 'Below the line. Tighten the pitch, fill the intel, recover with volume.'
+            : 'Off the board. Reset — pitch harder, handle the top objection, log intel.';
+
+  return (
+    <div
+      style={{
+        position: 'sticky',
+        top: 62, // sits flush under the sticky header (~50px) + some breathing room
+        zIndex: 20,
+        background: BRAND.surface,
+        border: `1px solid ${BRAND.lineStrong}`,
+        borderRadius: 14,
+        padding: '12px 14px',
+        marginTop: 14,
+        marginBottom: 6,
+        boxShadow: '0 10px 30px rgba(0,0,0,0.45)',
+      }}
+    >
+      {/* Top row: letter + numeric + coach line */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+        }}
+      >
+        <div
+          aria-label={`Projected grade ${g.touched ? g.letter : 'pending'}`}
+          style={{
+            minWidth: 58,
+            height: 58,
+            borderRadius: 14,
+            background: g.touched ? letterColor : BRAND.chip,
+            color: g.touched ? BRAND.black : BRAND.gray,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontFamily: TEKO,
+            fontSize: 42,
+            lineHeight: 1,
+            letterSpacing: '0.02em',
+            border: g.touched ? 'none' : `1px dashed ${BRAND.lineStrong}`,
+          }}
+        >
+          {g.touched ? g.letter : '—'}
+        </div>
+        <div style={{flex: 1, minWidth: 0}}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: 8,
+              fontFamily: TEKO,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+            }}
+          >
+            <span style={{color: BRAND.white, fontSize: 22}}>
+              {g.touched ? g.total : 0}
+              <span style={{color: BRAND.gray, fontSize: 14}}>/100</span>
+            </span>
+            <span style={{color: BRAND.gray, fontSize: 12}}>
+              · LIVE PROJECTION
+            </span>
+          </div>
+          <div
+            style={{
+              color: BRAND.gray,
+              fontSize: 12,
+              marginTop: 2,
+              lineHeight: 1.35,
+            }}
+          >
+            {coachLine}
+          </div>
+        </div>
+        <Link
+          to="/grading-rubric"
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            fontFamily: TEKO,
+            fontSize: 13,
+            color: BRAND.gray,
+            textDecoration: 'none',
+            letterSpacing: '0.1em',
+            padding: '6px 10px',
+            borderRadius: 999,
+            border: `1px solid ${BRAND.line}`,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          RUBRIC ↗
+        </Link>
+      </div>
+
+      {/* Breakdown strip — 5 tiny bars showing each component's contribution */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(5, 1fr)',
+          gap: 6,
+          marginTop: 10,
+        }}
+      >
+        <ScoreChip label="CLOSE" pts={g.closeScore} max={35} />
+        <ScoreChip label="VOL" pts={g.volScore} max={20} />
+        <ScoreChip label="AGG" pts={g.aggScore} max={15} />
+        <ScoreChip label="JOB" pts={g.jobScore} max={15} />
+        <ScoreChip label="INTEL" pts={g.intelScore} max={15} />
+      </div>
+    </div>
+  );
+}
+
+function ScoreChip({
+  label,
+  pts,
+  max,
+}: {
+  label: string;
+  pts: number;
+  max: number;
+}) {
+  const pct = Math.max(0, Math.min(1, pts / max));
+  const bar =
+    pct >= 0.85 ? BRAND.green : pct >= 0.55 ? BRAND.gold : pct > 0 ? BRAND.orange : BRAND.chip;
+  return (
+    <div
+      style={{
+        background: BRAND.chip,
+        borderRadius: 8,
+        padding: '6px 8px',
+        border: `1px solid ${BRAND.line}`,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          fontFamily: TEKO,
+          letterSpacing: '0.08em',
+        }}
+      >
+        <span style={{color: BRAND.gray, fontSize: 10}}>{label}</span>
+        <span style={{color: BRAND.white, fontSize: 13}}>
+          {Math.round(pts)}
+          <span style={{color: BRAND.gray, fontSize: 10}}>/{max}</span>
+        </span>
+      </div>
+      <div
+        style={{
+          marginTop: 4,
+          height: 4,
+          borderRadius: 4,
+          background: 'rgba(255,255,255,0.08)',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            width: `${Math.round(pct * 100)}%`,
+            height: '100%',
+            background: bar,
+            transition: 'width 220ms ease',
+          }}
+        />
+      </div>
     </div>
   );
 }

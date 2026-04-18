@@ -84,8 +84,14 @@ export async function loader({context}: LoaderFunctionArgs) {
       : Promise.resolve(null),
   ]);
 
-  // Split events into today vs. week (events is ordered by Start_DateTime asc).
-  const allEvents = events || [];
+  // Enrich events with accountCity from the NJ accounts map so /shift-report
+  // can prefill the city without a second round-trip. Keyed on Zoho account id.
+  const cityById = new Map<string, string | null>();
+  (njAccounts || []).forEach((a) => cityById.set(a.id, a.city));
+  const allEvents: EventSummary[] = (events || []).map((e) => ({
+    ...e,
+    accountCity: e.accountId ? cityById.get(e.accountId) ?? null : null,
+  }));
   const todayEvents = allEvents.filter((e) => e.date === todayIso);
   const weekEvents = allEvents.filter((e) => e.date !== todayIso);
 
@@ -157,6 +163,7 @@ type EventSummary = {
   time: string; // "3:00 PM"
   accountId: string | null;
   accountName: string | null;
+  accountCity: string | null; // enriched post-fetch from NJ accounts map
   territory: 'NJ-N' | 'NJ-S' | null;
   isOverride: boolean;
   startIso: string;
@@ -209,6 +216,7 @@ async function fetchEventsRange(
         time,
         accountId: whatId,
         accountName,
+        accountCity: null, // enriched after njAccounts fetch resolves
         territory,
         isOverride,
         startIso,
@@ -967,6 +975,7 @@ function EventRow({
   const params = new URLSearchParams();
   if (ev.accountId) params.set('accountId', ev.accountId);
   if (ev.accountName) params.set('accountName', ev.accountName);
+  if (ev.accountCity) params.set('accountCity', ev.accountCity);
   params.set('date', ev.date);
   const reportHref = `/shift-report?${params.toString()}`;
 
