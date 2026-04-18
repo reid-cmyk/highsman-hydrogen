@@ -113,6 +113,26 @@ create table if not exists public.brand_visits (
   notes_to_sales_team     text,
   spoke_with_manager      boolean not null default false,
 
+  -- ─── Menus ────────────────────────────────────────────────────────────────
+  -- Every visit Serena audits BOTH the in-store digital menu and the store's
+  -- online menu for accuracy on the 5 Highsman checks: photo, category, brand,
+  -- size, price. Per-SKU JSONB lets sales drill in on any flagged issues.
+  --   menu_*_audit  — { [formatSlug__strainSlug]: {
+  --                       onMenu, photo, category, brand, size, price,
+  --                       priceSeen, notes
+  --                     }}
+  --   menu_flags    — quick summary count for dashboards.
+  menu_instore_checked      boolean not null default false,
+  menu_instore_na           boolean not null default false,
+  menu_instore_audit        jsonb   not null default '{}'::jsonb,
+  menu_instore_photo_urls   text[]  not null default '{}',
+  menu_online_checked       boolean not null default false,
+  menu_online_na            boolean not null default false,
+  menu_online_url           text,
+  menu_online_audit         jsonb   not null default '{}'::jsonb,
+  menu_online_photo_urls    text[]  not null default '{}',
+  menu_flags                int     not null default 0,
+
   -- ─── Photos ───────────────────────────────────────────────────────────────
   shelf_photo_url         text,
   before_photo_url        text,
@@ -127,7 +147,23 @@ alter table public.brand_visits
   add column if not exists merch_visible            jsonb  not null default '{}'::jsonb,
   add column if not exists merch_visible_photo_urls text[] not null default '{}',
   add column if not exists dropoffs                 jsonb  not null default '{}'::jsonb,
-  add column if not exists dropoff_photo_urls       text[] not null default '{}';
+  add column if not exists dropoff_photo_urls       text[] not null default '{}',
+  -- Menus audit (added 2026-04-18)
+  add column if not exists menu_instore_checked     boolean not null default false,
+  add column if not exists menu_instore_na          boolean not null default false,
+  add column if not exists menu_instore_audit       jsonb   not null default '{}'::jsonb,
+  add column if not exists menu_instore_photo_urls  text[]  not null default '{}',
+  add column if not exists menu_online_checked      boolean not null default false,
+  add column if not exists menu_online_na           boolean not null default false,
+  add column if not exists menu_online_url          text,
+  add column if not exists menu_online_audit        jsonb   not null default '{}'::jsonb,
+  add column if not exists menu_online_photo_urls   text[]  not null default '{}',
+  add column if not exists menu_flags               int     not null default 0;
+
+-- Partial index to speed up "stores with open menu issues" dashboard queries.
+create index if not exists brand_visits_menu_flags_idx
+  on public.brand_visits (account_id, visit_date desc)
+  where menu_flags > 0;
 
 create index if not exists brand_visits_rep_date_idx
   on public.brand_visits (rep_id, visit_date desc);

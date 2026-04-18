@@ -70,6 +70,14 @@ type Payload = {
   // Drop
   goodieItems: Array<{item: string; cost: number}>;
   dropoffs: Record<string, number>;
+  // Menus (NEW)
+  menuInstoreChecked: boolean;
+  menuInstoreNA: boolean;
+  menuInstoreAudit: Record<string, any>;
+  menuOnlineChecked: boolean;
+  menuOnlineNA: boolean;
+  menuOnlineUrl: string;
+  menuOnlineAudit: Record<string, any>;
   // Vibes
   vibesScore: number | null;
   notesToSales: string;
@@ -196,6 +204,13 @@ export async function action({request, context}: ActionFunctionArgs) {
     budtendersTrained: parseJson<Payload['budtendersTrained']>('budtendersTrained', []),
     goodieItems: parseJson<Payload['goodieItems']>('goodieItems', []),
     dropoffs: parseJson<Record<string, number>>('dropoffs', {}),
+    menuInstoreChecked: form.get('menuInstoreChecked') === 'true',
+    menuInstoreNA: form.get('menuInstoreNA') === 'true',
+    menuInstoreAudit: parseJson<Record<string, any>>('menuInstoreAudit', {}),
+    menuOnlineChecked: form.get('menuOnlineChecked') === 'true',
+    menuOnlineNA: form.get('menuOnlineNA') === 'true',
+    menuOnlineUrl: String(form.get('menuOnlineUrl') || ''),
+    menuOnlineAudit: parseJson<Record<string, any>>('menuOnlineAudit', {}),
     vibesScore: form.get('vibesScore') ? Number(form.get('vibesScore')) : null,
     notesToSales: String(form.get('notesToSales') || ''),
     spokeWithManager: form.get('spokeWithManager') === 'true',
@@ -207,8 +222,14 @@ export async function action({request, context}: ActionFunctionArgs) {
   type PhotoTask = {group: string; index: number; file: File};
   const photos: PhotoTask[] = [];
 
-  // Indexed groups: merchVisiblePhoto_0..N and dropoffPhoto_0..N
-  const indexedGroups = ['merchVisiblePhoto', 'dropoffPhoto'] as const;
+  // Indexed groups: merchVisiblePhoto_0..N, dropoffPhoto_0..N,
+  // menuInstorePhoto_0..N, menuOnlinePhoto_0..N
+  const indexedGroups = [
+    'merchVisiblePhoto',
+    'dropoffPhoto',
+    'menuInstorePhoto',
+    'menuOnlinePhoto',
+  ] as const;
   for (const group of indexedGroups) {
     for (let i = 0; i < MAX_INDEXED_PHOTOS; i++) {
       const f = form.get(`${group}_${i}`);
@@ -273,6 +294,14 @@ export async function action({request, context}: ActionFunctionArgs) {
     .filter((u) => u.group === 'dropoffPhoto')
     .sort((a, b) => a.index - b.index)
     .map((u) => u.url);
+  const menuInstorePhotoUrls = uploaded
+    .filter((u) => u.group === 'menuInstorePhoto')
+    .sort((a, b) => a.index - b.index)
+    .map((u) => u.url);
+  const menuOnlinePhotoUrls = uploaded
+    .filter((u) => u.group === 'menuOnlinePhoto')
+    .sort((a, b) => a.index - b.index)
+    .map((u) => u.url);
   const selfieUrl = uploaded.find((u) => u.group === 'selfie')?.url || null;
 
   // ─── Insert brand_visits ──────────────────────────────────────────────────
@@ -280,6 +309,13 @@ export async function action({request, context}: ActionFunctionArgs) {
     (sum, g) => sum + (Number(g.cost) || 0),
     0,
   );
+
+  // Summary counter for dashboards: how many menu-accuracy issues did Serena
+  // flag across both menus on this visit? Counts `wrong` checks and also
+  // counts any SKU she marked as "not on the menu but expected" (onMenu=false).
+  const menuFlags =
+    countMenuFlags(payload.menuInstoreAudit) +
+    countMenuFlags(payload.menuOnlineAudit);
 
   const visitRow = {
     id: visitId,
@@ -308,6 +344,19 @@ export async function action({request, context}: ActionFunctionArgs) {
     goodie_total_spent: goodieTotal,
     dropoffs: payload.dropoffs || {},
     dropoff_photo_urls: dropoffPhotoUrls,
+    // Menus — every visit, Serena audits the in-store digital menu AND the
+    // online menu for photo / category / brand / size / price accuracy.
+    // Per-SKU JSONB payload lets the sales team drill in by SKU to fix issues.
+    menu_instore_checked: payload.menuInstoreChecked,
+    menu_instore_na: payload.menuInstoreNA,
+    menu_instore_audit: payload.menuInstoreAudit || {},
+    menu_instore_photo_urls: menuInstorePhotoUrls,
+    menu_online_checked: payload.menuOnlineChecked,
+    menu_online_na: payload.menuOnlineNA,
+    menu_online_url: payload.menuOnlineUrl || null,
+    menu_online_audit: payload.menuOnlineAudit || {},
+    menu_online_photo_urls: menuOnlinePhotoUrls,
+    menu_flags: menuFlags,
     // Vibes
     vibes_score: payload.vibesScore,
     notes_to_sales_team: payload.notesToSales || null,
@@ -516,6 +565,25 @@ async function uploadAllToR2(
     return {group, index, url: `${publicBase}/${key}`};
   });
   return Promise.all(tasks);
+}
+
+// Count every menu-accuracy issue so the sales team can triage at a glance
+// (without parsing the full JSONB per row).
+//   • Each per-SKU check (photo/category/brand/size/price) marked 'wrong' = +1
+//   • A SKU marked "onMenu === false" while it should be carried          = +1
+function countMenuFlags(audit: Record<string, any>): number {
+  if (!audit || typeof audit !== 'object') return 0;
+  let flags = 0;
+  const checkKeys = ['photo', 'category', 'brand', 'size', 'price'] as const;
+  for (const key of Object.keys(audit)) {
+    const entry = audit[key];
+    if (!entry || typeof entry !== 'object') continue;
+    if (entry.onMenu === false) flags += 1;
+    for (const ck of checkKeys) {
+      if (entry[ck] === 'wrong') flags += 1;
+    }
+  }
+  return flags;
 }
 
 function pickExtension(file: File): string {

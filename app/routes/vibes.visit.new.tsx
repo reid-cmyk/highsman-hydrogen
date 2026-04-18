@@ -2,7 +2,7 @@ import {useEffect, useMemo, useState} from 'react';
 import type {LoaderFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {Link, useLoaderData, useSearchParams, useFetcher} from '@remix-run/react';
-import {STRAINS, FORMATS} from '~/data/highsman-skus';
+import {STRAINS, FORMATS, MENU_CHECKS, type MenuCheckKey} from '~/data/highsman-skus';
 import {MERCH_ITEMS, CATEGORIES} from '~/data/merch-catalog';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -99,6 +99,7 @@ const BRAND = {
   red: '#FF3B30',
   orange: '#FF8A00',
   purple: '#B884FF',
+  cyan: '#00D4FF',
   line: 'rgba(255,255,255,0.10)',
   chip: 'rgba(255,255,255,0.06)',
 } as const;
@@ -114,9 +115,45 @@ type SkuStockMap = Record<string, Record<string, boolean>>;
 // Merch visible / drop-off counts are keyed by MerchItem.id.
 type MerchCountMap = Record<string, number>;
 
+// Menu accuracy audit — one entry per SKU carried in-store.
+// `onMenu: false` = SKU stocked but missing from the menu (itself a flag).
+// For each of the 5 checks: 'ok' | 'wrong' | null (not yet reviewed).
+type MenuCheckState = 'ok' | 'wrong' | null;
+type MenuAuditEntry = {
+  onMenu: boolean | null;
+  photo: MenuCheckState;
+  category: MenuCheckState;
+  brand: MenuCheckState;
+  size: MenuCheckState;
+  price: MenuCheckState;
+  priceSeen?: string; // free-text so "$42.50" / "42" / etc all accepted
+  notes?: string;
+};
+type MenuAuditMap = Record<string, MenuAuditEntry>; // key: `${format}__${strain}`
+
+function menuSkuKey(formatSlug: string, strainSlug: string) {
+  return `${formatSlug}__${strainSlug}`;
+}
+
+// Helpers to count flags for progress display in StepMenus.
+function countFlags(audit: MenuAuditMap): number {
+  let flags = 0;
+  for (const entry of Object.values(audit)) {
+    if (entry.onMenu === false) flags += 1;
+    for (const k of ['photo', 'category', 'brand', 'size', 'price'] as const) {
+      if (entry[k] === 'wrong') flags += 1;
+    }
+  }
+  return flags;
+}
+function countReviewedSkus(audit: MenuAuditMap): number {
+  return Object.values(audit).filter((e) => e.onMenu !== null).length;
+}
+
 const STEPS = [
   {key: 'arrive', label: 'Arrive', color: BRAND.gold},
   {key: 'audit', label: 'Audit', color: BRAND.purple},
+  {key: 'menus', label: 'Menus', color: BRAND.cyan},
   {key: 'train', label: 'Train', color: BRAND.green},
   {key: 'drop', label: 'Drop', color: BRAND.orange},
   {key: 'vibes', label: 'Vibes', color: BRAND.gold},
@@ -177,8 +214,22 @@ export default function VibesVisitNew() {
   const [skuStock, setSkuStock] = useState<SkuStockMap>({});
   // Merchandising visible in-store — count per MerchItem.id
   const [merchVisible, setMerchVisible] = useState<MerchCountMap>({});
-  // Photos of Highsman merchandising visible in the store — min 1, max 3
+  // Photos of Highsman merchandising visible in-store — min 1, max 3
   const [merchVisiblePhotos, setMerchVisiblePhotos] = useState<File[]>([]);
+
+  // Menus — accuracy audit on the store's in-store digital menu +
+  // online menu. Per-SKU check of Photo / Category / Brand / Size / Price.
+  // Value for each check is 'ok' | 'wrong' | null (not-checked).
+  const [menuInstoreChecked, setMenuInstoreChecked] = useState(false);
+  const [menuInstoreNA, setMenuInstoreNA] = useState(false); // store has no in-store digital menu
+  const [menuInstorePhotos, setMenuInstorePhotos] = useState<File[]>([]);
+  const [menuInstoreAudit, setMenuInstoreAudit] = useState<MenuAuditMap>({});
+
+  const [menuOnlineChecked, setMenuOnlineChecked] = useState(false);
+  const [menuOnlineNA, setMenuOnlineNA] = useState(false); // store not listed online
+  const [menuOnlineUrl, setMenuOnlineUrl] = useState('');
+  const [menuOnlinePhotos, setMenuOnlinePhotos] = useState<File[]>([]);
+  const [menuOnlineAudit, setMenuOnlineAudit] = useState<MenuAuditMap>({});
 
   // Train
   const [decksTaught, setDecksTaught] = useState<string[]>([]);
@@ -281,6 +332,17 @@ export default function VibesVisitNew() {
       case 'audit':
         // Require at least one Highsman-merch-in-store photo.
         return merchVisiblePhotos.length >= 1;
+      case 'menus':
+        // Serena must acknowledge she checked BOTH menus — either by
+        // actually checking (reviewed ≥ 1 SKU) or by marking the menu
+        // "Not available at this store" so the data still reflects reality.
+        const instoreOk =
+          menuInstoreNA ||
+          (menuInstoreChecked && countReviewedSkus(menuInstoreAudit) >= 1);
+        const onlineOk =
+          menuOnlineNA ||
+          (menuOnlineChecked && countReviewedSkus(menuOnlineAudit) >= 1);
+        return instoreOk && onlineOk;
       case 'train':
         // Hard gate: we MUST know how many budtenders work at this store so
         // the Vibes program has a real training target and can measure
@@ -305,6 +367,12 @@ export default function VibesVisitNew() {
     merchVisiblePhotos.length,
     vibesScore,
     numberOfBudtenders,
+    menuInstoreNA,
+    menuInstoreChecked,
+    menuInstoreAudit,
+    menuOnlineNA,
+    menuOnlineChecked,
+    menuOnlineAudit,
   ]);
 
   const stepIdx = STEPS.findIndex((s) => s.key === step);
@@ -341,6 +409,14 @@ export default function VibesVisitNew() {
     // SKU stock + merch audit
     form.set('skuStock', JSON.stringify(skuStock));
     form.set('merchVisible', JSON.stringify(merchVisible));
+    // Menu accuracy audit (in-store digital + online)
+    form.set('menuInstoreChecked', menuInstoreChecked ? 'true' : 'false');
+    form.set('menuInstoreNA', menuInstoreNA ? 'true' : 'false');
+    form.set('menuInstoreAudit', JSON.stringify(menuInstoreAudit));
+    form.set('menuOnlineChecked', menuOnlineChecked ? 'true' : 'false');
+    form.set('menuOnlineNA', menuOnlineNA ? 'true' : 'false');
+    form.set('menuOnlineUrl', menuOnlineUrl);
+    form.set('menuOnlineAudit', JSON.stringify(menuOnlineAudit));
     // Training
     form.set('decksTaught', JSON.stringify(decksTaught));
     form.set('budtendersTrained', JSON.stringify(budtenders));
@@ -360,6 +436,8 @@ export default function VibesVisitNew() {
     form.set('ugcPostUrl', ugcPostUrl);
     // Photos — multi-slot append
     merchVisiblePhotos.forEach((f, i) => form.append(`merchVisiblePhoto_${i}`, f));
+    menuInstorePhotos.forEach((f, i) => form.append(`menuInstorePhoto_${i}`, f));
+    menuOnlinePhotos.forEach((f, i) => form.append(`menuOnlinePhoto_${i}`, f));
     dropoffPhotos.forEach((f, i) => form.append(`dropoffPhoto_${i}`, f));
     if (selfiePhoto) form.set('selfiePhoto', selfiePhoto);
 
@@ -500,6 +578,31 @@ export default function VibesVisitNew() {
                 setMerchVisiblePhotos={setMerchVisiblePhotos}
               />
             )}
+            {step === 'menus' && (
+              <StepMenus
+                skuStock={skuStock}
+                visitType={visitType}
+                accountName={accountName}
+                menuInstoreChecked={menuInstoreChecked}
+                setMenuInstoreChecked={setMenuInstoreChecked}
+                menuInstoreNA={menuInstoreNA}
+                setMenuInstoreNA={setMenuInstoreNA}
+                menuInstorePhotos={menuInstorePhotos}
+                setMenuInstorePhotos={setMenuInstorePhotos}
+                menuInstoreAudit={menuInstoreAudit}
+                setMenuInstoreAudit={setMenuInstoreAudit}
+                menuOnlineChecked={menuOnlineChecked}
+                setMenuOnlineChecked={setMenuOnlineChecked}
+                menuOnlineNA={menuOnlineNA}
+                setMenuOnlineNA={setMenuOnlineNA}
+                menuOnlineUrl={menuOnlineUrl}
+                setMenuOnlineUrl={setMenuOnlineUrl}
+                menuOnlinePhotos={menuOnlinePhotos}
+                setMenuOnlinePhotos={setMenuOnlinePhotos}
+                menuOnlineAudit={menuOnlineAudit}
+                setMenuOnlineAudit={setMenuOnlineAudit}
+              />
+            )}
             {step === 'train' && (
               <StepTrain
                 decks={decks}
@@ -568,11 +671,13 @@ export default function VibesVisitNew() {
                   ? 'Pick a store and tap Check In to continue.'
                   : step === 'audit'
                     ? 'Take at least 1 photo of Highsman merch in-store to continue.'
-                    : step === 'train'
-                      ? "Enter the number of budtenders on staff above — we can't continue without it."
-                      : step === 'vibes'
-                        ? 'Give this store a Vibes Score (0–10) to submit.'
-                        : 'Please complete this step to continue.'}
+                    : step === 'menus'
+                      ? 'Check both the in-store digital menu AND the online menu (or mark "Not available"). You must review ≥ 1 SKU or mark N/A on each.'
+                      : step === 'train'
+                        ? "Enter the number of budtenders on staff above — we can't continue without it."
+                        : step === 'vibes'
+                          ? 'Give this store a Vibes Score (0–10) to submit.'
+                          : 'Please complete this step to continue.'}
               </div>
             ) : null}
 
@@ -1177,7 +1282,675 @@ function StepAudit(props: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Step 3 · Train
+// Step 3 · Menus
+// ─────────────────────────────────────────────────────────────────────────────
+// Audit the store's in-store digital menu AND online menu for accuracy.
+// Per SKU stocked, verify: Photo · Category · Brand · Size · Price.
+// Anything flagged 'wrong' surfaces to the sales team via brand_visits.
+// First visits and stores with new products get extra attention but the
+// check is required on every visit so menu drift never goes unnoticed.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// List of stocked SKUs to audit — derived from the Audit step's skuStock.
+function stockedSkus(skuStock: SkuStockMap) {
+  const rows: Array<{format: (typeof FORMATS)[number]; strain: (typeof STRAINS)[number]; key: string}> =
+    [];
+  for (const f of FORMATS) {
+    const strainsIn = skuStock[f.slug] || {};
+    for (const s of STRAINS) {
+      if (strainsIn[s.slug]) {
+        rows.push({format: f, strain: s, key: menuSkuKey(f.slug, s.slug)});
+      }
+    }
+  }
+  return rows;
+}
+
+function StepMenus(props: {
+  skuStock: SkuStockMap;
+  visitType: string;
+  accountName: string;
+  menuInstoreChecked: boolean;
+  setMenuInstoreChecked: (b: boolean) => void;
+  menuInstoreNA: boolean;
+  setMenuInstoreNA: (b: boolean) => void;
+  menuInstorePhotos: File[];
+  setMenuInstorePhotos: (f: File[]) => void;
+  menuInstoreAudit: MenuAuditMap;
+  setMenuInstoreAudit: (m: MenuAuditMap) => void;
+  menuOnlineChecked: boolean;
+  setMenuOnlineChecked: (b: boolean) => void;
+  menuOnlineNA: boolean;
+  setMenuOnlineNA: (b: boolean) => void;
+  menuOnlineUrl: string;
+  setMenuOnlineUrl: (v: string) => void;
+  menuOnlinePhotos: File[];
+  setMenuOnlinePhotos: (f: File[]) => void;
+  menuOnlineAudit: MenuAuditMap;
+  setMenuOnlineAudit: (m: MenuAuditMap) => void;
+}) {
+  const stocked = useMemo(() => stockedSkus(props.skuStock), [props.skuStock]);
+  const firstTime = props.visitType === 'first_visit';
+
+  // If she didn't stock any SKUs on the Audit step, we still show the menu
+  // step so she can add any SKUs she sees ON the menu (even if they're not
+  // physically on-shelf — could be web-only listings, etc.).
+  const hasStockedSkus = stocked.length > 0;
+
+  return (
+    <div style={{display: 'grid', gap: 14}}>
+      <SectionTitle index="03" title="Menus" color={BRAND.cyan} />
+
+      {/* Intro / context */}
+      <div
+        style={{
+          padding: 12,
+          background: 'rgba(0,212,255,0.08)',
+          border: `1px solid ${BRAND.cyan}`,
+          borderRadius: 8,
+          fontFamily: BODY,
+          fontSize: 13,
+          color: BRAND.white,
+          lineHeight: 1.5,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: TEKO,
+            fontSize: 14,
+            color: BRAND.cyan,
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            marginBottom: 6,
+          }}
+        >
+          {firstTime
+            ? '★ First Visit — extra attention on menus'
+            : 'Menu accuracy check'}
+        </div>
+        Check the <strong>in-store digital menu</strong> (TVs, tablets) AND
+        the <strong>online menu</strong> (Dutchie, I Heart Jane, store
+        site). For every Highsman SKU they carry, verify 5 things:
+        <strong> Photo · Category · Brand · Size · Price.</strong> Flag
+        anything wrong — the sales team will chase it down.
+      </div>
+
+      {/* What to expect per format */}
+      <div
+        style={{
+          padding: 10,
+          background: BRAND.chip,
+          border: `1px solid ${BRAND.line}`,
+          borderRadius: 8,
+          fontSize: 12,
+          fontFamily: BODY,
+          color: BRAND.gray,
+          lineHeight: 1.55,
+        }}
+      >
+        <div
+          style={{
+            color: BRAND.white,
+            fontFamily: TEKO,
+            fontSize: 12,
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            marginBottom: 4,
+          }}
+        >
+          Expected on every menu
+        </div>
+        {FORMATS.map((f) => (
+          <div key={f.slug}>
+            <strong style={{color: BRAND.white}}>{f.name}</strong> →{' '}
+            {f.expectedCategory} · {f.expectedSubcategory} ·{' '}
+            <span style={{color: BRAND.gold}}>{f.expectedSize}</span> ·{' '}
+            Brand: Highsman
+          </div>
+        ))}
+      </div>
+
+      {/* ─── In-Store Digital Menu ──────────────────────────────────────── */}
+      <MenuSection
+        tone={BRAND.cyan}
+        label="In-Store Digital Menu"
+        hint="The TV / tablet menu on the dispensary floor."
+        checked={props.menuInstoreChecked}
+        setChecked={props.setMenuInstoreChecked}
+        na={props.menuInstoreNA}
+        setNA={props.setMenuInstoreNA}
+        naLabel="No in-store digital menu at this store"
+        audit={props.menuInstoreAudit}
+        setAudit={props.setMenuInstoreAudit}
+        stocked={stocked}
+        hasStocked={hasStockedSkus}
+      >
+        <Field label="Photo of the menu" required={false}>
+          <MultiPhotoPicker
+            files={props.menuInstorePhotos}
+            setFiles={props.setMenuInstorePhotos}
+            minRequired={0}
+            maxAllowed={3}
+            label="Snap the in-store menu"
+          />
+        </Field>
+      </MenuSection>
+
+      {/* ─── Online Menu ───────────────────────────────────────────────── */}
+      <MenuSection
+        tone={BRAND.cyan}
+        label="Online Menu"
+        hint="Their website, Dutchie, I Heart Jane, Weedmaps, etc."
+        checked={props.menuOnlineChecked}
+        setChecked={props.setMenuOnlineChecked}
+        na={props.menuOnlineNA}
+        setNA={props.setMenuOnlineNA}
+        naLabel="Store isn't listed online / no Highsman SKUs live"
+        audit={props.menuOnlineAudit}
+        setAudit={props.setMenuOnlineAudit}
+        stocked={stocked}
+        hasStocked={hasStockedSkus}
+      >
+        <Field label="Menu URL" required={false}>
+          <input
+            type="url"
+            value={props.menuOnlineUrl}
+            onChange={(e) => props.setMenuOnlineUrl(e.target.value)}
+            placeholder="https://..."
+            style={{
+              width: '100%',
+              padding: '8px 10px',
+              background: BRAND.black,
+              border: `1px solid ${BRAND.line}`,
+              color: BRAND.white,
+              borderRadius: 6,
+              fontFamily: BODY,
+              fontSize: 13,
+              outline: 'none',
+              boxSizing: 'border-box',
+            }}
+          />
+        </Field>
+        <Field label="Screenshot(s) of the online menu" required={false}>
+          <MultiPhotoPicker
+            files={props.menuOnlinePhotos}
+            setFiles={props.setMenuOnlinePhotos}
+            minRequired={0}
+            maxAllowed={3}
+            label="Upload screenshot"
+          />
+        </Field>
+      </MenuSection>
+    </div>
+  );
+}
+
+// ─── Shared menu-section panel (In-Store + Online share this UI) ───────────
+function MenuSection(props: {
+  tone: string;
+  label: string;
+  hint: string;
+  checked: boolean;
+  setChecked: (b: boolean) => void;
+  na: boolean;
+  setNA: (b: boolean) => void;
+  naLabel: string;
+  audit: MenuAuditMap;
+  setAudit: (m: MenuAuditMap) => void;
+  stocked: Array<{format: (typeof FORMATS)[number]; strain: (typeof STRAINS)[number]; key: string}>;
+  hasStocked: boolean;
+  children?: React.ReactNode;
+}) {
+  const reviewed = countReviewedSkus(props.audit);
+  const flags = countFlags(props.audit);
+  const disabled = props.na;
+
+  function setEntry(key: string, patch: Partial<MenuAuditEntry>) {
+    const current: MenuAuditEntry = props.audit[key] || {
+      onMenu: null,
+      photo: null,
+      category: null,
+      brand: null,
+      size: null,
+      price: null,
+    };
+    props.setAudit({...props.audit, [key]: {...current, ...patch}});
+  }
+
+  return (
+    <div
+      style={{
+        padding: 14,
+        background: disabled
+          ? 'rgba(169,172,175,0.06)'
+          : 'rgba(0,212,255,0.05)',
+        border: `1px solid ${disabled ? BRAND.line : props.tone}`,
+        borderRadius: 8,
+        opacity: disabled ? 0.75 : 1,
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          gap: 8,
+          marginBottom: 4,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: TEKO,
+            fontSize: 17,
+            color: props.tone,
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+          }}
+        >
+          {props.label}
+        </div>
+        {reviewed > 0 || flags > 0 ? (
+          <div
+            style={{
+              fontFamily: TEKO,
+              fontSize: 12,
+              color: BRAND.gray,
+              letterSpacing: '0.08em',
+            }}
+          >
+            {reviewed} reviewed ·{' '}
+            <span style={{color: flags > 0 ? BRAND.red : BRAND.green}}>
+              {flags} flag{flags === 1 ? '' : 's'}
+            </span>
+          </div>
+        ) : null}
+      </div>
+      <div style={{color: BRAND.gray, fontSize: 12, marginBottom: 10}}>
+        {props.hint}
+      </div>
+
+      {/* Not-available toggle */}
+      <label
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '8px 10px',
+          background: BRAND.chip,
+          border: `1px solid ${BRAND.line}`,
+          borderRadius: 6,
+          marginBottom: 10,
+          cursor: 'pointer',
+          fontFamily: BODY,
+          fontSize: 13,
+          color: BRAND.white,
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={props.na}
+          onChange={(e) => {
+            props.setNA(e.target.checked);
+            if (e.target.checked) props.setChecked(false);
+          }}
+        />
+        {props.naLabel}
+      </label>
+
+      {!disabled ? (
+        <>
+          {/* "I checked this menu" toggle */}
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 10px',
+              background: props.checked
+                ? 'rgba(46,204,113,0.10)'
+                : BRAND.chip,
+              border: `1px solid ${props.checked ? BRAND.green : BRAND.line}`,
+              borderRadius: 6,
+              marginBottom: 12,
+              cursor: 'pointer',
+              fontFamily: BODY,
+              fontSize: 13,
+              color: BRAND.white,
+              fontWeight: 600,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={props.checked}
+              onChange={(e) => props.setChecked(e.target.checked)}
+            />
+            I checked this menu
+          </label>
+
+          {props.children}
+
+          {/* Per-SKU audit cards */}
+          {props.hasStocked ? (
+            <div style={{display: 'grid', gap: 10, marginTop: 12}}>
+              {props.stocked.map(({format, strain, key}) => (
+                <SkuAuditCard
+                  key={key}
+                  format={format}
+                  strain={strain}
+                  entry={props.audit[key]}
+                  onPatch={(patch) => setEntry(key, patch)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div
+              style={{
+                marginTop: 10,
+                padding: 10,
+                background: BRAND.chip,
+                border: `1px dashed ${BRAND.line}`,
+                borderRadius: 6,
+                color: BRAND.gray,
+                fontSize: 12,
+                fontFamily: BODY,
+              }}
+            >
+              No SKUs marked in stock on the Audit step. Go back one step
+              to mark what they carry, then come back to audit the menus.
+            </div>
+          )}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+// ─── Per-SKU audit card — 5 toggle chips + price seen + notes ─────────────
+function SkuAuditCard(props: {
+  format: (typeof FORMATS)[number];
+  strain: (typeof STRAINS)[number];
+  entry: MenuAuditEntry | undefined;
+  onPatch: (patch: Partial<MenuAuditEntry>) => void;
+}) {
+  const e: MenuAuditEntry = props.entry || {
+    onMenu: null,
+    photo: null,
+    category: null,
+    brand: null,
+    size: null,
+    price: null,
+  };
+  const onMenu = e.onMenu;
+  const hasAnyFlag =
+    onMenu === false ||
+    MENU_CHECKS.some((c) => e[c.key] === 'wrong');
+
+  return (
+    <div
+      style={{
+        padding: 10,
+        background: BRAND.chip,
+        border: `1px solid ${
+          hasAnyFlag
+            ? BRAND.red
+            : onMenu === true
+              ? BRAND.line
+              : BRAND.line
+        }`,
+        borderRadius: 8,
+      }}
+    >
+      {/* Title row */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 6,
+          marginBottom: 6,
+        }}
+      >
+        <div>
+          <span
+            style={{
+              fontFamily: TEKO,
+              fontSize: 16,
+              color: BRAND.white,
+              letterSpacing: '0.04em',
+            }}
+          >
+            {props.format.name}
+          </span>
+          <span style={{color: BRAND.gray, margin: '0 6px'}}>·</span>
+          <span style={{fontSize: 13, color: BRAND.gold}}>
+            {props.strain.name}
+          </span>
+        </div>
+        <div style={{color: BRAND.gray, fontSize: 11, fontFamily: BODY}}>
+          Expected: {props.format.expectedSubcategory} ·{' '}
+          {props.format.expectedSize}
+        </div>
+      </div>
+
+      {/* On menu? */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          marginBottom: 8,
+          fontFamily: BODY,
+          fontSize: 12,
+        }}
+      >
+        <span style={{color: BRAND.gray, marginRight: 4}}>On the menu?</span>
+        <Tri
+          label="Yes"
+          active={onMenu === true}
+          color={BRAND.green}
+          onClick={() => props.onPatch({onMenu: true})}
+        />
+        <Tri
+          label="Missing"
+          active={onMenu === false}
+          color={BRAND.red}
+          onClick={() =>
+            // Missing from menu auto-flags — clear per-check state since
+            // they don't apply.
+            props.onPatch({
+              onMenu: false,
+              photo: null,
+              category: null,
+              brand: null,
+              size: null,
+              price: null,
+            })
+          }
+        />
+        <Tri
+          label="Skip"
+          active={onMenu === null}
+          color={BRAND.gray}
+          onClick={() => props.onPatch({onMenu: null})}
+        />
+      </div>
+
+      {/* 5 check chips — only when onMenu === true */}
+      {onMenu === true ? (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(5, 1fr)',
+            gap: 4,
+            marginBottom: 8,
+          }}
+        >
+          {MENU_CHECKS.map((c) => (
+            <CheckChip
+              key={c.key}
+              label={c.short}
+              title={c.describe(props.format)}
+              state={e[c.key]}
+              onCycle={() => {
+                const cur = e[c.key];
+                const next: MenuCheckState =
+                  cur === null ? 'ok' : cur === 'ok' ? 'wrong' : null;
+                props.onPatch({[c.key]: next} as Partial<MenuAuditEntry>);
+              }}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {/* Price seen + notes — show when flagged or when onMenu=true */}
+      {onMenu === true ? (
+        <div style={{display: 'grid', gap: 6}}>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={e.priceSeen || ''}
+            onChange={(ev) => props.onPatch({priceSeen: ev.target.value})}
+            placeholder="Price seen on menu (e.g. $42)"
+            style={{
+              width: '100%',
+              padding: '6px 8px',
+              background: BRAND.black,
+              border: `1px solid ${BRAND.line}`,
+              color: BRAND.white,
+              borderRadius: 6,
+              fontFamily: BODY,
+              fontSize: 12,
+              outline: 'none',
+              boxSizing: 'border-box',
+            }}
+          />
+          {hasAnyFlag ? (
+            <textarea
+              value={e.notes || ''}
+              onChange={(ev) => props.onPatch({notes: ev.target.value})}
+              placeholder="What needs fixing? (wrong photo, wrong category, stale price…)"
+              rows={2}
+              style={{
+                width: '100%',
+                padding: '6px 8px',
+                background: BRAND.black,
+                border: `1px solid ${BRAND.red}`,
+                color: BRAND.white,
+                borderRadius: 6,
+                fontFamily: BODY,
+                fontSize: 12,
+                outline: 'none',
+                boxSizing: 'border-box',
+                resize: 'vertical',
+              }}
+            />
+          ) : null}
+        </div>
+      ) : onMenu === false ? (
+        <textarea
+          value={e.notes || ''}
+          onChange={(ev) => props.onPatch({notes: ev.target.value})}
+          placeholder="Any context? (e.g. told buyer, out of stock vs missing listing)"
+          rows={2}
+          style={{
+            width: '100%',
+            padding: '6px 8px',
+            background: BRAND.black,
+            border: `1px solid ${BRAND.red}`,
+            color: BRAND.white,
+            borderRadius: 6,
+            fontFamily: BODY,
+            fontSize: 12,
+            outline: 'none',
+            boxSizing: 'border-box',
+            resize: 'vertical',
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+// Tri-state pill used for "On the menu?"
+function Tri(props: {
+  label: string;
+  active: boolean;
+  color: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={props.onClick}
+      style={{
+        padding: '4px 10px',
+        borderRadius: 999,
+        border: `1px solid ${props.active ? props.color : BRAND.line}`,
+        background: props.active ? props.color : 'transparent',
+        color: props.active ? BRAND.black : BRAND.gray,
+        fontFamily: TEKO,
+        fontSize: 12,
+        letterSpacing: '0.1em',
+        textTransform: 'uppercase',
+        cursor: 'pointer',
+        fontWeight: 600,
+      }}
+    >
+      {props.label}
+    </button>
+  );
+}
+
+// Per-check chip with 3 states: unchecked / OK / Wrong.
+// Tap cycles: — → ✓ → ⚠ → —
+function CheckChip(props: {
+  label: string;
+  title: string;
+  state: MenuCheckState;
+  onCycle: () => void;
+}) {
+  const isOk = props.state === 'ok';
+  const isWrong = props.state === 'wrong';
+  const color = isOk ? BRAND.green : isWrong ? BRAND.red : BRAND.gray;
+  const bg = isOk
+    ? 'rgba(46,204,113,0.15)'
+    : isWrong
+      ? 'rgba(255,59,48,0.15)'
+      : BRAND.chip;
+  const icon = isOk ? '✓' : isWrong ? '⚠' : '—';
+  return (
+    <button
+      type="button"
+      onClick={props.onCycle}
+      title={props.title}
+      style={{
+        padding: '6px 4px',
+        background: bg,
+        border: `1px solid ${isOk || isWrong ? color : BRAND.line}`,
+        borderRadius: 6,
+        color: color,
+        fontFamily: TEKO,
+        fontSize: 11,
+        letterSpacing: '0.08em',
+        textTransform: 'uppercase',
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 2,
+        fontWeight: 600,
+      }}
+    >
+      <span style={{fontSize: 14, lineHeight: 1}}>{icon}</span>
+      <span>{props.label}</span>
+    </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 4 · Train
 // ─────────────────────────────────────────────────────────────────────────────
 function StepTrain(props: {
   decks: Deck[];
