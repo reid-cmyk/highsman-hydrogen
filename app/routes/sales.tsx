@@ -97,7 +97,19 @@ function money(n: number): string {
 }
 
 // ── Zoho Inventory API ─────────────────────────────────────────────────────
+// Module-scoped access-token cache. Zoho access tokens live ~60 min; we cache
+// for 55 min to stay well under expiry. Without this cache, the /oauth/v2/token
+// endpoint rate-limits with 400 "too many requests continuously" — each page
+// load or period switch would otherwise force a fresh refresh round-trip.
+let cachedAccessToken: {token: string; expiresAt: number} | null = null;
+const TOKEN_TTL_MS = 55 * 60 * 1000;
+
 async function getZohoAccessToken(env: any): Promise<string> {
+  const now = Date.now();
+  if (cachedAccessToken && cachedAccessToken.expiresAt > now + 30_000) {
+    return cachedAccessToken.token;
+  }
+
   // Prefer Inventory-scoped credentials; fall back to general Zoho creds
   const clientId = env.ZOHO_INVENTORY_CLIENT_ID || env.ZOHO_CLIENT_ID;
   const clientSecret = env.ZOHO_INVENTORY_CLIENT_SECRET || env.ZOHO_CLIENT_SECRET;
@@ -119,7 +131,61 @@ async function getZohoAccessToken(env: any): Promise<string> {
   }
   const data: any = await res.json();
   if (!data.access_token) throw new Error('Zoho token refresh returned no access_token');
+  cachedAccessToken = {token: data.access_token, expiresAt: now + TOKEN_TTL_MS};
   return data.access_token;
+}
+
+// ── Warehouse/location → state mapping ─────────────────────────────────────
+// In Zoho Inventory, each warehouse/location represents a state market.
+// A sales order carries `location_name` (or `warehouse_name` on older org setups)
+// and we resolve it to a 2-letter state code.
+//
+// The resolver checks (in order):
+//   1. Exact 2-letter state code anywhere in the location name
+//   2. Full state name substring ("New Jersey", "Massachusetts", etc.)
+//   3. Known city/market keywords mapped to their state
+// If nothing matches, returns '' (order excluded from state cards).
+const STATE_FULL_NAMES: Record<string, string> = {
+  'NEW JERSEY': 'NJ',
+  'MASSACHUSETTS': 'MA',
+  'NEW YORK': 'NY',
+  'RHODE ISLAND': 'RI',
+  'MISSOURI': 'MO',
+};
+const CITY_STATE_HINTS: Record<string, string> = {
+  NEWARK: 'NJ',
+  JERSEY: 'NJ',
+  COLLINGSWOOD: 'NJ',
+  TRENTON: 'NJ',
+  BOSTON: 'MA',
+  WORCESTER: 'MA',
+  SPRINGFIELD: 'MA',
+  BROOKLYN: 'NY',
+  MANHATTAN: 'NY',
+  PROVIDENCE: 'RI',
+  CRANSTON: 'RI',
+  STLOUIS: 'MO',
+  KANSASCITY: 'MO',
+  KIRKSVILLE: 'MO',
+  JOPLIN: 'MO',
+};
+
+function resolveStateFromLocation(locationName: string): string {
+  if (!locationName) return '';
+  const upper = locationName.toUpperCase();
+  // 1. Look for explicit 2-letter state code (surrounded by non-alpha or at boundaries)
+  const codeMatch = upper.match(/\b(NJ|MA|NY|RI|MO)\b/);
+  if (codeMatch) return codeMatch[1];
+  // 2. Full state name
+  for (const [fullName, code] of Object.entries(STATE_FULL_NAMES)) {
+    if (upper.includes(fullName)) return code;
+  }
+  // 3. City hints — strip spaces for keywords like "KANSAS CITY"
+  const squished = upper.replace(/[^A-Z]/g, '');
+  for (const [city, code] of Object.entries(CITY_STATE_HINTS)) {
+    if (squished.includes(city)) return code;
+  }
+  return '';
 }
 
 // Highsman Zoho Inventory Org ID — env var overrides if set
@@ -270,10 +336,21 @@ export async function loader({request, context}: LoaderFunctionArgs) {
 
     for (const so of ytdOrders) {
       const orderDate = new Date(so.date);
-      // State: prefer shipping, fallback billing
-      const rawState: string =
-        so.shipping_address?.state || so.billing_address?.state || so.billing_state || '';
-      const state = (rawState || '').trim().toUpperCase().slice(0, 2);
+      // State is derived from the Zoho Inventory location/warehouse on the order —
+      // each warehouse in the Highsman org represents a state market (NJ, MA, NY, RI, MO).
+      // Fall back to shipping/billing address state only if the order has no location.
+      const rawLocation: string = so.location_name || so.warehouse_name || '';
+      let state = resolveStateFromLocation(rawLocation);
+      if (!state) {
+        const addrState: string =
+          so.shipping_address?.state || so.billing_address?.state || so.billing_state || '';
+        state = (addrState || '').trim().toUpperCase().slice(0, 2);
+        // Normalize full state names that may appear in address fields
+        if (state.length > 2) {
+          const mapped = STATE_FULL_NAMES[(addrState || '').trim().toUpperCase()];
+          state = mapped || state.slice(0, 2);
+        }
+      }
       const total = Number(so.total || 0);
       const customerId = String(so.customer_id || so.contact_id || so.customer_name);
       const storeName = so.customer_name || 'Unknown';
