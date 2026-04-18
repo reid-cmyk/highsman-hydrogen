@@ -2901,7 +2901,7 @@ function ReceiptsSubmitter(props: {
       });
       const data: {
         ok?: boolean;
-        emailed?: boolean;
+        emailSent?: boolean;
         emailError?: string;
         message?: string;
       } = await res.json().catch(() => ({}));
@@ -2922,7 +2922,7 @@ function ReceiptsSubmitter(props: {
         return;
       }
 
-      const nextStatus: 'filed' | 'saved_no_email' = data.emailed
+      const nextStatus: 'filed' | 'saved_no_email' = data.emailSent
         ? 'filed'
         : 'saved_no_email';
       props.setFiledReceipts(

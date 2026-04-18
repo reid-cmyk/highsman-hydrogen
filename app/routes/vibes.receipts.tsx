@@ -221,7 +221,7 @@ export default function VibesReceiptsPage() {
       });
       const data: {
         ok?: boolean;
-        emailed?: boolean;
+        emailSent?: boolean;
         emailError?: string;
         message?: string;
       } = await res.json().catch(() => ({}));
@@ -242,7 +242,7 @@ export default function VibesReceiptsPage() {
         return;
       }
 
-      const nextStatus: 'filed' | 'saved_no_email' = data.emailed
+      const nextStatus: 'filed' | 'saved_no_email' = data.emailSent
         ? 'filed'
         : 'saved_no_email';
       setFiledReceipts((prev) =>
