@@ -94,6 +94,7 @@ async function fetchAccount(accountId: string, token: string) {
       'Link_for_Pop_Ups',
       'Email_for_Staff_Trainings',
       'Link_for_Staff_Training',
+      'Number_of_Budtenders',
     ].join(','),
   );
   const res = await fetch(url.toString(), {
@@ -372,6 +373,10 @@ export async function loader({request, context}: LoaderFunctionArgs) {
           popUpLink: account.Link_for_Pop_Ups || null,
           trainingEmail: account.Email_for_Staff_Trainings || null,
           trainingLink: account.Link_for_Staff_Training || null,
+          numberOfBudtenders:
+            account.Number_of_Budtenders != null && account.Number_of_Budtenders !== ''
+              ? Number(account.Number_of_Budtenders)
+              : null,
         },
         contacts,
         contactsByRole,

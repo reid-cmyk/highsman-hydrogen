@@ -27,7 +27,21 @@ type Env = {
   R2_SECRET_ACCESS_KEY?: string;
   R2_BUCKET?: string;
   R2_PUBLIC_URL?: string;
+  ZOHO_CLIENT_ID?: string;
+  ZOHO_CLIENT_SECRET?: string;
+  ZOHO_REFRESH_TOKEN?: string;
+  KLAVIYO_PRIVATE_KEY?: string;
+  KLAVIYO_PRIVATE_API_KEY?: string;
 };
+
+// ─── Budtender Training Camp — Klaviyo list ─────────────────────────────────
+const BUDTENDER_TRAINING_LIST_ID = 'WBSrLZ';
+const KLAVIYO_REVISION = '2024-10-15';
+
+// Module-scope Zoho token cache (per worker instance). Avoids getting blocked
+// by Zoho's "too many requests continuously" rate limit on /oauth/v2/token.
+let cachedZohoToken: string | null = null;
+let zohoTokenExpiresAt = 0;
 
 type Payload = {
   repId: string;
@@ -116,6 +130,21 @@ export async function action({request, context}: ActionFunctionArgs) {
   if (!ALLOWED_VISIT_TYPES.includes(vt as any)) {
     return json({ok: false, message: 'Invalid visitType'}, {status: 400});
   }
+
+  // Budtender count — the training goal for this store.
+  // `budtenderCount` is the (possibly edited) value the rep saw on screen;
+  // `budtenderCountOriginal` is what was loaded from Zoho. If they differ,
+  // we PATCH the Zoho Account below.
+  const budtenderCountRaw = form.get('budtenderCount');
+  const budtenderCountOrigRaw = form.get('budtenderCountOriginal');
+  const budtenderCount =
+    budtenderCountRaw != null && budtenderCountRaw !== ''
+      ? Number(budtenderCountRaw)
+      : null;
+  const budtenderCountOrig =
+    budtenderCountOrigRaw != null && budtenderCountOrigRaw !== ''
+      ? Number(budtenderCountOrigRaw)
+      : null;
 
   // Robust JSON helper
   const parseJson = <T,>(key: string, fallback: T): T => {
@@ -356,6 +385,51 @@ export async function action({request, context}: ActionFunctionArgs) {
     }
   }
 
+  // ─── Zoho: PATCH updated budtender count (non-fatal) ─────────────────────
+  // If the rep corrected the number on screen, write it back so every future
+  // visit has the right training goal. Wrapped in try/catch — visit already
+  // saved, this can fail without blocking the response.
+  if (
+    payload.accountId &&
+    budtenderCount != null &&
+    Number.isFinite(budtenderCount) &&
+    budtenderCount !== budtenderCountOrig
+  ) {
+    try {
+      await patchZohoBudtenderCount(env, payload.accountId, budtenderCount);
+    } catch (err) {
+      console.warn('[vibes-visit] Zoho budtender-count PATCH failed (non-fatal)', err);
+    }
+  }
+
+  // ─── Klaviyo: enroll captured emails into Budtender Training Camp ────────
+  // Every budtender the rep captured with a valid email goes straight onto
+  // list WBSrLZ. They get added with store_account_id + store_name properties
+  // so we can slice sign-ups by store later.
+  const klaviyoKey = env.KLAVIYO_PRIVATE_KEY || env.KLAVIYO_PRIVATE_API_KEY;
+  if (klaviyoKey && payload.budtendersTrained.length) {
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    for (const bt of payload.budtendersTrained) {
+      if (typeof bt !== 'object' || !bt.email) continue;
+      const email = bt.email.trim().toLowerCase();
+      if (!emailRe.test(email)) continue;
+      try {
+        await enrollBudtenderInTrainingCamp(
+          klaviyoKey,
+          email,
+          bt.name || '',
+          payload.accountId,
+          payload.accountName,
+        );
+      } catch (err) {
+        console.warn(
+          `[vibes-visit] Klaviyo enrollment failed for ${email} (non-fatal)`,
+          err,
+        );
+      }
+    }
+  }
+
   return json({
     ok: true,
     id: visitId,
@@ -437,4 +511,155 @@ function pickExtension(file: File): string {
   if (mime.includes('heic')) return 'heic';
   if (mime.includes('webp')) return 'webp';
   return 'bin';
+}
+
+// ─── Zoho helpers ───────────────────────────────────────────────────────────
+async function getZohoToken(env: Env): Promise<string> {
+  const now = Date.now();
+  if (cachedZohoToken && now < zohoTokenExpiresAt) return cachedZohoToken;
+  if (!env.ZOHO_CLIENT_ID || !env.ZOHO_CLIENT_SECRET || !env.ZOHO_REFRESH_TOKEN) {
+    throw new Error('Zoho credentials not configured');
+  }
+  const res = await fetch('https://accounts.zoho.com/oauth/v2/token', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: env.ZOHO_CLIENT_ID,
+      client_secret: env.ZOHO_CLIENT_SECRET,
+      refresh_token: env.ZOHO_REFRESH_TOKEN,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Zoho token refresh failed (${res.status}): ${text.slice(0, 300)}`);
+  }
+  const data = (await res.json()) as {access_token: string};
+  cachedZohoToken = data.access_token;
+  zohoTokenExpiresAt = now + 55 * 60 * 1000;
+  return cachedZohoToken!;
+}
+
+async function patchZohoBudtenderCount(
+  env: Env,
+  accountId: string,
+  count: number,
+): Promise<void> {
+  const token = await getZohoToken(env);
+  const res = await fetch(
+    `https://www.zohoapis.com/crm/v7/Accounts/${encodeURIComponent(accountId)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Zoho-oauthtoken ${token}`,
+      },
+      body: JSON.stringify({
+        data: [
+          {
+            id: accountId,
+            Number_of_Budtenders: count,
+          },
+        ],
+      }),
+    },
+  );
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Zoho PATCH failed (${res.status}): ${text.slice(0, 300)}`);
+  }
+}
+
+// ─── Klaviyo: Budtender Training Camp enrollment ────────────────────────────
+async function klaviyoFetch(
+  url: string,
+  apiKey: string,
+  options: RequestInit = {},
+): Promise<Response> {
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      Accept: 'application/vnd.api+json',
+      'Content-Type': 'application/vnd.api+json',
+      Authorization: `Klaviyo-API-Key ${apiKey}`,
+      revision: KLAVIYO_REVISION,
+      ...(options.headers || {}),
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Klaviyo ${res.status}: ${text.slice(0, 300)}`);
+  }
+  return res;
+}
+
+async function enrollBudtenderInTrainingCamp(
+  apiKey: string,
+  email: string,
+  name: string,
+  storeAccountId: string,
+  storeName: string,
+): Promise<void> {
+  // 1. Upsert the profile with budtender metadata
+  const [firstName, ...lastParts] = (name || '').trim().split(' ');
+  const lastName = lastParts.join(' ');
+  await klaviyoFetch(
+    'https://a.klaviyo.com/api/profile-import/',
+    apiKey,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        data: {
+          type: 'profile',
+          attributes: {
+            email,
+            ...(firstName ? {first_name: firstName} : {}),
+            ...(lastName ? {last_name: lastName} : {}),
+            properties: {
+              is_budtender: true,
+              store_account_id: storeAccountId,
+              store_name: storeName,
+              enrolled_via: 'live_vibes_visit',
+              enrolled_at: new Date().toISOString(),
+            },
+          },
+        },
+      }),
+    },
+  );
+
+  // 2. Subscribe to Budtender Training Camp list (WBSrLZ)
+  await klaviyoFetch(
+    'https://a.klaviyo.com/api/profile-subscription-bulk-create-jobs/',
+    apiKey,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        data: {
+          type: 'profile-subscription-bulk-create-job',
+          attributes: {
+            profiles: {
+              data: [
+                {
+                  type: 'profile',
+                  attributes: {
+                    email,
+                    subscriptions: {
+                      email: {marketing: {consent: 'SUBSCRIBED'}},
+                    },
+                  },
+                },
+              ],
+            },
+            historical_import: false,
+          },
+          relationships: {
+            list: {
+              data: {type: 'list', id: BUDTENDER_TRAINING_LIST_ID},
+            },
+          },
+        },
+      }),
+    },
+  );
 }

@@ -57,7 +57,21 @@ type AccountResult = {
   popUpEmail: string | null;
   popUpLink: string | null;
   lastVisitDate: string | null;
+  // Staffing — used by /vibes/visit/new to set the live-training goal per store.
+  // Custom field on Accounts ("Account Information → Number of Budtenders").
+  numberOfBudtenders: number | null;
 };
+
+/** Parse a Zoho custom number field that may be sent as string or number. */
+function readNumber(acct: any, ...candidates: string[]): number | null {
+  for (const key of candidates) {
+    const raw = acct[key];
+    if (raw == null || raw === '') continue;
+    const n = typeof raw === 'number' ? raw : Number(raw);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
 
 /** Read a custom field from a Zoho record tolerating multiple API-name conventions. */
 function readCustom(acct: any, ...candidates: string[]): string | null {
@@ -95,6 +109,7 @@ async function searchAccounts(
       'Email_to_book_pop_ups',
       'Link_for_Pop_Ups',
       'Visit_Date',
+      'Number_of_Budtenders',
     ].join(','),
   );
   url.searchParams.set('per_page', '50');
@@ -124,6 +139,7 @@ async function searchAccounts(
     popUpEmail: readCustom(acct, 'Email_to_book_pop_ups', 'Email_for_Pop_Ups'),
     popUpLink: readCustom(acct, 'Link_for_Pop_Ups', 'Link_For_Pop_Ups'),
     lastVisitDate: readCustom(acct, 'Visit_Date', 'Data_Collection_Last_Visit_Date'),
+    numberOfBudtenders: readNumber(acct, 'Number_of_Budtenders', 'No_of_Budtenders'),
   }));
 
   // Post-filter for NJ when scope requires it. `word` search doesn't accept a
@@ -134,6 +150,52 @@ async function searchAccounts(
       .slice(0, 15);
   }
   return allAccounts.slice(0, 15);
+}
+
+/** Fetch a single Zoho Account by id. Returns the same AccountResult shape the
+ *  search endpoint returns so clients have a consistent account contract. */
+async function fetchAccountById(
+  accountId: string,
+  accessToken: string,
+): Promise<AccountResult | null> {
+  const url = new URL(`https://www.zohoapis.com/crm/v7/Accounts/${accountId}`);
+  url.searchParams.set(
+    'fields',
+    [
+      'Account_Name',
+      'Billing_Street',
+      'Billing_City',
+      'Billing_State',
+      'Phone',
+      'Email_to_book_pop_ups',
+      'Link_for_Pop_Ups',
+      'Visit_Date',
+      'Number_of_Budtenders',
+    ].join(','),
+  );
+  const res = await fetch(url.toString(), {
+    headers: {Authorization: `Zoho-oauthtoken ${accessToken}`},
+  });
+  if (res.status === 204 || res.status === 404) return null;
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Zoho account fetch failed (${res.status}): ${text.slice(0, 300)}`);
+  }
+  const data = await res.json();
+  const acct = (data.data || [])[0];
+  if (!acct) return null;
+  return {
+    id: acct.id,
+    name: acct.Account_Name,
+    city: acct.Billing_City || null,
+    state: acct.Billing_State || null,
+    street: acct.Billing_Street || null,
+    phone: acct.Phone || null,
+    popUpEmail: readCustom(acct, 'Email_to_book_pop_ups', 'Email_for_Pop_Ups'),
+    popUpLink: readCustom(acct, 'Link_for_Pop_Ups', 'Link_For_Pop_Ups'),
+    lastVisitDate: readCustom(acct, 'Visit_Date', 'Data_Collection_Last_Visit_Date'),
+    numberOfBudtenders: readNumber(acct, 'Number_of_Budtenders', 'No_of_Budtenders'),
+  };
 }
 
 /** Look up a single Contact by email. Used to resolve `Email for Pop Ups` → full contact record. */
@@ -276,12 +338,41 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const query = (url.searchParams.get('q') || '').trim();
   const contactEmail = (url.searchParams.get('contactEmail') || '').trim();
+  const accountId = (url.searchParams.get('accountId') || '').trim();
   const scope = url.searchParams.get('scope') === 'all' ? 'all' as const : 'nj' as const;
 
   const env = context.env as any;
   const clientId = env.ZOHO_CLIENT_ID;
   const clientSecret = env.ZOHO_CLIENT_SECRET;
   const refreshToken = env.ZOHO_REFRESH_TOKEN;
+
+  // Single-account fetch by id — used by /vibes/visit/new when a rep arrives
+  // with a preset accountId (from the Store Profile deep-link) so we can pull
+  // the Number of Budtenders custom field to set the training goal.
+  if (accountId) {
+    if (!clientId || !clientSecret || !refreshToken) {
+      return json({account: null, error: 'CRM not configured'}, {
+        headers: {'Cache-Control': 'no-store'},
+      });
+    }
+    try {
+      const accessToken = await getAccessToken({
+        ZOHO_CLIENT_ID: clientId,
+        ZOHO_CLIENT_SECRET: clientSecret,
+        ZOHO_REFRESH_TOKEN: refreshToken,
+      });
+      const account = await fetchAccountById(accountId, accessToken);
+      return json({account}, {
+        headers: {'Cache-Control': 'public, max-age=300'},
+      });
+    } catch (err: any) {
+      console.error('[api/accounts] Account fetch error:', err.message);
+      return json({account: null, error: 'Account lookup unavailable'}, {
+        status: 200,
+        headers: {'Cache-Control': 'no-store'},
+      });
+    }
+  }
 
   // Dedicated contact-by-email lookup (for resolving `Email for Pop Ups` → full Contact)
   if (contactEmail) {

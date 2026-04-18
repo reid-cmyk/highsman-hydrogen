@@ -150,6 +150,10 @@ export default function VibesVisitNew() {
   const presetAccountName = params.get('accountName') || '';
   const presetAccountCity = params.get('accountCity') || '';
   const presetAccountState = params.get('accountState') || 'NJ';
+  const presetBudtenderCountRaw = params.get('budtenderCount') || '';
+  const presetBudtenderCount = presetBudtenderCountRaw
+    ? Number(presetBudtenderCountRaw)
+    : null;
 
   // Step state
   const [step, setStep] = useState<StepKey>('arrive');
@@ -183,6 +187,16 @@ export default function VibesVisitNew() {
   );
   const [budName, setBudName] = useState('');
   const [budEmail, setBudEmail] = useState('');
+  // Training goal: pulled from Zoho Account "Number of Budtenders". Editable by
+  // the rep if she finds the real number is different. We persist both the
+  // original and the edited value so the submit action can PATCH Zoho iff it
+  // actually changed.
+  const [numberOfBudtenders, setNumberOfBudtenders] = useState<number | null>(
+    Number.isFinite(presetBudtenderCount) ? presetBudtenderCount : null,
+  );
+  const [numberOfBudtendersOrig, setNumberOfBudtendersOrig] = useState<
+    number | null
+  >(Number.isFinite(presetBudtenderCount) ? presetBudtenderCount : null);
 
   // Drop
   const [goodieItems, setGoodieItems] = useState<Array<{item: string; cost: number}>>(
@@ -212,6 +226,31 @@ export default function VibesVisitNew() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountQuery]);
+
+  // If the rep arrived with a preset accountId but no budtender count (e.g.
+  // deep-linked from the /vibes/store/:accountId "Start Visit" button without
+  // the count param), fetch the account once so Step Train can show the goal.
+  const budtenderFetcher = useFetcher<{account: {numberOfBudtenders: number | null} | null}>();
+  useEffect(() => {
+    if (
+      accountId &&
+      numberOfBudtenders == null &&
+      budtenderFetcher.state === 'idle' &&
+      !budtenderFetcher.data
+    ) {
+      budtenderFetcher.load(
+        `/api/accounts?accountId=${encodeURIComponent(accountId)}`,
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountId]);
+  useEffect(() => {
+    const n = budtenderFetcher.data?.account?.numberOfBudtenders;
+    if (typeof n === 'number' && Number.isFinite(n)) {
+      setNumberOfBudtenders(n);
+      setNumberOfBudtendersOrig(n);
+    }
+  }, [budtenderFetcher.data]);
 
   // GPS check-in
   function captureGps() {
@@ -296,6 +335,12 @@ export default function VibesVisitNew() {
     // Training
     form.set('decksTaught', JSON.stringify(decksTaught));
     form.set('budtendersTrained', JSON.stringify(budtenders));
+    // Store staffing — current vs. originally loaded from Zoho. The action uses
+    // the pair to decide whether to PATCH Zoho with an updated count.
+    if (numberOfBudtenders != null)
+      form.set('budtenderCount', String(numberOfBudtenders));
+    if (numberOfBudtendersOrig != null)
+      form.set('budtenderCountOriginal', String(numberOfBudtendersOrig));
     // Drop
     form.set('goodieItems', JSON.stringify(goodieItems));
     form.set('dropoffs', JSON.stringify(dropoffs));
@@ -418,6 +463,15 @@ export default function VibesVisitNew() {
                   setAccountCity(a.city || '');
                   setAccountState(a.state || 'NJ');
                   setAccountQuery('');
+                  // Capture the budtender count from the Zoho search result so
+                  // Step Train can render the live-training goal. Falls back to
+                  // the useEffect fetcher if the search didn't include it.
+                  const n =
+                    typeof a.numberOfBudtenders === 'number'
+                      ? a.numberOfBudtenders
+                      : null;
+                  setNumberOfBudtenders(n);
+                  setNumberOfBudtendersOrig(n);
                 }}
                 visitType={visitType}
                 setVisitType={setVisitType}
@@ -448,6 +502,10 @@ export default function VibesVisitNew() {
                 setBudName={setBudName}
                 budEmail={budEmail}
                 setBudEmail={setBudEmail}
+                numberOfBudtenders={numberOfBudtenders}
+                setNumberOfBudtenders={setNumberOfBudtenders}
+                accountId={accountId}
+                accountName={accountName}
               />
             )}
             {step === 'drop' && (
@@ -1094,6 +1152,10 @@ function StepTrain(props: {
   setBudName: (v: string) => void;
   budEmail: string;
   setBudEmail: (v: string) => void;
+  numberOfBudtenders: number | null;
+  setNumberOfBudtenders: (n: number | null) => void;
+  accountId: string;
+  accountName: string;
 }) {
   function toggleDeck(slug: string) {
     const set = new Set(props.decksTaught);
@@ -1114,9 +1176,160 @@ function StepTrain(props: {
     props.setBudtenders(props.budtenders.filter((_, j) => j !== i));
   }
 
+  // Progress: Trained X / Y, Emails captured Z / Y
+  const trainedCount = props.budtenders.length;
+  const emailCount = props.budtenders.filter((b) =>
+    b.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(b.email),
+  ).length;
+  const goal = props.numberOfBudtenders ?? 0;
+  const goalKnown = typeof props.numberOfBudtenders === 'number';
+  const emailPct = goal > 0 ? Math.min(100, (emailCount / goal) * 100) : 0;
+  const trainedPct = goal > 0 ? Math.min(100, (trainedCount / goal) * 100) : 0;
+
+  // Per-store self-signup link — budtenders you couldn't catch in person can
+  // sign themselves up and get credited to this store.
+  const selfSignupLink = props.accountId
+    ? `https://www.highsman.com/budtender-training?store=${encodeURIComponent(
+        props.accountId,
+      )}&storeName=${encodeURIComponent(props.accountName || '')}`
+    : null;
+
+  function copySignupLink() {
+    if (!selfSignupLink) return;
+    try {
+      navigator.clipboard.writeText(selfSignupLink);
+    } catch {
+      // ignore — fallback is below (manual select)
+    }
+  }
+
   return (
     <div style={{display: 'grid', gap: 14}}>
       <SectionTitle index="03" title="Train" color={BRAND.green} />
+
+      {/* ─── Training Goal + Progress ──────────────────────────────────────── */}
+      <div
+        style={{
+          padding: 14,
+          background: 'rgba(46,204,113,0.08)',
+          border: `1px solid ${BRAND.green}`,
+          borderRadius: 8,
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            justifyContent: 'space-between',
+            gap: 8,
+            marginBottom: 10,
+          }}
+        >
+          <div
+            style={{
+              fontFamily: TEKO,
+              fontSize: 13,
+              color: BRAND.green,
+              letterSpacing: '0.18em',
+              textTransform: 'uppercase',
+            }}
+          >
+            Training Goal
+          </div>
+          <div
+            style={{
+              fontFamily: TEKO,
+              fontSize: 11,
+              color: BRAND.gray,
+              letterSpacing: '0.1em',
+            }}
+          >
+            EDITABLE
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            marginBottom: 10,
+          }}
+        >
+          <div style={{color: BRAND.gray, fontSize: 12, fontFamily: BODY}}>
+            Budtenders on staff:
+          </div>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={99}
+            value={props.numberOfBudtenders ?? ''}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === '') {
+                props.setNumberOfBudtenders(null);
+                return;
+              }
+              const n = Math.max(0, Math.min(99, Number(v)));
+              props.setNumberOfBudtenders(Number.isFinite(n) ? n : null);
+            }}
+            placeholder="?"
+            style={{
+              width: 64,
+              padding: '6px 8px',
+              background: BRAND.black,
+              border: `1px solid ${BRAND.green}`,
+              color: BRAND.white,
+              borderRadius: 6,
+              fontFamily: TEKO,
+              fontSize: 22,
+              textAlign: 'center',
+              outline: 'none',
+            }}
+          />
+          {!goalKnown ? (
+            <div style={{fontSize: 11, color: BRAND.gold, fontFamily: BODY}}>
+              ← ask the manager, we'll save it back to Zoho
+            </div>
+          ) : null}
+        </div>
+
+        {/* Progress bars */}
+        <ProgressBar
+          label="Trained live"
+          current={trainedCount}
+          goal={goal}
+          pct={trainedPct}
+          color={BRAND.green}
+          fallback={!goalKnown ? `${trainedCount} trained` : undefined}
+        />
+        <div style={{height: 8}} />
+        <ProgressBar
+          label="Emails captured"
+          current={emailCount}
+          goal={goal}
+          pct={emailPct}
+          color={BRAND.gold}
+          fallback={!goalKnown ? `${emailCount} emails` : undefined}
+        />
+
+        <div
+          style={{
+            marginTop: 10,
+            fontSize: 11,
+            color: BRAND.gray,
+            fontFamily: BODY,
+            lineHeight: 1.4,
+          }}
+        >
+          Push for every budtender email you can get — they go{' '}
+          <span style={{color: BRAND.gold}}>straight into Budtender Training Camp</span>.
+          No email = no long-term relationship.
+        </div>
+      </div>
+
+      {/* ─── Decks taught ──────────────────────────────────────────────────── */}
       <Field label="Decks taught (select any)">
         <div style={{display: 'grid', gap: 6}}>
           {props.decks.map((d) => {
@@ -1165,69 +1378,276 @@ function StepTrain(props: {
         </div>
       </Field>
 
-      <Field label="Budtenders trained (live)">
-        <div style={{display: 'flex', gap: 6}}>
+      {/* ─── Budtenders trained (live) + email capture ──────────────────────── */}
+      <Field label="Budtenders trained (capture every email)">
+        <div style={{display: 'grid', gap: 6}}>
           <input
             type="text"
             value={props.budName}
             onChange={(e) => props.setBudName(e.target.value)}
-            placeholder="Name"
-            style={{...inputStyle(), flex: 2}}
+            placeholder="First name (or nickname)"
+            style={inputStyle()}
           />
           <input
             type="email"
+            inputMode="email"
+            autoCapitalize="off"
+            autoCorrect="off"
             value={props.budEmail}
             onChange={(e) => props.setBudEmail(e.target.value)}
-            placeholder="Email (opt)"
-            style={{...inputStyle(), flex: 3}}
+            placeholder="Email — auto-enrolls in Training Camp"
+            style={{
+              ...inputStyle(),
+              borderColor: props.budEmail ? BRAND.gold : BRAND.line,
+            }}
           />
-          <button type="button" onClick={addBud} style={secondaryBtn()}>
-            Add
+          <button
+            type="button"
+            onClick={addBud}
+            disabled={!props.budName.trim()}
+            style={{
+              ...secondaryBtn(),
+              borderColor: props.budName.trim() ? BRAND.green : BRAND.line,
+              color: props.budName.trim() ? BRAND.green : BRAND.gray,
+              cursor: props.budName.trim() ? 'pointer' : 'not-allowed',
+            }}
+          >
+            + Add Budtender
           </button>
         </div>
+
         {props.budtenders.length > 0 ? (
-          <div style={{marginTop: 8, display: 'grid', gap: 4}}>
-            {props.budtenders.map((b, i) => (
-              <div
-                key={i}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  padding: '6px 10px',
-                  background: BRAND.chip,
-                  border: `1px solid ${BRAND.line}`,
-                  borderRadius: 4,
-                  fontSize: 12,
-                }}
-              >
-                <span>
-                  <span style={{color: BRAND.white, fontWeight: 600}}>
-                    {b.name}
-                  </span>
-                  {b.email ? (
-                    <span style={{color: BRAND.gray, marginLeft: 8}}>
-                      {b.email}
-                    </span>
-                  ) : null}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => rmBud(i)}
+          <div style={{marginTop: 10, display: 'grid', gap: 4}}>
+            {props.budtenders.map((b, i) => {
+              const hasEmail = Boolean(
+                b.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(b.email),
+              );
+              return (
+                <div
+                  key={i}
                   style={{
-                    background: 'transparent',
-                    color: BRAND.gray,
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontFamily: TEKO,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 10px',
+                    background: hasEmail
+                      ? 'rgba(245,228,0,0.08)'
+                      : BRAND.chip,
+                    border: `1px solid ${hasEmail ? BRAND.gold : BRAND.line}`,
+                    borderRadius: 6,
+                    fontSize: 12,
                   }}
                 >
-                  ✕
-                </button>
-              </div>
-            ))}
+                  <div style={{flex: 1, minWidth: 0}}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <span style={{color: BRAND.white, fontWeight: 600}}>
+                        {b.name}
+                      </span>
+                      {hasEmail ? (
+                        <span
+                          style={{
+                            fontFamily: TEKO,
+                            fontSize: 10,
+                            color: BRAND.gold,
+                            letterSpacing: '0.14em',
+                            padding: '1px 6px',
+                            background: 'rgba(245,228,0,0.15)',
+                            borderRadius: 3,
+                          }}
+                        >
+                          TRAINING CAMP ✓
+                        </span>
+                      ) : (
+                        <span
+                          style={{
+                            fontFamily: TEKO,
+                            fontSize: 10,
+                            color: BRAND.gray,
+                            letterSpacing: '0.14em',
+                          }}
+                        >
+                          NO EMAIL
+                        </span>
+                      )}
+                    </div>
+                    {b.email ? (
+                      <div
+                        style={{
+                          color: BRAND.gray,
+                          fontSize: 11,
+                          marginTop: 2,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {b.email}
+                      </div>
+                    ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => rmBud(i)}
+                    style={{
+                      background: 'transparent',
+                      color: BRAND.gray,
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontFamily: TEKO,
+                      marginLeft: 8,
+                    }}
+                    aria-label="Remove budtender"
+                  >
+                    ✕
+                  </button>
+                </div>
+              );
+            })}
           </div>
         ) : null}
       </Field>
+
+      {/* ─── Self-signup link for budtenders not on shift ──────────────────── */}
+      {selfSignupLink ? (
+        <div
+          style={{
+            padding: 12,
+            background: BRAND.chip,
+            border: `1px dashed ${BRAND.line}`,
+            borderRadius: 8,
+          }}
+        >
+          <div
+            style={{
+              fontFamily: TEKO,
+              fontSize: 13,
+              color: BRAND.gold,
+              letterSpacing: '0.18em',
+              textTransform: 'uppercase',
+              marginBottom: 4,
+            }}
+          >
+            Couldn't catch everyone?
+          </div>
+          <div
+            style={{
+              fontSize: 11,
+              color: BRAND.gray,
+              marginBottom: 8,
+              fontFamily: BODY,
+            }}
+          >
+            Share this link with the manager or drop it in the breakroom —
+            signups credit this store.
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              gap: 6,
+              alignItems: 'center',
+            }}
+          >
+            <input
+              type="text"
+              readOnly
+              value={selfSignupLink}
+              onFocus={(e) => e.currentTarget.select()}
+              style={{
+                ...inputStyle(),
+                flex: 1,
+                fontSize: 11,
+                color: BRAND.gray,
+              }}
+            />
+            <button
+              type="button"
+              onClick={copySignupLink}
+              style={{
+                ...secondaryBtn(),
+                padding: '10px 14px',
+                fontSize: 13,
+              }}
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// Training-goal progress bar for Step Train.
+function ProgressBar({
+  label,
+  current,
+  goal,
+  pct,
+  color,
+  fallback,
+}: {
+  label: string;
+  current: number;
+  goal: number;
+  pct: number;
+  color: string;
+  fallback?: string;
+}) {
+  return (
+    <div>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          marginBottom: 4,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: TEKO,
+            fontSize: 12,
+            color: BRAND.gray,
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+          }}
+        >
+          {label}
+        </span>
+        <span
+          style={{
+            fontFamily: TEKO,
+            fontSize: 16,
+            color,
+            letterSpacing: '0.04em',
+          }}
+        >
+          {fallback || `${current} / ${goal}`}
+        </span>
+      </div>
+      <div
+        style={{
+          height: 6,
+          background: 'rgba(255,255,255,0.06)',
+          borderRadius: 3,
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            width: `${Math.max(0, Math.min(100, pct))}%`,
+            height: '100%',
+            background: color,
+            transition: 'width 0.25s ease',
+          }}
+        />
+      </div>
     </div>
   );
 }
