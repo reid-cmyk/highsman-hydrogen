@@ -897,8 +897,8 @@ export default function OpsDashboard() {
           borderTop: `1px solid ${BRAND.lineStrong}`,
           padding: '10px 12px',
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr 1fr',
-          gap: 8,
+          gridTemplateColumns: '1fr 1fr 1fr 1fr',
+          gap: 6,
           zIndex: 30,
         }}
       >
@@ -908,10 +908,10 @@ export default function OpsDashboard() {
             background: BRAND.gold,
             color: BRAND.black,
             fontFamily: TEKO,
-            fontSize: 14,
-            letterSpacing: '0.14em',
+            fontSize: 13,
+            letterSpacing: '0.12em',
             textTransform: 'uppercase',
-            padding: '12px 8px',
+            padding: '12px 4px',
             textAlign: 'center',
             textDecoration: 'none',
             border: `1px solid ${BRAND.gold}`,
@@ -925,10 +925,10 @@ export default function OpsDashboard() {
             background: 'transparent',
             color: BRAND.gold,
             fontFamily: TEKO,
-            fontSize: 14,
-            letterSpacing: '0.14em',
+            fontSize: 13,
+            letterSpacing: '0.12em',
             textTransform: 'uppercase',
-            padding: '12px 8px',
+            padding: '12px 4px',
             textAlign: 'center',
             textDecoration: 'none',
             border: `1px solid ${BRAND.gold}`,
@@ -937,15 +937,32 @@ export default function OpsDashboard() {
           Shift Report
         </Link>
         <Link
+          to="/vibes"
+          style={{
+            background: 'transparent',
+            color: BRAND.gold,
+            fontFamily: TEKO,
+            fontSize: 13,
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+            padding: '12px 4px',
+            textAlign: 'center',
+            textDecoration: 'none',
+            border: `1px solid ${BRAND.gold}`,
+          }}
+        >
+          Vibes
+        </Link>
+        <Link
           to="/njmenu"
           style={{
             background: 'transparent',
             color: BRAND.white,
             fontFamily: TEKO,
-            fontSize: 14,
-            letterSpacing: '0.14em',
+            fontSize: 13,
+            letterSpacing: '0.12em',
             textTransform: 'uppercase',
-            padding: '12px 8px',
+            padding: '12px 4px',
             textAlign: 'center',
             textDecoration: 'none',
             border: `1px solid ${BRAND.lineStrong}`,
