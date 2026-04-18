@@ -783,7 +783,28 @@ export default function OpsDashboard() {
         </Card>
 
         {/* ── Scoreboard ─────────────────────────────────────────────── */}
-        <Card kicker="Last 30 Days" title="Scoreboard" accent={BRAND.gold}>
+        <Card
+          kicker="Last 30 Days"
+          title="Scoreboard"
+          accent={BRAND.gold}
+          action={
+            <Link
+              to="/grading-rubric"
+              style={{
+                fontFamily: TEKO,
+                fontSize: 12,
+                letterSpacing: '0.16em',
+                textTransform: 'uppercase',
+                color: BRAND.gold,
+                textDecoration: 'none',
+                border: `1px solid ${BRAND.gold}`,
+                padding: '6px 10px',
+              }}
+            >
+              Rubric
+            </Link>
+          }
+        >
           {!hasSupabase ? (
             <ErrorState message="Supabase not configured yet — run the setup in supabase/SETUP.md to light this up." />
           ) : !scoreboard.ok ? (
