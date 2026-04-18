@@ -1399,6 +1399,20 @@ export default function NJMenu() {
               </a>
             </nav>
 
+            {/* Highsman Logo Banner */}
+            <div
+              className="flex items-center justify-center py-8 md:py-10"
+              style={{background: '#000', borderBottom: '1px solid rgba(255,255,255,0.06)'}}
+            >
+              <a href="https://highsman.com" target="_blank" rel="noopener noreferrer" style={{display: 'inline-block'}}>
+                <img
+                  src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Logo_White.png?v=1775594430"
+                  alt="Highsman"
+                  style={{width: 240, maxWidth: '70vw', height: 'auto', display: 'block'}}
+                />
+              </a>
+            </div>
+
             <div className="max-w-2xl mx-auto px-6 md:px-10 py-16 md:py-24">
               {/* Success Icon */}
               <div className="text-center mb-10">
