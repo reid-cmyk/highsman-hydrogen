@@ -191,78 +191,16 @@ const SECTIONS: Section[] = [
   },
   {
     kicker: 'Section 05',
-    title: 'Consumer · Brand',
+    title: 'Rewards Store',
     accent: BRAND.white,
     blurb:
-      'Shop pages and brand storytelling. Where consumers land and convert.',
+      'Gear, prizes, and swag. Where Spark Team and partners redeem the wins.',
     pages: [
-      {
-        path: '/hit-sticks',
-        name: 'Hit Sticks',
-        description:
-          '0.5g triple-infused pre-rolls built for on-the-go. The fastest way to hit the product — and the highest-margin unit on the menu.',
-        access: 'public',
-      },
-      {
-        path: '/pre-rolls',
-        name: '1.2G Pre-Rolls',
-        description:
-          'The flagship 1.2g triple-infused pre-rolls. Built for sharing and heavy sessions. Five strains.',
-        access: 'public',
-      },
-      {
-        path: '/ground-game',
-        name: 'Ground Game (7G Flower)',
-        description:
-          '7g jars of premium flower — the roll-your-own format. Versatile, high-value, and the workhorse of the lineup.',
-        access: 'public',
-      },
-      {
-        path: '/our-strains',
-        name: 'Our Strains',
-        description:
-          'The full strain lineup. Terpenes, effects, and what each one delivers on the floor.',
-        access: 'public',
-      },
       {
         path: '/apparel',
         name: 'Apparel · The Collection',
         description:
-          'Highsman merch — tees, hoodies, hats. The uniform. Ships DTC.',
-        access: 'public',
-      },
-      {
-        path: '/storelocator',
-        name: 'Store Locator',
-        description:
-          'Find a dispensary carrying Highsman. Map view with filters by state and product line.',
-        access: 'public',
-      },
-      {
-        path: '/contact',
-        name: 'Contact',
-        description:
-          'Public contact form — inbound inquiries, press, partnership asks.',
-        access: 'public',
-      },
-    ],
-  },
-  {
-    kicker: 'Section 06',
-    title: 'Policies',
-    accent: BRAND.gray,
-    blurb: 'Legal footer pages — every site needs them.',
-    pages: [
-      {
-        path: '/policies/privacy-policy',
-        name: 'Privacy Policy',
-        description: 'Site privacy policy. Updated for NJ cannabis compliance.',
-        access: 'public',
-      },
-      {
-        path: '/policies/terms-of-service',
-        name: 'Terms of Service',
-        description: 'Site terms of service and conditions of use.',
+          'Highsman merch — tees, hoodies, hats, accessories. The uniform of the brand and the rewards catalog for the field.',
         access: 'public',
       },
     ],
