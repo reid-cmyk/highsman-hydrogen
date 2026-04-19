@@ -968,8 +968,12 @@ function TierBlock({
 }
 
 function StopCard({stop, tierColor}: {stop: RouteStop; tierColor: string}) {
-  const href = stop.accountId.startsWith('lead-')
-    ? `/vibes/store?leadId=${stop.leadId || ''}`
+  // Prospects (Zoho Leads) skip the full Account visit flow — they don't stock
+  // Highsman yet, so SKU/Merch/Menu audits don't apply. Route straight to the
+  // 5-question Sampling drop-in with lead context pre-filled.
+  const isLead = stop.accountId.startsWith('lead-');
+  const href = isLead
+    ? `/vibes/lead-visit?leadId=${encodeURIComponent(stop.leadId || '')}&company=${encodeURIComponent(stop.name)}&city=${encodeURIComponent(stop.city || '')}&state=${encodeURIComponent(stop.state || 'NJ')}`
     : `/vibes/store/${stop.accountId}`;
   const daysLabel =
     stop.tier === 'FRESH' && stop.daysSinceClosed != null

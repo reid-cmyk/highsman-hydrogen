@@ -132,6 +132,23 @@ export default function LeadVisitPage() {
   const [createdNewLead, setCreatedNewLead] = useState(false);
   const searchAbort = useRef<AbortController | null>(null);
 
+  // Pre-fill from URL query params when rep taps a TARGET stop on /vibes.
+  // Dashboard routes lead stops to:
+  //   /vibes/lead-visit?leadId=X&company=Y&city=Z&state=NJ
+  // so the rep lands on this 5-question form with dispensary context already populated.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const qs = new URLSearchParams(window.location.search);
+    const qsLeadId = qs.get('leadId');
+    const qsCompany = qs.get('company');
+    const qsCity = qs.get('city');
+    const qsState = qs.get('state');
+    if (qsLeadId) setLeadId(qsLeadId);
+    if (qsCompany) setLeadCompany(qsCompany);
+    if (qsCity) setLeadCity(qsCity);
+    if (qsState) setLeadState(qsState.toUpperCase());
+  }, []);
+
   // Inline "create new lead" form toggle
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newLead, setNewLead] = useState({
