@@ -1,73 +1,40 @@
-// Gmail integration via Google Identity Services + Gmail API
+// Gmail client — thin wrapper around the server-side /api/sales-floor-send-email
+// route. OAuth for sky@highsman.com lives in Oxygen env vars (GMAIL_CLIENT_ID /
+// GMAIL_CLIENT_SECRET / GMAIL_REFRESH_TOKEN) and the browser never sees them.
+//
+// The legacy client-side GIS flow has been retired — this module keeps the same
+// surface (Gmail.send / Gmail.isConnected / Gmail.authorize) so callers in
+// app.js continue to work.
 
 const Gmail = (() => {
-  let accessToken = null;
+  const ENDPOINT = '/api/sales-floor-send-email';
 
-  function getToken() {
-    return accessToken || sessionStorage.getItem('gmail_token');
-  }
+  // The server is always the sender — treat Gmail as "connected" from the
+  // browser's perspective so the UI never shows a connect modal for it.
+  function isConnected() { return true; }
 
-  function setToken(token) {
-    accessToken = token;
-    sessionStorage.setItem('gmail_token', token);
-  }
+  // No-op (server handles OAuth). Kept so older call sites don't crash.
+  function authorize() { return Promise.resolve(true); }
+  function getToken() { return null; }
 
-  function isConnected() {
-    return !!getToken();
-  }
-
-  // Trigger Google OAuth popup using GIS (Google Identity Services)
-  function authorize() {
-    return new Promise((resolve, reject) => {
-      if (!window.google) {
-        reject(new Error('Google Identity Services not loaded. Add the GIS script to your page.'));
-        return;
-      }
-      const client = google.accounts.oauth2.initTokenClient({
-        client_id: CONFIG.gmail.clientId,
-        scope: CONFIG.gmail.scopes,
-        callback: (response) => {
-          if (response.error) { reject(response); return; }
-          setToken(response.access_token);
-          resolve(response.access_token);
-        },
-      });
-      client.requestAccessToken();
-    });
-  }
-
-  // Send an email via Gmail API
-  async function send({ to, subject, body }) {
-    const token = getToken();
-    if (!token) throw new Error('Gmail not authenticated');
-
-    // Build RFC 2822 message
-    const message = [
-      `To: ${to}`,
-      `Subject: ${subject}`,
-      'Content-Type: text/plain; charset=utf-8',
-      '',
-      body,
-    ].join('\r\n');
-
-    const encoded = btoa(unescape(encodeURIComponent(message)))
-      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-
-    const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+  async function send({to, subject, body, cc, replyTo}) {
+    const res = await fetch(ENDPOINT, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ raw: encoded }),
+      headers: {'Content-Type': 'application/json'},
+      credentials: 'same-origin',
+      body: JSON.stringify({to, subject, body, cc, replyTo}),
     });
 
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error?.message || 'Gmail send failed');
+    // Try to parse JSON even on non-2xx so we can surface a useful error.
+    let data = null;
+    try { data = await res.json(); } catch { /* ignore */ }
+
+    if (!res.ok || !data || data.ok === false) {
+      const msg = (data && data.error) || `Gmail send failed (HTTP ${res.status})`;
+      throw new Error(msg);
     }
-    return res.json();
+    return data; // { ok:true, messageId, from }
   }
 
-  return { authorize, send, isConnected, getToken };
+  return {send, isConnected, authorize, getToken};
 })();

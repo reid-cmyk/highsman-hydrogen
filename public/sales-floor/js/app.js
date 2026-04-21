@@ -417,10 +417,11 @@ async function sendTemplateEmail() {
   const subject = document.getElementById('email-subject').value;
   const body = document.getElementById('email-body').value;
   if (!to || !subject) { toast('Please fill in To and select a template', 'error'); return; }
-  if (!Gmail.isConnected()) { toast('Connect Gmail first', 'error'); showConnectModal(); return; }
+  if (!body) { toast('Hit Preview first to generate the message', 'error'); return; }
   try {
-    await Gmail.send({ to, subject, body });
-    toast(`Email sent to ${to}`, 'success');
+    const result = await Gmail.send({ to, subject, body });
+    const from = result?.from ? ` from ${result.from}` : '';
+    toast(`Email sent to ${to}${from}`, 'success');
   } catch (err) {
     toast(`Send failed: ${err.message}`, 'error');
   }
@@ -431,11 +432,11 @@ async function sendQuickEmail() {
   const to = document.getElementById('quick-to').value;
   const name = document.getElementById('quick-name').value;
   if (!templateKey || !to) { toast('Select a template and enter an email', 'error'); return; }
-  if (!Gmail.isConnected()) { toast('Connect Gmail first', 'error'); showConnectModal(); return; }
   const filled = fillTemplate(templateKey, { name, sender: CONFIG.salesperson.name });
   try {
-    await Gmail.send({ to, subject: filled.subject, body: filled.body });
-    toast(`Email sent to ${to}`, 'success');
+    const result = await Gmail.send({ to, subject: filled.subject, body: filled.body });
+    const from = result?.from ? ` from ${result.from}` : '';
+    toast(`Email sent to ${to}${from}`, 'success');
   } catch (err) {
     toast(`Send failed: ${err.message}`, 'error');
   }
