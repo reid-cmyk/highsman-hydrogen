@@ -21,6 +21,7 @@ declare global {
     PUBLIC_STOREFRONT_ID: string;
     KLAVIYO_PRIVATE_KEY: string;
     STAFF_DASHBOARD_PASSWORD: string;
+    SALES_DASHBOARD_PASSWORD: string;
   }
 }
 
