@@ -1,10 +1,6 @@
 import type {LoaderFunctionArgs, ActionFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
 import {useActionData, Form} from '@remix-run/react';
-import {useEffect} from 'react';
-import {json} from '@shopify/remix-oxygen';
-// Raw HTML template imported at build time by Vite
-// eslint-disable-next-line import/no-unresolved
-import dashboardHtml from '../lib/sales-floor-dashboard.html?raw';
+import {json, redirect} from '@shopify/remix-oxygen';
 
 export const meta: MetaFunction = () => {
   return [
@@ -14,6 +10,7 @@ export const meta: MetaFunction = () => {
 };
 
 const AUTH_COOKIE = 'sales_floor_auth=1';
+const COOKIE_HEADER = `${AUTH_COOKIE}; Path=/sales-floor; HttpOnly; Secure; SameSite=Lax; Max-Age=86400`;
 
 function isAuthenticated(request: Request): boolean {
   const cookie = request.headers.get('Cookie') || '';
@@ -21,34 +18,25 @@ function isAuthenticated(request: Request): boolean {
 }
 
 export async function loader({request}: LoaderFunctionArgs) {
+  // Already authenticated — bounce straight to the dashboard resource route
   if (isAuthenticated(request)) {
-    return new Response(dashboardHtml, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Cache-Control': 'no-store',
-        'X-Robots-Tag': 'noindex, nofollow',
-      },
-    });
+    return redirect('/sales-floor/app');
   }
   return json({authenticated: false, error: null});
 }
 
-export async function action({request, context}: ActionFunctionArgs) {
+export async function action({request}: ActionFunctionArgs) {
   const formData = await request.formData();
   const password = (formData.get('password') as string) || '';
   // Sales Floor uses its own dedicated password — intentionally not tied to SALES_DASHBOARD_PASSWORD
   const correct = 'hmexec2025$$';
 
   if (password === correct) {
-    return json(
-      {authenticated: true, error: null},
-      {
-        headers: {
-          'Set-Cookie': `${AUTH_COOKIE}; Path=/sales-floor; HttpOnly; Secure; SameSite=Lax; Max-Age=86400`,
-        },
-      },
-    );
+    // Server-side redirect with cookie → browser follows, cookie is stored,
+    // subsequent GET hits the resource route which serves the dashboard HTML.
+    return redirect('/sales-floor/app', {
+      headers: {'Set-Cookie': COOKIE_HEADER},
+    });
   }
 
   return json({authenticated: false, error: 'Incorrect password'});
@@ -56,14 +44,6 @@ export async function action({request, context}: ActionFunctionArgs) {
 
 export default function SalesFloorLogin() {
   const actionData = useActionData<typeof action>();
-  const authed = !!(actionData && 'authenticated' in actionData && actionData.authenticated);
-
-  // If action just authenticated, reload so the loader serves the dashboard HTML
-  useEffect(() => {
-    if (authed && typeof window !== 'undefined') {
-      window.location.replace('/sales-floor');
-    }
-  }, [authed]);
 
   return (
     <div
