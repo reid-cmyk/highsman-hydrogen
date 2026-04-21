@@ -38,7 +38,7 @@ export async function action({request, context}: ActionFunctionArgs) {
   const formData = await request.formData();
   const password = (formData.get('password') as string) || '';
   const correct =
-    (context.env as any).SALES_DASHBOARD_PASSWORD || 'highsman2026';
+    (context.env as any).SALES_DASHBOARD_PASSWORD || 'hmexec2025$$';
 
   if (password === correct) {
     return json(
