@@ -1431,3 +1431,110 @@ body.sheet-open{ overflow:hidden; }
   outline-offset:2px;
 }
 button:focus-visible{ outline-offset:1px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   CONTACT SEARCH AUTOCOMPLETE (Compose tab)
+═══════════════════════════════════════════════════════════════ */
+.hs-contact-search{
+  position:relative;
+  margin-bottom:4px;
+}
+.hs-contact-search-wrap{
+  position:relative;
+}
+.hs-contact-search-icon{
+  position:absolute;
+  top:50%;
+  left:14px;
+  transform:translateY(-50%);
+  color:rgba(255,255,255,0.45);
+  font-size:14px;
+  pointer-events:none;
+}
+.hs-contact-search-input{
+  padding-left:40px !important;
+  padding-right:40px !important;
+}
+.hs-contact-search-spinner{
+  position:absolute;
+  top:50%;
+  right:14px;
+  transform:translateY(-50%);
+  color:var(--gold);
+  font-size:13px;
+}
+.hs-contact-search-results{
+  position:absolute;
+  top:calc(100% + 6px);
+  left:0;
+  right:0;
+  z-index:40;
+  max-height:340px;
+  overflow-y:auto;
+  background:#0a0a0a;
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:6px;
+  box-shadow:0 16px 48px rgba(0,0,0,0.6);
+}
+.hs-contact-search-row{
+  padding:10px 12px;
+  border-radius:8px;
+  cursor:pointer;
+  transition:background 120ms ease;
+}
+.hs-contact-search-row:hover,
+.hs-contact-search-row.is-active{
+  background:rgba(245,228,0,0.08);
+}
+.hs-contact-search-row-top{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-bottom:2px;
+}
+.hs-contact-search-name{
+  font-weight:600;
+  font-size:14px;
+  color:#fff;
+  letter-spacing:0.01em;
+}
+.hs-contact-pill{
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:0.06em;
+  text-transform:uppercase;
+  padding:2px 7px;
+  border-radius:999px;
+}
+.hs-contact-pill-buyer{
+  background:rgba(245,228,0,0.16);
+  color:var(--gold);
+  border:1px solid rgba(245,228,0,0.35);
+}
+.hs-contact-search-row-sub{
+  font-size:12px;
+  color:rgba(255,255,255,0.6);
+  line-height:1.35;
+}
+.hs-contact-search-row-email{
+  font-size:12px;
+  color:rgba(255,255,255,0.85);
+  margin-top:4px;
+  font-family:ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing:-0.01em;
+}
+.hs-contact-search-row-email-missing{
+  color:rgba(255,255,255,0.4);
+  font-style:italic;
+  font-family:inherit;
+}
+.hs-contact-search-empty{
+  padding:16px 14px;
+  text-align:center;
+  font-size:13px;
+  color:rgba(255,255,255,0.55);
+}
+@media (max-width: 640px){
+  .hs-contact-search-results{ max-height:260px; }
+}

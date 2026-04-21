@@ -395,6 +395,32 @@
             <span id="compose-template-chip" class="hs-reason-chip hidden">—</span>
           </div>
           <div class="p-6 space-y-4">
+            <!-- Smart Zoho lookup — search by contact name OR dispensary -->
+            <div class="hs-contact-search">
+              <label class="hs-label" for="contact-search-input">Search contact or dispensary</label>
+              <div class="hs-contact-search-wrap">
+                <i class="fa-solid fa-magnifying-glass hs-contact-search-icon"></i>
+                <input
+                  id="contact-search-input"
+                  type="text"
+                  class="hs-input hs-contact-search-input"
+                  placeholder="e.g. “Jane Smith” or “Garden State Dispensary”"
+                  autocomplete="off"
+                  oninput="ContactSearch.onInput(event)"
+                  onfocus="ContactSearch.onFocus(event)"
+                  onblur="ContactSearch.onBlur(event)"
+                  onkeydown="ContactSearch.onKeydown(event)"
+                />
+                <span id="contact-search-spinner" class="hs-contact-search-spinner hidden">
+                  <i class="fa-solid fa-circle-notch fa-spin"></i>
+                </span>
+              </div>
+              <div id="contact-search-results" class="hs-contact-search-results hidden" role="listbox"></div>
+              <div id="contact-search-hint" class="hs-helper-note">
+                Pick a contact to auto-fill To / Name / Company from Zoho.
+              </div>
+            </div>
+
             <div class="hs-form-grid">
               <div>
                 <label class="hs-label">To (email)</label>
@@ -726,6 +752,7 @@
 <script src="/sales-floor/js/ai-brief.js"></script>
 <script src="/sales-floor/js/alerts.js"></script>
 <script src="/sales-floor/js/issues.js"></script>
+<script src="/sales-floor/js/contact-search.js"></script>
 <script src="/sales-floor/js/app.js"></script>
 <script>
   // ───────────────────────────────────────────────────────────
