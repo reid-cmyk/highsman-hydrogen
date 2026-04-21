@@ -37,8 +37,8 @@ export async function loader({request}: LoaderFunctionArgs) {
 export async function action({request, context}: ActionFunctionArgs) {
   const formData = await request.formData();
   const password = (formData.get('password') as string) || '';
-  const correct =
-    (context.env as any).SALES_DASHBOARD_PASSWORD || 'hmexec2025$$';
+  // Sales Floor uses its own dedicated password — intentionally not tied to SALES_DASHBOARD_PASSWORD
+  const correct = 'hmexec2025$$';
 
   if (password === correct) {
     return json(
