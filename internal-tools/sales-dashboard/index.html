@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HIGHSMAN — Sales</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Teko:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { black: '#000000', white: '#FFFFFF', gray: '#A9ACAF' }
+          },
+          fontFamily: {
+            teko: ['Teko', 'sans-serif'],
+            barlow: ['Barlow Semi Condensed', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="bg-brand-black text-brand-white font-barlow overflow-hidden">
+
+<div class="flex h-screen">
+
+  <!-- ═══════════════════════════════════════════════
+       SIDEBAR
+  ════════════════════════════════════════════════ -->
+  <aside class="w-56 bg-brand-black border-r border-brand-gray flex flex-col flex-shrink-0">
+
+    <!-- Wordmark -->
+    <div class="px-5 pt-6 pb-5 border-b border-brand-gray">
+      <div class="hs-wordmark">HIGHSMAN</div>
+      <div class="text-brand-gray text-xs font-barlow mt-1 tracking-wide" id="user-greeting">Good morning</div>
+    </div>
+
+    <!-- Nav -->
+    <nav class="flex-1 py-4 overflow-y-auto">
+      <div class="hs-nav-group-label">Sales</div>
+      <button onclick="showTab('dashboard')" id="nav-dashboard" class="hs-nav-btn active">
+        <i class="fa-solid fa-chart-line w-4 text-center"></i> Dashboard
+      </button>
+      <button onclick="showTab('leads')" id="nav-leads" class="hs-nav-btn">
+        <i class="fa-solid fa-fire w-4 text-center"></i> Leads
+        <span id="hot-badge" class="ml-auto hs-hot-badge hidden"></span>
+      </button>
+      <button onclick="showTab('pipeline')" id="nav-pipeline" class="hs-nav-btn">
+        <i class="fa-solid fa-table-columns w-4 text-center"></i> Pipeline
+      </button>
+      <button onclick="showTab('accounts')" id="nav-accounts" class="hs-nav-btn">
+        <i class="fa-solid fa-building w-4 text-center"></i> Accounts
+        <span id="alert-sidebar-dot" class="ml-auto hidden alert-sidebar-dot"></span>
+      </button>
+
+      <div class="hs-nav-group-label mt-4">Tools</div>
+      <button onclick="showTab('compose')" id="nav-compose" class="hs-nav-btn">
+        <i class="fa-solid fa-envelope w-4 text-center"></i> Email
+      </button>
+      <button onclick="showTab('issues')" id="nav-issues" class="hs-nav-btn">
+        <i class="fa-solid fa-triangle-exclamation w-4 text-center"></i> Issues
+        <span id="issues-nav-badge" class="ml-auto hs-hot-badge hidden" style="background:#DC2626;"></span>
+      </button>
+    </nav>
+
+    <!-- Sync -->
+    <div class="px-4 py-4 border-t border-brand-gray">
+      <button onclick="syncCRM()" class="hs-btn-primary w-full">
+        <i class="fa-solid fa-rotate" id="sync-icon"></i> Sync CRM
+      </button>
+      <div id="sync-status" class="text-xs text-brand-gray text-center mt-2 font-barlow"></div>
+    </div>
+  </aside>
+
+  <!-- ═══════════════════════════════════════════════
+       MAIN
+  ════════════════════════════════════════════════ -->
+  <main class="flex-1 flex flex-col overflow-hidden">
+
+    <!-- Top bar -->
+    <header class="bg-brand-black border-b border-brand-gray px-7 py-0 flex items-center justify-between flex-shrink-0 h-14">
+      <h1 id="page-title" class="hs-page-title">Dashboard</h1>
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2">
+          <span class="hs-status-dot" id="status-dot"></span>
+          <span class="text-brand-gray text-xs font-barlow tracking-wide" id="status-text">Not connected</span>
+        </div>
+        <button onclick="showConnectModal()" class="hs-btn-secondary text-xs">
+          Connect
+        </button>
+      </div>
+    </header>
+
+    <!-- Scrollable content -->
+    <div class="flex-1 overflow-y-auto bg-brand-black p-7">
+
+
+      <!-- ═══════════════════ DASHBOARD ═══════════════════ -->
+      <div id="tab-dashboard" class="tab-content">
+
+        <!-- Critical Account Loss Banner — shown only when critical alerts exist -->
+        <div id="critical-alert-banner" class="critical-banner hidden mb-px">
+          <div class="critical-banner-inner">
+            <i class="fa-solid fa-fire critical-banner-icon"></i>
+            <span class="critical-banner-msg"></span>
+          </div>
+          <button onclick="showTab('accounts')" class="critical-banner-cta">View Alerts</button>
+        </div>
+
+        <!-- Stats row -->
+        <div class="grid grid-cols-4 gap-px mb-px bg-brand-gray">
+          <div class="stat-card bg-brand-black p-6">
+            <div class="hs-stat-label">Hot Leads</div>
+            <div class="hs-stat-number text-white" id="stat-hot">—</div>
+            <div class="hs-stat-sub">Follow up today</div>
+          </div>
+          <div class="stat-card bg-brand-black p-6">
+            <div class="hs-stat-label">Pipeline Value</div>
+            <div class="hs-stat-number text-white" id="stat-pipeline">—</div>
+            <div class="hs-stat-sub">Open opportunities</div>
+          </div>
+          <div class="stat-card bg-brand-black p-6">
+            <div class="hs-stat-label">Calls Today</div>
+            <div class="hs-stat-number text-white" id="stat-calls">0</div>
+            <div class="hs-stat-sub">Logged this session</div>
+          </div>
+          <div class="stat-card bg-brand-black p-6">
+            <div class="hs-stat-label">Active Alerts</div>
+            <div class="hs-stat-number text-white" id="stat-issues">—</div>
+            <div class="hs-stat-sub">Inventory &amp; account issues</div>
+          </div>
+        </div>
+
+        <!-- Two-column grid -->
+        <div class="grid grid-cols-2 gap-px bg-brand-gray mt-px">
+
+          <!-- Hot Leads -->
+          <div class="bg-brand-black">
+            <div class="hs-card-header">
+              <span class="hs-card-title">Hot Leads — Call Today</span>
+              <button onclick="showTab('leads')" class="hs-link">View all</button>
+            </div>
+            <div id="dashboard-hot-leads" class="divide-y divide-brand-gray/30">
+              <div class="hs-empty-state">
+                Connect Zoho CRM to load leads
+              </div>
+            </div>
+          </div>
+
+          <!-- Pipeline Snapshot -->
+          <div class="bg-brand-black">
+            <div class="hs-card-header">
+              <span class="hs-card-title">Pipeline Snapshot</span>
+              <button onclick="showTab('pipeline')" class="hs-link">Full board</button>
+            </div>
+            <div id="dashboard-pipeline" class="p-6 space-y-3">
+              <div class="hs-empty-state">No pipeline data yet</div>
+            </div>
+          </div>
+
+          <!-- Inventory Alerts Panel -->
+          <div class="bg-brand-black flex flex-col" style="max-height:420px;">
+            <div class="hs-card-header flex-shrink-0">
+              <span class="hs-card-title">Inventory Alerts</span>
+              <div id="alert-header-counts" class="flex items-center gap-1.5"></div>
+            </div>
+            <div id="alert-list" class="overflow-y-auto flex-1 divide-y" style="border-top:none;">
+              <div class="hs-empty-state py-10">Loading alerts...</div>
+            </div>
+          </div>
+
+          <!-- Quick Email -->
+          <div class="bg-brand-black">
+            <div class="hs-card-header">
+              <span class="hs-card-title">Quick Email</span>
+            </div>
+            <div class="p-6 space-y-3">
+              <select id="quick-template" class="hs-input">
+                <option value="">— Select a template —</option>
+                <option value="intro">Intro / First Touch</option>
+                <option value="followup">Follow-Up</option>
+                <option value="proposal">Proposal Send</option>
+                <option value="checkin">Account Check-In</option>
+                <option value="reorder">Reorder Reminder</option>
+              </select>
+              <input id="quick-to" type="email" placeholder="To: email@example.com" class="hs-input" />
+              <input id="quick-name" type="text" placeholder="Contact name" class="hs-input" />
+              <button onclick="sendQuickEmail()" class="hs-btn-primary w-full">
+                <i class="fa-solid fa-paper-plane mr-1"></i> Send Email
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div><!-- /dashboard -->
+
+
+      <!-- ═══════════════════ LEADS ═══════════════════ -->
+      <div id="tab-leads" class="tab-content hidden">
+
+        <div class="flex items-center gap-3 mb-6">
+          <button onclick="filterLeads('all')" id="filter-all" class="hs-filter-btn active">All</button>
+          <button onclick="filterLeads('hot')" id="filter-hot" class="hs-filter-btn">
+            <span class="hs-dot bg-red-600 mr-1"></span>Hot
+          </button>
+          <button onclick="filterLeads('warm')" id="filter-warm" class="hs-filter-btn">
+            <span class="hs-dot bg-amber-400 mr-1"></span>Warm
+          </button>
+          <button onclick="filterLeads('new')" id="filter-new" class="hs-filter-btn">
+            <span class="hs-dot bg-blue-400 mr-1"></span>New
+          </button>
+          <div class="ml-auto relative">
+            <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-brand-gray text-xs"></i>
+            <input id="lead-search" type="text" placeholder="Search leads..." oninput="searchLeads()" class="hs-input pl-8 w-52" />
+          </div>
+        </div>
+
+        <div id="lead-list" class="border border-brand-gray divide-y divide-brand-gray/40">
+          <div class="hs-empty-state py-12">
+            No leads loaded. Sync Zoho CRM to get started.
+          </div>
+        </div>
+      </div><!-- /leads -->
+
+
+      <!-- ═══════════════════ PIPELINE ═══════════════════ -->
+      <div id="tab-pipeline" class="tab-content hidden">
+        <div id="pipeline-board" class="flex gap-px bg-brand-gray border border-brand-gray overflow-x-auto pb-0 min-h-96">
+          <div class="hs-empty-state py-16 bg-brand-black w-full">
+            Connect Zoho CRM to load your pipeline
+          </div>
+        </div>
+      </div><!-- /pipeline -->
+
+
+      <!-- ═══════════════════ ACCOUNTS ═══════════════════ -->
+      <div id="tab-accounts" class="tab-content hidden">
+
+        <div class="flex items-center gap-4 mb-6">
+          <input id="account-search" type="text" placeholder="Search accounts..." oninput="searchAccounts()" class="hs-input w-64" />
+          <div class="ml-auto font-teko uppercase text-brand-gray text-sm tracking-wide" id="account-count"></div>
+        </div>
+
+        <div id="account-list" class="border border-brand-gray divide-y divide-brand-gray/40">
+          <div class="hs-empty-state py-12">
+            No accounts loaded. Sync Zoho CRM to get started.
+          </div>
+        </div>
+      </div><!-- /accounts -->
+
+
+      <!-- ═══════════════════ EMAIL TEMPLATES ═══════════════════ -->
+      <div id="tab-compose" class="tab-content hidden">
+        <div class="max-w-2xl border border-brand-gray">
+          <div class="hs-card-header">
+            <span class="hs-card-title">One-Click Email Templates</span>
+          </div>
+          <div class="p-6 space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="hs-label">To (email)</label>
+                <input id="email-to" type="email" class="hs-input" />
+              </div>
+              <div>
+                <label class="hs-label">Contact Name</label>
+                <input id="email-name" type="text" class="hs-input" />
+              </div>
+              <div>
+                <label class="hs-label">Company</label>
+                <input id="email-company" type="text" class="hs-input" />
+              </div>
+              <div>
+                <label class="hs-label">Template</label>
+                <select id="email-template" onchange="previewTemplate()" class="hs-input">
+                  <option value="">— Select template —</option>
+                  <option value="intro">Intro / First Touch</option>
+                  <option value="followup">Follow-Up After Call</option>
+                  <option value="proposal">Sending Proposal</option>
+                  <option value="checkin">Account Check-In</option>
+                  <option value="reorder">Reorder Reminder</option>
+                  <option value="thankyou">Thank You / Won Deal</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="email-preview-box" class="hidden space-y-3">
+              <div>
+                <label class="hs-label">Subject</label>
+                <input id="email-subject" type="text" class="hs-input" />
+              </div>
+              <div>
+                <label class="hs-label">Message — edit before sending</label>
+                <textarea id="email-body" rows="10" class="hs-input resize-none"></textarea>
+              </div>
+            </div>
+
+            <div class="flex gap-3 pt-1">
+              <button onclick="previewTemplate()" class="hs-btn-secondary flex-1">
+                <i class="fa-solid fa-eye mr-1"></i> Preview
+              </button>
+              <button onclick="sendTemplateEmail()" class="hs-btn-primary flex-1">
+                <i class="fa-solid fa-paper-plane mr-1"></i> Send via Gmail
+              </button>
+            </div>
+          </div>
+        </div>
+      </div><!-- /compose -->
+
+      <!-- ═══════════════════ ISSUE REPORTING ═══════════════════ -->
+      <div id="tab-issues" class="tab-content hidden">
+
+        <!-- Report Form -->
+        <div class="border border-brand-gray">
+          <div class="hs-card-header">
+            <span class="hs-card-title">Report Customer Issue</span>
+            <span class="font-barlow text-xs text-brand-gray tracking-wide">Takes under 60 seconds</span>
+          </div>
+          <div class="p-6">
+
+            <!-- Row 1: Account | Contact | Reported By -->
+            <div class="grid grid-cols-3 gap-4 mb-4">
+              <div class="col-span-1">
+                <label class="hs-label">Account Name</label>
+                <select id="issue-account" class="hs-input">
+                  <option value="">— Select account —</option>
+                </select>
+              </div>
+              <div>
+                <label class="hs-label">Contact Name at Account</label>
+                <input id="issue-contact" type="text" placeholder="e.g. Jane Smith" class="hs-input" />
+              </div>
+              <div>
+                <label class="hs-label">Reported By</label>
+                <input id="issue-reporter" type="text" class="hs-input" readonly style="opacity:0.55;cursor:default;" />
+              </div>
+            </div>
+
+            <!-- Row 2: Issue Type | Severity | Date -->
+            <div class="grid grid-cols-3 gap-4 mb-4">
+              <div>
+                <label class="hs-label">Issue Type</label>
+                <select id="issue-type" class="hs-input">
+                  <option value="">— Select type —</option>
+                  <option>Product Quality</option>
+                  <option>Delivery Problem</option>
+                  <option>Wrong Order</option>
+                  <option>Pricing Dispute</option>
+                  <option>Out of Stock</option>
+                  <option>Account Relationship</option>
+                  <option>Other</option>
+                </select>
+              </div>
+              <div>
+                <label class="hs-label">Severity</label>
+                <select id="issue-severity" class="hs-input">
+                  <option value="Low">Low</option>
+                  <option value="Medium" selected>Medium</option>
+                  <option value="High">High</option>
+                  <option value="Critical">Critical</option>
+                </select>
+              </div>
+              <div>
+                <label class="hs-label">Date of Issue</label>
+                <input id="issue-date" type="date" class="hs-input" />
+              </div>
+            </div>
+
+            <!-- Row 3: Description -->
+            <div class="mb-4">
+              <label class="hs-label">Issue Description
+                <span class="issue-label-hint">— 3–4 sentences max</span>
+              </label>
+              <textarea id="issue-description" rows="3"
+                placeholder="What happened? When did it occur? What's the customer impact?"
+                class="hs-input resize-none"></textarea>
+            </div>
+
+            <button onclick="submitIssue()" class="hs-btn-primary w-full">
+              <i class="fa-solid fa-flag mr-2"></i> Log Issue
+            </button>
+          </div>
+        </div>
+
+        <!-- Issue Log -->
+        <div class="border border-brand-gray border-t-0 mt-0">
+          <div class="hs-card-header">
+            <span class="hs-card-title">Issue Log</span>
+            <div class="flex items-center gap-2">
+              <button onclick="filterIssues('all')"      id="ifilter-all"      class="hs-filter-btn active">All</button>
+              <button onclick="filterIssues('open')"     id="ifilter-open"     class="hs-filter-btn">Open</button>
+              <button onclick="filterIssues('resolved')" id="ifilter-resolved" class="hs-filter-btn">Resolved</button>
+              <span id="issue-log-counts" class="ml-3 font-barlow text-xs text-brand-gray"></span>
+            </div>
+          </div>
+          <!-- Column headers -->
+          <div class="issue-log-header">
+            <div class="issue-col-ticket">Ticket</div>
+            <div style="flex:1;">Account · Contact</div>
+            <div class="issue-col-type">Type</div>
+            <div class="issue-col-badge">Severity</div>
+            <div class="issue-col-badge">Status</div>
+            <div class="issue-col-date">Date</div>
+            <div class="issue-col-action"></div>
+          </div>
+          <div id="issue-log" class="divide-y divide-brand-gray/20">
+            <div class="hs-empty-state">No issues logged yet. Use the form above to report a customer issue.</div>
+          </div>
+        </div>
+
+      </div><!-- /issues -->
+
+    </div><!-- /scrollable -->
+  </main>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════
+     AI PRE-CALL BRIEF MODAL
+════════════════════════════════════════════════ -->
+<div id="brief-modal" class="hs-overlay hidden">
+  <div class="hs-modal max-w-xl">
+    <div class="hs-modal-header">
+      <div>
+        <div class="hs-modal-title">AI Pre-Call Brief</div>
+        <div class="text-brand-gray text-sm font-barlow mt-0.5" id="brief-lead-name"></div>
+      </div>
+      <button onclick="closeBrief()" class="hs-close-btn">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div id="brief-content" class="p-6 space-y-4 max-h-[55vh] overflow-y-auto">
+      <div class="hs-loading">
+        <div class="hs-spinner"></div>
+        <p class="text-brand-gray text-sm font-barlow mt-3">Generating your brief...</p>
+      </div>
+    </div>
+    <div class="px-6 py-4 border-t border-brand-gray flex gap-3">
+      <button onclick="callLead(currentBriefLead)" class="hs-btn-primary flex-1">
+        <i class="fa-solid fa-phone mr-1"></i> Log Call
+      </button>
+      <button onclick="emailFromBrief()" class="hs-btn-secondary flex-1">
+        <i class="fa-solid fa-envelope mr-1"></i> Email
+      </button>
+      <button onclick="closeBrief()" class="hs-btn-ghost px-4">
+        Close
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════
+     CONNECT MODAL
+════════════════════════════════════════════════ -->
+<div id="connect-modal" class="hs-overlay hidden">
+  <div class="hs-modal max-w-md">
+    <div class="hs-modal-header">
+      <div class="hs-modal-title">Connect Services</div>
+      <button onclick="closeConnectModal()" class="hs-close-btn">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="p-6 space-y-4">
+
+      <div class="hs-connect-row">
+        <div class="hs-connect-icon">
+          <i class="fa-solid fa-database text-brand-gray"></i>
+        </div>
+        <div class="flex-1">
+          <div class="font-teko uppercase text-white text-base tracking-wide">Zoho CRM</div>
+          <div class="font-barlow text-brand-gray text-sm">Leads, accounts, pipeline</div>
+        </div>
+        <div id="zoho-status" class="flex items-center gap-2">
+          <span class="hs-status-dot"></span>
+          <span class="font-barlow text-brand-gray text-xs">Not connected</span>
+        </div>
+      </div>
+
+      <div class="hs-connect-row">
+        <div class="hs-connect-icon">
+          <i class="fa-solid fa-envelope text-brand-gray"></i>
+        </div>
+        <div class="flex-1">
+          <div class="font-teko uppercase text-white text-base tracking-wide">Gmail</div>
+          <div class="font-barlow text-brand-gray text-sm">Send email templates</div>
+        </div>
+        <div id="gmail-status" class="flex items-center gap-2">
+          <span class="hs-status-dot"></span>
+          <span class="font-barlow text-brand-gray text-xs">Not connected</span>
+        </div>
+      </div>
+
+      <div class="hs-connect-row opacity-40">
+        <div class="hs-connect-icon">
+          <i class="fa-solid fa-comment-sms text-brand-gray"></i>
+        </div>
+        <div class="flex-1">
+          <div class="font-teko uppercase text-white text-base tracking-wide">Twilio SMS</div>
+          <div class="font-barlow text-brand-gray text-sm">Coming soon</div>
+        </div>
+        <span class="hs-badge-ghost">SOON</span>
+      </div>
+
+      <button onclick="initConnections()" class="hs-btn-primary w-full mt-2">
+        <i class="fa-solid fa-plug mr-1"></i> Connect Services
+      </button>
+      <p class="font-barlow text-xs text-center text-brand-gray">Credentials stored in this browser session only.</p>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════
+     TOAST
+════════════════════════════════════════════════ -->
+<div id="toast" class="fixed bottom-6 right-6 z-[100] hidden">
+  <div class="flex items-center gap-3 bg-brand-white text-brand-black text-sm px-5 py-3 font-barlow font-medium max-w-sm">
+    <i id="toast-icon" class="fa-solid fa-circle-check text-brand-black"></i>
+    <span id="toast-msg"></span>
+  </div>
+</div>
+
+
+<script src="config/config.js"></script>
+<script src="js/templates.js"></script>
+<script src="js/zoho.js"></script>
+<script src="js/gmail.js"></script>
+<script src="js/ai-brief.js"></script>
+<script src="js/alerts.js"></script>
+<script src="js/issues.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
