@@ -116,20 +116,52 @@ function updateStats() {
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 function renderDashboard() {
   const hotLeadsEl = document.getElementById('dashboard-hot-leads');
-  const hotLeads = leads.filter(l => l._status === 'hot').slice(0, 5);
+  const hotLeads = leads.filter(l => l._status === 'hot').slice(0, 6);
   if (hotLeads.length === 0) {
-    hotLeadsEl.innerHTML = `<div class="hs-empty-state">No hot leads — you're on top of things.</div>`;
+    hotLeadsEl.innerHTML = `
+      <div class="hs-empty-state py-10">
+        <div class="hs-empty-state-icon"><i class="fa-solid fa-fire"></i></div>
+        No hot leads right now — you're on top of things.
+        <div style="margin-top:8px;font-size:0.82rem;opacity:0.8;">Head to <strong style="color:#fff;">Leads</strong> to warm up new prospects.</div>
+      </div>`;
   } else {
-    hotLeadsEl.innerHTML = hotLeads.map(l => `
-      <div class="dash-lead-row" onclick="openBrief(${leads.indexOf(l)})">
-        <div>
-          <div class="dash-lead-name">${l._fullName}</div>
-          <div class="dash-lead-company">${l.Company || '—'}</div>
-        </div>
-        <button onclick="event.stopPropagation(); openBrief(${leads.indexOf(l)})" class="hs-btn-secondary" style="font-size:0.72rem; padding:3px 12px;">
-          Brief
-        </button>
-      </div>`).join('');
+    hotLeadsEl.innerHTML = hotLeads.map((l, i) => {
+      const idx = leads.indexOf(l);
+      const isTop = i === 0;
+      const reason = l.Lead_Source ? `Source: ${l.Lead_Source}` : 'Ready to close';
+      const phone = l.Phone || '';
+      const callHref = phone ? `tel:${phone}` : '#';
+      const rowClass = isTop ? 'dash-lead-row top-of-queue' : 'dash-lead-row';
+      const callBtn = isTop
+        ? `<a href="${callHref}" onclick="event.stopPropagation(); callLead(leads[${idx}]);" class="hs-btn-primary" style="min-width:110px;">
+             <i class="fa-solid fa-phone"></i> Call Now
+           </a>`
+        : `<a href="${callHref}" onclick="event.stopPropagation(); callLead(leads[${idx}]);" class="lead-action-btn" title="Call">
+             <i class="fa-solid fa-phone"></i>
+           </a>`;
+      const briefBtn = isTop
+        ? `<button onclick="event.stopPropagation(); openBrief(${idx})" class="hs-btn-secondary" style="min-width:100px;">
+             <i class="fa-solid fa-brain"></i> Brief
+           </button>`
+        : `<button onclick="event.stopPropagation(); openBrief(${idx})" class="lead-action-btn" title="AI Brief">
+             <i class="fa-solid fa-brain"></i> Brief
+           </button>`;
+      return `
+        <div class="${rowClass}" onclick="openBrief(${idx})">
+          <div style="flex:1; min-width:0;">
+            <div class="dash-lead-name">
+              ${l._fullName || '—'}
+              ${isTop ? '<span class="hs-reason-chip" style="margin-left:10px; color:#fff; border-color:rgba(255,255,255,0.4);">Top of Queue</span>' : ''}
+            </div>
+            <div class="dash-lead-company">${l.Company || '—'}${phone ? ` &middot; <span style="opacity:0.9;">${phone}</span>` : ''}</div>
+            ${isTop ? `<div class="dash-lead-company" style="margin-top:6px; opacity:0.7;">${reason}</div>` : ''}
+          </div>
+          <div style="display:flex; gap:8px; align-items:center; flex-shrink:0;">
+            ${callBtn}
+            ${briefBtn}
+          </div>
+        </div>`;
+    }).join('');
   }
 
   // Render alert panel
@@ -253,23 +285,30 @@ function renderAccounts() {
   document.getElementById('account-count').textContent = `${list.length} account${list.length !== 1 ? 's' : ''}`;
   const el = document.getElementById('account-list');
   if (list.length === 0) {
-    el.innerHTML = `<div class="hs-empty-state py-10">No accounts loaded.</div>`;
+    el.innerHTML = `
+      <div class="hs-empty-state py-10">
+        <div class="hs-empty-state-icon"><i class="fa-solid fa-building"></i></div>
+        No accounts loaded. Sync Zoho CRM to get started.
+      </div>`;
     return;
   }
-  el.innerHTML = list.map(a => `
+  el.innerHTML = list.map(a => {
+    const meta = [a.Industry, a.Billing_City, a.Billing_State].filter(Boolean).join(' · ');
+    return `
     <div class="account-row">
       <div class="account-icon">
         <i class="fa-solid fa-building"></i>
       </div>
       <div style="flex:1;min-width:0;">
-        <div style="font-family:'Teko',sans-serif;font-size:1rem;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#fff;">${a.Account_Name || '—'}</div>
-        <div style="font-family:'Barlow Semi Condensed',sans-serif;font-size:0.82rem;color:#A9ACAF;">${[a.Industry, a.Billing_City, a.Billing_State].filter(Boolean).join(' · ')}</div>
+        <div class="lead-name">${a.Account_Name || '—'}</div>
+        <div class="lead-company">${meta || '—'}</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-        ${a.Phone ? `<a href="tel:${a.Phone}" class="lead-action-btn"><i class="fa-solid fa-phone"></i> ${a.Phone}</a>` : ''}
-        <button class="lead-action-btn"><i class="fa-solid fa-envelope"></i> Email</button>
+        ${a.Phone ? `<a href="tel:${a.Phone}" class="lead-action-btn" title="Call"><i class="fa-solid fa-phone"></i> ${a.Phone}</a>` : ''}
+        <button class="lead-action-btn" title="Email"><i class="fa-solid fa-envelope"></i> Email</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function searchAccounts() { renderAccounts(); }

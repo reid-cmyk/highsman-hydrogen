@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HIGHSMAN — Sales</title>
+  <title>HIGHSMAN — Sales Floor</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Teko:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Teko:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -33,48 +33,73 @@
   <!-- ═══════════════════════════════════════════════
        SIDEBAR
   ════════════════════════════════════════════════ -->
-  <aside class="w-56 bg-brand-black border-r border-brand-gray flex flex-col flex-shrink-0">
+  <aside class="hs-sidebar flex flex-col flex-shrink-0">
 
-    <!-- Wordmark -->
-    <div class="px-5 pt-6 pb-5 border-b border-brand-gray">
-      <div class="hs-wordmark">HIGHSMAN</div>
-      <div class="text-brand-gray text-xs font-barlow mt-1 tracking-wide" id="user-greeting">Good morning</div>
+    <!-- Logo + Greeting -->
+    <div class="hs-sidebar-brand">
+      <img class="hs-logo"
+           src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Logo_White.png?v=1775594430"
+           alt="Highsman" />
+      <div class="hs-greeting" id="user-greeting">Good morning</div>
+      <div class="hs-greeting-sub">Let's run the table today.</div>
+    </div>
+
+    <!-- Focus of the Day -->
+    <div class="hs-focus-pill">
+      <div class="hs-focus-label">Today's Focus</div>
+      <div class="hs-focus-value" id="focus-value">Hot Leads</div>
+      <div class="hs-focus-count" id="focus-count">—</div>
     </div>
 
     <!-- Nav -->
-    <nav class="flex-1 py-4 overflow-y-auto">
+    <nav class="flex-1 py-3 overflow-y-auto">
       <div class="hs-nav-group-label">Sales</div>
       <button onclick="showTab('dashboard')" id="nav-dashboard" class="hs-nav-btn active">
-        <i class="fa-solid fa-chart-line w-4 text-center"></i> Dashboard
+        <i class="fa-solid fa-chart-line hs-nav-icon"></i>
+        <span>Dashboard</span>
       </button>
       <button onclick="showTab('leads')" id="nav-leads" class="hs-nav-btn">
-        <i class="fa-solid fa-fire w-4 text-center"></i> Leads
+        <i class="fa-solid fa-fire hs-nav-icon"></i>
+        <span>Leads</span>
         <span id="hot-badge" class="ml-auto hs-hot-badge hidden"></span>
       </button>
       <button onclick="showTab('pipeline')" id="nav-pipeline" class="hs-nav-btn">
-        <i class="fa-solid fa-table-columns w-4 text-center"></i> Pipeline
+        <i class="fa-solid fa-table-columns hs-nav-icon"></i>
+        <span>Pipeline</span>
       </button>
       <button onclick="showTab('accounts')" id="nav-accounts" class="hs-nav-btn">
-        <i class="fa-solid fa-building w-4 text-center"></i> Accounts
+        <i class="fa-solid fa-building hs-nav-icon"></i>
+        <span>Accounts</span>
         <span id="alert-sidebar-dot" class="ml-auto hidden alert-sidebar-dot"></span>
       </button>
 
       <div class="hs-nav-group-label mt-4">Tools</div>
       <button onclick="showTab('compose')" id="nav-compose" class="hs-nav-btn">
-        <i class="fa-solid fa-envelope w-4 text-center"></i> Email
+        <i class="fa-solid fa-envelope hs-nav-icon"></i>
+        <span>Email</span>
       </button>
       <button onclick="showTab('issues')" id="nav-issues" class="hs-nav-btn">
-        <i class="fa-solid fa-triangle-exclamation w-4 text-center"></i> Issues
+        <i class="fa-solid fa-triangle-exclamation hs-nav-icon"></i>
+        <span>Issues</span>
         <span id="issues-nav-badge" class="ml-auto hs-hot-badge hidden" style="background:#DC2626;"></span>
       </button>
     </nav>
 
     <!-- Sync -->
-    <div class="px-4 py-4 border-t border-brand-gray">
+    <div class="hs-sidebar-sync">
       <button onclick="syncCRM()" class="hs-btn-primary w-full">
-        <i class="fa-solid fa-rotate" id="sync-icon"></i> Sync CRM
+        <i class="fa-solid fa-rotate" id="sync-icon"></i>
+        <span>Sync CRM</span>
       </button>
-      <div id="sync-status" class="text-xs text-brand-gray text-center mt-2 font-barlow"></div>
+      <div id="sync-status" class="hs-sync-status"></div>
+    </div>
+
+    <!-- Spark Greatness mark -->
+    <div class="hs-sidebar-footer">
+      <img class="hs-spark-mark"
+           src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Spark_Greatness_Footer_White.png?v=1775595123"
+           alt="Spark Greatness"
+           onerror="this.style.display='none'" />
     </div>
   </aside>
 
@@ -84,12 +109,16 @@
   <main class="flex-1 flex flex-col overflow-hidden">
 
     <!-- Top bar -->
-    <header class="bg-brand-black border-b border-brand-gray px-7 py-0 flex items-center justify-between flex-shrink-0 h-14">
-      <h1 id="page-title" class="hs-page-title">Dashboard</h1>
+    <header class="hs-topbar">
+      <div>
+        <h1 id="page-title" class="hs-page-title">Dashboard</h1>
+        <div id="page-sub" class="hs-page-sub">Run the table today.</div>
+      </div>
       <div class="flex items-center gap-4">
-        <div class="flex items-center gap-2">
+        <div class="hs-date-chip" id="today-chip">Today</div>
+        <div class="hs-status-wrap">
           <span class="hs-status-dot" id="status-dot"></span>
-          <span class="text-brand-gray text-xs font-barlow tracking-wide" id="status-text">Not connected</span>
+          <span class="hs-status-text" id="status-text">Not connected</span>
         </div>
         <button onclick="showConnectModal()" class="hs-btn-secondary text-xs">
           Connect
@@ -118,56 +147,66 @@
           <div class="stat-card bg-brand-black p-6">
             <div class="hs-stat-label">Hot Leads</div>
             <div class="hs-stat-number text-white" id="stat-hot">—</div>
-            <div class="hs-stat-sub">Follow up today</div>
+            <div class="hs-stat-sub">Call these first</div>
           </div>
           <div class="stat-card bg-brand-black p-6">
             <div class="hs-stat-label">Pipeline Value</div>
             <div class="hs-stat-number text-white" id="stat-pipeline">—</div>
-            <div class="hs-stat-sub">Open opportunities</div>
+            <div class="hs-stat-sub">Ready to close</div>
           </div>
           <div class="stat-card bg-brand-black p-6">
             <div class="hs-stat-label">Calls Today</div>
             <div class="hs-stat-number text-white" id="stat-calls">0</div>
-            <div class="hs-stat-sub">Logged this session</div>
+            <div class="hs-stat-sub">Keep the meter running</div>
           </div>
           <div class="stat-card bg-brand-black p-6">
             <div class="hs-stat-label">Active Alerts</div>
             <div class="hs-stat-number text-white" id="stat-issues">—</div>
-            <div class="hs-stat-sub">Inventory &amp; account issues</div>
+            <div class="hs-stat-sub">Inventory &amp; accounts</div>
           </div>
         </div>
 
-        <!-- Two-column grid -->
-        <div class="grid grid-cols-2 gap-px bg-brand-gray mt-px">
+        <!-- CALL QUEUE — hero zone -->
+        <div class="hs-section-break">
+          <span class="hs-section-label">Call Queue</span>
+          <span class="hs-section-hint">Top of the list is your first call. Hit <strong>CALL</strong>, then <strong>BRIEF</strong>.</span>
+        </div>
 
-          <!-- Hot Leads -->
-          <div class="bg-brand-black">
-            <div class="hs-card-header">
-              <span class="hs-card-title">Hot Leads — Call Today</span>
-              <button onclick="showTab('leads')" class="hs-link">View all</button>
-            </div>
-            <div id="dashboard-hot-leads" class="divide-y divide-brand-gray/30">
-              <div class="hs-empty-state">
-                Connect Zoho CRM to load leads
-              </div>
+        <div class="bg-brand-black border border-brand-gray mb-px">
+          <div class="hs-card-header">
+            <span class="hs-card-title">Hot Leads — Call Today</span>
+            <button onclick="showTab('leads')" class="hs-link">View all leads</button>
+          </div>
+          <div id="dashboard-hot-leads" class="divide-y divide-brand-gray/30">
+            <div class="hs-empty-state">
+              <div class="hs-empty-state-icon"><i class="fa-solid fa-fire"></i></div>
+              Connect Zoho CRM to load your call queue.
             </div>
           </div>
+        </div>
+
+        <!-- Secondary row: Pipeline + Alerts + Quick Email -->
+        <div class="hs-section-break">
+          <span class="hs-section-label">At a Glance</span>
+        </div>
+
+        <div class="grid grid-cols-3 gap-px bg-brand-gray">
 
           <!-- Pipeline Snapshot -->
           <div class="bg-brand-black">
             <div class="hs-card-header">
-              <span class="hs-card-title">Pipeline Snapshot</span>
+              <span class="hs-card-title">Pipeline</span>
               <button onclick="showTab('pipeline')" class="hs-link">Full board</button>
             </div>
-            <div id="dashboard-pipeline" class="p-6 space-y-3">
+            <div id="dashboard-pipeline" class="p-5 space-y-3">
               <div class="hs-empty-state">No pipeline data yet</div>
             </div>
           </div>
 
           <!-- Inventory Alerts Panel -->
-          <div class="bg-brand-black flex flex-col" style="max-height:420px;">
+          <div class="bg-brand-black flex flex-col" style="max-height:380px;">
             <div class="hs-card-header flex-shrink-0">
-              <span class="hs-card-title">Inventory Alerts</span>
+              <span class="hs-card-title">Alerts</span>
               <div id="alert-header-counts" class="flex items-center gap-1.5"></div>
             </div>
             <div id="alert-list" class="overflow-y-auto flex-1 divide-y" style="border-top:none;">
@@ -180,9 +219,9 @@
             <div class="hs-card-header">
               <span class="hs-card-title">Quick Email</span>
             </div>
-            <div class="p-6 space-y-3">
+            <div class="p-5 space-y-3">
               <select id="quick-template" class="hs-input">
-                <option value="">— Select a template —</option>
+                <option value="">— Pick a template —</option>
                 <option value="intro">Intro / First Touch</option>
                 <option value="followup">Follow-Up</option>
                 <option value="proposal">Proposal Send</option>
@@ -194,6 +233,7 @@
               <button onclick="sendQuickEmail()" class="hs-btn-primary w-full">
                 <i class="fa-solid fa-paper-plane mr-1"></i> Send Email
               </button>
+              <div class="hs-helper-note">Opens in Gmail — review before you hit send.</div>
             </div>
           </div>
 
@@ -204,7 +244,7 @@
       <!-- ═══════════════════ LEADS ═══════════════════ -->
       <div id="tab-leads" class="tab-content hidden">
 
-        <div class="flex items-center gap-3 mb-6">
+        <div class="flex items-center gap-3 mb-6 flex-wrap">
           <button onclick="filterLeads('all')" id="filter-all" class="hs-filter-btn active">All</button>
           <button onclick="filterLeads('hot')" id="filter-hot" class="hs-filter-btn">
             <span class="hs-dot bg-red-600 mr-1"></span>Hot
@@ -217,12 +257,13 @@
           </button>
           <div class="ml-auto relative">
             <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-brand-gray text-xs"></i>
-            <input id="lead-search" type="text" placeholder="Search leads..." oninput="searchLeads()" class="hs-input pl-8 w-52" />
+            <input id="lead-search" type="text" placeholder="Search leads..." oninput="searchLeads()" class="hs-input pl-8 w-64" />
           </div>
         </div>
 
         <div id="lead-list" class="border border-brand-gray divide-y divide-brand-gray/40">
           <div class="hs-empty-state py-12">
+            <div class="hs-empty-state-icon"><i class="fa-solid fa-fire"></i></div>
             No leads loaded. Sync Zoho CRM to get started.
           </div>
         </div>
@@ -233,7 +274,8 @@
       <div id="tab-pipeline" class="tab-content hidden">
         <div id="pipeline-board" class="flex gap-px bg-brand-gray border border-brand-gray overflow-x-auto pb-0 min-h-96">
           <div class="hs-empty-state py-16 bg-brand-black w-full">
-            Connect Zoho CRM to load your pipeline
+            <div class="hs-empty-state-icon"><i class="fa-solid fa-table-columns"></i></div>
+            Connect Zoho CRM to load your pipeline.
           </div>
         </div>
       </div><!-- /pipeline -->
@@ -243,12 +285,16 @@
       <div id="tab-accounts" class="tab-content hidden">
 
         <div class="flex items-center gap-4 mb-6">
-          <input id="account-search" type="text" placeholder="Search accounts..." oninput="searchAccounts()" class="hs-input w-64" />
+          <div class="relative flex-1 max-w-md">
+            <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-brand-gray text-xs"></i>
+            <input id="account-search" type="text" placeholder="Search accounts..." oninput="searchAccounts()" class="hs-input pl-8 w-full" />
+          </div>
           <div class="ml-auto font-teko uppercase text-brand-gray text-sm tracking-wide" id="account-count"></div>
         </div>
 
         <div id="account-list" class="border border-brand-gray divide-y divide-brand-gray/40">
           <div class="hs-empty-state py-12">
+            <div class="hs-empty-state-icon"><i class="fa-solid fa-building"></i></div>
             No accounts loaded. Sync Zoho CRM to get started.
           </div>
         </div>
@@ -257,23 +303,65 @@
 
       <!-- ═══════════════════ EMAIL TEMPLATES ═══════════════════ -->
       <div id="tab-compose" class="tab-content hidden">
-        <div class="max-w-2xl border border-brand-gray">
+
+        <!-- Template Gallery -->
+        <div class="hs-section-break" style="margin-top:0;">
+          <span class="hs-section-label">Pick a Play</span>
+          <span class="hs-section-hint">Tap a template, fill in the blanks, hit send.</span>
+        </div>
+
+        <div class="template-gallery">
+          <button class="template-card" onclick="pickTemplate('intro')" data-template="intro">
+            <div class="template-card-icon"><i class="fa-solid fa-handshake"></i></div>
+            <div class="template-card-title">Intro</div>
+            <div class="template-card-sub">First touch — start the relationship</div>
+          </button>
+          <button class="template-card" onclick="pickTemplate('followup')" data-template="followup">
+            <div class="template-card-icon"><i class="fa-solid fa-reply"></i></div>
+            <div class="template-card-title">Follow-Up</div>
+            <div class="template-card-sub">After a call — keep it moving</div>
+          </button>
+          <button class="template-card" onclick="pickTemplate('proposal')" data-template="proposal">
+            <div class="template-card-icon"><i class="fa-solid fa-file-signature"></i></div>
+            <div class="template-card-title">Proposal</div>
+            <div class="template-card-sub">Send the offer — ask for the deal</div>
+          </button>
+          <button class="template-card" onclick="pickTemplate('checkin')" data-template="checkin">
+            <div class="template-card-icon"><i class="fa-solid fa-hand-peace"></i></div>
+            <div class="template-card-title">Check-In</div>
+            <div class="template-card-sub">Active account — keep them happy</div>
+          </button>
+          <button class="template-card" onclick="pickTemplate('reorder')" data-template="reorder">
+            <div class="template-card-icon"><i class="fa-solid fa-boxes-stacked"></i></div>
+            <div class="template-card-title">Reorder</div>
+            <div class="template-card-sub">Time to restock — make it easy</div>
+          </button>
+          <button class="template-card" onclick="pickTemplate('thankyou')" data-template="thankyou">
+            <div class="template-card-icon"><i class="fa-solid fa-trophy"></i></div>
+            <div class="template-card-title">Thank You</div>
+            <div class="template-card-sub">Won deal — lock in the partnership</div>
+          </button>
+        </div>
+
+        <!-- Compose Form -->
+        <div class="max-w-3xl border border-brand-gray mt-6">
           <div class="hs-card-header">
-            <span class="hs-card-title">One-Click Email Templates</span>
+            <span class="hs-card-title">Compose &amp; Send</span>
+            <span id="compose-template-chip" class="hs-reason-chip hidden">—</span>
           </div>
           <div class="p-6 space-y-4">
             <div class="grid grid-cols-2 gap-4">
               <div>
                 <label class="hs-label">To (email)</label>
-                <input id="email-to" type="email" class="hs-input" />
+                <input id="email-to" type="email" class="hs-input" placeholder="name@company.com" />
               </div>
               <div>
                 <label class="hs-label">Contact Name</label>
-                <input id="email-name" type="text" class="hs-input" />
+                <input id="email-name" type="text" class="hs-input" placeholder="Jane" />
               </div>
               <div>
                 <label class="hs-label">Company</label>
-                <input id="email-company" type="text" class="hs-input" />
+                <input id="email-company" type="text" class="hs-input" placeholder="Highsman Partner Co." />
               </div>
               <div>
                 <label class="hs-label">Template</label>
@@ -308,6 +396,7 @@
                 <i class="fa-solid fa-paper-plane mr-1"></i> Send via Gmail
               </button>
             </div>
+            <div class="hs-helper-note">Draft opens in Gmail. You're the last check before it goes.</div>
           </div>
         </div>
       </div><!-- /compose -->
@@ -319,7 +408,7 @@
         <div class="border border-brand-gray">
           <div class="hs-card-header">
             <span class="hs-card-title">Report Customer Issue</span>
-            <span class="font-barlow text-xs text-brand-gray tracking-wide">Takes under 60 seconds</span>
+            <span class="font-barlow text-xs text-brand-gray tracking-wide">Under 60 seconds — log it, move on.</span>
           </div>
           <div class="p-6">
 
@@ -427,17 +516,17 @@
   <div class="hs-modal max-w-xl">
     <div class="hs-modal-header">
       <div>
-        <div class="hs-modal-title">AI Pre-Call Brief</div>
-        <div class="text-brand-gray text-sm font-barlow mt-0.5" id="brief-lead-name"></div>
+        <div class="hs-modal-eyebrow">AI Pre-Call Brief</div>
+        <div class="hs-modal-title" id="brief-lead-name">—</div>
       </div>
-      <button onclick="closeBrief()" class="hs-close-btn">
+      <button onclick="closeBrief()" class="hs-close-btn" aria-label="Close">
         <i class="fa-solid fa-xmark"></i>
       </button>
     </div>
     <div id="brief-content" class="p-6 space-y-4 max-h-[55vh] overflow-y-auto">
       <div class="hs-loading">
         <div class="hs-spinner"></div>
-        <p class="text-brand-gray text-sm font-barlow mt-3">Generating your brief...</p>
+        <p class="text-brand-gray text-sm font-barlow mt-3">Loading your brief...</p>
       </div>
     </div>
     <div class="px-6 py-4 border-t border-brand-gray flex gap-3">
@@ -461,8 +550,11 @@
 <div id="connect-modal" class="hs-overlay hidden">
   <div class="hs-modal max-w-md">
     <div class="hs-modal-header">
-      <div class="hs-modal-title">Connect Services</div>
-      <button onclick="closeConnectModal()" class="hs-close-btn">
+      <div>
+        <div class="hs-modal-eyebrow">Setup</div>
+        <div class="hs-modal-title">Connect Services</div>
+      </div>
+      <button onclick="closeConnectModal()" class="hs-close-btn" aria-label="Close">
         <i class="fa-solid fa-xmark"></i>
       </button>
     </div>
@@ -520,7 +612,7 @@
      TOAST
 ════════════════════════════════════════════════ -->
 <div id="toast" class="fixed bottom-6 right-6 z-[100] hidden">
-  <div class="flex items-center gap-3 bg-brand-white text-brand-black text-sm px-5 py-3 font-barlow font-medium max-w-sm">
+  <div class="flex items-center gap-3 bg-brand-white text-brand-black text-sm px-5 py-3 font-barlow font-medium max-w-sm shadow-2xl">
     <i id="toast-icon" class="fa-solid fa-circle-check text-brand-black"></i>
     <span id="toast-msg"></span>
   </div>
@@ -535,5 +627,74 @@
 <script src="js/alerts.js"></script>
 <script src="js/issues.js"></script>
 <script src="js/app.js"></script>
+<script>
+  // Page subtitle copy — Highsman voice, per tab
+  (function () {
+    const SUBS = {
+      dashboard: "Run the table today.",
+      leads:     "Top of the list = your next call. Move.",
+      pipeline:  "Deals in motion. Keep them moving.",
+      accounts:  "Your book of business. Protect it.",
+      compose:   "Push-button plays. Personalized, ready to send.",
+      issues:    "Log it, solve it, keep it moving.",
+    };
+    const origShowTab = window.showTab;
+    if (typeof origShowTab === 'function') {
+      window.showTab = function (tab) {
+        origShowTab.apply(this, arguments);
+        const sub = document.getElementById('page-sub');
+        if (sub && SUBS[tab]) sub.textContent = SUBS[tab];
+      };
+    }
+    // Today chip
+    const chip = document.getElementById('today-chip');
+    if (chip) {
+      const d = new Date();
+      const opts = { weekday: 'short', month: 'short', day: 'numeric' };
+      chip.textContent = d.toLocaleDateString('en-US', opts).toUpperCase();
+    }
+  })();
+
+  // Template gallery — wire up quick picker
+  function pickTemplate(key) {
+    const sel = document.getElementById('email-template');
+    if (!sel) return;
+    sel.value = key;
+    document.querySelectorAll('.template-card').forEach(c => c.classList.remove('active'));
+    const card = document.querySelector(`.template-card[data-template="${key}"]`);
+    if (card) card.classList.add('active');
+    const chip = document.getElementById('compose-template-chip');
+    if (chip) {
+      const title = card ? card.querySelector('.template-card-title').textContent : key;
+      chip.textContent = title;
+      chip.classList.remove('hidden');
+    }
+    if (typeof previewTemplate === 'function') previewTemplate();
+    // scroll to form
+    document.getElementById('email-to')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.getElementById('email-to')?.focus();
+  }
+  window.pickTemplate = pickTemplate;
+
+  // Focus-of-the-day updater — hook into updateStats if present
+  (function () {
+    const origUpdate = window.updateStats;
+    if (typeof origUpdate === 'function') {
+      window.updateStats = function () {
+        origUpdate.apply(this, arguments);
+        const hotEl = document.getElementById('stat-hot');
+        const focusCount = document.getElementById('focus-count');
+        const focusVal = document.getElementById('focus-value');
+        if (hotEl && focusCount) {
+          focusCount.textContent = hotEl.textContent;
+          if (focusVal) {
+            const n = parseInt(hotEl.textContent, 10);
+            focusVal.textContent = (n > 0) ? 'Hot Leads' : 'Build Pipeline';
+          }
+        }
+      };
+    }
+  })();
+</script>
 </body>
 </html>
