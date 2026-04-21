@@ -1,5 +1,6 @@
 import type {LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
+import {getRepFromRequest} from '../lib/sales-floor-reps';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sales Floor — Contact Search (Zoho Contacts + Accounts)
@@ -13,6 +14,14 @@ import {json} from '@shopify/remix-oxygen';
 // buyer contact for that store. Contacts and Accounts are searched in
 // parallel; for top matching Accounts we also pull their related Contacts,
 // then merge, dedupe, and rank buyers first.
+//
+// NB — Contact search is intentionally NOT scoped by rep Owner. Zoho's
+// `/search` endpoint accepts one of `word|email|phone|criteria` at a time, so
+// we can't combine "find buyers named X" with "where Owner=rep". More
+// importantly, the compose flow benefits from a broad lookup: any rep should
+// be able to email any known dispensary contact, whether or not they own the
+// record. Rep scoping is still applied to the main dashboard sync (leads,
+// deals, accounts) — see api.sales-floor-sync.tsx.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Module-scoped token cache — shares the 55-min TTL pattern used elsewhere.
@@ -234,6 +243,11 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     return json({ok: true, results: []}, {headers: {'Cache-Control': 'no-store'}});
   }
 
+  // Resolve rep (for logging/telemetry only — search stays unscoped, see
+  // header comment). If no rep is logged in we still return results so the
+  // compose flow works for anonymous-but-authed scenarios.
+  const rep = getRepFromRequest(request);
+
   const env = context.env as any;
   const clientId = env.ZOHO_CLIENT_ID;
   const clientSecret = env.ZOHO_CLIENT_SECRET;
@@ -294,7 +308,15 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     const ranked = rank(merged, q).slice(0, 12);
 
     return json(
-      {ok: true, results: ranked, meta: {query: q, total: ranked.length}},
+      {
+        ok: true,
+        results: ranked,
+        meta: {
+          query: q,
+          total: ranked.length,
+          rep: rep ? {id: rep.id, firstName: rep.firstName} : null,
+        },
+      },
       {headers: {'Cache-Control': 'private, max-age=30'}},
     );
   } catch (err: any) {

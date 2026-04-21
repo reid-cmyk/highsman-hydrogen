@@ -21,6 +21,14 @@ const PIPELINE_STAGES = [
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  // The server injects window.__HS_REP__ on every /sales-floor/app response
+  // (see app/routes/sales-floor.app.tsx). Hydrate CONFIG.salesperson from it
+  // so every downstream helper (greeting, template filler, issue-reporter
+  // default) uses the actual logged-in rep — not the hard-coded config.js
+  // default. We keep the CONFIG.salesperson shape stable so existing code
+  // that reads `.name` / `.email` keeps working.
+  hydrateRepFromServer();
+
   updateGreeting();
   updateConnectionStatus();
   Issues.init();
@@ -30,6 +38,31 @@ document.addEventListener('DOMContentLoaded', () => {
   // empty, fall back to demo data so the dashboard is never blank.
   bootstrapCRM();
 });
+
+function hydrateRepFromServer() {
+  try {
+    const rep = window.__HS_REP__;
+    if (!rep || typeof rep !== 'object') return;
+    if (!CONFIG.salesperson) CONFIG.salesperson = {};
+    CONFIG.salesperson.name = rep.displayName || CONFIG.salesperson.name;
+    CONFIG.salesperson.firstName = rep.firstName || CONFIG.salesperson.firstName;
+    CONFIG.salesperson.email = rep.email || CONFIG.salesperson.email;
+    CONFIG.salesperson.signature = rep.signature || CONFIG.salesperson.signature;
+    CONFIG.salesperson.id = rep.id;
+
+    // Belt-and-suspenders: token replacement in the HTML template already
+    // sets these, but re-populate in JS in case a cached page loads with
+    // placeholder text. Also covers any future JS-rendered refs to rep email.
+    const composeFromEl = document.getElementById('compose-from-addr');
+    if (composeFromEl && rep.email) composeFromEl.textContent = rep.email;
+    const sidebarName = document.getElementById('sidebar-rep-name');
+    if (sidebarName && rep.displayName) sidebarName.textContent = rep.displayName;
+    const sidebarEmail = document.getElementById('sidebar-rep-email');
+    if (sidebarEmail && rep.email) sidebarEmail.textContent = rep.email;
+  } catch (err) {
+    console.warn('[sales-floor] hydrateRepFromServer failed (keeping defaults):', err);
+  }
+}
 
 async function bootstrapCRM() {
   const statusEl = document.getElementById('sync-status');

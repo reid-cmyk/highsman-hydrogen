@@ -122,6 +122,16 @@
       <div id="sync-status" class="hs-sync-status"></div>
     </div>
 
+    <!-- Rep identity strip + logout -->
+    <div class="hs-sidebar-rep">
+      <div class="hs-sidebar-rep-name" id="sidebar-rep-name">__REP_DISPLAY_NAME__</div>
+      <div class="hs-sidebar-rep-email" id="sidebar-rep-email">__REP_EMAIL__</div>
+      <a class="hs-sidebar-logout" href="/api/sales-floor-logout">
+        <i class="fa-solid fa-right-from-bracket"></i>
+        <span>Log out</span>
+      </a>
+    </div>
+
     <!-- Spark Greatness mark -->
     <div class="hs-sidebar-footer">
       <img class="hs-spark-mark"
@@ -467,7 +477,7 @@
                 <i class="fa-solid fa-paper-plane mr-1"></i> Send via Gmail
               </button>
             </div>
-            <div class="hs-helper-note">Sends live from sky@highsman.com. Preview first, then hit send.</div>
+            <div class="hs-helper-note">Sends live from <span id="compose-from-addr">__REP_EMAIL__</span>. Preview first, then hit send.</div>
           </div>
         </div>
       </div><!-- /compose -->

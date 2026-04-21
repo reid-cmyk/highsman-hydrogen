@@ -32,11 +32,19 @@ const CONFIG = {
     fromNumber: '',
   },
 
+  // Fallback rep identity. Overwritten on boot by hydrateRepFromServer() in
+  // app.js using the window.__HS_REP__ blob injected by the /sales-floor/app
+  // route. If that injection is missing (shouldn't happen) this generic
+  // identity keeps the UI from crashing — but the email From header and
+  // greeting will look wrong, so prefer fixing the injection.
   salesperson: {
-    name: 'Reid Meyers',
-    email: 'reid@highsman.com',
+    name: 'Highsman Rep',
+    firstName: 'Rep',
+    email: 'sales@highsman.com',
     company: 'Highsman',
     phone: '',
     title: 'Sales Representative',
+    signature: '',
+    id: null,
   },
 };

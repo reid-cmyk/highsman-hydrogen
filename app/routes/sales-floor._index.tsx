@@ -1,6 +1,11 @@
 import type {LoaderFunctionArgs, ActionFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
 import {useActionData, Form} from '@remix-run/react';
 import {json, redirect} from '@shopify/remix-oxygen';
+import {
+  findRepByPassword,
+  parseSalesFloorCookies,
+  buildLoginCookieHeaders,
+} from '../lib/sales-floor-reps';
 
 export const meta: MetaFunction = () => {
   return [
@@ -9,17 +14,14 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-const AUTH_COOKIE = 'sales_floor_auth=1';
-const COOKIE_HEADER = `${AUTH_COOKIE}; Path=/sales-floor; HttpOnly; Secure; SameSite=Lax; Max-Age=86400`;
-
-function isAuthenticated(request: Request): boolean {
-  const cookie = request.headers.get('Cookie') || '';
-  return cookie.includes(AUTH_COOKIE);
-}
+// Each rep has their own password (see app/lib/sales-floor-reps.ts). The
+// password IS the identity — we look up the rep by password, then set a
+// sales_floor_rep=<id> cookie alongside the standard auth cookie.
+// Adding/rotating a rep = one edit to sales-floor-reps.ts.
 
 export async function loader({request}: LoaderFunctionArgs) {
-  // Already authenticated — bounce straight to the dashboard resource route
-  if (isAuthenticated(request)) {
+  const {authed, repId} = parseSalesFloorCookies(request.headers.get('Cookie'));
+  if (authed && repId) {
     return redirect('/sales-floor/app');
   }
   return json({authenticated: false, error: null});
@@ -28,18 +30,18 @@ export async function loader({request}: LoaderFunctionArgs) {
 export async function action({request}: ActionFunctionArgs) {
   const formData = await request.formData();
   const password = (formData.get('password') as string) || '';
-  // Sales Floor uses its own dedicated password — intentionally not tied to SALES_DASHBOARD_PASSWORD
-  const correct = 'hmexec2025$$';
 
-  if (password === correct) {
-    // Server-side redirect with cookie → browser follows, cookie is stored,
-    // subsequent GET hits the resource route which serves the dashboard HTML.
-    return redirect('/sales-floor/app', {
-      headers: {'Set-Cookie': COOKIE_HEADER},
-    });
+  const rep = findRepByPassword(password);
+  if (!rep) {
+    return json({authenticated: false, error: 'Incorrect password'});
   }
 
-  return json({authenticated: false, error: 'Incorrect password'});
+  // Remix accepts string[] for Set-Cookie — both cookies land on the response.
+  const cookieHeaders = buildLoginCookieHeaders(rep.id);
+  const headers = new Headers();
+  for (const c of cookieHeaders) headers.append('Set-Cookie', c);
+
+  return redirect('/sales-floor/app', {headers});
 }
 
 export default function SalesFloorLogin() {
@@ -95,7 +97,7 @@ export default function SalesFloorLogin() {
               letterSpacing: '0.03em',
             }}
           >
-            Authorized reps only.
+            Enter your rep password.
           </p>
         </div>
 

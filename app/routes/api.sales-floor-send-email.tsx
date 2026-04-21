@@ -1,50 +1,74 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
+import {getRepFromRequest, type SalesRep} from '../lib/sales-floor-reps';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sales Floor — Send Email via Gmail (sky@highsman.com)
+// Sales Floor — Send Email (per-rep Gmail OAuth)
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/sales-floor-send-email
 //   body (JSON): { to, subject, body, cc?, replyTo? }
-//   → { ok: true, messageId } | { ok: false, error }
+//   → { ok: true, messageId, from } | { ok: false, error }
 //
-// Uses the same server-side Gmail refresh-token pattern as
-// api.staff-expense-submit.tsx / api.goodies-receipt-submit.tsx. OAuth
-// credentials stay on Oxygen as env vars — never touch the browser.
+// Each logged-in rep has their own Gmail OAuth credential triple pointed to
+// their personal @highsman.com mailbox (see app/lib/sales-floor-reps.ts). The
+// resolver:
+//   1. Reads `sales_floor_rep` cookie → rep registry entry
+//   2. Looks up the env var NAMES in that entry
+//   3. Pulls the actual credentials off context.env (set in Oxygen)
+//   4. Sends the message as that rep's mailbox
 //
-// Env vars used:
-//   GMAIL_CLIENT_ID       — Google OAuth client ID for sky@highsman.com
-//   GMAIL_CLIENT_SECRET   — OAuth client secret
-//   GMAIL_REFRESH_TOKEN   — long-lived refresh token granted by sky@
-//   GMAIL_SALES_FROM      — optional override, defaults to sky@highsman.com
+// No rep = 401. No env vars for a configured rep = 503 (tells the caller
+// the deploy is missing their credentials). Any other failure surfaces the
+// Google error message verbatim so debugging stays easy.
 // ─────────────────────────────────────────────────────────────────────────────
 
-type Env = {
-  GMAIL_CLIENT_ID?: string;
-  GMAIL_CLIENT_SECRET?: string;
-  GMAIL_REFRESH_TOKEN?: string;
-  GMAIL_SALES_FROM?: string;
+// Per-rep token cache: one entry per rep id. Without this we'd hammer
+// Google's token endpoint on every send AND leak one rep's token to another
+// in the cross-rep case. 55-min TTL mirrors the Zoho pattern.
+type TokenCacheEntry = {token: string; expiresAt: number};
+const gmailTokenCache = new Map<string, TokenCacheEntry>();
+
+type RepEnv = {
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+  from: string;
+  fromName: string;
 };
 
-const FROM_NAME = 'Highsman Sales';
-const DEFAULT_FROM = 'sky@highsman.com';
+// Resolve the logged-in rep's Gmail environment from the Oxygen env bag.
+// Returns null if any required credential is missing so the caller can
+// surface a clean "not configured" error instead of a cryptic Google failure.
+function resolveRepEnv(rep: SalesRep, env: Record<string, string | undefined>): RepEnv | null {
+  const clientId = env[rep.gmail.clientIdVar];
+  const clientSecret = env[rep.gmail.clientSecretVar];
+  const refreshToken = env[rep.gmail.refreshTokenVar];
+  if (!clientId || !clientSecret || !refreshToken) return null;
 
-// Module-scope Gmail access-token cache — avoids hammering Google's token
-// endpoint (same 55-min TTL pattern used across the app).
-let cachedGmailToken: string | null = null;
-let gmailTokenExpiresAt = 0;
+  const fromOverride = rep.gmail.fromVar ? env[rep.gmail.fromVar] : undefined;
+  const from = (fromOverride || rep.gmail.defaultFrom).trim();
 
-async function getGmailAccessToken(env: Env): Promise<string> {
+  return {
+    clientId,
+    clientSecret,
+    refreshToken,
+    from,
+    fromName: rep.gmail.fromName,
+  };
+}
+
+async function getGmailAccessToken(repId: string, cfg: RepEnv): Promise<string> {
   const now = Date.now();
-  if (cachedGmailToken && now < gmailTokenExpiresAt) return cachedGmailToken;
+  const cached = gmailTokenCache.get(repId);
+  if (cached && now < cached.expiresAt) return cached.token;
 
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
     body: new URLSearchParams({
-      client_id: env.GMAIL_CLIENT_ID!,
-      client_secret: env.GMAIL_CLIENT_SECRET!,
-      refresh_token: env.GMAIL_REFRESH_TOKEN!,
+      client_id: cfg.clientId,
+      client_secret: cfg.clientSecret,
+      refresh_token: cfg.refreshToken,
       grant_type: 'refresh_token',
     }),
   });
@@ -53,9 +77,11 @@ async function getGmailAccessToken(env: Env): Promise<string> {
     throw new Error(`Gmail token refresh failed (${res.status}): ${text.slice(0, 300)}`);
   }
   const data = (await res.json()) as {access_token: string; expires_in?: number};
-  cachedGmailToken = data.access_token;
-  gmailTokenExpiresAt = now + 55 * 60 * 1000;
-  return cachedGmailToken!;
+  gmailTokenCache.set(repId, {
+    token: data.access_token,
+    expiresAt: now + 55 * 60 * 1000,
+  });
+  return data.access_token;
 }
 
 function isValidEmail(s: string | null | undefined): boolean {
@@ -129,21 +155,21 @@ function buildMimeMessage(m: {
 }
 
 async function sendViaGmail(
-  env: Env,
+  repId: string,
+  cfg: RepEnv,
   payload: {
     to: string;
     subject: string;
     textBody: string;
     cc?: string | null;
     replyTo?: string | null;
-    from: string;
   },
 ): Promise<string> {
-  const token = await getGmailAccessToken(env);
+  const token = await getGmailAccessToken(repId, cfg);
 
   const mime = buildMimeMessage({
-    fromName: FROM_NAME,
-    fromAddress: payload.from,
+    fromName: cfg.fromName,
+    fromAddress: cfg.from,
     to: payload.to,
     cc: payload.cc || null,
     replyTo: payload.replyTo || null,
@@ -179,12 +205,22 @@ export async function action({request, context}: ActionFunctionArgs) {
     return json({ok: false, error: 'Method not allowed'}, {status: 405});
   }
 
-  const env = context.env as Env;
-  const configured =
-    env.GMAIL_CLIENT_ID && env.GMAIL_CLIENT_SECRET && env.GMAIL_REFRESH_TOKEN;
-  if (!configured) {
+  const rep = getRepFromRequest(request);
+  if (!rep) {
     return json(
-      {ok: false, error: 'Gmail not configured on this deploy (missing GMAIL_* env vars).'},
+      {ok: false, error: 'Not logged in as a sales rep. Reload /sales-floor to sign in.'},
+      {status: 401},
+    );
+  }
+
+  const env = context.env as Record<string, string | undefined>;
+  const repEnv = resolveRepEnv(rep, env);
+  if (!repEnv) {
+    return json(
+      {
+        ok: false,
+        error: `Gmail not configured for ${rep.firstName} on this deploy (missing ${rep.gmail.clientIdVar} / ${rep.gmail.clientSecretVar} / ${rep.gmail.refreshTokenVar}).`,
+      },
       {status: 503},
     );
   }
@@ -225,18 +261,20 @@ export async function action({request, context}: ActionFunctionArgs) {
     return json({ok: false, error: 'Invalid "replyTo" email.'}, {status: 400});
   }
 
-  const from = (env.GMAIL_SALES_FROM || DEFAULT_FROM).trim();
-
   try {
-    const messageId = await sendViaGmail(env, {
+    const messageId = await sendViaGmail(rep.id, repEnv, {
       to,
       subject,
       textBody: body,
       cc,
       replyTo,
-      from,
     });
-    return json({ok: true, messageId, from});
+    return json({
+      ok: true,
+      messageId,
+      from: repEnv.from,
+      rep: {id: rep.id, firstName: rep.firstName},
+    });
   } catch (err: any) {
     console.error('[sales-floor-send-email] send error:', err.message);
     return json(

@@ -1,5 +1,6 @@
 import type {LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
+import {getRepFromRequest, type SalesRep} from '../lib/sales-floor-reps';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sales Floor CRM Sync — Server-side API Route
@@ -17,6 +18,12 @@ import {json} from '@shopify/remix-oxygen';
 //               Description, Modified_Time }
 //   Deal    → { id, Deal_Name, Account_Name, Stage, Amount, Closing_Date }
 //   Account → { Id, Account_Name, Industry, Billing_City, Billing_State, Phone }
+//
+// Per-rep scoping: the caller's rep is resolved from the sales_floor_rep
+// cookie (see app/lib/sales-floor-reps.ts). If the rep has a zohoOwnerId set
+// in the registry, every Zoho query is filtered by Owner.id so the dashboard
+// only returns that rep's book. Sky currently runs unfiltered — flip his
+// zohoOwnerId in the registry to enable scoping.
 //
 // Graceful degradation: if env vars are missing or Zoho fails, returns empty
 // arrays (200) with { ok:false, error:'...' } so the client can fall back to
@@ -73,11 +80,40 @@ function fullName(l: any): string {
   return `${l.First_Name || ''} ${l.Last_Name || ''}`.trim() || l.Company || 'Unknown Lead';
 }
 
+// When a rep has a zohoOwnerId, we fetch records scoped to that owner via the
+// /search endpoint with a COQL-style criteria string. Owner filtering through
+// the generic list endpoint doesn't work — Zoho only honors criteria on
+// /search or through `view_id`. We intentionally use /search here (no word
+// query, just criteria) to keep per-rep scoping consistent across modules.
+function ownerCriteria(ownerId: string): string {
+  return `(Owner.id:equals:${ownerId})`;
+}
+
+// Decide list-vs-search URL + query params based on whether a rep filter is in
+// play. Keeps the call sites below readable.
+function zohoModuleUrl(
+  module: string,
+  ownerId: string | null,
+  fields: string[],
+  perPage: number,
+): URL {
+  const base = ownerId
+    ? `https://www.zohoapis.com/crm/v7/${module}/search`
+    : `https://www.zohoapis.com/crm/v7/${module}`;
+  const url = new URL(base);
+  url.searchParams.set('fields', fields.join(','));
+  url.searchParams.set('per_page', String(perPage));
+  url.searchParams.set('sort_by', 'Modified_Time');
+  url.searchParams.set('sort_order', 'desc');
+  if (ownerId) url.searchParams.set('criteria', ownerCriteria(ownerId));
+  return url;
+}
+
 // ─── Zoho fetchers ───────────────────────────────────────────────────────────
-async function fetchLeads(accessToken: string) {
-  const url = new URL('https://www.zohoapis.com/crm/v7/Leads');
-  url.searchParams.set(
-    'fields',
+async function fetchLeads(accessToken: string, ownerId: string | null) {
+  const url = zohoModuleUrl(
+    'Leads',
+    ownerId,
     [
       'First_Name',
       'Last_Name',
@@ -90,11 +126,9 @@ async function fetchLeads(accessToken: string) {
       'Description',
       'Modified_Time',
       'Created_Time',
-    ].join(','),
+    ],
+    100,
   );
-  url.searchParams.set('per_page', '100');
-  url.searchParams.set('sort_by', 'Modified_Time');
-  url.searchParams.set('sort_order', 'desc');
 
   const res = await fetch(url.toString(), {
     headers: {Authorization: `Zoho-oauthtoken ${accessToken}`},
@@ -121,16 +155,13 @@ async function fetchLeads(accessToken: string) {
   }));
 }
 
-async function fetchDeals(accessToken: string) {
-  const url = new URL('https://www.zohoapis.com/crm/v7/Deals');
-  url.searchParams.set(
-    'fields',
-    ['Deal_Name', 'Account_Name', 'Stage', 'Amount', 'Closing_Date', 'Contact_Name', 'Description']
-      .join(','),
+async function fetchDeals(accessToken: string, ownerId: string | null) {
+  const url = zohoModuleUrl(
+    'Deals',
+    ownerId,
+    ['Deal_Name', 'Account_Name', 'Stage', 'Amount', 'Closing_Date', 'Contact_Name', 'Description'],
+    200,
   );
-  url.searchParams.set('per_page', '200');
-  url.searchParams.set('sort_by', 'Modified_Time');
-  url.searchParams.set('sort_order', 'desc');
 
   const res = await fetch(url.toString(), {
     headers: {Authorization: `Zoho-oauthtoken ${accessToken}`},
@@ -154,10 +185,10 @@ async function fetchDeals(accessToken: string) {
   }));
 }
 
-async function fetchAccounts(accessToken: string) {
-  const url = new URL('https://www.zohoapis.com/crm/v7/Accounts');
-  url.searchParams.set(
-    'fields',
+async function fetchAccounts(accessToken: string, ownerId: string | null) {
+  const url = zohoModuleUrl(
+    'Accounts',
+    ownerId,
     [
       'Account_Name',
       'Phone',
@@ -170,11 +201,9 @@ async function fetchAccounts(accessToken: string) {
       'Account_Type',
       'Description',
       'Modified_Time',
-    ].join(','),
+    ],
+    200,
   );
-  url.searchParams.set('per_page', '200');
-  url.searchParams.set('sort_by', 'Modified_Time');
-  url.searchParams.set('sort_order', 'desc');
 
   const res = await fetch(url.toString(), {
     headers: {Authorization: `Zoho-oauthtoken ${accessToken}`},
@@ -204,11 +233,16 @@ async function fetchAccounts(accessToken: string) {
 }
 
 // ─── Loader ──────────────────────────────────────────────────────────────────
-export async function loader({context}: LoaderFunctionArgs) {
+export async function loader({request, context}: LoaderFunctionArgs) {
   const env = context.env as any;
   const clientId = env.ZOHO_CLIENT_ID;
   const clientSecret = env.ZOHO_CLIENT_SECRET;
   const refreshToken = env.ZOHO_REFRESH_TOKEN;
+
+  // Resolve the caller's rep from the cookie. If they're not logged in we
+  // still serve an empty response (200) rather than 401 so the UI can fall
+  // back to demo mode the same way it does for missing env vars.
+  const rep: SalesRep | null = getRepFromRequest(request);
 
   if (!clientId || !clientSecret || !refreshToken) {
     return json(
@@ -218,11 +252,17 @@ export async function loader({context}: LoaderFunctionArgs) {
         leads: [],
         deals: [],
         accounts: [],
-        meta: {configured: false, syncedAt: new Date().toISOString()},
+        meta: {
+          configured: false,
+          syncedAt: new Date().toISOString(),
+          rep: rep ? {id: rep.id, firstName: rep.firstName} : null,
+        },
       },
       {status: 200, headers: {'Cache-Control': 'no-store'}},
     );
   }
+
+  const ownerId = rep?.zohoOwnerId || null;
 
   try {
     const accessToken = await getAccessToken({
@@ -232,15 +272,15 @@ export async function loader({context}: LoaderFunctionArgs) {
     });
 
     const [leads, deals, accounts] = await Promise.all([
-      fetchLeads(accessToken).catch((e) => {
+      fetchLeads(accessToken, ownerId).catch((e) => {
         console.error('[sales-floor-sync] leads fetch failed:', e.message);
         return [];
       }),
-      fetchDeals(accessToken).catch((e) => {
+      fetchDeals(accessToken, ownerId).catch((e) => {
         console.error('[sales-floor-sync] deals fetch failed:', e.message);
         return [];
       }),
-      fetchAccounts(accessToken).catch((e) => {
+      fetchAccounts(accessToken, ownerId).catch((e) => {
         console.error('[sales-floor-sync] accounts fetch failed:', e.message);
         return [];
       }),
@@ -256,12 +296,14 @@ export async function loader({context}: LoaderFunctionArgs) {
           configured: true,
           syncedAt: new Date().toISOString(),
           counts: {leads: leads.length, deals: deals.length, accounts: accounts.length},
+          rep: rep ? {id: rep.id, firstName: rep.firstName, scoped: !!ownerId} : null,
         },
       },
       {
         headers: {
           // 60s browser cache so rapid tab-switches don't refetch; worker-side
-          // token cache handles the 55-min window.
+          // token cache handles the 55-min window. `private` because the
+          // payload is rep-scoped.
           'Cache-Control': 'private, max-age=60',
         },
       },
@@ -275,7 +317,11 @@ export async function loader({context}: LoaderFunctionArgs) {
         leads: [],
         deals: [],
         accounts: [],
-        meta: {configured: true, syncedAt: new Date().toISOString()},
+        meta: {
+          configured: true,
+          syncedAt: new Date().toISOString(),
+          rep: rep ? {id: rep.id, firstName: rep.firstName, scoped: !!ownerId} : null,
+        },
       },
       {status: 200, headers: {'Cache-Control': 'no-store'}},
     );
