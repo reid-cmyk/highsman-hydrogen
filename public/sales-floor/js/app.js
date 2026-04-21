@@ -67,6 +67,7 @@ function hydrateRepFromServer() {
 async function bootstrapCRM() {
   const statusEl = document.getElementById('sync-status');
   if (statusEl) statusEl.textContent = 'Connecting to Zoho…';
+  updateConnectionStatus('syncing');
   try {
     const snapshot = await Zoho.syncAll();
     const hasAny = snapshot.leads.length + snapshot.deals.length + snapshot.accounts.length > 0;
@@ -77,7 +78,7 @@ async function bootstrapCRM() {
       accounts = snapshot.accounts;
       loadDemoAlerts(); // keep the alert panel populated until real alert logic lands
       renderAll();
-      updateConnectionStatus(true);
+      updateConnectionStatus('connected');
       if (statusEl) statusEl.textContent = `Synced ${new Date().toLocaleTimeString()}`;
       return;
     }
@@ -85,6 +86,7 @@ async function bootstrapCRM() {
     // Configured but returned nothing, OR not configured at all → demo mode.
     console.warn('[sales-floor] CRM returned no data — falling back to demo.', snapshot);
     loadDemoData();
+    updateConnectionStatus('demo');
     if (statusEl) {
       statusEl.textContent = snapshot.configured
         ? 'CRM empty — showing demo'
@@ -93,6 +95,7 @@ async function bootstrapCRM() {
   } catch (err) {
     console.error('[sales-floor] CRM bootstrap failed:', err);
     loadDemoData();
+    updateConnectionStatus('offline');
     if (statusEl) statusEl.textContent = 'Offline — showing demo';
   }
 }
@@ -134,6 +137,7 @@ async function syncCRM() {
   const statusEl = document.getElementById('sync-status');
   icon?.classList.add('animate-spin');
   if (statusEl) statusEl.textContent = 'Syncing…';
+  updateConnectionStatus('syncing');
   try {
     const snapshot = await Zoho.syncAll();
     const hasAny = snapshot.leads.length + snapshot.deals.length + snapshot.accounts.length > 0;
@@ -145,17 +149,20 @@ async function syncCRM() {
       renderAll();
       if (statusEl) statusEl.textContent = `Synced ${new Date().toLocaleTimeString()}`;
       toast('CRM data synced', 'success');
-      updateConnectionStatus(true);
+      updateConnectionStatus('connected');
     } else if (!snapshot.configured) {
       if (statusEl) statusEl.textContent = 'CRM not configured';
       toast('Zoho not configured on this deploy', 'error');
+      updateConnectionStatus('demo');
     } else {
       if (statusEl) statusEl.textContent = 'No records returned';
       toast('Zoho returned no records', 'info');
+      updateConnectionStatus('demo');
     }
   } catch (err) {
     if (statusEl) statusEl.textContent = 'Sync failed';
     toast(`Sync error: ${err.message}`, 'error');
+    updateConnectionStatus('offline');
   } finally {
     icon?.classList.remove('animate-spin');
   }
@@ -483,27 +490,31 @@ function quickEmail(idx) {
   showTab('compose');
 }
 
-// ─── Connect Modal ────────────────────────────────────────────────────────────
-function showConnectModal() { document.getElementById('connect-modal').classList.remove('hidden'); }
-function closeConnectModal() { document.getElementById('connect-modal').classList.add('hidden'); }
+// ─── Connection Status ────────────────────────────────────────────────────────
+// The legacy client-side "Connect Services" modal has been retired. Zoho +
+// Gmail OAuth both live server-side (Oxygen env vars), so from the browser's
+// perspective the dashboard is always "connected" — we just reflect the
+// live sync state (Connected / Syncing / Offline / Demo) in the status pills.
+function updateConnectionStatus(state = 'connected') {
+  // state ∈ 'connected' | 'syncing' | 'offline' | 'demo'
+  const copy = {
+    connected: 'Connected',
+    syncing: 'Syncing…',
+    offline: 'Offline',
+    demo: 'Demo mode',
+  };
+  const label = copy[state] || copy.connected;
+  const dotClass = state === 'connected' ? 'hs-status-dot connected' : 'hs-status-dot';
 
-async function initConnections() {
-  closeConnectModal();
-  toast('Opening Zoho CRM authorization…', 'info');
-  Zoho.authorize();
-}
-
-function updateConnectionStatus(connected = false) {
-  const dot = document.getElementById('status-dot');
-  const text = document.getElementById('status-text');
-  if (!dot || !text) return;
-  if (connected || Zoho.isConnected()) {
-    dot.className = 'hs-status-dot connected';
-    text.textContent = 'Zoho connected';
-  } else {
-    dot.className = 'hs-status-dot';
-    text.textContent = Zoho.isConfigured() ? 'Zoho idle' : 'Demo mode';
-  }
+  // Update both the desktop top-bar pill and the mobile pagehead chip.
+  ['status-dot', 'status-dot-m'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.className = dotClass;
+  });
+  ['status-text', 'status-text-m'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = label;
+  });
 }
 
 // ─── Toast ────────────────────────────────────────────────────────────────────

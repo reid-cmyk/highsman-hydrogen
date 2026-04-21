@@ -154,13 +154,10 @@
       </div>
       <div class="hs-topbar-meta">
         <div class="hs-date-chip" id="today-chip">Today</div>
-        <div class="hs-status-wrap">
-          <span class="hs-status-dot" id="status-dot"></span>
-          <span class="hs-status-text" id="status-text">Not connected</span>
+        <div class="hs-status-wrap" aria-live="polite">
+          <span class="hs-status-dot connected" id="status-dot"></span>
+          <span class="hs-status-text" id="status-text">Connected</span>
         </div>
-        <button onclick="showConnectModal()" class="hs-btn-secondary text-xs">
-          Connect
-        </button>
       </div>
     </header>
 
@@ -170,10 +167,10 @@
         <h1 id="page-title-m" class="hs-page-title">Dashboard</h1>
         <div id="page-sub-m" class="hs-page-sub">Run the table today.</div>
       </div>
-      <button onclick="showConnectModal()" class="hs-status-chip" aria-label="Connection status">
-        <span class="hs-status-dot" id="status-dot-m"></span>
-        <span class="hs-status-text" id="status-text-m">Connect</span>
-      </button>
+      <div class="hs-status-chip" aria-live="polite" aria-label="Connection status">
+        <span class="hs-status-dot connected" id="status-dot-m"></span>
+        <span class="hs-status-text" id="status-text-m">Connected</span>
+      </div>
     </div>
 
     <!-- Scrollable content -->
@@ -637,9 +634,6 @@
     <button onclick="syncCRM(); closeMoreSheet();" class="hs-sheet-row">
       <i class="fa-solid fa-rotate"></i> Sync CRM
     </button>
-    <button onclick="showConnectModal(); closeMoreSheet();" class="hs-sheet-row">
-      <i class="fa-solid fa-plug"></i> Connections
-    </button>
     <button onclick="closeMoreSheet()" class="hs-sheet-cancel">Close</button>
   </div>
 </div>
@@ -680,68 +674,9 @@
 </div>
 
 
-<!-- ═══════════════════════════════════════════════
-     CONNECT MODAL
-══════════════════════════════════════════════════ -->
-<div id="connect-modal" class="hs-overlay hidden">
-  <div class="hs-modal max-w-md">
-    <div class="hs-modal-header">
-      <div>
-        <div class="hs-modal-eyebrow">Setup</div>
-        <div class="hs-modal-title">Connect Services</div>
-      </div>
-      <button onclick="closeConnectModal()" class="hs-close-btn" aria-label="Close">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-    </div>
-    <div class="p-6 space-y-4">
-
-      <div class="hs-connect-row">
-        <div class="hs-connect-icon">
-          <i class="fa-solid fa-database text-brand-gray"></i>
-        </div>
-        <div class="flex-1">
-          <div class="hs-connect-name">Zoho CRM</div>
-          <div class="hs-connect-desc">Leads, accounts, pipeline</div>
-        </div>
-        <div id="zoho-status" class="flex items-center gap-2">
-          <span class="hs-status-dot"></span>
-          <span class="hs-connect-status">Not connected</span>
-        </div>
-      </div>
-
-      <div class="hs-connect-row">
-        <div class="hs-connect-icon">
-          <i class="fa-solid fa-envelope text-brand-gray"></i>
-        </div>
-        <div class="flex-1">
-          <div class="hs-connect-name">Gmail</div>
-          <div class="hs-connect-desc">Send email templates</div>
-        </div>
-        <div id="gmail-status" class="flex items-center gap-2">
-          <span class="hs-status-dot"></span>
-          <span class="hs-connect-status">Not connected</span>
-        </div>
-      </div>
-
-      <div class="hs-connect-row opacity-40">
-        <div class="hs-connect-icon">
-          <i class="fa-solid fa-comment-sms text-brand-gray"></i>
-        </div>
-        <div class="flex-1">
-          <div class="hs-connect-name">Twilio SMS</div>
-          <div class="hs-connect-desc">Coming soon</div>
-        </div>
-        <span class="hs-badge-ghost">SOON</span>
-      </div>
-
-      <button onclick="initConnections()" class="hs-btn-primary w-full mt-2">
-        <i class="fa-solid fa-plug mr-1"></i> Connect Services
-      </button>
-      <p class="hs-connect-footnote">Credentials stored in this browser session only.</p>
-    </div>
-  </div>
-</div>
+<!-- Legacy client-side "Connect Services" modal removed — Zoho + Gmail auth
+     now runs entirely server-side (Oxygen env vars). Status is reflected in
+     the top-bar/mobile pill via updateConnectionStatus() in app.js. -->
 
 
 <!-- ═══════════════════════════════════════════════
