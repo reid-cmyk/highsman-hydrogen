@@ -1,121 +1,98 @@
-// Zoho CRM integration
-// Uses OAuth 2.0 — user must authenticate first via connect modal
+// Zoho CRM client — thin wrapper around the server-side /api/sales-floor-sync route.
+//
+// The previous version tried to call Zoho directly from the browser, which
+// doesn't work (CORS + secrets exposure). All OAuth lives server-side now in
+// app/routes/api.sales-floor-sync.tsx — this file just caches the last sync
+// response so multiple renderers can share it without re-fetching.
 
 const Zoho = (() => {
-  let accessToken = null;
-  const BASE = 'https://www.zohoapis.com/crm/v3';
+  const ENDPOINT = '/api/sales-floor-sync';
 
-  function setToken(token) {
-    accessToken = token;
-    sessionStorage.setItem('zoho_token', token);
-  }
+  let cache = {
+    leads: [],
+    deals: [],
+    accounts: [],
+    syncedAt: null,
+    configured: false,
+    connected: false,
+  };
 
-  function getToken() {
-    return accessToken || sessionStorage.getItem('zoho_token');
-  }
+  async function syncAll() {
+    const res = await fetch(ENDPOINT, {
+      method: 'GET',
+      headers: {Accept: 'application/json'},
+      credentials: 'same-origin',
+    });
+    if (!res.ok) throw new Error(`Sync failed: HTTP ${res.status}`);
+    const data = await res.json();
 
-  function headers() {
-    return {
-      Authorization: `Zoho-oauthtoken ${getToken()}`,
-      'Content-Type': 'application/json',
+    cache = {
+      leads: Array.isArray(data.leads) ? data.leads : [],
+      deals: Array.isArray(data.deals) ? data.deals : [],
+      accounts: Array.isArray(data.accounts) ? data.accounts : [],
+      syncedAt: data.meta?.syncedAt || new Date().toISOString(),
+      configured: !!data.meta?.configured,
+      connected: !!data.ok,
+      error: data.error || null,
     };
-  }
-
-  async function get(endpoint, params = {}) {
-    const url = new URL(`${BASE}/${endpoint}`);
-    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-    const res = await fetch(url.toString(), { headers: headers() });
-    if (!res.ok) throw new Error(`Zoho API error: ${res.status}`);
-    return res.json();
+    return cache;
   }
 
   async function fetchLeads() {
-    const data = await get('Leads', {
-      fields: 'First_Name,Last_Name,Email,Phone,Company,Lead_Status,Lead_Source,Annual_Revenue,Description,Created_Time,Modified_Time',
-      per_page: 100,
-      sort_by: 'Modified_Time',
-      sort_order: 'desc',
-    });
-    return (data.data || []).map(normalizeLeadStatus);
+    if (!cache.syncedAt) await syncAll();
+    return cache.leads;
   }
 
   async function fetchDeals() {
-    const data = await get('Deals', {
-      fields: 'Deal_Name,Account_Name,Stage,Amount,Closing_Date,Contact_Name,Description,Created_Time',
-      per_page: 200,
-    });
-    return data.data || [];
+    if (!cache.syncedAt) await syncAll();
+    return cache.deals;
   }
 
   async function fetchAccounts() {
-    const data = await get('Accounts', {
-      fields: 'Account_Name,Phone,Website,Industry,Annual_Revenue,Billing_City,Billing_State,Account_Type,Description,Modified_Time',
-      per_page: 200,
-      sort_by: 'Modified_Time',
-      sort_order: 'desc',
-    });
-    return data.data || [];
-  }
-
-  // Map Zoho lead statuses to hot/warm/new/cold
-  function normalizeLeadStatus(lead) {
-    const zohoStatus = (lead.Lead_Status || '').toLowerCase();
-    let status = 'new';
-    if (['attempted to contact', 'contacted', 'pre-qualified', 'not contacted'].includes(zohoStatus)) {
-      status = 'new';
-    }
-    if (['working - contacted', 'contact in future'].includes(zohoStatus)) {
-      status = 'warm';
-    }
-    if (['qualified'].includes(zohoStatus)) {
-      status = 'hot';
-    }
-    if (['unqualified', 'junk lead'].includes(zohoStatus)) {
-      status = 'cold';
-    }
-    return { ...lead, _status: status, _fullName: `${lead.First_Name || ''} ${lead.Last_Name || ''}`.trim() };
+    if (!cache.syncedAt) await syncAll();
+    return cache.accounts;
   }
 
   function isConnected() {
-    return !!getToken();
+    return cache.connected;
   }
 
-  // Initiate OAuth flow (opens popup)
+  function isConfigured() {
+    return cache.configured;
+  }
+
+  function lastSync() {
+    return cache.syncedAt;
+  }
+
+  function lastError() {
+    return cache.error || null;
+  }
+
+  // No-op stubs for the legacy connect-modal flow. The server now handles
+  // auth entirely; the UI can keep showing a "Sync" button that just calls
+  // syncAll() via the dashboard's syncCRM().
   function authorize() {
-    const params = new URLSearchParams({
-      scope: CONFIG.zoho.scopes,
-      client_id: CONFIG.zoho.clientId,
-      response_type: 'code',
-      access_type: 'offline',
-      redirect_uri: CONFIG.zoho.redirectUri,
-    });
-    const authUrl = `https://accounts.zoho.com/oauth/v2/auth?${params}`;
-    window.open(authUrl, 'zoho_auth', 'width=600,height=700');
+    // Server handles OAuth via refresh token — nothing to do in the browser.
+    return Promise.resolve();
   }
+  function exchangeCode() { return Promise.resolve(); }
+  function setManualToken() {}
+  function getToken() { return null; }
 
-  // Call this after receiving the auth code from redirect
-  async function exchangeCode(code) {
-    // In production, this exchange happens server-side to protect clientSecret
-    const res = await fetch('https://accounts.zoho.com/oauth/v2/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: CONFIG.zoho.clientId,
-        client_secret: CONFIG.zoho.clientSecret,
-        redirect_uri: CONFIG.zoho.redirectUri,
-        code,
-      }),
-    });
-    const data = await res.json();
-    if (data.access_token) setToken(data.access_token);
-    return data;
-  }
-
-  // For demo / dev: manually paste an access token
-  function setManualToken(token) {
-    setToken(token);
-  }
-
-  return { fetchLeads, fetchDeals, fetchAccounts, isConnected, authorize, exchangeCode, setManualToken, getToken };
+  return {
+    syncAll,
+    fetchLeads,
+    fetchDeals,
+    fetchAccounts,
+    isConnected,
+    isConfigured,
+    lastSync,
+    lastError,
+    // Legacy surface kept so old init code won't crash:
+    authorize,
+    exchangeCode,
+    setManualToken,
+    getToken,
+  };
 })();

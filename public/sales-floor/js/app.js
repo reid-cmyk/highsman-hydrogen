@@ -24,9 +24,45 @@ document.addEventListener('DOMContentLoaded', () => {
   updateGreeting();
   updateConnectionStatus();
   Issues.init();
-  loadDemoData();   // remove this line when real CRM data is connected
   updateIssueBadge();
+
+  // Auto-sync from Zoho on page load. If the CRM isn't configured or returns
+  // empty, fall back to demo data so the dashboard is never blank.
+  bootstrapCRM();
 });
+
+async function bootstrapCRM() {
+  const statusEl = document.getElementById('sync-status');
+  if (statusEl) statusEl.textContent = 'Connecting to Zoho…';
+  try {
+    const snapshot = await Zoho.syncAll();
+    const hasAny = snapshot.leads.length + snapshot.deals.length + snapshot.accounts.length > 0;
+
+    if (snapshot.connected && hasAny) {
+      leads = snapshot.leads;
+      deals = snapshot.deals;
+      accounts = snapshot.accounts;
+      loadDemoAlerts(); // keep the alert panel populated until real alert logic lands
+      renderAll();
+      updateConnectionStatus(true);
+      if (statusEl) statusEl.textContent = `Synced ${new Date().toLocaleTimeString()}`;
+      return;
+    }
+
+    // Configured but returned nothing, OR not configured at all → demo mode.
+    console.warn('[sales-floor] CRM returned no data — falling back to demo.', snapshot);
+    loadDemoData();
+    if (statusEl) {
+      statusEl.textContent = snapshot.configured
+        ? 'CRM empty — showing demo'
+        : 'Demo mode';
+    }
+  } catch (err) {
+    console.error('[sales-floor] CRM bootstrap failed:', err);
+    loadDemoData();
+    if (statusEl) statusEl.textContent = 'Offline — showing demo';
+  }
+}
 
 function updateGreeting() {
   const h = new Date().getHours();
@@ -58,29 +94,37 @@ function showTab(tab) {
 }
 
 // ─── CRM Sync ─────────────────────────────────────────────────────────────────
+// The "Sync" button in the sidebar pulls fresh data from /api/sales-floor-sync.
+// OAuth lives server-side — no connect modal needed for Zoho.
 async function syncCRM() {
-  if (!Zoho.isConnected()) {
-    showConnectModal();
-    return;
-  }
   const icon = document.getElementById('sync-icon');
-  icon.classList.add('animate-spin');
-  document.getElementById('sync-status').textContent = 'Syncing…';
+  const statusEl = document.getElementById('sync-status');
+  icon?.classList.add('animate-spin');
+  if (statusEl) statusEl.textContent = 'Syncing…';
   try {
-    [leads, deals, accounts] = await Promise.all([
-      Zoho.fetchLeads(),
-      Zoho.fetchDeals(),
-      Zoho.fetchAccounts(),
-    ]);
-    renderAll();
-    document.getElementById('sync-status').textContent = `Synced ${new Date().toLocaleTimeString()}`;
-    toast('CRM data synced', 'success');
-    updateConnectionStatus(true);
+    const snapshot = await Zoho.syncAll();
+    const hasAny = snapshot.leads.length + snapshot.deals.length + snapshot.accounts.length > 0;
+
+    if (snapshot.connected && hasAny) {
+      leads = snapshot.leads;
+      deals = snapshot.deals;
+      accounts = snapshot.accounts;
+      renderAll();
+      if (statusEl) statusEl.textContent = `Synced ${new Date().toLocaleTimeString()}`;
+      toast('CRM data synced', 'success');
+      updateConnectionStatus(true);
+    } else if (!snapshot.configured) {
+      if (statusEl) statusEl.textContent = 'CRM not configured';
+      toast('Zoho not configured on this deploy', 'error');
+    } else {
+      if (statusEl) statusEl.textContent = 'No records returned';
+      toast('Zoho returned no records', 'info');
+    }
   } catch (err) {
-    document.getElementById('sync-status').textContent = 'Sync failed';
+    if (statusEl) statusEl.textContent = 'Sync failed';
     toast(`Sync error: ${err.message}`, 'error');
   } finally {
-    icon.classList.remove('animate-spin');
+    icon?.classList.remove('animate-spin');
   }
 }
 
@@ -418,9 +462,13 @@ async function initConnections() {
 function updateConnectionStatus(connected = false) {
   const dot = document.getElementById('status-dot');
   const text = document.getElementById('status-text');
+  if (!dot || !text) return;
   if (connected || Zoho.isConnected()) {
     dot.className = 'hs-status-dot connected';
     text.textContent = 'Zoho connected';
+  } else {
+    dot.className = 'hs-status-dot';
+    text.textContent = Zoho.isConfigured() ? 'Zoho idle' : 'Demo mode';
   }
 }
 
