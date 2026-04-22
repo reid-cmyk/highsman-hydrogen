@@ -517,7 +517,7 @@ function renderOrders() {
       : null;
     const buyer = acct?._buyer || null;
     const buyerLine = buyer
-      ? `<div class="hs-orders-buyer"><i class="fa-solid fa-user"></i> ${escapeHtml(buyer._fullName || '')}${buyer.Job_Role ? ` · ${escapeHtml(buyer.Job_Role)}` : ''}</div>`
+      ? `<div class="hs-orders-buyer"><i class="fa-solid fa-user"></i> ${escapeHtml(buyer._fullName || '')}${buyer._jobRole ? ` · ${escapeHtml(buyer._jobRole)}` : ''}</div>`
       : '';
     const phone = buyer?.Mobile || buyer?.Phone || r.phone || '';
     const email = buyer?.Email || acct?.Email || '';
@@ -876,7 +876,7 @@ function renderAccounts() {
             </span>
             <div class="hs-account-buyer-meta">
               <div class="hs-account-buyer-name">${escapeHtml(buyer._fullName || '—')}</div>
-              <div class="hs-account-buyer-role">${escapeHtml(buyer._jobRole || 'Purchasing & Inventory Management')}</div>
+              <div class="hs-account-buyer-role">${escapeHtml(buyer._jobRole || 'No Job Role set in Zoho')}</div>
             </div>
           </div>
           <button class="hs-account-buyer-change" type="button"
@@ -1041,8 +1041,9 @@ function filterAccountsByState(code) {
 // Opens a modal listing every contact on the account so the rep can pick
 // who the buyer is. Clicking a contact POSTs to /api/sales-floor-set-account-buyer
 // which writes the canonical buyer role ("Purchasing & Inventory Management")
-// to that contact's Job_Role (or Title fallback) in Zoho. We don't clear the
-// previous buyer's role — multiple people can carry buyer duties.
+// to that contact's Role_Title picklist (labelled "Job Role" in Zoho UI) in
+// Zoho. We don't clear the previous buyer's role — multiple people can carry
+// buyer duties.
 //
 // State is parked on `_buyerPicker` rather than a global because the modal is
 // transient — opening on a different account just overwrites the slot.
@@ -1092,7 +1093,7 @@ function renderBuyerPickerList() {
   });
   host.innerHTML = sorted.map(c => {
     const isCurrent = c.id === currentBuyerId;
-    const role = c._jobRole || (isCurrent ? 'Purchasing & Inventory Management' : 'No role on file');
+    const role = c._jobRole || 'No role on file';
     const meta = [c.Email, c.Mobile || c.Phone].filter(Boolean).join(' · ');
     return `
       <button class="hs-buyer-row ${isCurrent ? 'is-current' : ''}"
@@ -1146,8 +1147,9 @@ async function selectBuyer(contactId) {
     // Roll back in-memory and re-render so the card matches Zoho's truth again.
     acc.buyer = prevBuyer;
     if (newBuyer && prevBuyer && newBuyer.id !== prevBuyer.id) {
-      // Job_Role is the only buyer-role signal — never fall back to Title.
-      newBuyer._jobRole = newBuyer.Job_Role || '';
+      // Role_Title (UI label "Job Role") is the only buyer-role signal —
+      // never fall back to Title or Job_Title.
+      newBuyer._jobRole = newBuyer.Role_Title || '';
     }
     renderAccounts();
     toast(`Could not save buyer: ${err.message}`, 'error');
