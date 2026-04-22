@@ -96,3 +96,104 @@ function fillTemplate(templateKey, { name = '', company = '', sender = '' }) {
     body: replace(t.body),
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SMS templates — canned Highsman-voice texts for the /sales-floor dashboard
+// ─────────────────────────────────────────────────────────────────────────────
+// Short, polite, direct, signed from Sky. Designed to fit in one or two SMS
+// segments (under ~250 chars) so carriers don't fragment them. Voice follows
+// the Highsman brand voice skill — Floor register, benefit-first, no hedging,
+// no permission-seeking, no medical framing. Assumptive closes where it fits.
+//
+// Variables:
+//   {name}     → contact first name (falls back to "there" if unknown)
+//   {company}  → account name       (falls back to "the shop")
+//
+// The `label` is what shows on the chip row in the composer UI.
+// The `icon`  is a Font Awesome glyph name (e.g. "phone-slash", "rotate").
+// The `hint`  is the one-line description shown on hover / long-press.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SMS_TEMPLATES = {
+  tried_reach: {
+    label: 'Tried You',
+    icon: 'phone-slash',
+    hint: "Can't reach them by phone — pivot to text",
+    body: `Hey {name}, Sky @ Highsman. Tried you earlier — no luck. Grab me when you've got 2 min, got a quick update for {company}.`,
+  },
+
+  checkin_sales: {
+    label: 'Check-In',
+    icon: 'hand',
+    hint: 'How is Highsman moving at their shop',
+    body: `Hey {name}, Sky with Highsman checking in. How's Highsman moving at {company}? Let me know if you need anything on my end.`,
+  },
+
+  low_inventory: {
+    label: 'Low Inv',
+    icon: 'box-open',
+    hint: 'Heard they are running light — prompt a reorder',
+    body: `Hey {name}, Sky @ Highsman. Heard {company} was running light — want me to cue up a reorder? I can turn it around fast.`,
+  },
+
+  cold_intro_ricky: {
+    label: 'Cold Intro',
+    icon: 'star',
+    hint: 'First-touch — Highsman by Ricky Williams',
+    body: `Hey {name}, Sky reaching out from Highsman by Ricky Williams. Want to get the Triple Infused lineup on your shelf at {company}. 2 min to chat?`,
+  },
+
+  post_meeting_ty: {
+    label: 'Thanks',
+    icon: 'handshake',
+    hint: 'Post-meeting thank-you',
+    body: `Appreciate the time today, {name}. Getting everything moving on our end for {company}. Text me whenever — I'm your point person.`,
+  },
+
+  order_confirmed: {
+    label: 'Order Lock',
+    icon: 'circle-check',
+    hint: 'Confirm order placed — delivery this week',
+    body: `Hey {name}, Sky @ Highsman. Your order's locked — lands this week. Text me if anything shifts on your side.`,
+  },
+
+  merch_drop: {
+    label: 'Merch Drop',
+    icon: 'shirt',
+    hint: 'Swing by to refresh display + drop merch',
+    body: `Hey {name}, Sky with Highsman. Swinging by {company} to refresh the display + drop fresh merch. 10 min tops — what day works?`,
+  },
+
+  popup_invite: {
+    label: 'Pop-Up',
+    icon: 'calendar-day',
+    hint: 'Offer a Highsman pop-up / sampling event',
+    body: `Hey {name}, Sky here. Running Highsman pop-ups in the area — bringing samples + Ricky Williams swag for {company}'s team. Want us on the schedule?`,
+  },
+};
+
+// Fill a SMS template with contact context. Defaults are Highsman-friendly:
+// missing name → "there" (still polite); missing company → "the shop" (keeps
+// it conversational if the rep is texting from a cold lead with no account).
+function fillSmsTemplate(key, { name = '', company = '' } = {}) {
+  const t = SMS_TEMPLATES[key];
+  if (!t) return null;
+  // Prefer first name — the templates read more naturally that way.
+  const first = String(name || '').trim().split(/\s+/)[0] || '';
+  return t.body
+    .replace(/\{name\}/g, first || 'there')
+    .replace(/\{company\}/g, company || 'the shop');
+}
+
+// Ordered list for rendering the chip row in template order (vs. object-key
+// order which is technically undefined in older engines).
+const SMS_TEMPLATE_ORDER = [
+  'tried_reach',
+  'checkin_sales',
+  'low_inventory',
+  'cold_intro_ricky',
+  'post_meeting_ty',
+  'order_confirmed',
+  'merch_drop',
+  'popup_invite',
+];

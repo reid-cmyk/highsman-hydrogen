@@ -2461,3 +2461,106 @@ a.hs-contact-meta-cell:hover i{ color:var(--gold); }
 #account-list .hs-contact-card:last-child{
   margin-bottom:0;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SMS TEMPLATE CHIP ROW
+   ─────────────────────────────────────────────────────────────────────────
+   Horizontally scrollable row of one-tap canned-text chips. Mounts above
+   the composer textarea (in-thread) and inside the New Text modal. Tap a
+   chip → fillSmsTemplate() resolves {name}/{company} and drops the body
+   into the textarea. Voice + copy live in templates.js; these styles are
+   for the UI shell only.
+─────────────────────────────────────────────────────────────────────────── */
+.hs-sms-template-row{
+  display:flex;
+  flex-wrap:nowrap;
+  gap:8px;
+  overflow-x:auto;
+  overflow-y:hidden;
+  padding:6px 2px 10px;
+  margin:0 0 8px;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(255,255,255,0.18) transparent;
+  -webkit-overflow-scrolling:touch;
+}
+.hs-sms-template-row::-webkit-scrollbar{
+  height:4px;
+}
+.hs-sms-template-row::-webkit-scrollbar-thumb{
+  background:rgba(255,255,255,0.18);
+  border-radius:4px;
+}
+.hs-sms-template-row:empty{
+  display:none;
+}
+
+.hs-sms-template-chip{
+  flex:0 0 auto;
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  padding:7px 12px;
+  border-radius:999px;
+  border:1px solid var(--line, rgba(255,255,255,0.10));
+  background:var(--chip, rgba(255,255,255,0.04));
+  color:#E7E9EC;
+  font-family:var(--barlow, 'Barlow Semi Condensed', system-ui, sans-serif);
+  font-size:12.5px;
+  font-weight:600;
+  letter-spacing:0.02em;
+  line-height:1;
+  white-space:nowrap;
+  cursor:pointer;
+  transition:background .15s ease, border-color .15s ease, transform .08s ease, color .15s ease;
+  user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+.hs-sms-template-chip i{
+  font-size:11px;
+  color:var(--gold, #C8A85A);
+  transition:color .15s ease;
+}
+.hs-sms-template-chip span{
+  display:inline-block;
+  text-transform:uppercase;
+}
+.hs-sms-template-chip:hover{
+  background:rgba(200,168,90,0.10);
+  border-color:rgba(200,168,90,0.40);
+  color:#FFFFFF;
+}
+.hs-sms-template-chip:hover i{
+  color:#E8C97A;
+}
+.hs-sms-template-chip:active{
+  transform:scale(0.97);
+  background:rgba(200,168,90,0.18);
+  border-color:rgba(200,168,90,0.55);
+}
+.hs-sms-template-chip:focus-visible{
+  outline:2px solid var(--gold, #C8A85A);
+  outline-offset:2px;
+}
+
+/* Modal context: the New Text modal background is darker, so lift the chip
+   contrast a touch to keep them legible. */
+#sms-new-templates .hs-sms-template-chip{
+  background:rgba(255,255,255,0.05);
+  border-color:rgba(255,255,255,0.12);
+}
+
+/* Mobile: tighter padding so the row doesn't eat composer real estate. */
+@media (max-width: 480px){
+  .hs-sms-template-row{
+    gap:6px;
+    padding:4px 2px 8px;
+    margin-bottom:6px;
+  }
+  .hs-sms-template-chip{
+    padding:6px 10px;
+    font-size:12px;
+  }
+  .hs-sms-template-chip i{
+    font-size:10.5px;
+  }
+}

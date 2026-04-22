@@ -545,5 +545,8 @@ window.SMS = (function () {
     closeNew,
     sendNew,
     onContactPicked,
+    // Read-only accessor used by sms-templates.js to resolve {name}/{company}
+    // from the active conversation's E.164 against window.leads/accounts.
+    getOpenWith: () => S.openWith || '',
   };
 })();

@@ -727,6 +727,11 @@
 
             <!-- Composer -->
             <div id="sms-composer" class="hs-sms-composer hidden">
+              <!-- Template chip row — populated by sms-templates.js.
+                   Tap a chip to auto-fill the textarea with a Highsman-voice
+                   canned text. Name + company are resolved from the open
+                   thread's contact when available. -->
+              <div id="sms-composer-templates" class="hs-sms-template-row" data-target="composer"></div>
               <textarea
                 id="sms-input"
                 rows="2"
@@ -902,6 +907,7 @@
 
       <div>
         <label class="hs-label">First message</label>
+        <div id="sms-new-templates" class="hs-sms-template-row" data-target="new"></div>
         <textarea id="sms-new-body" rows="4" maxlength="1600" class="hs-input resize-none" placeholder="Hey Jane — quick one. Got a 2-min for the Highsman update?"></textarea>
         <div class="hs-helper-note"><span id="sms-new-counter">0</span>/1600</div>
       </div>
@@ -942,6 +948,7 @@
 <script src="/sales-floor/js/issues.js"></script>
 <script src="/sales-floor/js/contact-search.js"></script>
 <script src="/sales-floor/js/sms.js"></script>
+<script src="/sales-floor/js/sms-templates.js"></script>
 <script src="/sales-floor/js/missed-calls.js"></script>
 <script src="/sales-floor/js/app.js"></script>
 <script>
