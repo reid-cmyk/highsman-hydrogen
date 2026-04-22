@@ -401,10 +401,21 @@ function websiteToDomain(raw: string | undefined | null): string | null {
   return BRIEF_CONSUMER_DOMAINS.has(s) ? null : s;
 }
 
-// Pick the best company domain across every signal we have on the lead:
-// 1. The primary Email (if business domain).
-// 2. Any other contact email at the account (if business domain).
-// 3. The Account's Website field.
+// Pick the best company domain across every signal we have on the lead.
+// Website wins over contact-email fallbacks because contact emails at a
+// retail account can belong to distributors, fulfillment vendors, or
+// personal consumer inboxes (e.g. Rush Budz has a contact
+// `Fulfillment@ernestready.com` — ernestready is a third-party
+// fulfillment service, not Rush Budz). The Account.Website field is the
+// canonical business identity in Zoho, so trust it ahead of stray contacts.
+//
+// Priority:
+//   1. Primary email's business domain (strongest direct-to-buyer signal).
+//   2. Website domain (authoritative for the business entity).
+//   3. Any contact email at the account whose domain matches the Website
+//      (resolves "two contacts on the same real domain" cases when step 1
+//      is missing but we want the email-searchable form).
+//   4. Any other business-domain contact email (last-resort fallback).
 // Returns the first valid business domain, or null.
 function pickBestDomain(
   primaryEmail: string,
@@ -413,14 +424,14 @@ function pickBestDomain(
 ): string | null {
   const fromPrimary = primaryEmail ? leadDomainForExpansion(primaryEmail) : null;
   if (fromPrimary) return fromPrimary;
+  const fromWebsite = websiteToDomain(website);
+  if (fromWebsite) return fromWebsite;
   if (Array.isArray(contactEmails)) {
     for (const e of contactEmails) {
       const d = leadDomainForExpansion(e);
       if (d) return d;
     }
   }
-  const fromWebsite = websiteToDomain(website);
-  if (fromWebsite) return fromWebsite;
   return null;
 }
 
