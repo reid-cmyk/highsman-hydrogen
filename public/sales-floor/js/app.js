@@ -561,9 +561,15 @@ function renderNewCustomers() {
     const active = newCustomers.filter(c =>
       c.cardState === 'pending' || c.cardState === 'ready' || c.cardState === 'checkin_due'
     ).length;
-    meta.textContent = leaflinkOrdersFetched
-      ? `${active} active ${active === 1 ? 'shop' : 'shops'}`
-      : 'Loading…';
+    const cohort420 = newCustomers.filter(c => c.is420Cohort && c.cardState !== 'done').length;
+    if (!leaflinkOrdersFetched) {
+      meta.textContent = 'Loading…';
+    } else {
+      const base = `${active} active ${active === 1 ? 'shop' : 'shops'}`;
+      meta.textContent = cohort420 > 0
+        ? `${base} · ${cohort420} from 4/20`
+        : base;
+    }
   }
 
   if (!leaflinkOrdersFetched) {
@@ -584,11 +590,16 @@ function renderNewCustomers() {
     return;
   }
 
-  // Order: checkin_due → ready → pending → vibes_booked
+  // Order:
+  //   1) 4/20 drop cohort first — these are the fresh first-time Highsman
+  //      buyers from the 4/20 weekend, lock them in now.
+  //   2) within each group: checkin_due → ready → pending → vibes_booked
   const order = {checkin_due: 0, ready: 1, pending: 2, vibes_booked: 3};
-  const sorted = [...active].sort(
-    (a, b) => (order[a.cardState] ?? 9) - (order[b.cardState] ?? 9),
-  );
+  const sorted = [...active].sort((a, b) => {
+    const cohortDelta = (b.is420Cohort ? 1 : 0) - (a.is420Cohort ? 1 : 0);
+    if (cohortDelta !== 0) return cohortDelta;
+    return (order[a.cardState] ?? 9) - (order[b.cardState] ?? 9);
+  });
 
   list.innerHTML = sorted.map((c, idx) => renderNewCustCard(c, idx)).join('');
 }
@@ -687,11 +698,20 @@ function renderNewCustCard(c, idx) {
       </div>`;
   }
 
+  const cohortPill = c.is420Cohort
+    ? `<span class="hs-newcust-pill is-420" title="First Highsman order on or after 4/20/2026">4/20 DROP</span>`
+    : '';
+  const cardClasses = ['hs-newcust-card', pillCls];
+  if (c.is420Cohort) cardClasses.push('is-420-cohort');
+
   return `
-    <div class="hs-newcust-card ${pillCls}" data-newcust-id="${acctId}">
+    <div class="${cardClasses.join(' ')}" data-newcust-id="${acctId}">
       <div class="hs-newcust-head">
         <div class="hs-newcust-name">${name}${state}</div>
-        <span class="hs-newcust-pill ${pillCls}">${pillText}</span>
+        <div class="hs-newcust-pills">
+          ${cohortPill}
+          <span class="hs-newcust-pill ${pillCls}">${pillText}</span>
+        </div>
       </div>
       ${orderLine}
       ${body}
@@ -701,8 +721,11 @@ function renderNewCustCard(c, idx) {
 
 // ─── New Customer state transitions ──────────────────────────────────────────
 async function markReadyToVibesVisit(zohoAccountId, customerName, firstOrderNumber, actualShipDate, firstOrderStatus, idx) {
-  const card = newCustomers[idx];
-  if (!card || card.zohoAccountId !== zohoAccountId) return;
+  // Resolve by Zoho account id — `idx` is the sorted-view index, not the
+  // source-array index, so a direct newCustomers[idx] lookup misfires after
+  // any re-sort (e.g. 4/20 cohort hoist).
+  const card = newCustomers.find((c) => c.zohoAccountId === zohoAccountId);
+  if (!card) return;
 
   // Optimistic: flip to vibes_booked locally
   const prevState = card.cardState;
@@ -748,8 +771,8 @@ async function markReadyToVibesVisit(zohoAccountId, customerName, firstOrderNumb
 }
 
 async function logCheckin(zohoAccountId, customerName, idx) {
-  const card = newCustomers[idx];
-  if (!card || card.zohoAccountId !== zohoAccountId) return;
+  const card = newCustomers.find((c) => c.zohoAccountId === zohoAccountId);
+  if (!card) return;
 
   const summary = (prompt(`Quick note on ${customerName} — how's product moving?`, '') || '').trim();
   const prevState = card.cardState;

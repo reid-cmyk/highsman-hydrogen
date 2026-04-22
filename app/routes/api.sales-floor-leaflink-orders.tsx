@@ -91,6 +91,13 @@ const CHECKIN_NOTE_SUBJECT = '[CHECKIN-12D]';
 // Days from actual_ship_date to the 12-day check-in.
 const CHECKIN_AFTER_DAYS = 12;
 
+// 4/20 drop cutoff. Any shop whose FIRST Highsman LeafLink order is on or after
+// this timestamp gets flagged as part of the 4/20 cohort — gold "4/20 DROP"
+// pill on the card + sorted to the top of New Customers so Sky can lock in the
+// freshest first-time buyers immediately.
+const POST_420_CUTOFF_ISO = '2026-04-20T00:00:00Z';
+const POST_420_CUTOFF_MS = new Date(POST_420_CUTOFF_ISO).getTime();
+
 // ─── Zoho OAuth (module-scope cache, 55-min TTL) ────────────────────────────
 let cachedZohoToken: string | null = null;
 let zohoTokenExpiresAt = 0;
@@ -409,6 +416,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     checkInDoneNoteId?: string | null;
     checkInDueDate?: string | null;
     cardState: 'pending' | 'ready' | 'vibes_booked' | 'checkin_due' | 'done';
+    is420Cohort: boolean;
   };
 
   const reorderDue: ReorderDueRow[] = [];
@@ -423,12 +431,15 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       // First-ever Highsman order on this account.
       const status = String(newest.status || '').trim();
       const ship = newest.actual_ship_date || null;
+      const firstDateIso = bestOrderDate(oldest);
+      const firstDateMs = firstDateIso ? new Date(firstDateIso).getTime() : 0;
+      const is420Cohort = firstDateMs >= POST_420_CUTOFF_MS;
       newCustomers.push({
         customerId: bucket.customerId,
         customerName: bucket.customerName,
         firstOrderId: newest.short_id || newest.number || '',
         firstOrderNumber: newest.number || newest.short_id || '',
-        firstOrderDate: bestOrderDate(oldest),
+        firstOrderDate: firstDateIso,
         firstOrderStatus: status,
         firstOrderTotal: orderTotal(newest),
         firstOrderSkus: topSkus(newest),
@@ -436,6 +447,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         state: null, // filled in by Zoho lookup below
         vibesEligible: false, // filled in below
         cardState: READY_STATUSES.has(status) && ship ? 'ready' : 'pending',
+        is420Cohort,
       });
     } else {
       // Returning customer — segment by recency on most recent order.
@@ -523,6 +535,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   // Filter out "done" cards from the New Customers tab — once Sky's logged
   // the 12-day check-in, the shop graduates to the regular Accounts list.
   const visibleNewCustomers = newCustomers.filter((r) => r.cardState !== 'done');
+  const cohort420Count = visibleNewCustomers.filter((r) => r.is420Cohort).length;
 
   return json({
     ok: true,
@@ -533,6 +546,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       fetchedAt: new Date().toISOString(),
       ordersScanned: allOrders.length,
       uniqueCustomers: byCustomer.size,
+      cohort420Count,
+      cohort420CutoffIso: POST_420_CUTOFF_ISO,
       errors,
     },
   });
