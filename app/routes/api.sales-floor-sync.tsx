@@ -157,7 +157,11 @@ async function fetchLeads(accessToken: string, ownerId: string | null) {
     throw new Error(`Zoho leads fetch failed (${res.status}): ${text.slice(0, 300)}`);
   }
   const data = await res.json();
-  return (data.data || []).map((l: any) => ({
+  return (data.data || [])
+    // Drop leads whose Company starts with "Test" (same rule we use for
+    // accounts) so throwaway seeded records don't clutter the Leads tab.
+    .filter((l: any) => !isTestName(l.Company))
+    .map((l: any) => ({
     id: l.id,
     First_Name: l.First_Name || '',
     Last_Name: l.Last_Name || '',
@@ -192,7 +196,16 @@ async function fetchDeals(accessToken: string, ownerId: string | null) {
     throw new Error(`Zoho deals fetch failed (${res.status}): ${text.slice(0, 300)}`);
   }
   const data = await res.json();
-  return (data.data || []).map((d: any) => ({
+  return (data.data || [])
+    // Drop deals whose linked Account name or Deal_Name starts with "Test" so
+    // throwaway pipeline records don't leak onto the dashboard.
+    .filter((d: any) => {
+      const acct = typeof d.Account_Name === 'object'
+        ? d.Account_Name?.name || ''
+        : d.Account_Name || '';
+      return !isTestName(acct) && !isTestName(d.Deal_Name);
+    })
+    .map((d: any) => ({
     id: d.id,
     Deal_Name: d.Deal_Name || '',
     // Zoho returns lookup fields as objects {name, id}; flatten to the string app.js uses.
@@ -214,6 +227,18 @@ const EXCLUDED_STATES = new Set(['MA', 'Massachusetts']);
 
 function isExcludedState(state: string | null | undefined): boolean {
   return EXCLUDED_STATES.has(String(state || '').trim());
+}
+
+// Test-record filter — drops anything whose name begins with "test" as a whole
+// word ("Test", "Test Dispensary", "TEST-ACCOUNT", "test 123"). Uses a
+// negative-lookahead on the next char so real names like "Testament" or
+// "Tester" don't get caught. Applied to Account_Name and Lead Company so the
+// rep's dashboard never has to scroll past throwaway records Reid or ops
+// seeded in Zoho while building workflows.
+function isTestName(name: string | null | undefined): boolean {
+  const n = String(name || '').trim();
+  if (!n) return false;
+  return /^test(?![a-z])/i.test(n);
 }
 
 async function fetchAccounts(accessToken: string, ownerId: string | null) {
@@ -249,6 +274,9 @@ async function fetchAccounts(accessToken: string, ownerId: string | null) {
     // Drop MA accounts before we even shape them — keeps the response leaner
     // and prevents any downstream join from reintroducing them.
     .filter((a: any) => !isExcludedState(a.Billing_State))
+    // Drop anything whose Account_Name starts with "Test" — those are
+    // throwaway records seeded while wiring up workflows.
+    .filter((a: any) => !isTestName(a.Account_Name))
     .map((a: any) => ({
       // app.js uses `Id` (capital I) in a couple spots; keep both for safety.
       Id: a.id,

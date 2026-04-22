@@ -361,9 +361,15 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     orders: LLOrder[];
   };
   const byCustomer = new Map<number, CustomerBucket>();
+  // Same whole-word prefix rule we use in api.sales-floor-sync.tsx — drop
+  // "Test", "Test Dispensary", "TEST-2", but not "Testament" or "Tester".
+  const isTestCustomerName = (name: string | null | undefined) =>
+    /^test(?![a-z])/i.test(String(name || '').trim());
   for (const order of allOrders) {
     const cust = order.customer || order.buyer;
     if (!cust || typeof cust.id !== 'number') continue;
+    // Skip throwaway test customers before they ever enter the bucket.
+    if (isTestCustomerName(cust.name)) continue;
     let bucket = byCustomer.get(cust.id);
     if (!bucket) {
       bucket = {
