@@ -55,6 +55,21 @@ a{ color:inherit; text-decoration:none; }
 .hidden{ display:none !important; }
 .hs-helper-note{ font-size:11px; color:var(--gray-dim); letter-spacing:0.02em; }
 
+/* Click-to-call link — subtle dashed underline signals it's tappable
+   (hands off to Quo desktop/extension via tel: URI). Inherits row color
+   so it doesn't fight the dashboard's monochrome hierarchy. */
+.hs-tel-link{
+  color:inherit;
+  text-decoration:none;
+  border-bottom:1px dashed rgba(255,255,255,0.28);
+  padding-bottom:1px;
+  transition:border-color 120ms ease, color 120ms ease;
+}
+.hs-tel-link:hover{
+  color:#FFFFFF;
+  border-bottom-color:rgba(255,255,255,0.7);
+}
+
 /* ═══════════════════════════════════════════════════════════════
    LAYOUT SHELL
 ═══════════════════════════════════════════════════════════════ */
