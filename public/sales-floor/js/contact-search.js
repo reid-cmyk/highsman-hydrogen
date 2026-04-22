@@ -1,153 +1,185 @@
-// Zoho-backed contact autocomplete for the Email Templates tab.
+// Zoho-backed contact autocomplete for the sales-floor dashboard.
 // Hits /api/sales-floor-contact-search?q=... — searches Contacts + Accounts,
-// pops a dropdown, and fills the To / Contact Name / Company inputs on click.
+// pops a dropdown, and fills the form fields for whichever widget is bound.
+//
+// Used in two places:
+//   1. Compose & Send tab  → fills email-to / email-name / email-company
+//   2. Quick Email panel   → fills quick-to / quick-name
+//
+// Each widget registers itself via ContactSearch.bind(cfg). The exposed
+// event handlers (onInput/onFocus/onBlur/onKeydown) route to the correct
+// instance based on the event target's id, so legacy inline handlers
+// like oninput="ContactSearch.onInput(event)" still work.
 
 const ContactSearch = (() => {
   const ENDPOINT = '/api/sales-floor-contact-search';
   const MIN_CHARS = 2;
   const DEBOUNCE_MS = 220;
 
-  let debounceTimer = null;
-  let lastQuery = '';
-  let results = [];
-  let highlightIdx = -1;
-  let abortController = null;
+  // Per-instance state keyed by the search input's id.
+  const instances = new Map();
 
   function $(id) { return document.getElementById(id); }
 
-  function onFocus() {
-    const q = $('contact-search-input').value.trim();
-    if (q.length >= MIN_CHARS && results.length) showResults();
+  function bind(cfg) {
+    if (!cfg || !cfg.inputId || !cfg.resultsId) return;
+    instances.set(cfg.inputId, {
+      cfg,
+      debounceTimer: null,
+      lastQuery: '',
+      results: [],
+      highlightIdx: -1,
+      abortController: null,
+    });
   }
 
-  function onBlur() {
-    // Slight delay so click on a result registers before close.
-    setTimeout(hideResults, 180);
+  function forEvent(e) {
+    const id = e && e.target && e.target.id;
+    return id ? instances.get(id) : null;
+  }
+
+  function onFocus(e) {
+    const inst = forEvent(e);
+    if (!inst) return;
+    const q = $(inst.cfg.inputId)?.value.trim() || '';
+    if (q.length >= MIN_CHARS && inst.results.length) showResults(inst);
+  }
+
+  function onBlur(e) {
+    const inst = forEvent(e);
+    if (!inst) return;
+    // Slight delay so a click on a result registers before we hide.
+    setTimeout(() => hideResults(inst), 180);
   }
 
   function onInput(e) {
+    const inst = forEvent(e);
+    if (!inst) return;
     const q = e.target.value.trim();
     if (q.length < MIN_CHARS) {
-      results = [];
-      hideResults();
+      inst.results = [];
+      hideResults(inst);
       return;
     }
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => runSearch(q), DEBOUNCE_MS);
+    clearTimeout(inst.debounceTimer);
+    inst.debounceTimer = setTimeout(() => runSearch(inst, q), DEBOUNCE_MS);
   }
 
   function onKeydown(e) {
-    if (!results.length) return;
+    const inst = forEvent(e);
+    if (!inst || !inst.results.length) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      highlightIdx = Math.min(highlightIdx + 1, results.length - 1);
-      renderResults();
+      inst.highlightIdx = Math.min(inst.highlightIdx + 1, inst.results.length - 1);
+      renderResults(inst);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      highlightIdx = Math.max(highlightIdx - 1, 0);
-      renderResults();
+      inst.highlightIdx = Math.max(inst.highlightIdx - 1, 0);
+      renderResults(inst);
     } else if (e.key === 'Enter') {
-      if (highlightIdx >= 0 && results[highlightIdx]) {
+      if (inst.highlightIdx >= 0 && inst.results[inst.highlightIdx]) {
         e.preventDefault();
-        pick(results[highlightIdx]);
+        pick(inst, inst.results[inst.highlightIdx]);
       }
     } else if (e.key === 'Escape') {
-      hideResults();
+      hideResults(inst);
     }
   }
 
-  async function runSearch(q) {
-    if (q === lastQuery) return;
-    lastQuery = q;
+  async function runSearch(inst, q) {
+    if (q === inst.lastQuery) return;
+    inst.lastQuery = q;
 
-    if (abortController) abortController.abort();
-    abortController = new AbortController();
+    if (inst.abortController) inst.abortController.abort();
+    inst.abortController = new AbortController();
 
-    const spinner = $('contact-search-spinner');
+    const spinner = inst.cfg.spinnerId ? $(inst.cfg.spinnerId) : null;
     spinner?.classList.remove('hidden');
 
     try {
       const res = await fetch(`${ENDPOINT}?q=${encodeURIComponent(q)}`, {
         credentials: 'same-origin',
-        signal: abortController.signal,
+        signal: inst.abortController.signal,
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      results = Array.isArray(data.results) ? data.results : [];
-      highlightIdx = results.length ? 0 : -1;
+      inst.results = Array.isArray(data.results) ? data.results : [];
+      inst.highlightIdx = inst.results.length ? 0 : -1;
 
-      if (!results.length) {
-        renderEmpty(data.ok === false ? (data.error || 'Search unavailable') : 'No matches');
+      if (!inst.results.length) {
+        renderEmpty(inst, data.ok === false ? (data.error || 'Search unavailable') : 'No matches');
       } else {
-        renderResults();
+        renderResults(inst);
       }
     } catch (err) {
       if (err.name === 'AbortError') return;
       console.error('[contact-search]', err);
-      renderEmpty('Search unavailable');
+      renderEmpty(inst, 'Search unavailable');
     } finally {
       spinner?.classList.add('hidden');
     }
   }
 
-  function renderResults() {
-    const box = $('contact-search-results');
+  function renderResults(inst) {
+    const box = $(inst.cfg.resultsId);
     if (!box) return;
-    box.innerHTML = results.map((r, i) => rowHtml(r, i)).join('');
+    box.innerHTML = inst.results.map((r, i) => rowHtml(r, i, inst.highlightIdx)).join('');
     Array.from(box.querySelectorAll('[data-idx]')).forEach((el) => {
-      el.addEventListener('mousedown', (e) => {
-        e.preventDefault();
+      el.addEventListener('mousedown', (ev) => {
+        ev.preventDefault();
         const idx = Number(el.getAttribute('data-idx'));
-        pick(results[idx]);
+        pick(inst, inst.results[idx]);
       });
       el.addEventListener('mouseenter', () => {
-        highlightIdx = Number(el.getAttribute('data-idx'));
-        updateHighlight();
+        inst.highlightIdx = Number(el.getAttribute('data-idx'));
+        updateHighlight(inst);
       });
     });
-    showResults();
+    showResults(inst);
   }
 
-  function renderEmpty(msg) {
-    const box = $('contact-search-results');
+  function renderEmpty(inst, msg) {
+    const box = $(inst.cfg.resultsId);
     if (!box) return;
     box.innerHTML = `<div class="hs-contact-search-empty">${escapeHtml(msg)}</div>`;
-    showResults();
+    showResults(inst);
   }
 
-  function updateHighlight() {
-    const box = $('contact-search-results');
+  function updateHighlight(inst) {
+    const box = $(inst.cfg.resultsId);
     if (!box) return;
     Array.from(box.querySelectorAll('[data-idx]')).forEach((el) => {
       const idx = Number(el.getAttribute('data-idx'));
-      el.classList.toggle('is-active', idx === highlightIdx);
+      el.classList.toggle('is-active', idx === inst.highlightIdx);
     });
   }
 
-  function showResults() {
-    $('contact-search-results')?.classList.remove('hidden');
-  }
+  function showResults(inst) { $(inst.cfg.resultsId)?.classList.remove('hidden'); }
+  function hideResults(inst) { $(inst.cfg.resultsId)?.classList.add('hidden'); }
 
-  function hideResults() {
-    $('contact-search-results')?.classList.add('hidden');
-  }
-
-  function pick(r) {
+  function pick(inst, r) {
     if (!r) return;
-    // Fill the email form.
-    const toEl = $('email-to');
-    const nameEl = $('email-name');
-    const companyEl = $('email-company');
-    if (toEl) toEl.value = r.email || '';
-    if (nameEl) nameEl.value = (r.name || '').split(' ')[0] || r.name || '';
-    if (companyEl) companyEl.value = r.accountName || '';
+    const fill = inst.cfg.fill || {};
+
+    if (fill.to) {
+      const el = $(fill.to);
+      if (el) el.value = r.email || '';
+    }
+    if (fill.name) {
+      const el = $(fill.name);
+      if (el) el.value = (r.name || '').split(' ')[0] || r.name || '';
+    }
+    if (fill.company) {
+      const el = $(fill.company);
+      if (el) el.value = r.accountName || '';
+    }
 
     // Reflect selection in the search input.
-    const input = $('contact-search-input');
+    const input = $(inst.cfg.inputId);
     if (input) input.value = r.name + (r.accountName ? ` · ${r.accountName}` : '');
 
-    // Nudge the hint so the rep knows it worked.
-    const hint = $('contact-search-hint');
+    // Update the hint if the widget exposes one.
+    const hint = inst.cfg.hintId ? $(inst.cfg.hintId) : null;
     if (hint) {
       if (!r.email) {
         hint.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="color:#F5E400"></i> No email on this contact in Zoho — add one before sending.`;
@@ -156,10 +188,17 @@ const ContactSearch = (() => {
       }
     }
 
-    hideResults();
+    // Auto-select a template on the Quick Email widget when the caller
+    // asked for it — leaves the template dropdown on whatever the rep
+    // had already picked if they chose one before searching.
+    if (inst.cfg.afterPick && typeof inst.cfg.afterPick === 'function') {
+      try { inst.cfg.afterPick(r); } catch (err) { console.error('[contact-search] afterPick', err); }
+    }
+
+    hideResults(inst);
   }
 
-  function rowHtml(r, idx) {
+  function rowHtml(r, idx, highlightIdx) {
     const active = idx === highlightIdx ? ' is-active' : '';
     const buyer = r.isBuyer
       ? '<span class="hs-contact-pill hs-contact-pill-buyer">Buyer</span>'
@@ -191,5 +230,33 @@ const ContactSearch = (() => {
       .replace(/'/g, '&#39;');
   }
 
-  return {onInput, onFocus, onBlur, onKeydown};
+  // Auto-register both known widgets on DOM ready. Keeps HTML inline
+  // handlers working with zero extra boilerplate in app.js.
+  function autoBind() {
+    if (document.getElementById('contact-search-input') && !instances.has('contact-search-input')) {
+      bind({
+        inputId: 'contact-search-input',
+        resultsId: 'contact-search-results',
+        spinnerId: 'contact-search-spinner',
+        hintId: 'contact-search-hint',
+        fill: {to: 'email-to', name: 'email-name', company: 'email-company'},
+      });
+    }
+    if (document.getElementById('quick-contact-search-input') && !instances.has('quick-contact-search-input')) {
+      bind({
+        inputId: 'quick-contact-search-input',
+        resultsId: 'quick-contact-search-results',
+        spinnerId: 'quick-contact-search-spinner',
+        hintId: 'quick-contact-search-hint',
+        fill: {to: 'quick-to', name: 'quick-name'},
+      });
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', autoBind);
+  } else {
+    autoBind();
+  }
+
+  return {bind, onInput, onFocus, onBlur, onKeydown};
 })();

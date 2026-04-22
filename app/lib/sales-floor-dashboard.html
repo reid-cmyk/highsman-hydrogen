@@ -267,6 +267,32 @@
               <span class="hs-card-title">Quick Email</span>
             </div>
             <div class="p-5 space-y-3">
+              <!-- Zoho-backed contact / dispensary lookup. Auto-fills To + Name. -->
+              <div class="hs-contact-search">
+                <label class="hs-label" for="quick-contact-search-input">Search contact or dispensary</label>
+                <div class="hs-contact-search-wrap">
+                  <i class="fa-solid fa-magnifying-glass hs-contact-search-icon"></i>
+                  <input
+                    id="quick-contact-search-input"
+                    type="text"
+                    class="hs-input hs-contact-search-input"
+                    placeholder='e.g. "Jane Smith" or "RISE Paterson"'
+                    autocomplete="off"
+                    oninput="ContactSearch.onInput(event)"
+                    onfocus="ContactSearch.onFocus(event)"
+                    onblur="ContactSearch.onBlur(event)"
+                    onkeydown="ContactSearch.onKeydown(event)"
+                  />
+                  <span id="quick-contact-search-spinner" class="hs-contact-search-spinner hidden">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                  </span>
+                </div>
+                <div id="quick-contact-search-results" class="hs-contact-search-results hidden" role="listbox"></div>
+                <div id="quick-contact-search-hint" class="hs-helper-note">
+                  Pick a contact to auto-fill To + Name from Zoho.
+                </div>
+              </div>
+
               <select id="quick-template" class="hs-input">
                 <option value="">— Pick a template —</option>
                 <option value="intro">Intro / First Touch</option>

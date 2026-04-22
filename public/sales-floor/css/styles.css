@@ -737,25 +737,37 @@ select.hs-input{
   padding-right:32px;
   color-scheme:dark;
 }
-/* Force high-contrast dropdown options — the native <option> popup
-   composites on the OS window, not the page, so the translucent --chip
-   background leaks out and the white text goes unreadable. Pin a hard
-   Space Black bg + white text so every template in the Quick Email
-   "Pick a template" dropdown stays legible. */
-select.hs-input option{
-  background-color:#0B0B0B;
-  color:#FFFFFF;
+/* Force high-contrast dropdown options on EVERY native <select> on the
+   sales-floor pages. The native <option> popup composites on the OS
+   window background, not the page — the translucent --chip background
+   of .hs-input leaks out and white-on-white text goes unreadable.
+   Pinning a hard Space Black bg + white text on the bare `option`
+   selector covers .hs-input AND any future selects we add (filter
+   menus, Tailwind-styled selects, etc.). */
+select{
+  color-scheme:dark;
+}
+option{
+  background-color:#0B0B0B !important;
+  color:#FFFFFF !important;
   font-family:var(--barlow);
   font-size:13.5px;
   padding:8px 10px;
 }
-select.hs-input option:checked,
-select.hs-input option:hover{
-  background-color:#1A1A1A;
-  color:#FFFFFF;
+option:checked,
+option:hover,
+option:focus{
+  background-color:#1A1A1A !important;
+  color:#FFFFFF !important;
 }
-select.hs-input option[value=""]{
-  color:var(--gray-dim);
+option[value=""]{
+  color:#A9ACAF !important; /* Quarter Gray for placeholder option */
+}
+optgroup{
+  background-color:#0B0B0B !important;
+  color:#A9ACAF !important;
+  font-family:var(--teko);
+  letter-spacing:0.08em;
 }
 
 .hs-label{
