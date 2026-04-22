@@ -366,7 +366,13 @@ async function handleCallCompleted(env: any, c: QuoCall) {
     payload.Caller_ID = formatPhoneE164(c.from) || c.from || '';
   }
   if (contact?.id) payload.Who_Id = contact.id;
-  if (contact?.accountId) payload.What_Id = contact.accountId;
+  if (contact?.accountId) {
+    payload.What_Id = contact.accountId;
+    // Zoho v7 Calls require $se_module whenever What_Id is set — it tells
+    // Zoho which module the related record lives in (Accounts vs Deals vs
+    // anything else that can carry a Call).
+    payload.$se_module = 'Accounts';
+  }
   if (rep?.zohoOwnerId) payload.Owner = {id: rep.zohoOwnerId};
 
   const zohoId = await createZohoCall(token, payload);
