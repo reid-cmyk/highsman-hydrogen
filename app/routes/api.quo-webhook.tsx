@@ -314,6 +314,14 @@ async function handleCallCompleted(env: any, c: QuoCall) {
       rep ? `Handled by: ${rep.displayName}` : null,
     ].filter(Boolean).join('\n'),
   };
+  // Zoho v7 Calls module requires Dialled_Number (outbound) or Caller_ID (inbound).
+  // Without one of these the create returns 400 MANDATORY_NOT_FOUND.
+  if (c.direction === 'outgoing') {
+    const toRaw = Array.isArray(c.to) ? (c.to[0] || '') : (c.to || '');
+    payload.Dialled_Number = formatPhoneE164(toRaw) || toRaw || '';
+  } else {
+    payload.Caller_ID = formatPhoneE164(c.from) || c.from || '';
+  }
   if (contact?.id) payload.Who_Id = contact.id;
   if (contact?.accountId) payload.What_Id = contact.accountId;
   if (rep?.zohoOwnerId) payload.Owner = {id: rep.zohoOwnerId};
