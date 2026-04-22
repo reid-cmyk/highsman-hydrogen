@@ -213,6 +213,19 @@ async function resolveRepFromCall(
   return repByEmail(u?.email);
 }
 
+// ─── Duration formatter ─────────────────────────────────────────────────────
+// Zoho Calls.Call_Duration is a *text* field. From inspection of existing
+// records it accepts MM:SS for short calls and HH:MM:SS once you cross an
+// hour. We always emit a zero-padded value so sorts work.
+function formatCallDuration(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds || 0));
+  const hh = Math.floor(s / 3600);
+  const mm = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return hh > 0 ? `${pad(hh)}:${pad(mm)}:${pad(ss)}` : `${pad(mm)}:${pad(ss)}`;
+}
+
 // ─── Subject builder ────────────────────────────────────────────────────────
 // Quo call id goes at the END so the human-readable bit is what shows in
 // the Zoho activity timeline. The id is what we search on later when
@@ -302,11 +315,16 @@ async function handleCallCompleted(env: any, c: QuoCall) {
 
   const startISO = c.answeredAt || c.completedAt || c.createdAt || new Date().toISOString();
 
+  const durSeconds = c.duration || 0;
   const payload: any = {
     Subject: callSubject(c, contact?.name || null),
     Call_Type: zohoCallType({direction: c.direction, status: c.status}),
     Call_Start_Time: startISO,
-    Call_Duration_in_seconds: c.duration || 0,
+    // Zoho v7 Calls module requires Call_Duration as a text field in MM:SS
+    // (or HH:MM:SS) form. Call_Duration_in_seconds is optional but we send
+    // both so reports can sum cleanly.
+    Call_Duration: formatCallDuration(durSeconds),
+    Call_Duration_in_seconds: durSeconds,
     Description: [
       `Quo call ${c.id}`,
       `Status: ${c.status}`,
@@ -314,8 +332,8 @@ async function handleCallCompleted(env: any, c: QuoCall) {
       rep ? `Handled by: ${rep.displayName}` : null,
     ].filter(Boolean).join('\n'),
   };
-  // Zoho v7 Calls module requires Dialled_Number (outbound) or Caller_ID (inbound).
-  // Without one of these the create returns 400 MANDATORY_NOT_FOUND.
+  // Caller_ID / Dialled_Number aren't system_mandatory but help reps see
+  // the other party at a glance in Zoho's call view.
   if (c.direction === 'outgoing') {
     const toRaw = Array.isArray(c.to) ? (c.to[0] || '') : (c.to || '');
     payload.Dialled_Number = formatPhoneE164(toRaw) || toRaw || '';
