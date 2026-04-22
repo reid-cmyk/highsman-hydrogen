@@ -362,6 +362,21 @@ async function fetchGmailThread(
 // Extract a company domain from an email address, skipping consumer
 // providers. Mirrors the logic in api.sales-floor-gmail-thread.tsx so the
 // domain we *would* expand on is the same one we pass to the Gmail route.
+// Highsman-internal vendor / partner / 3PL domains. These show up on
+// retail-account contact lists because the retailer uses the same
+// fulfillment vendor we do, but they are NOT the retailer's own domain
+// and should never be used as the Gmail-expansion domain for a brief.
+// Adding a domain here filters it out of both the contact-email loop
+// and any Website field that happens to point at the same host.
+// Examples:
+//   - ernestready.com — Highsman's 3PL; many retail Accounts have a
+//     `Fulfillment@ernestready.com` contact because Ernest Ready routes
+//     their orders. Domain-searching @ernestready.com on Sky's inbox
+//     would surface 3PL ops chatter, not customer correspondence.
+const BRIEF_VENDOR_DOMAINS = new Set<string>([
+  'ernestready.com',
+]);
+
 const BRIEF_CONSUMER_DOMAINS = new Set<string>([
   'gmail.com', 'googlemail.com', 'yahoo.com', 'ymail.com', 'rocketmail.com',
   'hotmail.com', 'live.com', 'outlook.com', 'msn.com', 'aol.com',
@@ -375,7 +390,9 @@ function leadDomainForExpansion(email: string): string | null {
   if (at < 1 || at === email.length - 1) return null;
   const domain = email.slice(at + 1).trim().toLowerCase();
   if (!domain || !domain.includes('.')) return null;
-  return BRIEF_CONSUMER_DOMAINS.has(domain) ? null : domain;
+  if (BRIEF_CONSUMER_DOMAINS.has(domain)) return null;
+  if (BRIEF_VENDOR_DOMAINS.has(domain)) return null;
+  return domain;
 }
 
 // Parse a website URL into a bare, business-domain-only host. Strips
@@ -398,7 +415,9 @@ function websiteToDomain(raw: string | undefined | null): string | null {
   // Must look like a real domain: has a dot, has no @, no invalid chars.
   if (!s || !s.includes('.') || s.includes('@')) return null;
   if (!/^[a-z0-9.\-]+$/.test(s)) return null;
-  return BRIEF_CONSUMER_DOMAINS.has(s) ? null : s;
+  if (BRIEF_CONSUMER_DOMAINS.has(s)) return null;
+  if (BRIEF_VENDOR_DOMAINS.has(s)) return null;
+  return s;
 }
 
 // Pick the best company domain across every signal we have on the lead.
