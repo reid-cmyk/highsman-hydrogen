@@ -24,7 +24,7 @@ import {getRepFromRequest, type SalesRep} from '../lib/sales-floor-reps';
 //   Account → { Id, Account_Name, Industry, Billing_City, Billing_State,
 //               Account_State, Shipping_State, _state,
 //               Total_Orders_Count, First_Order_Date, Last_Order_Date,
-//               _orderCount,
+//               First_Order_Number, _orderCount,
 //               Phone, contacts: Contact[], buyer: Contact|null }
 //               NOTE: `_state` is the canonical 2-letter code the client's
 //               state-filter tabs key off of. Highsman's Zoho has three state
@@ -264,12 +264,80 @@ async function fetchDeals(accessToken: string, ownerId: string | null) {
     Deal_Name: d.Deal_Name || '',
     // Zoho returns lookup fields as objects {name, id}; flatten to the string app.js uses.
     Account_Name: typeof d.Account_Name === 'object' ? d.Account_Name?.name || '' : d.Account_Name || '',
+    // Preserve the linked Account's id alongside the flattened name so the
+    // first-order-number enrichment below can match a Deal to its Account
+    // without relying on fuzzy name comparison.
+    _accountId: typeof d.Account_Name === 'object' ? (d.Account_Name?.id || '') : '',
     Stage: d.Stage || '',
     Amount: d.Amount || 0,
     Closing_Date: d.Closing_Date || '',
     Contact_Name: typeof d.Contact_Name === 'object' ? d.Contact_Name?.name || '' : d.Contact_Name || '',
     Description: d.Description || '',
   }));
+}
+
+// ─── First-order number enrichment ───────────────────────────────────────────
+// For each Account where _orderCount === 1 we surface the LeafLink order
+// number on the "New Customers" card. Highsman doesn't keep a dedicated
+// Order_Number field anywhere — the LeafLink→Zoho integration encodes it in
+// the Deal_Name string with the pattern `{Account_Name} - Order #{N}`. This
+// pass walks the already-fetched deals array (so we don't spend a round-trip
+// per account) and picks the earliest Deal for each first-order account.
+const ORDER_NUMBER_PATTERN = /-\s*Order\s*#(\d+)\b/i;
+
+function parseOrderNumberFromDealName(name: string | null | undefined): string {
+  const m = ORDER_NUMBER_PATTERN.exec(String(name || ''));
+  return m && m[1] ? m[1] : '';
+}
+
+// Returns a Map<accountId, {orderNumber, closingDate}> for accounts whose
+// single Deal we can identify from the deals array. Accounts without a
+// matching Deal (or where the Deal_Name doesn't carry "#N") are absent from
+// the map and the client just renders the date-only line.
+function buildFirstOrderIndex(deals: any[]): Map<string, {orderNumber: string; closingDate: string}> {
+  const byAcct = new Map<string, any[]>();
+  for (const d of deals) {
+    const acctId = d._accountId || '';
+    if (!acctId) continue;
+    if (!byAcct.has(acctId)) byAcct.set(acctId, []);
+    byAcct.get(acctId)!.push(d);
+  }
+  const out = new Map<string, {orderNumber: string; closingDate: string}>();
+  for (const [acctId, list] of byAcct.entries()) {
+    // Earliest Closing_Date wins — that's the first order. Deals with a blank
+    // Closing_Date sort to the bottom so we don't pick a stub over a real
+    // closed deal.
+    const sorted = list.slice().sort((a, b) => {
+      const ad = a.Closing_Date || '9999-12-31';
+      const bd = b.Closing_Date || '9999-12-31';
+      return ad < bd ? -1 : ad > bd ? 1 : 0;
+    });
+    // Prefer a Deal whose name actually carries "Order #N" — fall back to the
+    // earliest Deal otherwise so we still surface date context even without
+    // a number.
+    const withNumber = sorted.find((d) => parseOrderNumberFromDealName(d.Deal_Name));
+    const chosen = withNumber || sorted[0];
+    if (!chosen) continue;
+    out.set(acctId, {
+      orderNumber: parseOrderNumberFromDealName(chosen.Deal_Name),
+      closingDate: chosen.Closing_Date || '',
+    });
+  }
+  return out;
+}
+
+function attachFirstOrderNumbers(accounts: any[], deals: any[]) {
+  const index = buildFirstOrderIndex(deals);
+  for (const a of accounts) {
+    if (Number(a._orderCount || 0) !== 1) continue;
+    const hit = index.get(a.id);
+    if (!hit) continue;
+    if (hit.orderNumber) a.First_Order_Number = hit.orderNumber;
+    // If First_Order_Date wasn't populated on the Account, use the Deal's
+    // Closing_Date as a fallback so the card always has something to show.
+    if (!a.First_Order_Date && hit.closingDate) a.First_Order_Date = hit.closingDate;
+  }
+  return accounts;
 }
 
 // MA-state filter shared by the Accounts + Contacts fetchers. Reid asked us to
@@ -414,6 +482,12 @@ async function fetchAccounts(accessToken: string, ownerId: string | null) {
       Total_Orders_Count: a.Total_Orders_Count ?? null,
       First_Order_Date: a.First_Order_Date || null,
       Last_Order_Date: a.Last_Order_Date || null,
+      // Populated by attachFirstOrderNumbers() downstream. Stays null when the
+      // account isn't a first-order account or when the matching Deal_Name
+      // doesn't carry an "Order #N" token. The New Customers card reads this
+      // to render the exact LeafLink order number on Zoho-sourced cards
+      // (NJ fallback + NY/RI/MO).
+      First_Order_Number: null as string | null,
       // Canonical "how many orders" signal. Coerce null → 0 so client filters
       // can safely compare with >= 1 without null-checking. This is the ONLY
       // field the Accounts-tab filter should read.
@@ -594,6 +668,13 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       c._accountId ? accountIds.has(c._accountId) : true,
     );
     attachContactsToAccounts(accounts, visibleContacts);
+
+    // Pull the LeafLink order number off the matching earliest Deal so the
+    // New Customers card can render "Order #N · {date}" on Zoho-sourced cards
+    // (NJ fallback + NY / RI / MO). Uses the deals array we already fetched
+    // — no extra round-trip. Accounts without a matching Deal_Name that
+    // carries "Order #N" stay as "First order {date}" (graceful fallback).
+    attachFirstOrderNumbers(accounts, deals);
 
     return json(
       {

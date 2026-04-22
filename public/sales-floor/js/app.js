@@ -612,6 +612,10 @@ function combinedNewCustomers() {
       state: stateCode,
       firstOrderDate: a.First_Order_Date || null,
       lastOrderDate: a.Last_Order_Date || null,
+      // Parsed server-side from Deal_Name ("{Account} - Order #N"). Stays
+      // null when the Deal_Name didn't carry a "#N" — card then falls back
+      // to the date-only line.
+      firstOrderNumber: a.First_Order_Number || null,
       // 4/20 cohort still applies: if the single first order landed on/after
       // 4/20/2026, mark it. Matches the LeafLink-side cohort rule.
       is420Cohort: isOnOrAfter420(a.First_Order_Date || a.Last_Order_Date),
@@ -717,9 +721,21 @@ function renderZohoNewCustCard(c, idx) {
   const buyerEmail = buyer?.Email || acct?.Email || '';
   const buyerName = buyer?._fullName || c.customerName || '';
 
-  const orderLine = c.firstOrderDate
-    ? `<div class="hs-newcust-order">First order ${escapeHtml(formatDate(c.firstOrderDate))}</div>`
+  // Mirror the LeafLink card's "Order #N · {status}" format when we have the
+  // order number from Zoho — gives the rep the same reference they'd get from
+  // the LeafLink pipeline. Falls back to "First order {date}" when the
+  // matching Deal_Name didn't carry a #N token.
+  const dateLabel = c.firstOrderDate
+    ? escapeHtml(formatDate(c.firstOrderDate))
     : '';
+  let orderLine = '';
+  if (c.firstOrderNumber) {
+    orderLine = dateLabel
+      ? `<div class="hs-newcust-order">Order #${escapeHtml(String(c.firstOrderNumber))} · ${dateLabel}</div>`
+      : `<div class="hs-newcust-order">Order #${escapeHtml(String(c.firstOrderNumber))}</div>`;
+  } else if (dateLabel) {
+    orderLine = `<div class="hs-newcust-order">First order ${dateLabel}</div>`;
+  }
 
   const body = `
     <div class="hs-newcust-copy">
