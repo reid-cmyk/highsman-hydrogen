@@ -700,7 +700,8 @@ async function selectBuyer(contactId) {
     // Roll back in-memory and re-render so the card matches Zoho's truth again.
     acc.buyer = prevBuyer;
     if (newBuyer && prevBuyer && newBuyer.id !== prevBuyer.id) {
-      newBuyer._jobRole = newBuyer.Job_Role || newBuyer.Title || '';
+      // Job_Role is the only buyer-role signal — never fall back to Title.
+      newBuyer._jobRole = newBuyer.Job_Role || '';
     }
     renderAccounts();
     toast(`Could not save buyer: ${err.message}`, 'error');

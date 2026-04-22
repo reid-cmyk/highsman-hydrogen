@@ -7,17 +7,18 @@ import {getRepFromRequest} from '../lib/sales-floor-reps';
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/sales-floor-set-account-buyer
 //   body: { contactId: string, accountId?: string }
-//   → { ok, contactId, jobRole, fieldUsed: 'Job_Role'|'Title' }
+//   → { ok, contactId, jobRole }
 //
 // Stamps the chosen Contact as the buyer for their account by writing the
-// canonical role string into Zoho. Highsman uses "Job Role" — which on most
-// orgs is the standard `Title` field with a custom display label, but on
-// some it's a custom picklist `Job_Role`. We try Job_Role first; if Zoho
-// rejects it (INVALID_DATA), we fall back to writing Title.
+// canonical role string into the contact's `Job_Role` field in Zoho.
+//
+// Highsman's Zoho org uses a dedicated custom Job_Role picklist for buyer-
+// role tracking. `Title` is a separate generic field that frequently holds
+// noisy values (e.g. "Owner", "Manager") and must NEVER be used as the
+// buyer-role signal — never read it, never write to it.
 //
 // We don't clear any other contact's role — multiple people can carry buyer
-// duties at the same account, and we don't want to wipe a legitimate Title
-// out from under a contact just because the rep is naming a primary.
+// duties at the same account.
 //
 // Auth: same /sales-floor cookie as the rest of the dashboard. Returns 401
 // for unauthenticated callers, 400 for malformed input, 502 if Zoho rejects.
@@ -54,11 +55,9 @@ async function getZohoToken(env: any): Promise<string> {
   return cachedToken!;
 }
 
-// PUT a single field on a Contact. Returns true on 2xx, false on 400 (caller
-// can decide whether to fall back to a different field).
-async function putContactField(
+// PUT the Job_Role field on a Contact.
+async function putContactJobRole(
   contactId: string,
-  field: 'Job_Role' | 'Title',
   value: string,
   token: string,
 ): Promise<{ok: boolean; status: number; body: string}> {
@@ -69,7 +68,7 @@ async function putContactField(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      data: [{[field]: value}],
+      data: [{Job_Role: value}],
       // Don't fire workflow on every buyer reassignment — these get noisy
       // when a rep is reorganizing a few accounts in one sitting.
       trigger: [],
@@ -104,14 +103,10 @@ export async function action({request, context}: ActionFunctionArgs) {
   try {
     const token = await getZohoToken(env);
 
-    // Try Job_Role first (likely the custom picklist if Highsman's set up
-    // that way). On INVALID_DATA / 400, fall back to Title.
-    let result = await putContactField(contactId, 'Job_Role', CANONICAL_BUYER_ROLE, token);
-    let fieldUsed: 'Job_Role' | 'Title' = 'Job_Role';
-    if (!result.ok && result.status === 400) {
-      result = await putContactField(contactId, 'Title', CANONICAL_BUYER_ROLE, token);
-      fieldUsed = 'Title';
-    }
+    // Job_Role is the canonical buyer-role field on Highsman's Zoho org.
+    // No fallback to Title — it's a separate generic field that's never the
+    // buyer-role signal.
+    const result = await putContactJobRole(contactId, CANONICAL_BUYER_ROLE, token);
     if (!result.ok) {
       throw new Error(
         `Zoho update Contact (${result.status}): ${result.body.slice(0, 300)}`,
@@ -122,7 +117,6 @@ export async function action({request, context}: ActionFunctionArgs) {
       ok: true,
       contactId,
       jobRole: CANONICAL_BUYER_ROLE,
-      fieldUsed,
     });
   } catch (err: any) {
     console.error('[set-account-buyer] failed', contactId, err.message);

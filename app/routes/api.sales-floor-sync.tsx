@@ -273,11 +273,12 @@ async function fetchAccounts(accessToken: string, ownerId: string | null) {
 // Pull every contact attached to an account so we can (a) surface the real
 // buyer on the account card, (b) let the rep swap who the buyer is.
 //
-// "Job Role" in Highsman's Zoho instance might be the relabeled standard
-// `Title` field OR a custom `Job_Role` picklist. We try Job_Role first and
-// fall back to Title-only if Zoho rejects the field (INVALID_DATA / 400). Both
-// fields are normalized into `_jobRole` on the returned object so the rest of
-// the code stays simple.
+// Highsman's Zoho org has a dedicated custom `Job_Role` picklist that holds
+// the role the contact owns at the shop ("Purchasing & Inventory Management",
+// "Owner", "Manager on Duty", etc.). `Title` is a separate generic field that
+// often holds noisy values (e.g. "Owner") and must NEVER be treated as the
+// buyer-role signal. `_jobRole` is sourced ONLY from `Job_Role`. If a contact
+// has no Job_Role, that's "no role on file" — full stop.
 const CONTACT_BASE_FIELDS = [
   'First_Name',
   'Last_Name',
@@ -285,32 +286,19 @@ const CONTACT_BASE_FIELDS = [
   'Phone',
   'Mobile',
   'Title',
+  'Job_Role',
   'Account_Name',
   'Modified_Time',
 ];
 
 async function fetchContacts(accessToken: string, ownerId: string | null) {
-  // First attempt: include the custom Job_Role field. If Zoho's Contacts
-  // module doesn't have it, the call fails with 400 + INVALID_DATA and we
-  // retry without it.
-  let hasJobRole = true;
-  let url = zohoModuleUrl('Contacts', ownerId, [...CONTACT_BASE_FIELDS, 'Job_Role'], 200);
+  const url = zohoModuleUrl('Contacts', ownerId, CONTACT_BASE_FIELDS, 200);
 
-  let res = await fetch(url.toString(), {
+  const res = await fetch(url.toString(), {
     headers: {Authorization: `Zoho-oauthtoken ${accessToken}`},
   });
 
-  if (res.status === 400) {
-    // Most likely "invalid column name" because Job_Role doesn't exist on
-    // this org's Contacts module. Retry without it.
-    hasJobRole = false;
-    url = zohoModuleUrl('Contacts', ownerId, CONTACT_BASE_FIELDS, 200);
-    res = await fetch(url.toString(), {
-      headers: {Authorization: `Zoho-oauthtoken ${accessToken}`},
-    });
-  }
-
-  if (res.status === 204) return {contacts: [], hasJobRole};
+  if (res.status === 204) return {contacts: []};
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`Zoho contacts fetch failed (${res.status}): ${text.slice(0, 300)}`);
@@ -319,8 +307,9 @@ async function fetchContacts(accessToken: string, ownerId: string | null) {
   const contacts = (data.data || []).map((c: any) => {
     const accountId = c.Account_Name?.id || null;
     const accountName = c.Account_Name?.name || '';
-    // Job_Role wins if present; otherwise fall back to standard Title.
-    const jobRole = (hasJobRole ? c.Job_Role : null) || c.Title || '';
+    // Job Role only — Title is held separately for display, never the
+    // buyer-role signal.
+    const jobRole = c.Job_Role || '';
     const fn = c.First_Name || '';
     const ln = c.Last_Name || '';
     return {
@@ -332,21 +321,22 @@ async function fetchContacts(accessToken: string, ownerId: string | null) {
       Phone: c.Phone || '',
       Mobile: c.Mobile || '',
       Title: c.Title || '',
-      Job_Role: hasJobRole ? c.Job_Role || '' : '',
+      Job_Role: jobRole,
       _jobRole: jobRole,
       _accountId: accountId,
       _accountName: accountName,
       Modified_Time: c.Modified_Time || null,
     };
   });
-  return {contacts, hasJobRole};
+  return {contacts};
 }
 
 // ─── Buyer detection ─────────────────────────────────────────────────────────
-// We treat any contact whose Job_Role/Title contains "buyer", "purchas" (catches
+// We treat any contact whose Job_Role contains "buyer", "purchas" (catches
 // "Purchasing", "Purchaser"), or "inventory" (catches "Inventory Management")
 // as a candidate buyer. Exact match on the canonical "Purchasing & Inventory
-// Management" wins over loose matches when both exist.
+// Management" wins over loose matches when both exist. Title is never read
+// here — it's a separate generic field full of noise like "Owner".
 const CANONICAL_BUYER_ROLE = 'Purchasing & Inventory Management';
 
 function isBuyerRole(role: string | null | undefined): boolean {
@@ -438,7 +428,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       }),
       fetchContacts(accessToken, ownerId).catch((e) => {
         console.error('[sales-floor-sync] contacts fetch failed:', e.message);
-        return {contacts: [], hasJobRole: false};
+        return {contacts: []};
       }),
     ]);
 
@@ -465,7 +455,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
             accounts: accounts.length,
             contacts: visibleContacts.length,
           },
-          contactFieldMode: contactsResult.hasJobRole ? 'job_role' : 'title',
+          contactFieldMode: 'job_role',
           rep: rep ? {id: rep.id, firstName: rep.firstName, scoped: !!ownerId} : null,
         },
       },
