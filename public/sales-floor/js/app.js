@@ -832,7 +832,11 @@ function textBuyerByPhone(phone, name) {
 function renderAccounts() {
   let list = accounts;
   if (currentAccountState && currentAccountState !== 'all') {
-    list = list.filter(a => normalizeStateCode(a.Billing_State) === currentAccountState);
+    // `_state` is the server-resolved canonical state (Account_State picklist
+    // first, Billing_State fallback, Shipping_State last). Filtering on
+    // Billing_State alone used to hide records where the picklist said "RI"
+    // but billing was blank or the long-form "Rhode Island".
+    list = list.filter(a => normalizeStateCode(a._state || a.Billing_State) === currentAccountState);
   }
   const q = document.getElementById('account-search')?.value?.toLowerCase();
   if (q) list = list.filter(a =>
@@ -852,7 +856,12 @@ function renderAccounts() {
   el.innerHTML = list.map((a) => {
     const idx = accounts.indexOf(a);
     const subtitle = a.Industry || '';
-    const location = [a.Billing_City, a.Billing_State].filter(Boolean).join(', ');
+    // Display the canonical 2-letter state (from _state) instead of whatever
+    // shape Billing_State happens to be in — keeps cards consistent ("Warwick,
+    // RI" everywhere instead of a mix of "Warwick, Rhode Island" and
+    // "Warwick, RI") and hides blank-billing records cleanly.
+    const stateLabel = a._state || normalizeStateCode(a.Billing_State) || '';
+    const location = [a.Billing_City, stateLabel].filter(Boolean).join(', ');
 
     // Buyer takes precedence over the account-level Email/Phone. The buyer's
     // contact info is the data the rep actually wants to act on — calling the
@@ -1002,7 +1011,10 @@ function renderLeadStateTabs() {
 function renderAccountStateTabs() {
   const host = document.getElementById('account-state-tabs');
   if (!host) return;
-  const buckets = tallyStates(accounts, (a) => a.Billing_State);
+  // Bucket off the server-resolved `_state` so the tab counts match what the
+  // filter actually returns. Billing_State alone misses records where the
+  // picklist holds the real state and billing is blank / long-form.
+  const buckets = tallyStates(accounts, (a) => a._state || a.Billing_State);
   host.innerHTML = stateTabsHtml('account', buckets, currentAccountState, accounts.length);
 }
 

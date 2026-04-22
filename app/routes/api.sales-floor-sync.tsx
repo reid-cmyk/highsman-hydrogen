@@ -18,7 +18,16 @@ import {getRepFromRequest, type SalesRep} from '../lib/sales-floor-reps';
 //               Description, Modified_Time }
 //   Deal    → { id, Deal_Name, Account_Name, Stage, Amount, Closing_Date }
 //   Account → { Id, Account_Name, Industry, Billing_City, Billing_State,
+//               Account_State, Shipping_State, _state,
 //               Phone, contacts: Contact[], buyer: Contact|null }
+//               NOTE: `_state` is the canonical 2-letter code the client's
+//               state-filter tabs key off of. Highsman's Zoho has three state
+//               fields and they drift out of sync — Account_State (picklist,
+//               always a clean 2-letter code) is the authoritative signal and
+//               Billing_State/Shipping_State are only consulted as fallbacks.
+//               Historical bug: the dashboard filtered by Billing_State alone
+//               and lost ~9/10 RI accounts because Billing_State was either
+//               "Rhode Island" (long form) or null on most records.
 //   Contact → { id, _fullName, Email, Phone, Mobile, Title, Role_Title,
 //               _jobRole, _accountId, _accountName }
 //               NOTE: "Job Role" in Zoho's UI has api_name `Role_Title`.
@@ -229,6 +238,52 @@ function isExcludedState(state: string | null | undefined): boolean {
   return EXCLUDED_STATES.has(String(state || '').trim());
 }
 
+// Normalize whatever state value we're handed — "Rhode Island", "rhode island",
+// "RI", "ri" — down to a clean 2-letter uppercase code. Mirrors the client-side
+// normalizeStateCode() in public/sales-floor/js/app.js so server + client agree
+// on what "the state" is. Anything we can't resolve comes back as '' so the
+// caller can fall through to another field.
+const LONG_TO_CODE: Record<string, string> = {
+  alabama: 'AL', alaska: 'AK', arizona: 'AZ', arkansas: 'AR', california: 'CA',
+  colorado: 'CO', connecticut: 'CT', delaware: 'DE', florida: 'FL', georgia: 'GA',
+  hawaii: 'HI', idaho: 'ID', illinois: 'IL', indiana: 'IN', iowa: 'IA',
+  kansas: 'KS', kentucky: 'KY', louisiana: 'LA', maine: 'ME', maryland: 'MD',
+  massachusetts: 'MA', michigan: 'MI', minnesota: 'MN', mississippi: 'MS', missouri: 'MO',
+  montana: 'MT', nebraska: 'NE', nevada: 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
+  'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND',
+  ohio: 'OH', oklahoma: 'OK', oregon: 'OR', pennsylvania: 'PA', 'rhode island': 'RI',
+  'south carolina': 'SC', 'south dakota': 'SD', tennessee: 'TN', texas: 'TX',
+  utah: 'UT', vermont: 'VT', virginia: 'VA', washington: 'WA', 'west virginia': 'WV',
+  wisconsin: 'WI', wyoming: 'WY', 'district of columbia': 'DC',
+};
+
+function normalizeStateCode(raw: string | null | undefined): string {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  const lower = s.toLowerCase();
+  if (LONG_TO_CODE[lower]) return LONG_TO_CODE[lower];
+  if (/^[A-Za-z]{2}$/.test(s)) return s.toUpperCase();
+  return '';
+}
+
+// Authoritative state resolver. Highsman's Zoho keeps three state fields on
+// each Account and they routinely drift out of sync:
+//   Account_State    — custom picklist, always a clean 2-letter code
+//   Billing_State    — free-text, mix of "Rhode Island" / "RI" / null
+//   Shipping_State   — free-text, same mess
+// Account_State is the only reliably normalized field, so prefer it first.
+// Billing_State is the historical fallback (what the UI used to filter on).
+// Shipping_State is the last resort for records that have no billing address
+// but were entered via a warehouse-shipping flow.
+function resolveAccountState(a: any): string {
+  return (
+    normalizeStateCode(a.Account_State) ||
+    normalizeStateCode(a.Billing_State) ||
+    normalizeStateCode(a.Shipping_State) ||
+    ''
+  );
+}
+
 // Test-record filter — drops anything whose name begins with "test" as a whole
 // word ("Test", "Test Dispensary", "TEST-ACCOUNT", "test 123"). Uses a
 // negative-lookahead on the next char so real names like "Testament" or
@@ -254,6 +309,12 @@ async function fetchAccounts(accessToken: string, ownerId: string | null) {
       'Billing_Street',
       'Billing_City',
       'Billing_State',
+      // Account_State is the custom picklist ("Account State" in the Zoho UI)
+      // that Highsman ops uses as the canonical state signal — always a clean
+      // 2-letter code. Billing_State is frequently the long form or null, so
+      // filtering on Billing_State alone was silently hiding records.
+      'Account_State',
+      'Shipping_State',
       'Account_Type',
       'Description',
       'Modified_Time',
@@ -272,8 +333,15 @@ async function fetchAccounts(accessToken: string, ownerId: string | null) {
   const data = await res.json();
   return (data.data || [])
     // Drop MA accounts before we even shape them — keeps the response leaner
-    // and prevents any downstream join from reintroducing them.
-    .filter((a: any) => !isExcludedState(a.Billing_State))
+    // and prevents any downstream join from reintroducing them. Check ALL three
+    // state fields: some records have MA on Account_State but blank billing,
+    // others have "Massachusetts" on Billing_State but nothing on the picklist.
+    .filter(
+      (a: any) =>
+        !isExcludedState(a.Account_State) &&
+        !isExcludedState(a.Billing_State) &&
+        !isExcludedState(a.Shipping_State),
+    )
     // Drop anything whose Account_Name starts with "Test" — those are
     // throwaway records seeded while wiring up workflows.
     .filter((a: any) => !isTestName(a.Account_Name))
@@ -286,6 +354,13 @@ async function fetchAccounts(accessToken: string, ownerId: string | null) {
       Billing_Street: a.Billing_Street || '',
       Billing_City: a.Billing_City || '',
       Billing_State: a.Billing_State || '',
+      Account_State: a.Account_State || '',
+      Shipping_State: a.Shipping_State || '',
+      // Canonical 2-letter state code the client filter + tab strip read.
+      // Account_State first, then Billing_State, then Shipping_State — all
+      // normalized through the same lookup the client uses. If every field
+      // is blank this is '' and the record lands in the "—" (unknown) bucket.
+      _state: resolveAccountState(a),
       Phone: a.Phone || '',
       Website: a.Website || '',
       Account_Type: a.Account_Type || '',
