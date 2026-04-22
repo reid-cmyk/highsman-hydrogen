@@ -204,10 +204,11 @@ const ContactSearch = (() => {
       ? '<span class="hs-contact-pill hs-contact-pill-buyer">Buyer</span>'
       : '';
     const subParts = [];
-    // Prefer Job Role (the picklist) for the sub-line — it's the field reps
-    // actually care about ("Purchasing & Inventory Management", "Owner", etc.).
-    // Fall back to the generic Job Title only when Role is blank.
-    const roleLine = r.role || r.title;
+    // Only show Job Role (the Role_Title picklist) on the sub-line. Job Title
+    // is a separate noisy text field on Highsman's Zoho — never use it as a
+    // role display signal. If Role is blank, we show nothing here rather than
+    // leaking the wrong field.
+    const roleLine = r.role;
     if (roleLine) subParts.push(escapeHtml(roleLine));
     if (r.accountName) subParts.push(escapeHtml(r.accountName));
     const locParts = [r.city, r.state].filter(Boolean);

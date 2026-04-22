@@ -16,9 +16,12 @@ import {getRepFromRequest} from '../lib/sales-floor-reps';
 // then merge, dedupe, and rank buyers first.
 //
 // Buyer signal: the "Job Role" picklist (api_name `Role_Title`) is the
-// canonical role field on Highsman's Zoho org. We read Role_Title first
-// and only fall back to the noisier `Title` field when Role_Title is
-// empty, so buyer detection no longer leaks "Owner" etc. from Title.
+// canonical — and ONLY — role field on Highsman's Zoho org. `Title` and
+// `Job_Title` are separate generic text fields that frequently hold noise
+// like "PM Assistant", "Owner", or "Budtender" that are unrelated to who
+// actually handles purchasing. We never use them for the buyer signal —
+// not as a fallback, not for display. A contact with empty Role_Title is
+// "no role on file" and the UI should say exactly that.
 //
 // NB — Contact search is intentionally NOT scoped by rep Owner. Zoho's
 // `/search` endpoint accepts one of `word|email|phone|criteria` at a time, so
@@ -82,17 +85,13 @@ const BUYER_WORDS = [
   'inventory', 'merchandis',
 ];
 
-// Prefer Role_Title (the "Job Role" picklist) over Title. We only consider
-// Title as a fallback for records that genuinely have no role set.
-function isBuyerRole(
-  role: string | null | undefined,
-  title: string | null | undefined,
-): boolean {
+// Role_Title (the "Job Role" picklist) is the ONLY buyer signal. No Title
+// fallback — that field is generic noise ("PM Assistant", "Owner", etc.)
+// and has misclassified buyers repeatedly in the past.
+function isBuyerRole(role: string | null | undefined): boolean {
   const primary = String(role || '').toLowerCase();
-  if (primary) return BUYER_WORDS.some((w) => primary.includes(w));
-  const fallback = String(title || '').toLowerCase();
-  if (!fallback) return false;
-  return BUYER_WORDS.some((w) => fallback.includes(w));
+  if (!primary) return false;
+  return BUYER_WORDS.some((w) => primary.includes(w));
 }
 
 function fullName(c: any): string {
@@ -146,7 +145,7 @@ async function searchContacts(query: string, token: string): Promise<ContactResu
     accountId: lookupId(c.Account_Name),
     city: c.Mailing_City || null,
     state: c.Mailing_State || null,
-    isBuyer: isBuyerRole(c.Role_Title, c.Title),
+    isBuyer: isBuyerRole(c.Role_Title),
     source: 'contact',
   }));
 }
@@ -213,7 +212,7 @@ async function fetchAccountContacts(
     accountId: account.id,
     city: c.Mailing_City || account.city,
     state: c.Mailing_State || account.state,
-    isBuyer: isBuyerRole(c.Role_Title, c.Title),
+    isBuyer: isBuyerRole(c.Role_Title),
     source: 'account',
   }));
 }
