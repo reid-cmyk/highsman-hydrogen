@@ -767,9 +767,12 @@ function renderZohoNewCustCard(c, idx) {
   if (c.vibesEligible) {
     // NJ → Brand Team Onboarding is the primary CTA. Uses firstOrderDate as
     // the ship-date fallback (server accepts it for Zoho-sourced cards).
-    const safeName = JSON.stringify(c.customerName || '');
-    const safeOrder = JSON.stringify(c.firstOrderNumber || '');
-    const safeDate = JSON.stringify(c.firstOrderDate || '');
+    // HTML-escape the JSON-stringified args so the interior double-quotes
+    // don't close out the onclick="..." attribute. Without escapeAttr, the
+    // attribute parser truncates at the first " and the handler never runs.
+    const safeName = escapeAttr(JSON.stringify(c.customerName || ''));
+    const safeOrder = escapeAttr(JSON.stringify(c.firstOrderNumber || ''));
+    const safeDate = escapeAttr(JSON.stringify(c.firstOrderDate || ''));
     actions.push(
       `<button class="hs-newcust-btn is-primary" data-newcust-idx="${idx}" onclick="markZohoReadyToBrandTeam('${acctId}', ${safeName}, ${safeOrder}, ${safeDate}, ${idx})"><i class="fa-solid fa-route"></i> Brand Team Onboarding</button>`,
     );
@@ -854,10 +857,13 @@ function renderNewCustCard(c, idx) {
     } else {
       pillCls = 'is-ready';
       pillText = 'Order Ready';
-      const safeName = JSON.stringify(c.customerName || '');
-      const safeOrder = JSON.stringify(c.firstOrderNumber || '');
-      const safeShip = JSON.stringify(c.actualShipDate || '');
-      const safeStatus = JSON.stringify(c.firstOrderStatus || '');
+      // HTML-escape the JSON-stringified args so the interior double-quotes
+      // don't close out the onclick="..." attribute. Without escapeAttr, the
+      // attribute parser truncates at the first " and the handler never runs.
+      const safeName = escapeAttr(JSON.stringify(c.customerName || ''));
+      const safeOrder = escapeAttr(JSON.stringify(c.firstOrderNumber || ''));
+      const safeShip = escapeAttr(JSON.stringify(c.actualShipDate || ''));
+      const safeStatus = escapeAttr(JSON.stringify(c.firstOrderStatus || ''));
       body = `
         <div class="hs-newcust-copy">
           Ship date locked. Send the brand team — Sky drops in to walk product and stock the shelves.
