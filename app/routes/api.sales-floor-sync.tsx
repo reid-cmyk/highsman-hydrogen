@@ -15,7 +15,11 @@ import {getRepFromRequest, type SalesRep} from '../lib/sales-floor-reps';
 // Shapes preserved exactly to match what app.js renderers already expect:
 //   Lead    → { id, _fullName, First_Name, Last_Name, Company, Email, Phone,
 //               _status: 'hot'|'warm'|'new'|'cold', Lead_Status, Lead_Source,
-//               Description, Modified_Time }
+//               Description, State, Market_State, _state, Modified_Time }
+//               NOTE: `Market_State` is Highsman's custom "Market State" picklist
+//               (Zoho api_name `States`), a clean 2-letter code. `_state` is the
+//               canonical code the client's state-filter tabs key off — prefers
+//               Market_State, falls back to the address State field.
 //   Deal    → { id, Deal_Name, Account_Name, Stage, Amount, Closing_Date }
 //   Account → { Id, Account_Name, Industry, Billing_City, Billing_State,
 //               Account_State, Shipping_State, _state,
@@ -183,10 +187,13 @@ async function fetchLeads(accessToken: string, ownerId: string | null) {
       'Lead_Status',
       'Lead_Source',
       'Description',
-      // State + City pulled in for the new state filter tabs on /sales-floor.
-      // Reps want a one-click way to scope their list to a specific market
-      // (NJ, NY, RI, etc.) so they can plan a route or call sweep for the day.
+      // State + City are the legacy address fields. Market_State (api_name
+      // `States`) is Highsman's custom "Market State" picklist — always a clean
+      // 2-letter code, which is why it's the authoritative signal for the
+      // /sales-floor state filter tabs. The address `State` is kept as a
+      // fallback for records predating the picklist rollout.
       'State',
+      'States',
       'City',
       'Modified_Time',
       'Created_Time',
@@ -211,6 +218,14 @@ async function fetchLeads(accessToken: string, ownerId: string | null) {
     Lead_Source: l.Lead_Source || '',
     Description: l.Description || '',
     State: l.State || '',
+    // `States` is Zoho's api_name for the custom "Market State" picklist.
+    // Renamed on our shape to `Market_State` so the client doesn't read a
+    // plural field name that looks like a typo.
+    Market_State: l.States || '',
+    // Canonical 2-letter code the client state-filter tabs read. Market State
+    // wins because it's always clean; address State is the fallback for
+    // legacy records where the picklist is blank.
+    _state: normalizeStateCode(l.States) || normalizeStateCode(l.State) || '',
     City: l.City || '',
     Modified_Time: l.Modified_Time || null,
   }));

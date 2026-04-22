@@ -376,9 +376,11 @@ function renderLeads(filter = currentFilter) {
   currentFilter = filter;
   let list = currentFilter === 'all' ? leads : leads.filter(l => l._status === currentFilter);
   // State narrowing — applies on top of the status filter so reps can drill
-  // down to e.g. "Hot leads in NJ" without losing either filter.
+  // down to e.g. "Hot leads in NJ" without losing either filter. Keys off the
+  // server-resolved `_state` (Market_State picklist first, then address State)
+  // so the filter matches what the tabs counted.
   if (currentLeadState && currentLeadState !== 'all') {
-    list = list.filter(l => normalizeStateCode(l.State) === currentLeadState);
+    list = list.filter(l => (l._state || normalizeStateCode(l.State)) === currentLeadState);
   }
   const q = document.getElementById('lead-search')?.value?.toLowerCase();
   if (q) list = list.filter(l =>
@@ -1005,7 +1007,11 @@ function tallyStates(records, getter) {
 function renderLeadStateTabs() {
   const host = document.getElementById('lead-state-tabs');
   if (!host) return;
-  const buckets = tallyStates(leads, (l) => l.State);
+  // Bucket off the server-resolved `_state` (Market_State picklist first,
+  // address State as fallback) so tab counts match what the filter returns.
+  // Address `State` alone is noisy — half the records have the city or the
+  // long-form state in there.
+  const buckets = tallyStates(leads, (l) => l._state || l.State);
   host.innerHTML = stateTabsHtml('lead', buckets, currentLeadState, leads.length);
 }
 function renderAccountStateTabs() {
