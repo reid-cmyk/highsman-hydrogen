@@ -18,6 +18,15 @@ import {getRepFromRequest} from '../lib/sales-floor-reps';
 // "Owner", "Manager") and must NEVER be used as the buyer-role signal —
 // never read them, never write to them.
 //
+// ⚠️  PICKLIST actual_value vs display_value ⚠️
+// The Role_Title picklist option the shop-buyer role maps to has:
+//   actual_value  = 'Buyer / Manager'
+//   display_value = 'Purchasing & Inventory Management (Buyer, Procurement, Inventory Manager)'
+// Zoho's PUT endpoint requires the `actual_value`. Writing the display
+// string used to silently fail with PICKLIST_VALUE_NOT_CONFIGURED (502 to
+// the caller) — which is why the picker appeared to "do nothing" on
+// HudHaus in Apr 2026. Always write the actual_value.
+//
 // We don't clear any other contact's role — multiple people can carry buyer
 // duties at the same account.
 //
@@ -25,7 +34,8 @@ import {getRepFromRequest} from '../lib/sales-floor-reps';
 // for unauthenticated callers, 400 for malformed input, 502 if Zoho rejects.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CANONICAL_BUYER_ROLE = 'Purchasing & Inventory Management';
+// Zoho picklist `actual_value` — NOT the display label. See header note.
+const CANONICAL_BUYER_ROLE = 'Buyer / Manager';
 
 let cachedToken: string | null = null;
 let tokenExpiresAt = 0;

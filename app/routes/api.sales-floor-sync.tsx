@@ -458,10 +458,15 @@ async function fetchContacts(accessToken: string, ownerId: string | null) {
 // We treat any contact whose Role_Title (the "Job Role" picklist) contains
 // "buyer", "purchas" (catches "Purchasing", "Purchaser"), or "inventory"
 // (catches "Inventory Management") as a candidate buyer. Exact match on the
-// canonical "Purchasing & Inventory Management" wins over loose matches when
-// both exist. Title / Job_Title are never read here — they're separate
-// generic text fields full of noise like "Owner".
-const CANONICAL_BUYER_ROLE = 'Purchasing & Inventory Management';
+// canonical buyer role wins over loose matches when both exist. Title /
+// Job_Title are never read here — they're separate generic text fields full
+// of noise like "Owner".
+//
+// NOTE: The Role_Title picklist option for shop-buyer stores an
+// `actual_value` of 'Buyer / Manager' but a `display_value` of
+// 'Purchasing & Inventory Management (Buyer, Procurement, Inventory Manager)'.
+// Zoho v7 returns the `actual_value` on read, so we compare against that.
+const CANONICAL_BUYER_ROLE = 'Buyer / Manager';
 
 function isBuyerRole(role: string | null | undefined): boolean {
   const r = String(role || '').toLowerCase();

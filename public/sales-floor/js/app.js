@@ -1143,8 +1143,14 @@ async function selectBuyer(contactId) {
   // Optimistic UI — update the in-memory account so the card flips to the new
   // buyer immediately. We snapshot the previous buyer in case the API rejects
   // and we need to roll back without forcing a full re-sync.
+  //
+  // NOTE: 'Buyer / Manager' is the Zoho Role_Title picklist `actual_value`;
+  // its display label is 'Purchasing & Inventory Management (Buyer,
+  // Procurement, Inventory Manager)'. We set the actual_value here so the
+  // optimistic state matches what Zoho will return on the next sync (no
+  // flicker between pre- and post-sync values).
   const prevBuyer = acc.buyer;
-  newBuyer._jobRole = 'Purchasing & Inventory Management';
+  newBuyer._jobRole = 'Buyer / Manager';
   acc.buyer = newBuyer;
   renderAccounts();
   closeBuyerPicker();
