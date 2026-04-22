@@ -238,14 +238,23 @@ type EmailForContext = {
   date: string;
   direction: 'incoming' | 'outgoing';
   from: string;
+  to?: string;
   subject: string;
   snippet: string;
+  matchType: 'exact' | 'domain';
 };
 function renderEmailForContext(e: EmailForContext): string {
   const dir = e.direction === 'outgoing' ? 'OUT' : 'IN';
   const subj = (e.subject || '(no subject)').slice(0, 120);
   const snip = (e.snippet || '').replace(/\s+/g, ' ').trim().slice(0, 300);
-  return `  • [${shortIso(e.date)}] EMAIL ${dir} — "${subj}" — ${snip}`;
+  // Domain matches = correspondence with a DIFFERENT contact at the same
+  // shop (e.g. the previous buyer). Flag them so Claude can say "you spoke
+  // with Mike 3 weeks ago about reorders" rather than implying the current
+  // lead Dustin said it.
+  const domainFlag = e.matchType === 'domain'
+    ? ` [OTHER CONTACT AT SAME DOMAIN — counterparty: ${e.from}]`
+    : '';
+  return `  • [${shortIso(e.date)}] EMAIL ${dir}${domainFlag} — "${subj}" — ${snip}`;
 }
 
 // Pull Gmail messages by calling our own /api/sales-floor-gmail-thread route.
@@ -254,15 +263,32 @@ function renderEmailForContext(e: EmailForContext): string {
 async function fetchGmailThread(
   request: Request,
   counterpartyEmail: string,
+  domainOverride: string | null,
   limit: number,
-): Promise<{messages: EmailForContext[]; configured: boolean; error?: string}> {
-  if (!isValidEmail(counterpartyEmail)) {
-    return {messages: [], configured: true};
+): Promise<{
+  messages: EmailForContext[];
+  configured: boolean;
+  queriedEmail: string | null;
+  queriedDomain: string | null;
+  error?: string;
+}> {
+  if (!isValidEmail(counterpartyEmail) && !domainOverride) {
+    return {
+      messages: [],
+      configured: true,
+      queriedEmail: null,
+      queriedDomain: null,
+    };
   }
   try {
     const origin = new URL(request.url).origin;
     const target = new URL(`${origin}/api/sales-floor-gmail-thread`);
-    target.searchParams.set('email', counterpartyEmail);
+    if (isValidEmail(counterpartyEmail)) {
+      target.searchParams.set('email', counterpartyEmail);
+    }
+    if (domainOverride) {
+      target.searchParams.set('domain', domainOverride);
+    }
     target.searchParams.set('limit', String(limit));
 
     const res = await fetch(target.toString(), {
@@ -271,17 +297,29 @@ async function fetchGmailThread(
         Cookie: request.headers.get('Cookie') || '',
       },
     });
-    if (!res.ok) return {messages: [], configured: false, error: `http ${res.status}`};
+    if (!res.ok) {
+      return {
+        messages: [],
+        configured: false,
+        queriedEmail: counterpartyEmail || null,
+        queriedDomain: domainOverride,
+        error: `http ${res.status}`,
+      };
+    }
     const data = (await res.json().catch(() => ({}))) as {
       ok?: boolean;
       configured?: boolean;
       error?: string;
+      queriedEmail?: string | null;
+      queriedDomain?: string | null;
       messages?: Array<{
         date: string;
         direction: 'incoming' | 'outgoing';
         from: string;
+        to?: string;
         subject: string;
         snippet: string;
+        matchType?: 'exact' | 'domain';
       }>;
     };
     return {
@@ -289,15 +327,47 @@ async function fetchGmailThread(
         date: m.date,
         direction: m.direction,
         from: m.from,
+        to: m.to,
         subject: m.subject,
         snippet: m.snippet,
+        // Default to 'exact' for older clients that don't tag — this is a
+        // hedge for cached responses during the deploy gap; future messages
+        // always have matchType.
+        matchType: m.matchType || 'exact',
       })),
       configured: data.configured !== false,
+      queriedEmail: data.queriedEmail ?? (counterpartyEmail || null),
+      queriedDomain: data.queriedDomain ?? domainOverride,
       error: data.error,
     };
   } catch (err: any) {
-    return {messages: [], configured: false, error: err.message || 'gmail fetch failed'};
+    return {
+      messages: [],
+      configured: false,
+      queriedEmail: counterpartyEmail || null,
+      queriedDomain: domainOverride,
+      error: err.message || 'gmail fetch failed',
+    };
   }
+}
+
+// Extract a company domain from an email address, skipping consumer
+// providers. Mirrors the logic in api.sales-floor-gmail-thread.tsx so the
+// domain we *would* expand on is the same one we pass to the Gmail route.
+const BRIEF_CONSUMER_DOMAINS = new Set<string>([
+  'gmail.com', 'googlemail.com', 'yahoo.com', 'ymail.com', 'rocketmail.com',
+  'hotmail.com', 'live.com', 'outlook.com', 'msn.com', 'aol.com',
+  'icloud.com', 'me.com', 'mac.com', 'protonmail.com', 'proton.me', 'pm.me',
+  'fastmail.com', 'fastmail.fm', 'zoho.com', 'gmx.com', 'mail.com',
+  'tutanota.com', 'comcast.net', 'att.net', 'verizon.net', 'sbcglobal.net',
+  'cox.net', 'charter.net',
+]);
+function leadDomainForExpansion(email: string): string | null {
+  const at = email.lastIndexOf('@');
+  if (at < 1 || at === email.length - 1) return null;
+  const domain = email.slice(at + 1).trim().toLowerCase();
+  if (!domain || !domain.includes('.')) return null;
+  return BRIEF_CONSUMER_DOMAINS.has(domain) ? null : domain;
 }
 
 // Build the user-content block for Claude — all evidence, nothing else.
@@ -309,8 +379,14 @@ function buildClaudeContext(args: {
   emails: EmailForContext[];
   quoConfigured: boolean;
   gmailConfigured: boolean;
+  emailQueried: string | null;
+  domainQueried: string | null;
 }): string {
-  const {rep, lead, calls, sms, emails, quoConfigured, gmailConfigured} = args;
+  const {
+    rep, lead, calls, sms, emails,
+    quoConfigured, gmailConfigured,
+    emailQueried, domainQueried,
+  } = args;
   const today = new Date().toISOString();
   const leadName = fullNameOf(lead);
   const company = lead.Company || '(no company on record)';
@@ -366,15 +442,38 @@ function buildClaudeContext(args: {
   lines.push('');
 
   // Email history
+  const exactEmails = emails.filter((e) => e.matchType === 'exact');
+  const domainEmails = emails.filter((e) => e.matchType === 'domain');
   lines.push('EMAIL HISTORY (Gmail):');
   if (!gmailConfigured) {
     lines.push('  (Gmail not configured for this rep — no email data available)');
-  } else if (!email) {
+  } else if (!email && !domainQueried) {
     lines.push('  (no email on lead — skipped inbox lookup)');
   } else if (!hasEmails) {
-    lines.push('  (no prior emails with this address)');
+    if (domainQueried) {
+      lines.push(
+        `  (no prior emails with ${email || 'this lead'} OR any other contact at ${domainQueried})`,
+      );
+    } else {
+      lines.push(`  (no prior emails with ${email || 'this lead'})`);
+    }
   } else {
-    for (const e of emails.slice(0, 8)) lines.push(renderEmailForContext(e));
+    // Surface the search scope up-front so Claude knows which messages are
+    // with the current buyer vs. other people at the same shop.
+    if (domainQueried) {
+      lines.push(
+        `  SEARCH SCOPE: exact email "${email || '(n/a)'}" + all contacts at domain "@${domainQueried}"`,
+      );
+      lines.push(
+        `  (${exactEmails.length} message${exactEmails.length === 1 ? '' : 's'} with the current lead, ${domainEmails.length} with OTHER contact${domainEmails.length === 1 ? '' : 's'} at the same shop)`,
+      );
+    }
+    for (const e of emails.slice(0, 10)) lines.push(renderEmailForContext(e));
+    if (domainEmails.length > 0) {
+      lines.push(
+        '  NOTE: Messages tagged [OTHER CONTACT AT SAME DOMAIN] are with different people at the same company. Attribute those correctly — do not imply the current lead said them.',
+      );
+    }
   }
   lines.push('');
 
@@ -501,15 +600,32 @@ export async function action({request, context}: ActionFunctionArgs) {
         })
       : Promise.resolve([]);
 
-  const gmailPromise = emailAddr
-    ? fetchGmailThread(request, emailAddr, 8)
-    : Promise.resolve({messages: [], configured: false});
+  // Domain expansion: if the lead has a business email (foo@companyshop.com),
+  // also pull any correspondence Sky had with OTHER contacts at the same
+  // domain. Catches the "old buyer rolled off, new buyer took over" case
+  // where the exact-email search would return zero even though there's
+  // plenty of relevant shop history to surface.
+  const expandDomain = emailAddr ? leadDomainForExpansion(emailAddr) : null;
+  const gmailPromise = (emailAddr || expandDomain)
+    ? fetchGmailThread(request, emailAddr, expandDomain, 10)
+    : Promise.resolve({
+        messages: [],
+        configured: false,
+        queriedEmail: null,
+        queriedDomain: null,
+      });
 
   const [calls, sms, gmail] = await Promise.all([
     callsPromise,
     smsPromise,
     gmailPromise,
   ]);
+
+  // Split email counts by match type so the UI (and Reid's debugging) can
+  // tell whether history came from the exact address vs. from another
+  // contact at the same shop.
+  const exactEmailCount = gmail.messages.filter((m) => m.matchType === 'exact').length;
+  const domainEmailCount = gmail.messages.filter((m) => m.matchType === 'domain').length;
 
   const sources = {
     quoConfigured: quoOk,
@@ -518,8 +634,11 @@ export async function action({request, context}: ActionFunctionArgs) {
     callCount: calls.length,
     smsCount: sms.length,
     emailCount: gmail.messages.length,
+    exactEmailCount,
+    domainEmailCount,
     phoneQueried: phoneE164 || null,
-    emailQueried: emailAddr || null,
+    emailQueried: gmail.queriedEmail ?? (emailAddr || null),
+    domainQueried: gmail.queriedDomain ?? null,
   };
 
   // ─── If Claude isn't configured, return the deterministic fallback ───────
@@ -540,6 +659,8 @@ export async function action({request, context}: ActionFunctionArgs) {
     emails: gmail.messages,
     quoConfigured: quoOk,
     gmailConfigured: gmail.configured,
+    emailQueried: gmail.queriedEmail ?? (emailAddr || null),
+    domainQueried: gmail.queriedDomain ?? null,
   });
 
   try {

@@ -73,6 +73,53 @@ async function getGmailAccessToken(repId: string, cfg: RepEnv): Promise<string> 
   return data.access_token;
 }
 
+// Consumer email domains — skip domain-wide expansion on these, otherwise a
+// lead with a gmail.com address pulls every gmail.com contact from the rep's
+// inbox. Add more here as we see false positives in practice.
+const CONSUMER_EMAIL_DOMAINS = new Set<string>([
+  'gmail.com',
+  'googlemail.com',
+  'yahoo.com',
+  'ymail.com',
+  'rocketmail.com',
+  'hotmail.com',
+  'live.com',
+  'outlook.com',
+  'msn.com',
+  'aol.com',
+  'icloud.com',
+  'me.com',
+  'mac.com',
+  'protonmail.com',
+  'proton.me',
+  'pm.me',
+  'fastmail.com',
+  'fastmail.fm',
+  'zoho.com',
+  'gmx.com',
+  'mail.com',
+  'tutanota.com',
+  'comcast.net',
+  'att.net',
+  'verizon.net',
+  'sbcglobal.net',
+  'cox.net',
+  'charter.net',
+]);
+
+function extractDomain(email: string): string | null {
+  const at = email.lastIndexOf('@');
+  if (at < 1 || at === email.length - 1) return null;
+  const domain = email.slice(at + 1).trim().toLowerCase();
+  if (!domain || !domain.includes('.')) return null;
+  return domain;
+}
+
+function isBusinessDomain(domain: string | null): boolean {
+  if (!domain) return false;
+  return !CONSUMER_EMAIL_DOMAINS.has(domain);
+}
+
 // Gmail message metadata shape (only the fields we care about).
 type GmailMessageMeta = {
   id: string;
@@ -95,6 +142,10 @@ type ShapedEmail = {
   to: string;
   subject: string;
   snippet: string;
+  // 'exact' = matched the lead's specific email.
+  // 'domain' = matched another contact at the same company (domain expansion).
+  // Lets the Brief flag that a thread is with a different person at the shop.
+  matchType: 'exact' | 'domain';
 };
 
 function headerValue(m: GmailMessageMeta, name: string): string {
@@ -128,6 +179,33 @@ async function listMessageIds(
   if (!res.ok) {
     const t = await res.text().catch(() => '');
     throw new Error(`Gmail list ${res.status}: ${t.slice(0, 300)}`);
+  }
+  const data = (await res.json().catch(() => ({}))) as {
+    messages?: Array<{id: string; threadId: string}>;
+  };
+  return data.messages || [];
+}
+
+// Domain-wide search — "(from:@domain.com OR to:@domain.com)". Lets the Brief
+// surface conversations the rep has had with OTHER contacts at the same shop
+// (old buyer who rolled off, purchasing lead, AP clerk, etc.). Only safe on
+// business domains — see CONSUMER_EMAIL_DOMAINS.
+async function listMessageIdsForDomain(
+  token: string,
+  domain: string,
+  maxResults: number,
+): Promise<Array<{id: string; threadId: string}>> {
+  const q = `(from:@${domain} OR to:@${domain})`;
+  const url = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
+  url.searchParams.set('q', q);
+  url.searchParams.set('maxResults', String(maxResults));
+
+  const res = await fetch(url.toString(), {
+    headers: {Authorization: `Bearer ${token}`},
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    throw new Error(`Gmail domain list ${res.status}: ${t.slice(0, 300)}`);
   }
   const data = (await res.json().catch(() => ({}))) as {
     messages?: Array<{id: string; threadId: string}>;
@@ -179,6 +257,7 @@ function shape(
   m: GmailMessageMeta,
   repEmail: string,
   counterpartyEmail: string,
+  matchType: 'exact' | 'domain',
 ): ShapedEmail {
   const from = headerValue(m, 'From');
   const to = headerValue(m, 'To');
@@ -221,6 +300,7 @@ function shape(
     to,
     subject,
     snippet: decodeHtmlEntities(m.snippet || '').slice(0, 400),
+    matchType,
   };
 }
 
@@ -249,59 +329,126 @@ export async function loader({request, context}: LoaderFunctionArgs) {
 
   const url = new URL(request.url);
   const counterpartyEmail = String(url.searchParams.get('email') || '').trim();
+  // Domain override — caller may already know the lead's company domain
+  // (e.g. from parsing Account_Name's website) or we'll derive it from the
+  // counterparty email. Letting it be explicit keeps the route useful when
+  // the buyer's email is a consumer address but the shop has a real domain.
+  const explicitDomain = String(url.searchParams.get('domain') || '').trim().toLowerCase();
   const rawLimit = Number(url.searchParams.get('limit') || '8');
   const limit = Math.max(1, Math.min(15, Number.isFinite(rawLimit) ? rawLimit : 8));
 
-  if (!isValidEmail(counterpartyEmail)) {
+  if (!isValidEmail(counterpartyEmail) && !explicitDomain) {
     return json(
       {
         ok: true,
         configured: true,
         messages: [],
         queriedEmail: counterpartyEmail || null,
-        note: 'No valid email provided — skipped Gmail lookup.',
+        queriedDomain: null,
+        note: 'No valid email or domain provided — skipped Gmail lookup.',
       },
       {status: 200, headers: {'Cache-Control': 'no-store'}},
     );
   }
 
+  // Resolve the domain to expand against. Prefer explicit param; fall back
+  // to parsing the lead's email. Skip when domain is consumer (gmail.com,
+  // yahoo.com, etc.) — domain expansion on those would pull every unrelated
+  // gmail conversation.
+  const derivedDomain = extractDomain(counterpartyEmail);
+  const candidateDomain = (explicitDomain || derivedDomain || '').toLowerCase() || null;
+  const expansionDomain = isBusinessDomain(candidateDomain) ? candidateDomain : null;
+
   try {
     const token = await getGmailAccessToken(rep.id, repEnv);
-    const ids = await listMessageIds(token, counterpartyEmail, limit);
 
-    if (ids.length === 0) {
+    // Run exact-email and domain searches in parallel. Gmail's list API is
+    // cheap (just IDs), so running both always is fine. Per-search limit is
+    // the full `limit` — we de-dupe and trim after.
+    const [exactIds, domainIds] = await Promise.all([
+      isValidEmail(counterpartyEmail)
+        ? listMessageIds(token, counterpartyEmail, limit).catch((err) => {
+            console.warn('[gmail-thread] exact search failed:', err.message);
+            return [];
+          })
+        : Promise.resolve([] as Array<{id: string; threadId: string}>),
+      expansionDomain
+        ? listMessageIdsForDomain(token, expansionDomain, limit * 2).catch((err) => {
+            console.warn('[gmail-thread] domain search failed:', err.message);
+            return [];
+          })
+        : Promise.resolve([] as Array<{id: string; threadId: string}>),
+    ]);
+
+    // De-dupe: exact matches win over domain matches for the same message id.
+    // (The exact-email search result is a strict subset of the domain search
+    // for business domains, so this catches those duplicates.)
+    const seenIds = new Set<string>();
+    type TaggedId = {id: string; threadId: string; matchType: 'exact' | 'domain'};
+    const tagged: TaggedId[] = [];
+    for (const m of exactIds) {
+      if (seenIds.has(m.id)) continue;
+      seenIds.add(m.id);
+      tagged.push({id: m.id, threadId: m.threadId, matchType: 'exact'});
+    }
+    for (const m of domainIds) {
+      if (seenIds.has(m.id)) continue;
+      seenIds.add(m.id);
+      tagged.push({id: m.id, threadId: m.threadId, matchType: 'domain'});
+    }
+
+    if (tagged.length === 0) {
       return json(
         {
           ok: true,
           configured: true,
           messages: [],
-          queriedEmail: counterpartyEmail,
+          queriedEmail: counterpartyEmail || null,
+          queriedDomain: expansionDomain,
         },
         {status: 200, headers: {'Cache-Control': 'private, max-age=60'}},
       );
     }
 
     // Parallel metadata fetches — cheap, and it keeps us well within the
-    // 25s worker budget even on threads of 15 messages.
+    // 25s worker budget even on threads of 15 messages. Cap at limit*2 so
+    // we have room to trim after sorting newest-first.
+    const toFetch = tagged.slice(0, Math.max(limit * 2, limit));
     const metas = await Promise.all(
-      ids.map((m) => fetchMessageMeta(token, m.id)),
+      toFetch.map(async (t) => ({
+        meta: await fetchMessageMeta(token, t.id),
+        matchType: t.matchType,
+      })),
     );
 
     const shaped: ShapedEmail[] = [];
-    for (const meta of metas) {
+    for (const {meta, matchType} of metas) {
       if (!meta) continue;
-      shaped.push(shape(meta, repEnv.from, counterpartyEmail));
+      shaped.push(shape(meta, repEnv.from, counterpartyEmail, matchType));
     }
 
-    // Gmail's list API returns newest-first; re-sort for safety.
-    shaped.sort((a, b) => +new Date(b.date) - +new Date(a.date));
+    // Sort newest-first, but keep exact matches slightly ahead of domain
+    // matches when dates tie — in practice dates never tie, but the tiebreaker
+    // is cheap insurance that the rep's primary counterparty leads the list.
+    shaped.sort((a, b) => {
+      const delta = +new Date(b.date) - +new Date(a.date);
+      if (delta !== 0) return delta;
+      if (a.matchType === 'exact' && b.matchType !== 'exact') return -1;
+      if (b.matchType === 'exact' && a.matchType !== 'exact') return 1;
+      return 0;
+    });
+
+    // Trim to requested limit after sorting, so the top-N is whichever
+    // messages were newest — not skewed by which bucket we pulled from.
+    const trimmed = shaped.slice(0, limit);
 
     return json(
       {
         ok: true,
         configured: true,
-        messages: shaped,
-        queriedEmail: counterpartyEmail,
+        messages: trimmed,
+        queriedEmail: counterpartyEmail || null,
+        queriedDomain: expansionDomain,
       },
       {
         headers: {
@@ -319,7 +466,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         configured: true,
         error: err.message || 'Gmail thread fetch failed.',
         messages: [],
-        queriedEmail: counterpartyEmail,
+        queriedEmail: counterpartyEmail || null,
+        queriedDomain: expansionDomain,
       },
       {status: 200, headers: {'Cache-Control': 'no-store'}},
     );

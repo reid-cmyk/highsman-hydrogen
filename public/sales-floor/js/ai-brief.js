@@ -122,7 +122,20 @@ const AIBrief = (() => {
       chips.push(`<span class="brief-chip"><i class="fa-solid fa-comment-sms"></i> ${sources.smsCount} text${sources.smsCount === 1 ? '' : 's'}</span>`);
     }
     if (sources.emailCount > 0) {
-      chips.push(`<span class="brief-chip"><i class="fa-solid fa-envelope"></i> ${sources.emailCount} email${sources.emailCount === 1 ? '' : 's'}</span>`);
+      const exact = Number(sources.exactEmailCount || 0);
+      const domain = Number(sources.domainEmailCount || 0);
+      const domainLabel = esc(sources.domainQueried || 'the same shop');
+      // When domain expansion surfaced correspondence with OTHER contacts at
+      // the shop, split the chip so the rep sees that part of the history is
+      // with someone else (e.g. the previous buyer before this lead took over).
+      if (domain > 0 && exact > 0) {
+        chips.push(`<span class="brief-chip"><i class="fa-solid fa-envelope"></i> ${exact} with lead</span>`);
+        chips.push(`<span class="brief-chip" title="Correspondence with other contacts at ${domainLabel}"><i class="fa-solid fa-building"></i> ${domain} w/ other ${domain === 1 ? 'contact' : 'contacts'} @ shop</span>`);
+      } else if (domain > 0) {
+        chips.push(`<span class="brief-chip" title="Correspondence with other contacts at ${domainLabel}"><i class="fa-solid fa-building"></i> ${domain} email${domain === 1 ? '' : 's'} w/ other ${domain === 1 ? 'contact' : 'contacts'} @ shop</span>`);
+      } else {
+        chips.push(`<span class="brief-chip"><i class="fa-solid fa-envelope"></i> ${sources.emailCount} email${sources.emailCount === 1 ? '' : 's'}</span>`);
+      }
     }
     if (chips.length === 0) return '';
     return `<div class="brief-chip-row">${chips.join('')}</div>`;
