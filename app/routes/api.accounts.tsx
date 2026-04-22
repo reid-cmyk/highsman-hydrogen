@@ -105,6 +105,8 @@ async function searchAccounts(
       'Billing_Street',
       'Billing_City',
       'Billing_State',
+      'Shipping_State',
+      'Account_State',
       'Phone',
       'Email_to_book_pop_ups',
       'Link_for_Pop_Ups',
@@ -129,24 +131,47 @@ async function searchAccounts(
   }
 
   const data = await res.json();
-  const allAccounts: AccountResult[] = (data.data || []).map((acct: any): AccountResult => ({
-    id: acct.id,
-    name: acct.Account_Name,
-    city: acct.Billing_City || null,
-    state: acct.Billing_State || null,
-    street: acct.Billing_Street || null,
-    phone: acct.Phone || null,
-    popUpEmail: readCustom(acct, 'Email_to_book_pop_ups', 'Email_for_Pop_Ups'),
-    popUpLink: readCustom(acct, 'Link_for_Pop_Ups', 'Link_For_Pop_Ups'),
-    lastVisitDate: readCustom(acct, 'Visit_Date', 'Data_Collection_Last_Visit_Date'),
-    numberOfBudtenders: readNumber(acct, 'Number_of_Budtenders', 'No_of_Budtenders'),
-  }));
+  const allAccounts: AccountResult[] = (data.data || []).map((acct: any): AccountResult => {
+    // Reconcile across the 3 state fields — Billing_State is the preferred
+    // display value, but many records have it empty while Account_State (the
+    // 2-letter picklist) or Shipping_State is filled. Fall through until we
+    // find a non-empty value so the client always gets a state string.
+    const state =
+      acct.Billing_State ||
+      acct.Account_State ||
+      acct.Shipping_State ||
+      null;
+    return {
+      id: acct.id,
+      name: acct.Account_Name,
+      city: acct.Billing_City || null,
+      state,
+      street: acct.Billing_Street || null,
+      phone: acct.Phone || null,
+      popUpEmail: readCustom(acct, 'Email_to_book_pop_ups', 'Email_for_Pop_Ups'),
+      popUpLink: readCustom(acct, 'Link_for_Pop_Ups', 'Link_For_Pop_Ups'),
+      lastVisitDate: readCustom(acct, 'Visit_Date', 'Data_Collection_Last_Visit_Date'),
+      numberOfBudtenders: readNumber(acct, 'Number_of_Budtenders', 'No_of_Budtenders'),
+    };
+  });
 
-  // Post-filter for NJ when scope requires it. `word` search doesn't accept a
-  // Billing_State filter, so we do it in JS.
+  // Post-filter for NJ when scope requires it. Check ALL state fields on the
+  // raw record — not just the reconciled display value — because a record can
+  // have Account_State='NJ' while Billing_State is empty (common after CRM
+  // migrations). `word` search doesn't accept a state filter, so we do it here.
   if (scope === 'nj') {
+    const isNj = (v: any) =>
+      v === 'NJ' || v === 'New Jersey' || v === 'new jersey' || v === 'nj';
+    const rawById = new Map((data.data || []).map((a: any) => [a.id, a]));
     return allAccounts
-      .filter((a) => a.state === 'NJ' || a.state === 'New Jersey')
+      .filter((a) => {
+        const raw = rawById.get(a.id) as any;
+        return (
+          isNj(raw?.Billing_State) ||
+          isNj(raw?.Account_State) ||
+          isNj(raw?.Shipping_State)
+        );
+      })
       .slice(0, 15);
   }
   return allAccounts.slice(0, 15);
