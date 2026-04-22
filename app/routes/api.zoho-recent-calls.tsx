@@ -3,6 +3,7 @@
 // Returns the 5 most recent Zoho Calls so we can confirm the webhook wrote.
 
 import {json, type LoaderFunctionArgs} from '@shopify/remix-oxygen';
+import {getRecentWebhookEvents} from './api.quo-webhook';
 
 const FIELDS = [
   'id', 'Subject', 'Call_Type', 'Call_Start_Time', 'Call_Duration', 'Call_Status',
@@ -44,5 +45,5 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   if (!r.ok) return json({ok: false, stage: 'list', status: r.status, body: txt.slice(0, 600)});
   let body: any = {};
   try { body = JSON.parse(txt); } catch { return json({ok: false, stage: 'parse', body: txt.slice(0, 400)}); }
-  return json({ok: true, calls: body.data || []});
+  return json({ok: true, calls: body.data || [], webhookEvents: getRecentWebhookEvents()});
 }

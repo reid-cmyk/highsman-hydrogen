@@ -52,6 +52,18 @@ const quoIdToZohoCallId = new Map<string, string>(); // best-effort cache
 let cachedZohoToken: string | null = null;
 let zohoTokenExpiresAt = 0;
 
+// Last 10 errors + last 10 successes — temp diag so we can read them via
+// /api/zoho-recent-calls. Drop after #41 verified.
+type DiagEvent = {at: string; type: string; ok: boolean; detail: string};
+const recentEvents: DiagEvent[] = [];
+function recordEvent(e: DiagEvent) {
+  recentEvents.unshift(e);
+  if (recentEvents.length > 20) recentEvents.length = 20;
+}
+export function getRecentWebhookEvents() {
+  return recentEvents.slice();
+}
+
 // ─── Zoho helpers (local — webhook is a single-purpose route, no shared DI) ─
 async function getZohoToken(env: any): Promise<string> {
   const now = Date.now();
@@ -253,12 +265,14 @@ export async function action({request, context}: ActionFunctionArgs) {
     }
   } catch (err: any) {
     console.error('[quo-webhook] handler error', eventType, err.message);
+    recordEvent({at: new Date().toISOString(), type: eventType, ok: false, detail: String(err?.message || err).slice(0, 600)});
     // Returning 200 prevents endless Quo retries for permanent errors
     // (bad Zoho field, deleted contact, etc.). Transient infra issues
     // will surface in our own logs.
     return json({ok: false, error: err.message, eventType}, {status: 200});
   }
 
+  recordEvent({at: new Date().toISOString(), type: eventType, ok: true, detail: ''});
   return json({ok: true, type: eventType}, {status: 200});
 }
 
