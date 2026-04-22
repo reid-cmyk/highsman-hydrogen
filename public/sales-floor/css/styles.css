@@ -2223,3 +2223,241 @@ button:focus-visible{ outline-offset:1px; }
   color: #FCA5A5;
 }
 /* (Pill `.hs-panel-pill.is-error` already defined above — reused as-is.) */
+
+/* ═══════════════════════════════════════════════════════════════
+   CONTACT CARD — unified Leads / Accounts card system
+   -----------------------------------------------------------
+   Used by renderLeads() and renderAccounts() in app.js.
+   Three stacked regions: header (avatar + name + status),
+   meta strip (phone/email/location chips) and action bar
+   (Call / Text / Email / Brief). Mobile-first; desktop fans
+   the meta strip out horizontally.
+═══════════════════════════════════════════════════════════════ */
+.hs-contact-card{
+  background:linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
+  border:1px solid var(--line);
+  border-radius:var(--r-lg);
+  padding:16px;
+  margin-bottom:12px;
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  transition:border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  cursor:pointer;
+}
+.hs-contact-card:hover{
+  border-color:var(--line-strong);
+  transform:translateY(-1px);
+  box-shadow:0 4px 16px rgba(0,0,0,0.25);
+}
+.hs-contact-card:last-child{ margin-bottom:0; }
+
+/* ── Header ── */
+.hs-contact-header{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+.hs-contact-avatar{
+  flex-shrink:0;
+  width:44px; height:44px;
+  border-radius:50%;
+  background:var(--chip);
+  border:1px solid var(--line);
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--teko);
+  font-size:17px;
+  letter-spacing:0.04em;
+  color:var(--white);
+}
+.hs-contact-avatar.is-account{
+  background:linear-gradient(135deg, rgba(245,228,0,0.12) 0%, rgba(245,228,0,0.02) 100%);
+  border-color:rgba(245,228,0,0.25);
+  color:var(--gold);
+  font-size:16px;
+}
+.hs-contact-identity{
+  flex:1;
+  min-width:0;
+}
+.hs-contact-name{
+  font-family:var(--teko);
+  font-size:22px;
+  line-height:1.1;
+  color:var(--white);
+  letter-spacing:0.02em;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.hs-contact-sub{
+  font-family:var(--barlow);
+  font-size:12.5px;
+  color:var(--gray-dim);
+  margin-top:3px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+/* ── Status badges (hot / warm / cold / new) ── */
+.hs-contact-header .badge{
+  flex-shrink:0;
+  display:inline-flex;
+  align-items:center;
+  padding:4px 10px;
+  border-radius:999px;
+  font-family:var(--teko);
+  font-size:12px;
+  letter-spacing:0.14em;
+  text-transform:uppercase;
+  border:1px solid transparent;
+}
+.badge-hot{   background:rgba(255,59,48,0.14);  color:#FF6B63; border-color:rgba(255,59,48,0.38); }
+.badge-warm{  background:rgba(255,138,0,0.14);  color:#FFB164; border-color:rgba(255,138,0,0.38); }
+.badge-cold{  background:rgba(74,158,255,0.14); color:#7FB8FF; border-color:rgba(74,158,255,0.36); }
+.badge-new{   background:rgba(245,228,0,0.14);  color:#F5E400; border-color:rgba(245,228,0,0.36); }
+
+/* ── Meta strip (phone / email / location) ── */
+.hs-contact-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  padding-top:12px;
+  border-top:1px dashed var(--line);
+}
+.hs-contact-meta-cell{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 10px;
+  background:var(--chip);
+  border:1px solid var(--line);
+  border-radius:8px;
+  font-family:var(--barlow);
+  font-size:12.5px;
+  color:var(--gray-dim);
+  text-decoration:none;
+  max-width:100%;
+  transition:background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.hs-contact-meta-cell i{
+  color:var(--gray-dimmer);
+  font-size:11px;
+  flex-shrink:0;
+}
+a.hs-contact-meta-cell:hover{
+  background:var(--chip-strong);
+  border-color:var(--line-strong);
+  color:var(--white);
+}
+a.hs-contact-meta-cell:hover i{ color:var(--gold); }
+.hs-contact-meta-truncate{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  max-width:180px;
+}
+
+/* ── Action bar — Call · Text · Email · Brief ── */
+.hs-contact-actions{
+  display:grid;
+  grid-auto-columns:1fr;
+  grid-auto-flow:column;
+  gap:8px;
+  padding-top:12px;
+  border-top:1px solid var(--line);
+}
+.hs-action-pill{
+  appearance:none;
+  background:var(--chip);
+  border:1px solid var(--line);
+  color:var(--white);
+  font-family:var(--teko);
+  font-size:14px;
+  letter-spacing:0.12em;
+  text-transform:uppercase;
+  padding:10px 8px;
+  border-radius:8px;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  text-decoration:none;
+  transition:background 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
+  min-height:40px;
+  min-width:0;
+}
+.hs-action-pill i{ font-size:13px; }
+.hs-action-pill span{ white-space:nowrap; }
+.hs-action-pill:hover:not(.is-disabled){
+  background:var(--chip-strong);
+  border-color:var(--line-strong);
+}
+.hs-action-pill:active:not(.is-disabled){ transform:scale(0.97); }
+.hs-action-pill.is-disabled{
+  opacity:0.35;
+  cursor:not-allowed;
+}
+
+/* Per-channel color accents — subtle left border + icon tint */
+.hs-action-pill.is-call:not(.is-disabled){
+  border-left:2px solid var(--green);
+}
+.hs-action-pill.is-call:not(.is-disabled) i{ color:var(--green); }
+.hs-action-pill.is-call:hover:not(.is-disabled){
+  background:rgba(46,204,113,0.12);
+  border-color:rgba(46,204,113,0.45);
+}
+
+.hs-action-pill.is-text:not(.is-disabled){
+  border-left:2px solid var(--blue);
+}
+.hs-action-pill.is-text:not(.is-disabled) i{ color:var(--blue); }
+.hs-action-pill.is-text:hover:not(.is-disabled){
+  background:rgba(74,158,255,0.12);
+  border-color:rgba(74,158,255,0.45);
+}
+
+.hs-action-pill.is-email:not(.is-disabled){
+  border-left:2px solid var(--gold);
+}
+.hs-action-pill.is-email:not(.is-disabled) i{ color:var(--gold); }
+.hs-action-pill.is-email:hover:not(.is-disabled){
+  background:rgba(245,228,0,0.12);
+  border-color:rgba(245,228,0,0.45);
+}
+
+.hs-action-pill.is-brief:not(.is-disabled){
+  border-left:2px solid var(--purple);
+}
+.hs-action-pill.is-brief:not(.is-disabled) i{ color:var(--purple); }
+.hs-action-pill.is-brief:hover:not(.is-disabled){
+  background:rgba(184,132,255,0.12);
+  border-color:rgba(184,132,255,0.45);
+}
+
+/* ── Responsive: tighten pills on narrow phones ── */
+@media (max-width: 480px){
+  .hs-contact-card{ padding:14px; }
+  .hs-contact-name{ font-size:20px; }
+  .hs-action-pill{
+    font-size:12px;
+    padding:9px 4px;
+    letter-spacing:0.08em;
+  }
+  .hs-action-pill span{
+    /* Keep labels visible — they're small enough already, but if a rep
+       has 4-buttons-wide on a tiny phone, let the icon lead visually. */
+  }
+  .hs-contact-meta-truncate{ max-width:140px; }
+}
+
+/* When a card renders inside a list container with its own padding, drop
+   the card's outer margin so they don't stack-compound. Uses #lead-list /
+   #account-list which both already get padding from their panels. */
+#lead-list .hs-contact-card:last-child,
+#account-list .hs-contact-card:last-child{
+  margin-bottom:0;
+}

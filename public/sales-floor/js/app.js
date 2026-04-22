@@ -303,26 +303,20 @@ function renderLeads(filter = currentFilter) {
   }
   el.innerHTML = list.map((l) => {
     const idx = leads.indexOf(l);
-    return `
-    <div class="lead-row" onclick="openBrief(${idx})">
-      <div class="lead-avatar">${initials(l._fullName)}</div>
-      <div class="lead-info">
-        <div class="lead-name">${l._fullName || '—'}</div>
-        <div class="lead-company">${l.Company || '—'}</div>
-        <div class="lead-meta">${l.Email || ''}${l.Phone ? ' · <a href="tel:' + l.Phone + '" onclick="event.stopPropagation();" class="hs-tel-link">' + l.Phone + '</a>' : ''}</div>
-      </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
-        <span class="badge badge-${l._status}">${l._status}</span>
-        <div style="display:flex;gap:6px;">
-          <button onclick="event.stopPropagation(); quickEmail(${idx})" class="lead-action-btn" title="Send email">
-            <i class="fa-solid fa-envelope"></i>
-          </button>
-          <button onclick="event.stopPropagation(); openBrief(${idx})" class="lead-action-btn" title="AI Brief">
-            <i class="fa-solid fa-brain"></i> Brief
-          </button>
-        </div>
-      </div>
-    </div>`;
+    return contactCardHtml({
+      idx,
+      kind: 'lead',
+      name: l._fullName,
+      subtitle: l.Company,
+      status: l._status,
+      phone: l.Phone,
+      mobile: l.Mobile,
+      email: l.Email,
+      onOpen: `openBrief(${idx})`,
+      emailHandler: `quickEmail(${idx})`,
+      textHandler: `quickText(${idx}, 'lead')`,
+      briefHandler: `openBrief(${idx})`,
+    });
   }).join('');
 }
 
@@ -391,22 +385,22 @@ function renderAccounts() {
       </div>`;
     return;
   }
-  el.innerHTML = list.map(a => {
-    const meta = [a.Industry, a.Billing_City, a.Billing_State].filter(Boolean).join(' · ');
-    return `
-    <div class="account-row">
-      <div class="account-icon">
-        <i class="fa-solid fa-building"></i>
-      </div>
-      <div style="flex:1;min-width:0;">
-        <div class="lead-name">${a.Account_Name || '—'}</div>
-        <div class="lead-company">${meta || '—'}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-        ${a.Phone ? `<a href="tel:${a.Phone}" class="lead-action-btn" title="Call"><i class="fa-solid fa-phone"></i> ${a.Phone}</a>` : ''}
-        <button class="lead-action-btn" title="Email"><i class="fa-solid fa-envelope"></i> Email</button>
-      </div>
-    </div>`;
+  el.innerHTML = list.map((a) => {
+    const idx = accounts.indexOf(a);
+    const subtitle = a.Industry || '';
+    const location = [a.Billing_City, a.Billing_State].filter(Boolean).join(', ');
+    return contactCardHtml({
+      idx,
+      kind: 'account',
+      name: a.Account_Name,
+      subtitle,
+      location,
+      phone: a.Phone,
+      email: a.Email,
+      emailHandler: `quickEmailAccount(${idx})`,
+      textHandler: `quickText(${idx}, 'account')`,
+      briefHandler: null, // briefs are lead-only for now
+    });
   }).join('');
 }
 
@@ -452,6 +446,15 @@ function emailFromBrief() {
   document.getElementById('email-name').value = currentBriefLead._fullName || '';
   document.getElementById('email-company').value = currentBriefLead.Company || '';
   showTab('compose');
+}
+
+// Sister of emailFromBrief — opens (or starts) an SMS thread with the
+// briefed lead. Used by the Brief modal's Text button.
+function textFromBrief() {
+  if (!currentBriefLead) return;
+  const idx = leads.indexOf(currentBriefLead);
+  closeBrief();
+  if (idx >= 0) quickText(idx, 'lead');
 }
 
 // ─── Email ────────────────────────────────────────────────────────────────────
@@ -504,6 +507,211 @@ function quickEmail(idx) {
   document.getElementById('email-company').value = lead.Company || '';
   showTab('compose');
 }
+
+// ─── Account-side email shortcut ──────────────────────────────────────────────
+// Accounts don't carry a primary contact email reliably, so this primes the
+// composer with whatever the Account record has and lets the rep hit the
+// Contact Search autocomplete to pick the human inside.
+function quickEmailAccount(idx) {
+  const a = accounts[idx];
+  if (!a) return;
+  document.getElementById('email-to').value = a.Email || '';
+  document.getElementById('email-name').value = '';
+  document.getElementById('email-company').value = a.Account_Name || '';
+  showTab('compose');
+}
+
+// ─── Text shortcut (Lead or Account) ──────────────────────────────────────────
+// Routes to the SMS panel and opens an existing thread when one exists, else
+// drops into the New Text modal pre-filled with the contact's number + name.
+// Both renderers (renderLeads / renderAccounts) call this with the index +
+// kind so we can grab the right record + display name without prop-drilling.
+function quickText(idx, kind) {
+  const rec = kind === 'account' ? accounts[idx] : leads[idx];
+  if (!rec) return;
+  const phone = rec.Mobile || rec.Phone || '';
+  const name = kind === 'account' ? (rec.Account_Name || '') : (rec._fullName || '');
+  const e164 = normalizePhoneE164(phone);
+
+  showTab('sms');
+
+  // Defer one tick so the SMS tab DOM is visible before we ask SMS to render
+  // a conversation pane (otherwise the threads list flashes first).
+  setTimeout(() => {
+    if (!window.SMS) return;
+    if (e164) {
+      window.SMS.openConversation(e164);
+    } else {
+      // No usable number on record — open the New Text modal so the rep can
+      // type one in. Pre-fill name so the saved Note ties back to the contact.
+      window.SMS.openNew && window.SMS.openNew();
+      const nameEl = document.getElementById('sms-new-name');
+      if (nameEl && name) nameEl.value = name;
+    }
+  }, 60);
+}
+
+// Browser mirror of the server-side E.164 normalizer (also lives in sms.js).
+// Duplicated here so quickText() works even if SMS hasn't booted yet.
+function normalizePhoneE164(raw) {
+  if (!raw) return null;
+  const trimmed = String(raw).trim();
+  if (/^\+[1-9]\d{1,14}$/.test(trimmed)) return trimmed;
+  const digits = trimmed.replace(/[^\d]/g, '');
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  return null;
+}
+
+// Pretty-print an E.164 (or any 10/11-digit phone) for display in cards.
+// Falls back to the raw value when the input doesn't look like a US number.
+function prettyPhone(raw) {
+  if (!raw) return '';
+  const d = String(raw).replace(/[^\d]/g, '');
+  if (d.length === 11 && d.startsWith('1')) {
+    return `(${d.slice(1, 4)}) ${d.slice(4, 7)}-${d.slice(7)}`;
+  }
+  if (d.length === 10) {
+    return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+  }
+  return String(raw);
+}
+
+// ─── Reusable Contact Card (Lead + Account) ───────────────────────────────────
+// One template renders both Lead and Account rows so the action bar
+// (Call / Text / Email / Brief) is visually identical and any new action
+// only needs to be added in one place. Cards are vertically structured:
+//
+//   ┌───────────────────────────────────────────────┐
+//   │ avatar   Name                       [status]  │ ← header
+//   │          Subtitle (company or industry)       │
+//   ├───────────────────────────────────────────────┤
+//   │ <i> phone     <i> email     <i> location      │ ← meta strip
+//   ├───────────────────────────────────────────────┤
+//   │ [Call]  [Text]  [Email]  [Brief]              │ ← action bar
+//   └───────────────────────────────────────────────┘
+//
+// This gives every channel its own visual weight — no more "email is the
+// big button and call is buried in a tel: link" — and gives reps a single
+// glance to find every action they can take from this card.
+function contactCardHtml(opts) {
+  const {
+    idx,
+    kind,                 // 'lead' | 'account'
+    name,
+    subtitle,
+    status,               // for leads: hot|warm|cold (renders badge)
+    location,             // for accounts: "City, ST"
+    phone,
+    email,
+    onOpen,               // optional outer click handler (e.g. open brief)
+    emailHandler,
+    textHandler,
+    briefHandler,
+  } = opts;
+
+  const display = name || '—';
+  const safeName = escapeHtml(display);
+  const safeSub = escapeHtml(subtitle || '');
+  const phonePretty = phone ? prettyPhone(phone) : '';
+  const phoneE164 = phone ? (normalizePhoneE164(phone) || phone) : '';
+  const ico = kind === 'account'
+    ? '<i class="fa-solid fa-building"></i>'
+    : initials(display);
+
+  const headerOpen = onOpen
+    ? `<div class="hs-contact-card" data-idx="${idx}" onclick="${onOpen}">`
+    : `<div class="hs-contact-card" data-idx="${idx}">`;
+
+  const statusBadge = status
+    ? `<span class="badge badge-${status}">${status}</span>`
+    : '';
+
+  const metaCells = [];
+  if (phoneE164) {
+    metaCells.push(`
+      <a class="hs-contact-meta-cell" href="tel:${escapeAttr(phoneE164)}" onclick="event.stopPropagation();" title="Call ${escapeAttr(phonePretty)}">
+        <i class="fa-solid fa-phone"></i>
+        <span>${escapeHtml(phonePretty)}</span>
+      </a>`);
+  }
+  if (email) {
+    metaCells.push(`
+      <span class="hs-contact-meta-cell" title="${escapeAttr(email)}">
+        <i class="fa-solid fa-envelope"></i>
+        <span class="hs-contact-meta-truncate">${escapeHtml(email)}</span>
+      </span>`);
+  }
+  if (location) {
+    metaCells.push(`
+      <span class="hs-contact-meta-cell" title="${escapeAttr(location)}">
+        <i class="fa-solid fa-location-dot"></i>
+        <span>${escapeHtml(location)}</span>
+      </span>`);
+  }
+
+  // ── Action bar — Call · Text · Email · Brief.
+  // Disabled state for missing channel keeps the layout consistent across
+  // every card (no "this card has 3 buttons, that card has 2" jitter).
+  const callBtn = phoneE164
+    ? `<a class="hs-action-pill is-call" href="tel:${escapeAttr(phoneE164)}" onclick="event.stopPropagation(); ${kind === 'lead' ? `callLead(leads[${idx}]);` : ''}" title="Call">
+         <i class="fa-solid fa-phone"></i><span>Call</span>
+       </a>`
+    : `<button class="hs-action-pill is-call is-disabled" disabled title="No phone on record">
+         <i class="fa-solid fa-phone"></i><span>Call</span>
+       </button>`;
+
+  const textBtn = phoneE164
+    ? `<button class="hs-action-pill is-text" onclick="event.stopPropagation(); ${textHandler}" title="Send text">
+         <i class="fa-solid fa-comment-sms"></i><span>Text</span>
+       </button>`
+    : `<button class="hs-action-pill is-text is-disabled" disabled title="No mobile number on record">
+         <i class="fa-solid fa-comment-sms"></i><span>Text</span>
+       </button>`;
+
+  const emailBtn = email
+    ? `<button class="hs-action-pill is-email" onclick="event.stopPropagation(); ${emailHandler}" title="Send email">
+         <i class="fa-solid fa-envelope"></i><span>Email</span>
+       </button>`
+    : `<button class="hs-action-pill is-email is-disabled" disabled title="No email on record">
+         <i class="fa-solid fa-envelope"></i><span>Email</span>
+       </button>`;
+
+  const briefBtn = briefHandler
+    ? `<button class="hs-action-pill is-brief" onclick="event.stopPropagation(); ${briefHandler}" title="AI Brief">
+         <i class="fa-solid fa-brain"></i><span>Brief</span>
+       </button>`
+    : '';
+
+  return `
+    ${headerOpen}
+      <div class="hs-contact-header">
+        <div class="hs-contact-avatar ${kind === 'account' ? 'is-account' : ''}">${ico}</div>
+        <div class="hs-contact-identity">
+          <div class="hs-contact-name">${safeName}</div>
+          ${safeSub ? `<div class="hs-contact-sub">${safeSub}</div>` : ''}
+        </div>
+        ${statusBadge}
+      </div>
+      ${metaCells.length ? `<div class="hs-contact-meta">${metaCells.join('')}</div>` : ''}
+      <div class="hs-contact-actions">
+        ${callBtn}
+        ${textBtn}
+        ${emailBtn}
+        ${briefBtn}
+      </div>
+    </div>`;
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+function escapeAttr(s) { return escapeHtml(s).replace(/`/g, '&#96;'); }
 
 // ─── Connection Status ────────────────────────────────────────────────────────
 // The legacy client-side "Connect Services" modal has been retired. Zoho +
