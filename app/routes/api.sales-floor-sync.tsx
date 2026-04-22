@@ -17,7 +17,17 @@ import {getRepFromRequest, type SalesRep} from '../lib/sales-floor-reps';
 //               _status: 'hot'|'warm'|'new'|'cold', Lead_Status, Lead_Source,
 //               Description, Modified_Time }
 //   Deal    → { id, Deal_Name, Account_Name, Stage, Amount, Closing_Date }
-//   Account → { Id, Account_Name, Industry, Billing_City, Billing_State, Phone }
+//   Account → { Id, Account_Name, Industry, Billing_City, Billing_State,
+//               Phone, contacts: Contact[], buyer: Contact|null }
+//   Contact → { id, _fullName, Email, Phone, Mobile, Title, Job_Role,
+//               _jobRole, _accountId, _accountName }
+//
+// MA accounts are hard-filtered out before the response is built (Reid's
+// request — sales-floor doesn't surface Massachusetts for now).
+//
+// Buyer detection: per-account `buyer` is set by pickBuyer(), which prefers
+// an exact case-insensitive match on "Purchasing & Inventory Management" and
+// falls back to any role containing buyer / purchas / inventory.
 //
 // Per-rep scoping: the caller's rep is resolved from the sales_floor_rep
 // cookie (see app/lib/sales-floor-reps.ts). If the rep has a zohoOwnerId set
@@ -124,6 +134,11 @@ async function fetchLeads(accessToken: string, ownerId: string | null) {
       'Lead_Status',
       'Lead_Source',
       'Description',
+      // State + City pulled in for the new state filter tabs on /sales-floor.
+      // Reps want a one-click way to scope their list to a specific market
+      // (NJ, NY, RI, etc.) so they can plan a route or call sweep for the day.
+      'State',
+      'City',
       'Modified_Time',
       'Created_Time',
     ],
@@ -151,6 +166,8 @@ async function fetchLeads(accessToken: string, ownerId: string | null) {
     _status: normalizeLeadStatus(l.Lead_Status),
     Lead_Source: l.Lead_Source || '',
     Description: l.Description || '',
+    State: l.State || '',
+    City: l.City || '',
     Modified_Time: l.Modified_Time || null,
   }));
 }
@@ -185,6 +202,17 @@ async function fetchDeals(accessToken: string, ownerId: string | null) {
   }));
 }
 
+// MA-state filter shared by the Accounts + Contacts fetchers. Reid asked us to
+// hide MA from the sales-floor for now — easiest place to do it is right after
+// the Zoho fetch so downstream views never see them. We check both 'MA' (the
+// 2-letter code Highsman uses everywhere) and 'Massachusetts' just in case
+// some legacy records have the long form.
+const EXCLUDED_STATES = new Set(['MA', 'Massachusetts']);
+
+function isExcludedState(state: string | null | undefined): boolean {
+  return EXCLUDED_STATES.has(String(state || '').trim());
+}
+
 async function fetchAccounts(accessToken: string, ownerId: string | null) {
   const url = zohoModuleUrl(
     'Accounts',
@@ -214,22 +242,146 @@ async function fetchAccounts(accessToken: string, ownerId: string | null) {
     throw new Error(`Zoho accounts fetch failed (${res.status}): ${text.slice(0, 300)}`);
   }
   const data = await res.json();
-  return (data.data || []).map((a: any) => ({
-    // app.js uses `Id` (capital I) in a couple spots; keep both for safety.
-    Id: a.id,
-    id: a.id,
-    Account_Name: a.Account_Name || '',
-    Industry: a.Industry || '',
-    Billing_Street: a.Billing_Street || '',
-    Billing_City: a.Billing_City || '',
-    Billing_State: a.Billing_State || '',
-    Phone: a.Phone || '',
-    Website: a.Website || '',
-    Account_Type: a.Account_Type || '',
-    Annual_Revenue: a.Annual_Revenue || 0,
-    Description: a.Description || '',
-    Modified_Time: a.Modified_Time || null,
-  }));
+  return (data.data || [])
+    // Drop MA accounts before we even shape them — keeps the response leaner
+    // and prevents any downstream join from reintroducing them.
+    .filter((a: any) => !isExcludedState(a.Billing_State))
+    .map((a: any) => ({
+      // app.js uses `Id` (capital I) in a couple spots; keep both for safety.
+      Id: a.id,
+      id: a.id,
+      Account_Name: a.Account_Name || '',
+      Industry: a.Industry || '',
+      Billing_Street: a.Billing_Street || '',
+      Billing_City: a.Billing_City || '',
+      Billing_State: a.Billing_State || '',
+      Phone: a.Phone || '',
+      Website: a.Website || '',
+      Account_Type: a.Account_Type || '',
+      Annual_Revenue: a.Annual_Revenue || 0,
+      Description: a.Description || '',
+      Modified_Time: a.Modified_Time || null,
+      // Populated by attachContactsToAccounts() after the contacts fetch
+      // resolves. `buyer` is the chosen primary contact (if one exists),
+      // `contacts` is the full list for the account.
+      contacts: [] as any[],
+      buyer: null as any,
+    }));
+}
+
+// ─── Contacts ────────────────────────────────────────────────────────────────
+// Pull every contact attached to an account so we can (a) surface the real
+// buyer on the account card, (b) let the rep swap who the buyer is.
+//
+// "Job Role" in Highsman's Zoho instance might be the relabeled standard
+// `Title` field OR a custom `Job_Role` picklist. We try Job_Role first and
+// fall back to Title-only if Zoho rejects the field (INVALID_DATA / 400). Both
+// fields are normalized into `_jobRole` on the returned object so the rest of
+// the code stays simple.
+const CONTACT_BASE_FIELDS = [
+  'First_Name',
+  'Last_Name',
+  'Email',
+  'Phone',
+  'Mobile',
+  'Title',
+  'Account_Name',
+  'Modified_Time',
+];
+
+async function fetchContacts(accessToken: string, ownerId: string | null) {
+  // First attempt: include the custom Job_Role field. If Zoho's Contacts
+  // module doesn't have it, the call fails with 400 + INVALID_DATA and we
+  // retry without it.
+  let hasJobRole = true;
+  let url = zohoModuleUrl('Contacts', ownerId, [...CONTACT_BASE_FIELDS, 'Job_Role'], 200);
+
+  let res = await fetch(url.toString(), {
+    headers: {Authorization: `Zoho-oauthtoken ${accessToken}`},
+  });
+
+  if (res.status === 400) {
+    // Most likely "invalid column name" because Job_Role doesn't exist on
+    // this org's Contacts module. Retry without it.
+    hasJobRole = false;
+    url = zohoModuleUrl('Contacts', ownerId, CONTACT_BASE_FIELDS, 200);
+    res = await fetch(url.toString(), {
+      headers: {Authorization: `Zoho-oauthtoken ${accessToken}`},
+    });
+  }
+
+  if (res.status === 204) return {contacts: [], hasJobRole};
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Zoho contacts fetch failed (${res.status}): ${text.slice(0, 300)}`);
+  }
+  const data = await res.json();
+  const contacts = (data.data || []).map((c: any) => {
+    const accountId = c.Account_Name?.id || null;
+    const accountName = c.Account_Name?.name || '';
+    // Job_Role wins if present; otherwise fall back to standard Title.
+    const jobRole = (hasJobRole ? c.Job_Role : null) || c.Title || '';
+    const fn = c.First_Name || '';
+    const ln = c.Last_Name || '';
+    return {
+      id: c.id,
+      First_Name: fn,
+      Last_Name: ln,
+      _fullName: `${fn} ${ln}`.trim() || c.Email || 'Unknown Contact',
+      Email: c.Email || '',
+      Phone: c.Phone || '',
+      Mobile: c.Mobile || '',
+      Title: c.Title || '',
+      Job_Role: hasJobRole ? c.Job_Role || '' : '',
+      _jobRole: jobRole,
+      _accountId: accountId,
+      _accountName: accountName,
+      Modified_Time: c.Modified_Time || null,
+    };
+  });
+  return {contacts, hasJobRole};
+}
+
+// ─── Buyer detection ─────────────────────────────────────────────────────────
+// We treat any contact whose Job_Role/Title contains "buyer", "purchas" (catches
+// "Purchasing", "Purchaser"), or "inventory" (catches "Inventory Management")
+// as a candidate buyer. Exact match on the canonical "Purchasing & Inventory
+// Management" wins over loose matches when both exist.
+const CANONICAL_BUYER_ROLE = 'Purchasing & Inventory Management';
+
+function isBuyerRole(role: string | null | undefined): boolean {
+  const r = String(role || '').toLowerCase();
+  if (!r) return false;
+  return r.includes('buyer') || r.includes('purchas') || r.includes('inventory');
+}
+
+function pickBuyer(contacts: any[]): any | null {
+  if (!contacts.length) return null;
+  // 1. Exact canonical match first (case-insensitive).
+  const exact = contacts.find(
+    (c) => String(c._jobRole || '').toLowerCase() === CANONICAL_BUYER_ROLE.toLowerCase(),
+  );
+  if (exact) return exact;
+  // 2. Any buyer-ish role.
+  const fuzzy = contacts.find((c) => isBuyerRole(c._jobRole));
+  if (fuzzy) return fuzzy;
+  return null;
+}
+
+function attachContactsToAccounts(accounts: any[], contacts: any[]) {
+  // Group contacts by account id once so we don't loop O(n*m).
+  const byAccount = new Map<string, any[]>();
+  for (const c of contacts) {
+    if (!c._accountId) continue;
+    if (!byAccount.has(c._accountId)) byAccount.set(c._accountId, []);
+    byAccount.get(c._accountId)!.push(c);
+  }
+  for (const acc of accounts) {
+    const list = byAccount.get(acc.id) || [];
+    acc.contacts = list;
+    acc.buyer = pickBuyer(list);
+  }
+  return accounts;
 }
 
 // ─── Loader ──────────────────────────────────────────────────────────────────
@@ -271,7 +423,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       ZOHO_REFRESH_TOKEN: refreshToken,
     });
 
-    const [leads, deals, accounts] = await Promise.all([
+    const [leads, deals, accounts, contactsResult] = await Promise.all([
       fetchLeads(accessToken, ownerId).catch((e) => {
         console.error('[sales-floor-sync] leads fetch failed:', e.message);
         return [];
@@ -284,7 +436,19 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         console.error('[sales-floor-sync] accounts fetch failed:', e.message);
         return [];
       }),
+      fetchContacts(accessToken, ownerId).catch((e) => {
+        console.error('[sales-floor-sync] contacts fetch failed:', e.message);
+        return {contacts: [], hasJobRole: false};
+      }),
     ]);
+
+    // Filter MA contacts out before joining (their accounts are already gone)
+    // so the picker doesn't show contacts that belong to hidden accounts.
+    const accountIds = new Set(accounts.map((a: any) => a.id));
+    const visibleContacts = contactsResult.contacts.filter((c: any) =>
+      c._accountId ? accountIds.has(c._accountId) : true,
+    );
+    attachContactsToAccounts(accounts, visibleContacts);
 
     return json(
       {
@@ -295,7 +459,13 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         meta: {
           configured: true,
           syncedAt: new Date().toISOString(),
-          counts: {leads: leads.length, deals: deals.length, accounts: accounts.length},
+          counts: {
+            leads: leads.length,
+            deals: deals.length,
+            accounts: accounts.length,
+            contacts: visibleContacts.length,
+          },
+          contactFieldMode: contactsResult.hasJobRole ? 'job_role' : 'title',
           rep: rep ? {id: rep.id, firstName: rep.firstName, scoped: !!ownerId} : null,
         },
       },

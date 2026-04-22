@@ -5,6 +5,12 @@ let leads = [];
 let accounts = [];
 let deals = [];
 let currentFilter = 'all';
+// State-scope filters for the Leads + Accounts tabs. 'all' shows everything;
+// any 2-letter code (NJ / NY / RI / MO …) narrows the list to that market.
+// We render the tab strip dynamically from whatever states are present in the
+// loaded data, so a rep working a single state never sees noise from others.
+let currentLeadState = 'all';
+let currentAccountState = 'all';
 let currentBriefLead = null;
 let callsToday = 0;          // legacy: local tel:-click counter (pre-Quo)
 let quoTodayCalls = null;    // real count from Quo; null = not yet fetched
@@ -180,6 +186,10 @@ async function syncCRM() {
 }
 
 function renderAll() {
+  // State tabs depend on the loaded data — populate them before the lists
+  // render so the count chips on each tab line up with what's actually shown.
+  renderLeadStateTabs();
+  renderAccountStateTabs();
   renderLeads();
   renderPipeline();
   renderAccounts();
@@ -290,6 +300,11 @@ function renderDashboard() {
 function renderLeads(filter = currentFilter) {
   currentFilter = filter;
   let list = currentFilter === 'all' ? leads : leads.filter(l => l._status === currentFilter);
+  // State narrowing — applies on top of the status filter so reps can drill
+  // down to e.g. "Hot leads in NJ" without losing either filter.
+  if (currentLeadState && currentLeadState !== 'all') {
+    list = list.filter(l => normalizeStateCode(l.State) === currentLeadState);
+  }
   const q = document.getElementById('lead-search')?.value?.toLowerCase();
   if (q) list = list.filter(l =>
     (l._fullName || '').toLowerCase().includes(q) ||
@@ -370,6 +385,9 @@ function renderPipeline() {
 // ─── Accounts ─────────────────────────────────────────────────────────────────
 function renderAccounts() {
   let list = accounts;
+  if (currentAccountState && currentAccountState !== 'all') {
+    list = list.filter(a => normalizeStateCode(a.Billing_State) === currentAccountState);
+  }
   const q = document.getElementById('account-search')?.value?.toLowerCase();
   if (q) list = list.filter(a =>
     (a.Account_Name || '').toLowerCase().includes(q) ||
@@ -389,22 +407,305 @@ function renderAccounts() {
     const idx = accounts.indexOf(a);
     const subtitle = a.Industry || '';
     const location = [a.Billing_City, a.Billing_State].filter(Boolean).join(', ');
+
+    // Buyer takes precedence over the account-level Email/Phone. The buyer's
+    // contact info is the data the rep actually wants to act on — calling the
+    // shop's main switchboard rarely lands you in front of the person who
+    // signs the PO.
+    const buyer = a.buyer || null;
+    const contactCount = Array.isArray(a.contacts) ? a.contacts.length : 0;
+    const cardPhone = buyer ? (buyer.Mobile || buyer.Phone || a.Phone) : a.Phone;
+    const cardEmail = buyer ? (buyer.Email || a.Email || '') : (a.Email || '');
+
+    // Buyer pill: name + role, with a "Change" link. When there's no buyer
+    // but the account has contacts, surface a CTA to set one. When there are
+    // no contacts at all, fall back to a quiet hint.
+    let extraRow = '';
+    if (buyer) {
+      extraRow = `
+        <div class="hs-account-buyer">
+          <div class="hs-account-buyer-line">
+            <span class="hs-account-buyer-pill">
+              <i class="fa-solid fa-user-tie"></i> Buyer
+            </span>
+            <div class="hs-account-buyer-meta">
+              <div class="hs-account-buyer-name">${escapeHtml(buyer._fullName || '—')}</div>
+              <div class="hs-account-buyer-role">${escapeHtml(buyer._jobRole || 'Purchasing & Inventory Management')}</div>
+            </div>
+          </div>
+          <button class="hs-account-buyer-change" type="button"
+                  onclick="event.stopPropagation(); openBuyerPicker(${idx})"
+                  title="Change the buyer for this account">
+            <i class="fa-solid fa-pen-to-square"></i><span>Change</span>
+          </button>
+        </div>`;
+    } else if (contactCount > 0) {
+      extraRow = `
+        <div class="hs-account-buyer is-empty">
+          <div class="hs-account-buyer-line">
+            <span class="hs-account-buyer-pill is-empty">
+              <i class="fa-solid fa-user-plus"></i> No Buyer
+            </span>
+            <div class="hs-account-buyer-meta">
+              <div class="hs-account-buyer-name">${contactCount} contact${contactCount === 1 ? '' : 's'} on file</div>
+              <div class="hs-account-buyer-role">Pick the Buyer / Purchasing contact</div>
+            </div>
+          </div>
+          <button class="hs-account-buyer-change is-cta" type="button"
+                  onclick="event.stopPropagation(); openBuyerPicker(${idx})">
+            <i class="fa-solid fa-user-check"></i><span>Set Buyer</span>
+          </button>
+        </div>`;
+    } else {
+      extraRow = `
+        <div class="hs-account-buyer is-empty">
+          <div class="hs-account-buyer-line">
+            <span class="hs-account-buyer-pill is-empty">
+              <i class="fa-solid fa-user-slash"></i> No Contacts
+            </span>
+            <div class="hs-account-buyer-meta">
+              <div class="hs-account-buyer-name">No contacts in Zoho</div>
+              <div class="hs-account-buyer-role">Add a contact to assign a buyer</div>
+            </div>
+          </div>
+        </div>`;
+    }
+
     return contactCardHtml({
       idx,
       kind: 'account',
       name: a.Account_Name,
       subtitle,
       location,
-      phone: a.Phone,
-      email: a.Email,
+      phone: cardPhone,
+      email: cardEmail,
       emailHandler: `quickEmailAccount(${idx})`,
       textHandler: `quickText(${idx}, 'account')`,
       briefHandler: null, // briefs are lead-only for now
+      extraRow,
     });
   }).join('');
 }
 
 function searchAccounts() { renderAccounts(); }
+
+// ─── State Filter Tabs (Leads + Accounts) ────────────────────────────────────
+// Reps want a one-click way to scope their list to a specific state market
+// (NJ, NY, RI, MO, etc.). The tab strip is rendered from whatever states are
+// actually present in the loaded data — if the rep has no NY accounts, no
+// NY tab shows up. "All" is always first; states sort alphabetically; counts
+// reflect the un-state-filtered data so the chips don't lie about what's
+// behind them.
+//
+// State values in Zoho are inconsistent ("New Jersey" vs "NJ" vs "Nj" vs
+// "  nj  ") so we normalize to a 2-letter uppercase code before grouping
+// and matching. Anything we can't recognize gets grouped under "—".
+
+// Long-name → 2-letter code lookup. Covers the markets Highsman ships to;
+// anything else falls through to a slugged 2-char fallback.
+const US_STATE_LOOKUP = {
+  'alabama':'AL','alaska':'AK','arizona':'AZ','arkansas':'AR','california':'CA',
+  'colorado':'CO','connecticut':'CT','delaware':'DE','florida':'FL','georgia':'GA',
+  'hawaii':'HI','idaho':'ID','illinois':'IL','indiana':'IN','iowa':'IA',
+  'kansas':'KS','kentucky':'KY','louisiana':'LA','maine':'ME','maryland':'MD',
+  'massachusetts':'MA','michigan':'MI','minnesota':'MN','mississippi':'MS','missouri':'MO',
+  'montana':'MT','nebraska':'NE','nevada':'NV','new hampshire':'NH','new jersey':'NJ',
+  'new mexico':'NM','new york':'NY','north carolina':'NC','north dakota':'ND','ohio':'OH',
+  'oklahoma':'OK','oregon':'OR','pennsylvania':'PA','rhode island':'RI','south carolina':'SC',
+  'south dakota':'SD','tennessee':'TN','texas':'TX','utah':'UT','vermont':'VT',
+  'virginia':'VA','washington':'WA','west virginia':'WV','wisconsin':'WI','wyoming':'WY',
+  'district of columbia':'DC',
+};
+function normalizeStateCode(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  const lower = s.toLowerCase();
+  if (US_STATE_LOOKUP[lower]) return US_STATE_LOOKUP[lower];
+  // Already a 2-letter code? Uppercase + return.
+  if (/^[A-Za-z]{2}$/.test(s)) return s.toUpperCase();
+  // Fallback: first 2 alpha chars uppercased — not perfect but stable.
+  const fallback = s.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase();
+  return fallback || '';
+}
+
+// Tally counts per state code for whatever's in `records` (using `getter` to
+// pull the raw state string off each record). Returns a sorted array of
+// {code, count} so the tab strip renders deterministically.
+function tallyStates(records, getter) {
+  const counts = new Map();
+  for (const r of records) {
+    const code = normalizeStateCode(getter(r)) || '—';
+    counts.set(code, (counts.get(code) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([code, count]) => ({code, count}))
+    .sort((a, b) => {
+      // Push the "—" (unknown) bucket to the end; everything else is alpha.
+      if (a.code === '—') return 1;
+      if (b.code === '—') return -1;
+      return a.code.localeCompare(b.code);
+    });
+}
+
+function renderLeadStateTabs() {
+  const host = document.getElementById('lead-state-tabs');
+  if (!host) return;
+  const buckets = tallyStates(leads, (l) => l.State);
+  host.innerHTML = stateTabsHtml('lead', buckets, currentLeadState, leads.length);
+}
+function renderAccountStateTabs() {
+  const host = document.getElementById('account-state-tabs');
+  if (!host) return;
+  const buckets = tallyStates(accounts, (a) => a.Billing_State);
+  host.innerHTML = stateTabsHtml('account', buckets, currentAccountState, accounts.length);
+}
+
+function stateTabsHtml(kind, buckets, active, totalCount) {
+  // No data? Hide the strip entirely — an empty tab row is just clutter.
+  if (!buckets.length) return '';
+  const handler = kind === 'lead' ? 'filterLeadsByState' : 'filterAccountsByState';
+  const allBtn = `
+    <button onclick="${handler}('all')"
+            class="hs-state-tab ${active === 'all' ? 'active' : ''}"
+            data-state="all">
+      All<span class="hs-state-tab-count">${totalCount}</span>
+    </button>`;
+  const stateBtns = buckets.map(b => `
+    <button onclick="${handler}('${escapeAttr(b.code)}')"
+            class="hs-state-tab ${active === b.code ? 'active' : ''}"
+            data-state="${escapeAttr(b.code)}"
+            title="${b.code === '—' ? 'No state on file' : b.code}">
+      ${escapeHtml(b.code)}<span class="hs-state-tab-count">${b.count}</span>
+    </button>`).join('');
+  return allBtn + stateBtns;
+}
+
+function filterLeadsByState(code) {
+  currentLeadState = code;
+  renderLeadStateTabs();
+  renderLeads();
+}
+function filterAccountsByState(code) {
+  currentAccountState = code;
+  renderAccountStateTabs();
+  renderAccounts();
+}
+
+// ─── Buyer Picker Modal ──────────────────────────────────────────────────────
+// Opens a modal listing every contact on the account so the rep can pick
+// who the buyer is. Clicking a contact POSTs to /api/sales-floor-set-account-buyer
+// which writes the canonical buyer role ("Purchasing & Inventory Management")
+// to that contact's Job_Role (or Title fallback) in Zoho. We don't clear the
+// previous buyer's role — multiple people can carry buyer duties.
+//
+// State is parked on `_buyerPicker` rather than a global because the modal is
+// transient — opening on a different account just overwrites the slot.
+let _buyerPicker = { accountIdx: null };
+
+function openBuyerPicker(accountIdx) {
+  const acc = accounts[accountIdx];
+  if (!acc) return;
+  _buyerPicker.accountIdx = accountIdx;
+  const titleEl = document.getElementById('buyer-picker-account');
+  if (titleEl) titleEl.textContent = acc.Account_Name || '—';
+  const subEl = document.getElementById('buyer-picker-sub');
+  if (subEl) {
+    const loc = [acc.Billing_City, acc.Billing_State].filter(Boolean).join(', ');
+    subEl.textContent = loc || 'Pick the contact who owns purchasing.';
+  }
+  renderBuyerPickerList();
+  document.getElementById('buyer-picker-modal')?.classList.remove('hidden');
+}
+
+function closeBuyerPicker() {
+  document.getElementById('buyer-picker-modal')?.classList.add('hidden');
+  _buyerPicker.accountIdx = null;
+}
+
+function renderBuyerPickerList() {
+  const host = document.getElementById('buyer-picker-list');
+  if (!host) return;
+  const acc = accounts[_buyerPicker.accountIdx];
+  const list = (acc && Array.isArray(acc.contacts)) ? acc.contacts : [];
+  if (!list.length) {
+    host.innerHTML = `
+      <div class="hs-empty-state py-8">
+        <div class="hs-empty-state-icon"><i class="fa-solid fa-user-slash"></i></div>
+        No contacts on this account in Zoho.
+        <div style="margin-top:8px;font-size:0.82rem;opacity:0.7;">Add a contact in Zoho first, then sync.</div>
+      </div>`;
+    return;
+  }
+  // Buyer first, then everyone else (alpha by name) — keeps the current
+  // buyer obvious and one click away if the rep just wants to confirm.
+  const currentBuyerId = acc.buyer?.id || null;
+  const sorted = [...list].sort((a, b) => {
+    if (a.id === currentBuyerId) return -1;
+    if (b.id === currentBuyerId) return 1;
+    return (a._fullName || '').localeCompare(b._fullName || '');
+  });
+  host.innerHTML = sorted.map(c => {
+    const isCurrent = c.id === currentBuyerId;
+    const role = c._jobRole || (isCurrent ? 'Purchasing & Inventory Management' : 'No role on file');
+    const meta = [c.Email, c.Mobile || c.Phone].filter(Boolean).join(' · ');
+    return `
+      <button class="hs-buyer-row ${isCurrent ? 'is-current' : ''}"
+              type="button"
+              onclick="selectBuyer('${escapeAttr(c.id)}')">
+        <div class="hs-buyer-row-avatar">${initials(c._fullName || '')}</div>
+        <div class="hs-buyer-row-main">
+          <div class="hs-buyer-row-name">
+            ${escapeHtml(c._fullName || '—')}
+            ${isCurrent ? '<span class="hs-buyer-current-pill">Current</span>' : ''}
+          </div>
+          <div class="hs-buyer-row-role">${escapeHtml(role)}</div>
+          ${meta ? `<div class="hs-buyer-row-meta">${escapeHtml(meta)}</div>` : ''}
+        </div>
+        <div class="hs-buyer-row-cta">
+          <i class="fa-solid ${isCurrent ? 'fa-circle-check' : 'fa-arrow-right'}"></i>
+        </div>
+      </button>`;
+  }).join('');
+}
+
+async function selectBuyer(contactId) {
+  const idx = _buyerPicker.accountIdx;
+  const acc = accounts[idx];
+  if (!acc || !contactId) return;
+  const newBuyer = (acc.contacts || []).find(c => c.id === contactId);
+  if (!newBuyer) { toast('Contact not found on this account', 'error'); return; }
+
+  // Optimistic UI — update the in-memory account so the card flips to the new
+  // buyer immediately. We snapshot the previous buyer in case the API rejects
+  // and we need to roll back without forcing a full re-sync.
+  const prevBuyer = acc.buyer;
+  newBuyer._jobRole = 'Purchasing & Inventory Management';
+  acc.buyer = newBuyer;
+  renderAccounts();
+  closeBuyerPicker();
+
+  try {
+    const res = await fetch('/api/sales-floor-set-account-buyer', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      credentials: 'same-origin',
+      body: JSON.stringify({contactId}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || `HTTP ${res.status}`);
+    }
+    toast(`${newBuyer._fullName} set as buyer`, 'success');
+  } catch (err) {
+    // Roll back in-memory and re-render so the card matches Zoho's truth again.
+    acc.buyer = prevBuyer;
+    if (newBuyer && prevBuyer && newBuyer.id !== prevBuyer.id) {
+      newBuyer._jobRole = newBuyer.Job_Role || newBuyer.Title || '';
+    }
+    renderAccounts();
+    toast(`Could not save buyer: ${err.message}`, 'error');
+  }
+}
 
 // ─── AI Brief Modal ───────────────────────────────────────────────────────────
 async function openBrief(idx) {
@@ -509,16 +810,23 @@ function quickEmail(idx) {
 }
 
 // ─── Account-side email shortcut ──────────────────────────────────────────────
-// Accounts don't carry a primary contact email reliably, so this primes the
-// composer with whatever the Account record has and lets the rep hit the
-// Contact Search autocomplete to pick the human inside.
+// When an Account has an assigned buyer (Job Role = Purchasing & Inventory
+// Management), we prefer the buyer's email + first name so the email is
+// addressed to the actual person who signs the PO, not a generic info@
+// inbox. Falls back to the Account's own Email if no buyer is set.
 function quickEmailAccount(idx) {
   const a = accounts[idx];
   if (!a) return;
-  document.getElementById('email-to').value = a.Email || '';
-  document.getElementById('email-name').value = '';
+  const buyer = a.buyer || null;
+  const to = (buyer?.Email) || a.Email || '';
+  const buyerFirstName = buyer ? (buyer.First_Name || (buyer._fullName || '').split(/\s+/)[0]) : '';
+  document.getElementById('email-to').value = to;
+  document.getElementById('email-name').value = buyerFirstName || '';
   document.getElementById('email-company').value = a.Account_Name || '';
   showTab('compose');
+  if (!to) {
+    toast(buyer ? 'Buyer has no email on file' : 'No email on this account', 'info');
+  }
 }
 
 // ─── Text shortcut (Lead or Account) ──────────────────────────────────────────
@@ -608,6 +916,10 @@ function contactCardHtml(opts) {
     emailHandler,
     textHandler,
     briefHandler,
+    extraRow,             // optional HTML to render between meta + actions
+                          // (used by Account cards to show the Buyer pill)
+    headerExtra,          // optional HTML rendered to the right of the
+                          // status badge in the header (e.g. "Change buyer" link)
   } = opts;
 
   const display = name || '—';
@@ -692,8 +1004,10 @@ function contactCardHtml(opts) {
           ${safeSub ? `<div class="hs-contact-sub">${safeSub}</div>` : ''}
         </div>
         ${statusBadge}
+        ${headerExtra || ''}
       </div>
       ${metaCells.length ? `<div class="hs-contact-meta">${metaCells.join('')}</div>` : ''}
+      ${extraRow || ''}
       <div class="hs-contact-actions">
         ${callBtn}
         ${textBtn}

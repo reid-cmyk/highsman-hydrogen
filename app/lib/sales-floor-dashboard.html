@@ -401,6 +401,11 @@
           </div>
         </div>
 
+        <!-- State tab strip — populated dynamically by renderLeadStateTabs()
+             from whatever states are present in the loaded leads. "All"
+             always shows first; tabs are alphabetical with per-state counts. -->
+        <div id="lead-state-tabs" class="hs-state-tabs" role="tablist" aria-label="Filter leads by state"></div>
+
         <div id="lead-list" class="hs-list-panel">
           <div class="hs-empty-state py-12">
             <div class="hs-empty-state-icon"><i class="fa-solid fa-fire"></i></div>
@@ -434,6 +439,12 @@
           </div>
           <div class="hs-toolbar-meta" id="account-count"></div>
         </div>
+
+        <!-- State tab strip — populated dynamically by renderAccountStateTabs()
+             from whatever Billing_State values are present on the loaded
+             accounts. MA accounts are already filtered out server-side so
+             "MA" should never show up here. -->
+        <div id="account-state-tabs" class="hs-state-tabs" role="tablist" aria-label="Filter accounts by state"></div>
 
         <div id="account-list" class="hs-list-panel">
           <div class="hs-empty-state py-12">
@@ -926,6 +937,37 @@
 <!-- Legacy client-side "Connect Services" modal removed — Zoho + Gmail auth
      now runs entirely server-side (Oxygen env vars). Status is reflected in
      the top-bar/mobile pill via updateConnectionStatus() in app.js. -->
+
+
+<!-- ═══════════════════════════════════════════════
+     BUYER PICKER MODAL — pick which contact owns purchasing
+══════════════════════════════════════════════════ -->
+<!-- Opens from any Account card's Buyer pill. Lists every contact tied to
+     that account; tapping one POSTs to /api/sales-floor-set-account-buyer
+     which writes the canonical "Purchasing & Inventory Management" role
+     onto that contact in Zoho (Job_Role first, Title fallback). The current
+     buyer is pinned to the top of the list with a "Current" badge so a rep
+     who taps the pill just to confirm has zero hunting to do. -->
+<div id="buyer-picker-modal" class="hs-overlay hidden" role="dialog" aria-modal="true" aria-label="Pick account buyer">
+  <div class="hs-modal max-w-lg">
+    <div class="hs-modal-header">
+      <div>
+        <div class="hs-modal-eyebrow">Buyer for</div>
+        <div class="hs-modal-title" id="buyer-picker-account">—</div>
+        <div class="hs-modal-sub" id="buyer-picker-sub">Pick the contact who owns purchasing.</div>
+      </div>
+      <button onclick="closeBuyerPicker()" class="hs-close-btn" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div id="buyer-picker-list" class="hs-buyer-list">
+      <div class="hs-empty-state py-8">Loading contacts…</div>
+    </div>
+    <div class="hs-modal-actions">
+      <button onclick="closeBuyerPicker()" class="hs-btn-ghost px-4">Close</button>
+    </div>
+  </div>
+</div>
 
 
 <!-- ═══════════════════════════════════════════════
