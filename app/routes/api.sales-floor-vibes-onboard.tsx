@@ -47,7 +47,14 @@ const VIBES_COVERED_STATES = new Set(['NJ', 'New Jersey']);
 // auto-creates Needs Onboarding deals on order placement — those don't
 // carry the signature and are transparent to both the dedup check here
 // and the Vibes board filter.
+//
+// Tier marker: since v2 we distinguish ONBOARDING vs TRAINING deals in the
+// same pipeline via the [TIER:X] suffix. Onboarding = Tier 1 (first-ever
+// Vibes visit), Training = Tier 2 (budtender training re-visit). Tier 3
+// Check-Ins are system-derived (30-day cadence) and never written as deals
+// — they live on the route builder, not in Zoho.
 const SALES_FLOOR_SIGNATURE = 'Auto-created from /sales-floor';
+const TIER_MARKER_ONBOARDING = '[TIER:ONBOARDING]';
 const READY_STATUSES = new Set([
   'Accepted',
   'Backorder',
@@ -301,9 +308,10 @@ export async function action({request, context}: ActionFunctionArgs) {
       ? `Ship date: ${actualShipDate.slice(0, 10)}`
       : `First order date: ${baseDate.slice(0, 10)}`;
     const description = [
-      `${SALES_FLOOR_SIGNATURE} New Customers tab by ${rep.displayName || rep.email || 'rep'}.`,
+      `${SALES_FLOOR_SIGNATURE} ${TIER_MARKER_ONBOARDING} New Customers tab by ${rep.displayName || rep.email || 'rep'}.`,
       firstOrderNumber ? `LeafLink order: ${firstOrderNumber}` : '',
       dateLabel,
+      `Stop duration: 60 min`,
       `12-day check-in due: ${checkInDueDate}`,
     ]
       .filter(Boolean)

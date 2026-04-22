@@ -350,21 +350,42 @@ function attachFirstOrderNumbers(accounts: any[], deals: any[]) {
   return accounts;
 }
 
-// ─── Vibes "Brand Team Booked" state ─────────────────────────────────────────
-// After a rep clicks Brand Team Onboarding on a New Customer card, we want the
+// ─── Vibes booked-state attachment (Tier 1 + Tier 2) ─────────────────────────
+// After a rep clicks Brand Team Onboarding OR Training on a card, we want the
 // card to stay visible (so the rep can still call/text/email the buyer) but
 // switch into a "booked" visual state instead of disappearing. The source of
 // truth is whether the account has a signed Sales Floor deal in the Needs
 // Onboarding pipeline — same signature the Vibes board filters on. Fetching
-// those deals up front and stamping `_vibesBooked` + `_checkInDueDate` onto
-// matching accounts lets the card survive across reloads without any extra
-// client roundtrips.
+// those deals up front and stamping per-tier flags onto matching accounts
+// lets the card survive across reloads without any extra client roundtrips.
+//
+// Tier 1 ONBOARDING and Tier 2 TRAINING are distinguished via the [TIER:X]
+// marker in Description. An account can have both booked at once (onboarded,
+// then training scheduled) — we track them separately so the card can show
+// two pills and hide both CTAs independently.
+//
+// Tier 3 CHECK-IN is NOT represented in Zoho deals — it's auto-derived by
+// the /vibes route builder from last-visit cadence. Sales-floor card UI
+// doesn't need a Tier 3 state (Sky can't trigger it).
 const NEEDS_ONBOARDING_PIPELINE = '6699615000010154308';
 const SALES_FLOOR_SIGNATURE = 'Auto-created from /sales-floor';
+const TIER_MARKER_ONBOARDING = '[TIER:ONBOARDING]';
+const TIER_MARKER_TRAINING = '[TIER:TRAINING]';
 
-async function fetchSalesFloorOnboardingDeals(
+type VibesBookedEntry = {
+  dealId: string;
+  tier: 'onboarding' | 'training';
+  // Onboarding → 12-day check-in date. Training → target visit date.
+  // Both surface as c._checkInDueDate / c._trainingDate on cards.
+  dateLabel: string | null;
+};
+
+async function fetchSalesFloorVibesDeals(
   accessToken: string,
-): Promise<Map<string, {dealId: string; checkInDueDate: string | null}>> {
+): Promise<{
+  onboarding: Map<string, VibesBookedEntry>;
+  training: Map<string, VibesBookedEntry>;
+}> {
   // One search call, signature-filtered in memory. Deals/search supports the
   // Pipeline criteria directly; we can't filter on Description text in the
   // criteria (Zoho doesn't index it) so we do it client-side.
@@ -381,8 +402,9 @@ async function fetchSalesFloorOnboardingDeals(
   const res = await fetch(url.toString(), {
     headers: {Authorization: `Zoho-oauthtoken ${accessToken}`},
   });
-  const out = new Map<string, {dealId: string; checkInDueDate: string | null}>();
-  if (!res.ok) return out; // 204 → no deals; any error → empty map
+  const onboarding = new Map<string, VibesBookedEntry>();
+  const training = new Map<string, VibesBookedEntry>();
+  if (!res.ok) return {onboarding, training};
   const data: any = await res.json().catch(() => ({}));
   const rows: any[] = Array.isArray(data?.data) ? data.data : [];
   for (const row of rows) {
@@ -390,31 +412,54 @@ async function fetchSalesFloorOnboardingDeals(
     if (!desc.includes(SALES_FLOOR_SIGNATURE)) continue;
     const acctId = row?.Account_Name?.id ? String(row.Account_Name.id) : '';
     if (!acctId) continue;
-    // Parse the "12-day check-in due: YYYY-MM-DD" line out of the Description
-    // so the card can render an exact "Check in by {date}" without another
-    // call. Regex match keeps this resilient to the line's position.
-    const match = desc.match(/12-day check-in due:\s*(\d{4}-\d{2}-\d{2})/);
-    const checkInDueDate = match ? match[1] : null;
-    // First signed deal wins — if the rep somehow got two created, we treat
-    // the account as booked regardless. Not overwriting avoids flipping the
-    // check-in date on every render.
-    if (!out.has(acctId)) {
-      out.set(acctId, {dealId: String(row.id || ''), checkInDueDate});
+    const dealId = String(row.id || '');
+    // Onboarding deals: parse the 12-day check-in date.
+    // Training deals: parse the target visit date.
+    // Legacy deals (pre-v2) have no tier marker — bucket them as onboarding
+    // because every pre-v2 signed deal came from the original onboarding
+    // button. Falls under the "when in doubt, keep the behavior that was
+    // shipping before" rule.
+    if (desc.includes(TIER_MARKER_TRAINING)) {
+      const match = desc.match(/Target visit:\s*on or before\s*(\d{4}-\d{2}-\d{2})/i);
+      const dateLabel = match ? match[1] : row?.Closing_Date || null;
+      if (!training.has(acctId)) {
+        training.set(acctId, {dealId, tier: 'training', dateLabel});
+      }
+    } else {
+      // Onboarding (explicit [TIER:ONBOARDING] or legacy unmarked deal).
+      const match = desc.match(/12-day check-in due:\s*(\d{4}-\d{2}-\d{2})/);
+      const dateLabel = match ? match[1] : null;
+      if (!onboarding.has(acctId)) {
+        onboarding.set(acctId, {dealId, tier: 'onboarding', dateLabel});
+      }
     }
   }
-  return out;
+  return {onboarding, training};
 }
 
 function attachVibesBookedStatus(
   accounts: any[],
-  booked: Map<string, {dealId: string; checkInDueDate: string | null}>,
+  booked: {
+    onboarding: Map<string, VibesBookedEntry>;
+    training: Map<string, VibesBookedEntry>;
+  },
 ) {
   for (const a of accounts) {
-    const hit = booked.get(a.id);
-    if (!hit) continue;
-    a._vibesBooked = true;
-    a._vibesDealId = hit.dealId;
-    a._checkInDueDate = hit.checkInDueDate;
+    const onb = booked.onboarding.get(a.id);
+    const trn = booked.training.get(a.id);
+    if (onb) {
+      // Legacy flag the client already reads — keep for backward compat
+      // (markZohoReadyToBrandTeam sets this same flag optimistically).
+      a._vibesBooked = true;
+      a._vibesDealId = onb.dealId;
+      a._checkInDueDate = onb.dateLabel;
+      a._onboardingBooked = true;
+    }
+    if (trn) {
+      a._trainingBooked = true;
+      a._trainingDealId = trn.dealId;
+      a._trainingDate = trn.dateLabel;
+    }
   }
   return accounts;
 }
@@ -751,13 +796,17 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         console.error('[sales-floor-sync] contacts fetch failed:', e.message);
         return {contacts: []};
       }),
-      // Signed Onboarding deals are NOT owner-scoped on purpose: the "booked"
-      // pill should show for every rep that opens the board, not just whoever
-      // clicked the button. If the account already has a Sales Floor deal in
-      // the Needs Onboarding pipeline, the card goes into booked mode.
-      fetchSalesFloorOnboardingDeals(accessToken).catch((e) => {
+      // Signed Onboarding + Training deals are NOT owner-scoped on purpose:
+      // the "booked" pills should show for every rep that opens the board,
+      // not just whoever clicked the button. Returns { onboarding, training }
+      // maps keyed by account id so attachVibesBookedStatus can stamp
+      // per-tier flags without a second roundtrip.
+      fetchSalesFloorVibesDeals(accessToken).catch((e) => {
         console.error('[sales-floor-sync] vibes-booked fetch failed:', e.message);
-        return new Map<string, {dealId: string; checkInDueDate: string | null}>();
+        return {
+          onboarding: new Map<string, VibesBookedEntry>(),
+          training: new Map<string, VibesBookedEntry>(),
+        };
       }),
     ]);
 
@@ -776,10 +825,11 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     // carries "Order #N" stay as "First order {date}" (graceful fallback).
     attachFirstOrderNumbers(accounts, deals);
 
-    // Stamp _vibesBooked / _vibesDealId / _checkInDueDate onto any account
-    // that already has a signed Sales Floor Onboarding deal. The client uses
-    // these to render the "Brand Team Booked — Check in by {date}" pill on
-    // New Customer cards so the card stays visible instead of disappearing.
+    // Stamp _vibesBooked / _onboardingBooked / _trainingBooked onto any
+    // account that already has a signed Sales Floor deal. The client uses
+    // these to render the "Brand Team Booked — Check in by {date}" pill and
+    // the "Training Booked — Visit by {date}" pill independently, so an
+    // account that's been onboarded AND scheduled for training shows both.
     attachVibesBookedStatus(accounts, vibesBookedMap);
 
     return json(

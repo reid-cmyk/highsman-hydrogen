@@ -2457,6 +2457,25 @@ a.hs-contact-meta-cell:hover i{ color:var(--gold); }
 }
 .hs-action-pill.is-flag-pete.is-active i{ color:#F59E0B; }
 
+/* Training pill — Vibes Tier 2. Uses a purple accent so Sky scans the Account
+   list and can see at-a-glance which NJ shops already have a Training booked
+   (.is-booked renders filled-purple/disabled) vs. which are still bookable. */
+.hs-action-pill.is-training{
+  border-left:2px solid #8B5CF6;
+}
+.hs-action-pill.is-training i{ color:#8B5CF6; }
+.hs-action-pill.is-training:hover:not(.is-disabled):not(.is-booked){
+  background:rgba(139,92,246,0.12);
+  border-color:rgba(139,92,246,0.45);
+}
+.hs-action-pill.is-training.is-booked{
+  background:rgba(139,92,246,0.18);
+  border-color:rgba(139,92,246,0.55);
+  color:#8B5CF6;
+  cursor:default;
+}
+.hs-action-pill.is-training.is-booked i{ color:#8B5CF6; }
+
 /* ── Responsive: tighten pills on narrow phones ── */
 @media (max-width: 480px){
   .hs-contact-card{ padding:14px; }

@@ -811,6 +811,25 @@ function renderZohoNewCustCard(c, idx) {
       `<button class="hs-newcust-btn is-primary" data-newcust-idx="${idx}" onclick="markZohoReadyToBrandTeam('${acctId}', ${safeName}, ${safeOrder}, ${safeDate}, ${idx})"><i class="fa-solid fa-route"></i> Brand Team Onboarding</button>`,
     );
   }
+  // Budtender Training (Vibes Tier 2). NJ-only. Parallel to Onboarding but
+  // can be booked even once the Onboarding deal is already locked in — the
+  // account can have both at once (onboard the buyer on Tue, train the staff
+  // the following Thu). When already booked we flip to a non-clickable pill
+  // with the target date.
+  if (c.vibesEligible) {
+    const trainingBookedFlag = !!acct?._trainingBooked;
+    const trainingDateLabel = acct?._trainingDate ? formatDate(acct._trainingDate) : '';
+    if (trainingBookedFlag) {
+      actions.push(
+        `<button class="hs-newcust-btn is-disabled" disabled title="Training booked${trainingDateLabel ? ` — target ${trainingDateLabel}` : ''}"><i class="fa-solid fa-graduation-cap"></i> Training ${trainingDateLabel ? `· ${trainingDateLabel}` : 'Booked'}</button>`,
+      );
+    } else {
+      const safeName = escapeAttr(JSON.stringify(c.customerName || ''));
+      actions.push(
+        `<button class="hs-newcust-btn" data-training-acct="${acctId}" onclick="markZohoTraining('${acctId}', ${safeName}, ${idx})"><i class="fa-solid fa-graduation-cap"></i> Training</button>`,
+      );
+    }
+  }
   if (buyerPhone) {
     actions.push(`<a class="hs-newcust-btn${c.vibesEligible ? '' : ' is-primary'}" href="tel:${escapeAttr(buyerPhone)}"><i class="fa-solid fa-phone"></i> Call buyer</a>`);
     actions.push(`<button class="hs-newcust-btn" onclick="textBuyerByPhone('${escapeAttr(buyerPhone)}', '${escapeAttr(buyerName)}')"><i class="fa-solid fa-message"></i> Text</button>`);
@@ -959,10 +978,29 @@ function renderNewCustCard(c, idx) {
   // checkin_due). Inject it into the existing actions row if we've built one,
   // otherwise create a standalone row so the button is never missing.
   const briefBtn = `<button class="hs-newcust-btn" onclick="openBriefForNewCust('${acctId}')"><i class="fa-solid fa-brain"></i> Brief</button>`;
+
+  // Budtender Training (Vibes Tier 2). NJ-only. Sits next to Brief on every
+  // card state — pending/ready/vibes_booked/checkin_due all get the button
+  // because training cadence is independent of the onboarding ship-date.
+  // Flips to a booked pill when an open Training deal already exists on the
+  // account (server stamps acct._trainingBooked from the signed Deal).
+  let trainingBtn = '';
+  if (c.vibesEligible) {
+    const trainingBookedFlag = !!acct?._trainingBooked;
+    const trainingDateLabel = acct?._trainingDate ? formatDate(acct._trainingDate) : '';
+    if (trainingBookedFlag) {
+      trainingBtn = `<button class="hs-newcust-btn is-disabled" disabled title="Training booked${trainingDateLabel ? ` — target ${trainingDateLabel}` : ''}"><i class="fa-solid fa-graduation-cap"></i> Training ${trainingDateLabel ? `· ${trainingDateLabel}` : 'Booked'}</button>`;
+    } else {
+      const safeName = escapeAttr(JSON.stringify(c.customerName || ''));
+      trainingBtn = `<button class="hs-newcust-btn" data-training-acct="${acctId}" onclick="markZohoTraining('${acctId}', ${safeName}, ${idx})"><i class="fa-solid fa-graduation-cap"></i> Training</button>`;
+    }
+  }
+
+  const extraBtns = `${trainingBtn}${briefBtn}`;
   if (actionRow.includes('</div>')) {
-    actionRow = actionRow.replace('</div>', `${briefBtn}</div>`);
+    actionRow = actionRow.replace('</div>', `${extraBtns}</div>`);
   } else {
-    actionRow = `<div class="hs-newcust-actions">${briefBtn}</div>`;
+    actionRow = `<div class="hs-newcust-actions">${extraBtns}</div>`;
   }
 
   const cohortPill = c.is420Cohort
@@ -1105,6 +1143,73 @@ async function markZohoReadyToBrandTeam(zohoAccountId, customerName, firstOrderN
       }
     }
     toast(err.message || 'Brand Team onboarding failed', 'error');
+  }
+}
+
+// Book a Budtender Training visit (Vibes Tier 2). Parallel to the Onboarding
+// flow but with the [TIER:TRAINING] marker in the Deal description — Sky's
+// route builder buckets Training separately from Onboarding, and dedup lets
+// both exist on the same account at once (onboard the buyer, train the staff).
+//
+// Any rep can fire this against any NJ account, regardless of order history —
+// training is where product knowledge lands on the floor and sometimes the
+// training visit is the thing that tips a cold account into its first order.
+// The server enforces NJ-only (Vibes coverage rule) and de-dupes open Training
+// deals on the same account. Sky cannot book Tier 3 Check-Ins (those are
+// system-auto-scheduled) — if the buyer asks for a visit that isn't a fresh
+// onboard, Sky books it as a Training.
+async function markZohoTraining(zohoAccountId, customerName, idx, opts) {
+  const trainingFocus = (opts && opts.trainingFocus) || '';
+  // Lock every matching Training button across the UI (could appear in both
+  // Accounts list and New Customers list for the same zohoAccountId).
+  const buttons = document.querySelectorAll(
+    `[data-training-idx="${idx}"], [data-training-acct="${zohoAccountId}"]`,
+  );
+  for (const b of buttons) {
+    if (b.tagName === 'BUTTON') {
+      b.disabled = true;
+      b.classList.add('is-disabled');
+    }
+  }
+
+  try {
+    const res = await fetch('/api/sales-floor-vibes-training', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({zohoAccountId, customerName, trainingFocus}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.ok) {
+      throw new Error(data?.error || `Training booking failed (${res.status})`);
+    }
+    // Stamp both _trainingBooked + _trainingDate on the account record so the
+    // card flips into booked state immediately. Server will re-stamp from the
+    // signed Training deal on the next sync so the state survives a refresh.
+    const acct = accounts.find((a) => a && a.id === zohoAccountId);
+    if (acct) {
+      acct._trainingBooked = true;
+      acct._trainingDealId = data.dealId || null;
+      acct._trainingDate = data.trainingDate || null;
+    }
+    renderAccounts();
+    renderNewCustomers();
+    renderDashboard();
+    updateStats();
+    const when = data.trainingDate ? formatDate(data.trainingDate) : 'this week';
+    toast(
+      data.alreadyBooked
+        ? `Training already on Sky's board. Target ${when}.`
+        : `Training booked. Serena in by ${when}.`,
+    );
+  } catch (err) {
+    for (const b of buttons) {
+      if (b.tagName === 'BUTTON') {
+        b.disabled = false;
+        b.classList.remove('is-disabled');
+      }
+    }
+    toast(err.message || 'Training booking failed', 'error');
   }
 }
 
@@ -1305,6 +1410,41 @@ function renderAccounts() {
         <span>${flagged ? 'On Pete' : 'Flag Pete'}</span>
       </button>`;
 
+    // Budtender Training (Vibes Tier 2). NJ-only because Vibes coverage is
+    // NJ-only in v1 — any other state's button renders disabled with a
+    // "Vibes is NJ-only" tooltip so the rep understands why it's dark.
+    // When a Training deal already exists, the button flips to a booked pill
+    // showing the target visit date so Sky can't double-book.
+    const njAccount = stateLabel === 'NJ';
+    const trainingBooked = !!a._trainingBooked;
+    const trainingDateLabel = a._trainingDate ? formatDate(a._trainingDate) : '';
+    let trainingPill = '';
+    if (trainingBooked) {
+      trainingPill = `
+        <button class="hs-action-pill is-training is-booked" disabled
+                title="Training booked${trainingDateLabel ? ` — target ${trainingDateLabel}` : ''}">
+          <i class="fa-solid fa-graduation-cap"></i>
+          <span>Training ${trainingDateLabel ? `· ${trainingDateLabel}` : 'Booked'}</span>
+        </button>`;
+    } else if (njAccount) {
+      const safeName = escapeAttr(JSON.stringify(a.Account_Name || ''));
+      trainingPill = `
+        <button class="hs-action-pill is-training"
+                data-training-acct="${escapeAttr(a.id || '')}"
+                onclick="event.stopPropagation(); markZohoTraining('${escapeAttr(a.id || '')}', ${safeName}, ${idx})"
+                title="Book a Budtender Training visit with Serena">
+          <i class="fa-solid fa-graduation-cap"></i>
+          <span>Training</span>
+        </button>`;
+    } else {
+      trainingPill = `
+        <button class="hs-action-pill is-training is-disabled" disabled
+                title="Vibes is NJ-only for v1">
+          <i class="fa-solid fa-graduation-cap"></i>
+          <span>Training</span>
+        </button>`;
+    }
+
     return contactCardHtml({
       idx,
       kind: 'account',
@@ -1318,7 +1458,10 @@ function renderAccounts() {
       briefHandler: `openBriefForAccount(${idx})`,
       extraRow,
       headerExtra,
-      extraAction: flagPill,
+      // Training + Flag Pete both live in the single extraAction slot;
+      // concatenating keeps the layout tight (one flex row) without having
+      // to open a new prop on contactCardHtml just for a second pill.
+      extraAction: `${trainingPill}${flagPill}`,
     });
   }).join('');
 }
