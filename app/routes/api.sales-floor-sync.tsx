@@ -216,6 +216,16 @@ async function fetchLeads(accessToken: string, ownerId: string | null) {
     // Drop leads whose Company starts with "Test" (same rule we use for
     // accounts) so throwaway seeded records don't clutter the Leads tab.
     .filter((l: any) => !isTestName(l.Company))
+    // Drop leads with no email AND no phone AND no mobile — a lead with
+    // zero contact methods is useless on the Sales Floor (can't call,
+    // can't text, can't email), so we hide it. Record stays in Zoho; we
+    // just don't surface it to the rep.
+    .filter((l: any) => {
+      const email = String(l.Email || '').trim();
+      const phone = String(l.Phone || '').trim();
+      const mobile = String(l.Mobile || '').trim();
+      return Boolean(email || phone || mobile);
+    })
     .map((l: any) => ({
     id: l.id,
     First_Name: l.First_Name || '',
