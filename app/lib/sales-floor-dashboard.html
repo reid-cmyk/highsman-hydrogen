@@ -491,13 +491,15 @@
            Two sources feed this tab:
              • NJ — LeafLink state machine:
                  pending     → waiting on Accepted + actual_ship_date
-                 ready       → "Ready to Account Visit" enabled
+                 ready       → "Brand Team Onboarding" enabled
                  vibes_booked → onboard deal exists; show 12-day check-in date
                  checkin_due → 12+ days post-ship; "Log Check-in" enabled
                  done        → checkin note exists (filtered out server-side)
-             • NY / RI / MO — Zoho-sourced first-order cards
-                 Total_Orders_Count === 1 on the Account record.
-                 Simpler card (no Vibes, no ship date — call the buyer).
+             • Zoho-sourced (all markets, incl. NJ fallback when LeafLink's
+               name match misses) — Total_Orders_Count === 1 on the Account.
+               NJ Zoho cards also get the Brand Team Onboarding button (uses
+               First_Order_Date as the check-in basis). NY/RI/MO Zoho cards
+               stay simple: call the buyer, welcome them.
            State tab strip lets the rep narrow to one market. -->
       <div id="tab-newcustomers" class="tab-content hidden">
         <div class="hs-toolbar">

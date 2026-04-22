@@ -616,6 +616,11 @@ function combinedNewCustomers() {
       // null when the Deal_Name didn't carry a "#N" — card then falls back
       // to the date-only line.
       firstOrderNumber: a.First_Order_Number || null,
+      // NJ gets the Brand Team Onboarding button — the /api/sales-floor-
+      // vibes-onboard endpoint accepts firstOrderDate as a ship-date
+      // fallback for Zoho-sourced cards and runs a duplicate-Deal check
+      // in the Needs Onboarding pipeline before creating a new one.
+      vibesEligible: stateCode === 'NJ',
       // 4/20 cohort still applies: if the single first order landed on/after
       // 4/20/2026, mark it. Matches the LeafLink-side cohort rule.
       is420Cohort: isOnOrAfter420(a.First_Order_Date || a.Last_Order_Date),
@@ -737,14 +742,32 @@ function renderZohoNewCustCard(c, idx) {
     orderLine = `<div class="hs-newcust-order">First order ${dateLabel}</div>`;
   }
 
-  const body = `
+  // Copy + actions split by state. NJ gets the full Brand Team Onboarding
+  // flow on top of the call/text/email row — the rep can route the visit in
+  // one click the same way the LeafLink-sourced cards do.
+  const body = c.vibesEligible
+    ? `
+    <div class="hs-newcust-copy">
+      First order just landed. Send the brand team — Sky drops in to walk product and stock the shelves.
+    </div>`
+    : `
     <div class="hs-newcust-copy">
       First Highsman order just landed. Call the buyer — welcome them, confirm the drop, set the reorder cadence.
     </div>`;
 
   const actions = [];
+  if (c.vibesEligible) {
+    // NJ → Brand Team Onboarding is the primary CTA. Uses firstOrderDate as
+    // the ship-date fallback (server accepts it for Zoho-sourced cards).
+    const safeName = JSON.stringify(c.customerName || '');
+    const safeOrder = JSON.stringify(c.firstOrderNumber || '');
+    const safeDate = JSON.stringify(c.firstOrderDate || '');
+    actions.push(
+      `<button class="hs-newcust-btn is-primary" data-newcust-idx="${idx}" onclick="markZohoReadyToBrandTeam('${acctId}', ${safeName}, ${safeOrder}, ${safeDate}, ${idx})"><i class="fa-solid fa-route"></i> Brand Team Onboarding</button>`,
+    );
+  }
   if (buyerPhone) {
-    actions.push(`<a class="hs-newcust-btn is-primary" href="tel:${escapeAttr(buyerPhone)}"><i class="fa-solid fa-phone"></i> Call buyer</a>`);
+    actions.push(`<a class="hs-newcust-btn${c.vibesEligible ? '' : ' is-primary'}" href="tel:${escapeAttr(buyerPhone)}"><i class="fa-solid fa-phone"></i> Call buyer</a>`);
     actions.push(`<button class="hs-newcust-btn" onclick="textBuyerByPhone('${escapeAttr(buyerPhone)}', '${escapeAttr(buyerName)}')"><i class="fa-solid fa-message"></i> Text</button>`);
   }
   if (buyerEmail) {
@@ -801,7 +824,7 @@ function renderNewCustCard(c, idx) {
     actionRow = `
       <div class="hs-newcust-actions">
         <button class="hs-newcust-btn is-disabled" disabled title="Waiting on Accepted status + ship date">
-          <i class="fa-solid fa-lock"></i> Ready to Account Visit
+          <i class="fa-solid fa-lock"></i> Brand Team Onboarding
         </button>
       </div>`;
   } else if (c.cardState === 'ready') {
@@ -825,13 +848,13 @@ function renderNewCustCard(c, idx) {
       const safeStatus = JSON.stringify(c.firstOrderStatus || '');
       body = `
         <div class="hs-newcust-copy">
-          Ship date locked. Send to Vibes — Sky drops in to walk product and stock the shelves.
+          Ship date locked. Send the brand team — Sky drops in to walk product and stock the shelves.
         </div>`;
       actionRow = `
         <div class="hs-newcust-actions">
           <button class="hs-newcust-btn is-primary" data-newcust-idx="${idx}"
             onclick="markReadyToVibesVisit('${acctId}', ${safeName}, ${safeOrder}, ${safeShip}, ${safeStatus}, ${idx})">
-            <i class="fa-solid fa-route"></i> Ready to Account Visit
+            <i class="fa-solid fa-route"></i> Brand Team Onboarding
           </button>
         </div>`;
     }
@@ -929,7 +952,7 @@ async function markReadyToVibesVisit(zohoAccountId, customerName, firstOrderNumb
     card.checkInDueDate = data.checkInDueDate || card.checkInDueDate;
     card.cardState = 'vibes_booked';
     renderNewCustomers();
-    toast(`Sent to Vibes. Check in by ${formatDate(card.checkInDueDate)}.`);
+    toast(`Brand team locked in. Check in by ${formatDate(card.checkInDueDate)}.`);
   } catch (err) {
     // Rollback
     card.cardState = prevState;
@@ -937,7 +960,70 @@ async function markReadyToVibesVisit(zohoAccountId, customerName, firstOrderNumb
     renderNewCustomers();
     renderDashboard();
     updateStats();
-    toast(err.message || 'Vibes onboard failed', 'error');
+    toast(err.message || 'Brand Team onboarding failed', 'error');
+  }
+}
+
+// Zoho-sourced twin of markReadyToVibesVisit. Used on the NJ Zoho-fallback
+// cards (Total_Orders_Count === 1 on the Account but LeafLink's name match
+// missed). Sends firstOrderDate in place of actualShipDate — the server
+// accepts that as a ship-date fallback and the /api/sales-floor-vibes-onboard
+// endpoint dedup-checks existing Needs Onboarding deals so this is safe to
+// click twice. No local state-machine row to optimistically flip (these
+// cards are derived on the fly from accounts[]), so we just disable the
+// button, POST, and toast on return.
+async function markZohoReadyToBrandTeam(zohoAccountId, customerName, firstOrderNumber, firstOrderDate, idx) {
+  // Lock the button so a double-tap doesn't fire twice.
+  const buttons = document.querySelectorAll(
+    `[data-newcust-idx="${idx}"]`,
+  );
+  for (const b of buttons) {
+    if (b.tagName === 'BUTTON') {
+      b.disabled = true;
+      b.classList.add('is-disabled');
+    }
+  }
+
+  try {
+    const res = await fetch('/api/sales-floor-vibes-onboard', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        zohoAccountId,
+        customerName,
+        firstOrderNumber,
+        // Zoho-path body: firstOrderDate is the basis for the 12-day check-in
+        // timer when actualShipDate/firstOrderStatus aren't available.
+        firstOrderDate,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.ok) {
+      throw new Error(data?.error || `Brand team onboarding failed (${res.status})`);
+    }
+    // Optimistically remove this account from the Zoho-sourced first-order
+    // pool so the card disappears on the next render — it's now "booked".
+    // On next background refresh the server-side dedup will hold.
+    const acct = accounts.find((a) => a && a.id === zohoAccountId);
+    if (acct) acct._orderCount = 0;
+    renderNewCustomers();
+    renderDashboard();
+    updateStats();
+    const when = data.checkInDueDate ? formatDate(data.checkInDueDate) : 'soon';
+    toast(
+      data.alreadyBooked
+        ? `Already on Sky's board. Check in by ${when}.`
+        : `Brand team locked in. Check in by ${when}.`,
+    );
+  } catch (err) {
+    for (const b of buttons) {
+      if (b.tagName === 'BUTTON') {
+        b.disabled = false;
+        b.classList.remove('is-disabled');
+      }
+    }
+    toast(err.message || 'Brand Team onboarding failed', 'error');
   }
 }
 
