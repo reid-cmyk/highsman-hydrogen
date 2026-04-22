@@ -138,6 +138,12 @@ async function loadFreshAccounts(
   const allDeals: any[] = data.data || [];
   debug.dealsFetched = allDeals.length;
 
+  // Sample first 5 deal descriptions so we can see what Zoho actually stores.
+  debug.sampleDescriptions = allDeals.slice(0, 5).map((d) => ({
+    name: d?.Deal_Name || null,
+    desc: typeof d?.Description === 'string' ? d.Description.slice(0, 200) : null,
+  }));
+
   // Only surface deals that were created from the Sales Floor "Brand Team
   // Onboarding" button. Legacy / manually-created deals in this pipeline are
   // preserved in Zoho for records but intentionally excluded here — Reid
