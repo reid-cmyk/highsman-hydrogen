@@ -536,7 +536,11 @@ function renderOrders() {
     const acct = r.zohoAccountId
       ? accounts.find(a => a.id === r.zohoAccountId)
       : null;
-    const buyer = acct?._buyer || null;
+    // Property name: `buyer` (no underscore). The sync endpoint writes
+  // acc.buyer = pickBuyer(list), so the matched-account's buyer is at
+  // acct.buyer. Reading acct._buyer returns undefined and every New
+  // Customer card silently shows "No buyer yet" regardless of Zoho state.
+  const buyer = acct?.buyer || null;
     const buyerLine = buyer
       ? `<div class="hs-orders-buyer"><i class="fa-solid fa-user"></i> ${escapeHtml(buyer._fullName || '')}${buyer._jobRole ? ` · ${escapeHtml(buyer._jobRole)}` : ''}</div>`
       : '';
@@ -721,7 +725,11 @@ function renderZohoNewCustCard(c, idx) {
   const name = escapeHtml(c.customerName || '—');
   const state = c.state ? `<span class="hs-newcust-state">${escapeHtml(c.state)}</span>` : '';
   const acct = c.zohoAccountId ? accounts.find(a => a.id === c.zohoAccountId) : null;
-  const buyer = acct?._buyer || null;
+  // Property name: `buyer` (no underscore). The sync endpoint writes
+  // acc.buyer = pickBuyer(list), so the matched-account's buyer is at
+  // acct.buyer. Reading acct._buyer returns undefined and every New
+  // Customer card silently shows "No buyer yet" regardless of Zoho state.
+  const buyer = acct?.buyer || null;
   const buyerPhone = buyer?.Mobile || buyer?.Phone || acct?.Phone || '';
   const buyerEmail = buyer?.Email || acct?.Email || '';
   const buyerName = buyer?._fullName || c.customerName || '';
@@ -803,7 +811,11 @@ function renderNewCustCard(c, idx) {
   const name = escapeHtml(c.customerName || '—');
   const state = c.state ? `<span class="hs-newcust-state">${escapeHtml(c.state)}</span>` : '';
   const acct = c.zohoAccountId ? accounts.find(a => a.id === c.zohoAccountId) : null;
-  const buyer = acct?._buyer || null;
+  // Property name: `buyer` (no underscore). The sync endpoint writes
+  // acc.buyer = pickBuyer(list), so the matched-account's buyer is at
+  // acct.buyer. Reading acct._buyer returns undefined and every New
+  // Customer card silently shows "No buyer yet" regardless of Zoho state.
+  const buyer = acct?.buyer || null;
   const buyerPhone = buyer?.Mobile || buyer?.Phone || c.phone || '';
   const orderLine = c.firstOrderNumber
     ? `<div class="hs-newcust-order">Order #${escapeHtml(String(c.firstOrderNumber))} · ${escapeHtml(c.firstOrderStatus || 'Pending')}</div>`
