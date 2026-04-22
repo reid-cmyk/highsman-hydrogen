@@ -3351,6 +3351,18 @@ a.hs-contact-meta-cell:hover i{ color:var(--gold); }
   letter-spacing:0.18em;
   box-shadow:0 0 0 1px rgba(245,228,0,0.45), 0 0 10px rgba(245,228,0,0.25);
 }
+/* First-order card (Zoho-sourced NY/RI/MO) — calmer gold rail, distinct from
+   the LeafLink "is-ready" urgent gold so reps read it as informational. */
+.hs-newcust-card.is-first-order{
+  border-left-color:var(--gold, #F5E400);
+  background:linear-gradient(180deg, rgba(245,228,0,0.025), var(--panel, #0E0E0E) 55%);
+}
+.hs-newcust-pill.is-first-order{
+  background:rgba(245,228,0,0.14);
+  color:var(--gold, #F5E400);
+  border:1px solid rgba(245,228,0,0.32);
+  font-weight:600;
+}
 /* Full-card 4/20 cohort glow — subtle gold rail on top of the state's left border */
 .hs-newcust-card.is-420-cohort{
   background:

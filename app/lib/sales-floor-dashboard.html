@@ -487,18 +487,25 @@
 
 
       <!-- ═══════════════════ NEW CUSTOMERS ═══════════════════ -->
-      <!-- First-time Highsman LeafLink orders, in a state machine:
-             pending     → waiting on Accepted + actual_ship_date
-             ready       → "Ready to Account Visit" enabled
-             vibes_booked → onboard deal exists; show 12-day check-in date
-             checkin_due → 12+ days post-ship; "Log Check-in" enabled
-             done        → checkin note exists (filtered out server-side)
-           Out-of-NJ accounts show "Vibes coverage isn't live in [state]"
-           because the Vibes program is NJ-only for v1. -->
+      <!-- First-time Highsman orders across every market (except MA).
+           Two sources feed this tab:
+             • NJ — LeafLink state machine:
+                 pending     → waiting on Accepted + actual_ship_date
+                 ready       → "Ready to Account Visit" enabled
+                 vibes_booked → onboard deal exists; show 12-day check-in date
+                 checkin_due → 12+ days post-ship; "Log Check-in" enabled
+                 done        → checkin note exists (filtered out server-side)
+             • NY / RI / MO — Zoho-sourced first-order cards
+                 Total_Orders_Count === 1 on the Account record.
+                 Simpler card (no Vibes, no ship date — call the buyer).
+           State tab strip lets the rep narrow to one market. -->
       <div id="tab-newcustomers" class="tab-content hidden">
         <div class="hs-toolbar">
           <div class="hs-toolbar-meta" id="newcust-count"></div>
         </div>
+        <!-- State tabs: All / NJ / NY / RI / MO (MA never appears — excluded
+             in combinedNewCustomers). Mirrors the Leads + Accounts strips. -->
+        <div id="newcust-state-tabs" class="hs-state-tabs" role="tablist" aria-label="Filter new customers by state"></div>
         <div id="newcust-list" class="hs-newcust-list">
           <div class="hs-empty-state py-12">
             <div class="hs-empty-state-icon"><i class="fa-solid fa-user-plus"></i></div>

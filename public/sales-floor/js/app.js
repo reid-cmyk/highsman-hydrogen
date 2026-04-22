@@ -11,6 +11,12 @@ let currentFilter = 'all';
 // loaded data, so a rep working a single state never sees noise from others.
 let currentLeadState = 'all';
 let currentAccountState = 'all';
+// New Customers state filter. Same tab strip pattern as Leads/Accounts — 'all'
+// by default, NJ/NY/RI/MO narrows the list. MA is intentionally excluded per
+// Reid (no MA new-customer tracking). NJ cards come from LeafLink with the
+// full Vibes-onboard state machine; NY/RI/MO cards come from Zoho first-order
+// accounts (Total_Orders_Count === 1) with a simpler call-the-buyer CTA.
+let currentNewCustState = 'all';
 let currentBriefLead = null;
 let callsToday = 0;          // legacy: local tel:-click counter (pre-Quo)
 let quoTodayCalls = null;    // real count from Quo; null = not yet fetched
@@ -197,14 +203,19 @@ function renderAll() {
   // render so the count chips on each tab line up with what's actually shown.
   renderLeadStateTabs();
   renderAccountStateTabs();
+  renderNewCustStateTabs();
   renderLeads();
   renderAccounts();
+  // Paint Zoho-only new-customer cards (NY/RI/MO) right away — they come from
+  // accounts[] so they don't need the LeafLink fetch to complete. NJ cards
+  // get added when loadLeaflinkOrders() lands.
+  renderNewCustomers();
   renderDashboard();
   updateStats();
   populateIssueAccountDropdown();
-  // Orders Due + New Customers are LeafLink-driven, not Zoho-driven, so
-  // they have their own loader. Kick it off after the Zoho render lands so
-  // the dashboard's other panels paint first.
+  // Orders Due + NJ New Customers are LeafLink-driven, so they have their
+  // own loader. Kick it off after the Zoho render lands so the dashboard's
+  // other panels paint first.
   loadLeaflinkOrders({force: false}).catch(() => {});
 }
 
@@ -241,11 +252,15 @@ function updateStats() {
   syncCountBadge('orders-nav-badge', reorderDue.length);
   syncCountBadge('bn-orders-badge', reorderDue.length);
 
-  // New Customers nav badge — count of pending/ready/checkin_due cards.
-  // We exclude vibes_booked because that one is "in flight" — the rep has
-  // already taken the next step. Done is filtered server-side.
-  const newcustActive = newCustomers.filter(c =>
-    c.cardState === 'pending' || c.cardState === 'ready' || c.cardState === 'checkin_due'
+  // New Customers nav badge — count of cards that still need rep action.
+  // Includes LeafLink pending/ready/checkin_due AND Zoho-sourced zoho_new
+  // (NY/RI/MO first-order welcome calls). vibes_booked is excluded because
+  // that one's already in flight with Sky.
+  const newcustActive = combinedNewCustomers().filter(c =>
+    c.cardState === 'pending' ||
+    c.cardState === 'ready' ||
+    c.cardState === 'checkin_due' ||
+    c.cardState === 'zoho_new'
   ).length;
   syncCountBadge('newcust-nav-badge', newcustActive);
   syncCountBadge('sheet-newcust-badge', newcustActive);
@@ -327,15 +342,18 @@ function renderDashboard() {
   if (ordersEl) {
     if (!leaflinkOrdersFetched) {
       ordersEl.innerHTML = `<div class="hs-empty-state">Loading orders…</div>`;
-    } else if (reorderDue.length === 0 && newCustomers.length === 0) {
+    } else if (reorderDue.length === 0 && combinedNewCustomers().length === 0) {
       ordersEl.innerHTML = `
         <div class="hs-empty-state">
           <div class="hs-empty-state-icon"><i class="fa-solid fa-clipboard-check"></i></div>
           Inbox zero on reorders. Spark Greatness.
         </div>`;
     } else {
-      const newcustActive = newCustomers.filter(c =>
-        c.cardState === 'pending' || c.cardState === 'ready' || c.cardState === 'checkin_due'
+      const newcustActive = combinedNewCustomers().filter(c =>
+        c.cardState === 'pending' ||
+        c.cardState === 'ready' ||
+        c.cardState === 'checkin_due' ||
+        c.cardState === 'zoho_new'
       ).length;
       const newcustPill = newcustActive > 0
         ? `<button onclick="showTab('newcustomers')" class="hs-orders-snap-pill">
@@ -460,6 +478,7 @@ async function loadLeaflinkOrders({force = false} = {}) {
   } finally {
     leaflinkOrdersLoading = false;
     renderOrders();
+    renderNewCustStateTabs();
     renderNewCustomers();
     renderDashboard();
     updateStats();
@@ -548,22 +567,88 @@ function renderOrders() {
 }
 
 // ─── New Customers (state-machine cards) ──────────────────────────────────────
-// Card lifecycle, driven by API + local optimistic updates:
-//   pending       — first order placed, no ship date yet (Vibes booking blocked)
-//   ready         — order Accepted+ AND ship date set (Vibes booking unlocked)
-//   vibes_booked  — Sky's onboard deal created, awaiting check-in window
-//   checkin_due   — 12 days post-ship, rep needs to call to verify sales
-//   done          — check-in logged; card removed
+// Two sources feed this tab:
+//   1) LeafLink (NJ only — Canfections is our NJ seller): cards drive the full
+//      state machine — pending → ready → vibes_booked → checkin_due → done.
+//      These are the richest cards because we have order status + ship date +
+//      the Vibes onboard workflow.
+//   2) Zoho first-order accounts (NY/RI/MO — any state except NJ/MA): cards
+//      are surfaced when Total_Orders_Count === 1 in Zoho. They're simpler —
+//      no LeafLink order status, no Vibes workflow (Vibes is NJ-only v1) —
+//      so the card is just "first order landed, call the buyer to welcome
+//      them." Uses the new cardState 'zoho_new'.
+// MA is intentionally excluded from both paths (Reid: no MA new-customer
+// tracking). NJ LeafLink cards always win over Zoho entries for the same
+// zohoAccountId (the LeafLink state machine carries more info).
+function combinedNewCustomers() {
+  // Keep LeafLink cards intact — they're the richer source.
+  const leafByAcct = new Set(
+    (newCustomers || [])
+      .filter((c) => c && c.zohoAccountId)
+      .map((c) => c.zohoAccountId),
+  );
+  const leaf = (newCustomers || []).filter((c) => c.cardState !== 'done');
+
+  // Add Zoho first-order accounts that LeafLink didn't already surface. NY/RI/MO
+  // only — NJ is LeafLink's territory, MA is excluded per Reid.
+  const zohoOnly = [];
+  for (const a of accounts) {
+    if (!a || !a.id) continue;
+    if (Number(a._orderCount || 0) !== 1) continue;
+    if (leafByAcct.has(a.id)) continue;
+    const stateCode = normalizeStateCode(a._state || a.Billing_State);
+    if (!stateCode || stateCode === 'MA') continue;
+    if (stateCode === 'NJ') continue; // NJ comes from LeafLink
+    zohoOnly.push({
+      kind: 'zoho',
+      cardState: 'zoho_new',
+      zohoAccountId: a.id,
+      customerName: a.Account_Name || '—',
+      state: stateCode,
+      firstOrderDate: a.First_Order_Date || null,
+      lastOrderDate: a.Last_Order_Date || null,
+      // 4/20 cohort still applies: if the single first order landed on/after
+      // 4/20/2026, mark it. Matches the LeafLink-side cohort rule.
+      is420Cohort: isOnOrAfter420(a.First_Order_Date || a.Last_Order_Date),
+    });
+  }
+
+  return [...leaf, ...zohoOnly];
+}
+
+// Is this date on or after 4/20/2026? Mirrors server-side cohort logic so the
+// gold-bar treatment is consistent across LeafLink + Zoho-sourced cards.
+function isOnOrAfter420(dateStr) {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return false;
+  return d.getTime() >= new Date('2026-04-20T00:00:00Z').getTime();
+}
+
 function renderNewCustomers() {
   const list = document.getElementById('newcust-list');
   const meta = document.getElementById('newcust-count');
   if (!list) return;
 
+  // Until LeafLink has fetched at least once we hold the UI in a loading state
+  // — even though Zoho accounts may already be populated — so we don't paint a
+  // half-list and then flash-update. Zoho-only cards appear alongside LeafLink
+  // cards the moment both sources are ready.
+  const combined = combinedNewCustomers();
+  // Normalize c.state on the way in — LeafLink-sourced cards can come back
+  // with "New Jersey" rather than "NJ" (Billing_State in Zoho isn't
+  // guaranteed to be 2-letter), so compare on the canonical code.
+  const stateFiltered = currentNewCustState === 'all'
+    ? combined
+    : combined.filter((c) => normalizeStateCode(c.state) === currentNewCustState);
+
   if (meta) {
-    const active = newCustomers.filter(c =>
-      c.cardState === 'pending' || c.cardState === 'ready' || c.cardState === 'checkin_due'
+    // Count anything that's not 'done' — LeafLink pending/ready/checkin_due
+    // AND Zoho zoho_new cards all represent shops that still need action.
+    const active = stateFiltered.filter(c =>
+      c.cardState !== 'done' && c.cardState !== 'vibes_booked'
     ).length;
-    const cohort420 = newCustomers.filter(c => c.is420Cohort && c.cardState !== 'done').length;
+    const cohort420 = stateFiltered.filter(c => c.is420Cohort && c.cardState !== 'done').length;
     if (!leaflinkOrdersFetched) {
       meta.textContent = 'Loading…';
     } else {
@@ -582,28 +667,91 @@ function renderNewCustomers() {
     return;
   }
 
-  // Filter out 'done' cards — they've graduated to the regular Accounts list.
-  const active = newCustomers.filter(c => c.cardState !== 'done');
-  if (active.length === 0) {
+  if (stateFiltered.length === 0) {
+    const scope = currentNewCustState === 'all' ? '' : ` in ${currentNewCustState}`;
     list.innerHTML = `<div class="hs-empty-state">
       <div class="hs-empty-state-icon"><i class="fa-solid fa-user-plus"></i></div>
-      No new shops onboarding right now.
+      No new shops onboarding${scope} right now.
     </div>`;
     return;
   }
 
   // Order:
-  //   1) 4/20 drop cohort first — these are the fresh first-time Highsman
-  //      buyers from the 4/20 weekend, lock them in now.
-  //   2) within each group: checkin_due → ready → pending → vibes_booked
-  const order = {checkin_due: 0, ready: 1, pending: 2, vibes_booked: 3};
-  const sorted = [...active].sort((a, b) => {
+  //   1) 4/20 drop cohort first — fresh first-time Highsman buyers from the
+  //      4/20 weekend. Lock them in now.
+  //   2) within each group:
+  //        checkin_due → ready → pending → zoho_new → vibes_booked
+  //      (zoho_new sits near the bottom because we don't have order-status
+  //       urgency to rank it against LeafLink cards — it's a "call the buyer"
+  //       nudge that's always the same priority.)
+  const order = {checkin_due: 0, ready: 1, pending: 2, zoho_new: 3, vibes_booked: 4};
+  const sorted = [...stateFiltered].sort((a, b) => {
     const cohortDelta = (b.is420Cohort ? 1 : 0) - (a.is420Cohort ? 1 : 0);
     if (cohortDelta !== 0) return cohortDelta;
     return (order[a.cardState] ?? 9) - (order[b.cardState] ?? 9);
   });
 
-  list.innerHTML = sorted.map((c, idx) => renderNewCustCard(c, idx)).join('');
+  list.innerHTML = sorted.map((c, idx) => {
+    return c.cardState === 'zoho_new'
+      ? renderZohoNewCustCard(c, idx)
+      : renderNewCustCard(c, idx);
+  }).join('');
+}
+
+// Render a simpler "first order from Zoho" card for NY/RI/MO. No LeafLink
+// ship-date / order-status context and no Vibes-onboard button (Vibes is NJ
+// v1 only). The rep's job here is simpler: call/text the buyer to welcome
+// them to Highsman and confirm the order shipped smoothly.
+function renderZohoNewCustCard(c, idx) {
+  const acctId = escapeAttr(c.zohoAccountId || '');
+  const name = escapeHtml(c.customerName || '—');
+  const state = c.state ? `<span class="hs-newcust-state">${escapeHtml(c.state)}</span>` : '';
+  const acct = c.zohoAccountId ? accounts.find(a => a.id === c.zohoAccountId) : null;
+  const buyer = acct?._buyer || null;
+  const buyerPhone = buyer?.Mobile || buyer?.Phone || acct?.Phone || '';
+  const buyerEmail = buyer?.Email || acct?.Email || '';
+  const buyerName = buyer?._fullName || c.customerName || '';
+
+  const orderLine = c.firstOrderDate
+    ? `<div class="hs-newcust-order">First order ${escapeHtml(formatDate(c.firstOrderDate))}</div>`
+    : '';
+
+  const body = `
+    <div class="hs-newcust-copy">
+      First Highsman order just landed. Call the buyer — welcome them, confirm the drop, set the reorder cadence.
+    </div>`;
+
+  const actions = [];
+  if (buyerPhone) {
+    actions.push(`<a class="hs-newcust-btn is-primary" href="tel:${escapeAttr(buyerPhone)}"><i class="fa-solid fa-phone"></i> Call buyer</a>`);
+    actions.push(`<button class="hs-newcust-btn" onclick="textBuyerByPhone('${escapeAttr(buyerPhone)}', '${escapeAttr(buyerName)}')"><i class="fa-solid fa-message"></i> Text</button>`);
+  }
+  if (buyerEmail) {
+    actions.push(`<a class="hs-newcust-btn" href="mailto:${escapeAttr(buyerEmail)}"><i class="fa-solid fa-envelope"></i> Email</a>`);
+  }
+  const actionRow = actions.length
+    ? `<div class="hs-newcust-actions">${actions.join('')}</div>`
+    : `<div class="hs-newcust-actions"><span class="hs-newcust-btn is-disabled" title="No buyer contact on file"><i class="fa-solid fa-user-slash"></i> No buyer yet</span></div>`;
+
+  const cohortPill = c.is420Cohort
+    ? `<span class="hs-newcust-pill is-420" title="First Highsman order on or after 4/20/2026">4/20 DROP</span>`
+    : '';
+  const cardClasses = ['hs-newcust-card', 'is-first-order'];
+  if (c.is420Cohort) cardClasses.push('is-420-cohort');
+
+  return `
+    <div class="${cardClasses.join(' ')}" data-newcust-id="${acctId}">
+      <div class="hs-newcust-head">
+        <div class="hs-newcust-name">${name}${state}</div>
+        <div class="hs-newcust-pills">
+          ${cohortPill}
+          <span class="hs-newcust-pill is-first-order">First Order</span>
+        </div>
+      </div>
+      ${orderLine}
+      ${body}
+      ${actionRow}
+    </div>`;
 }
 
 function renderNewCustCard(c, idx) {
@@ -1033,6 +1181,25 @@ function tallyStates(records, getter) {
     });
 }
 
+// Render the state-tab strip on the New Customers tab. Same pattern as the
+// Leads/Accounts tabs: "All" first, then whichever state codes show up in the
+// combined list (never MA — filtered out in combinedNewCustomers). Counts
+// reflect the combined list, not the currently-filtered list, so a rep can
+// see how many NY / RI / MO cards exist before clicking through.
+function renderNewCustStateTabs() {
+  const host = document.getElementById('newcust-state-tabs');
+  if (!host) return;
+  const combined = combinedNewCustomers();
+  const buckets = tallyStates(combined, (c) => c.state);
+  host.innerHTML = stateTabsHtml('newcust', buckets, currentNewCustState, combined.length);
+}
+
+function filterNewCustomersByState(code) {
+  currentNewCustState = code;
+  renderNewCustStateTabs();
+  renderNewCustomers();
+}
+
 function renderLeadStateTabs() {
   const host = document.getElementById('lead-state-tabs');
   if (!host) return;
@@ -1059,7 +1226,11 @@ function renderAccountStateTabs() {
 function stateTabsHtml(kind, buckets, active, totalCount) {
   // No data? Hide the strip entirely — an empty tab row is just clutter.
   if (!buckets.length) return '';
-  const handler = kind === 'lead' ? 'filterLeadsByState' : 'filterAccountsByState';
+  const handler = kind === 'lead'
+    ? 'filterLeadsByState'
+    : kind === 'newcust'
+      ? 'filterNewCustomersByState'
+      : 'filterAccountsByState';
   const allBtn = `
     <button onclick="${handler}('all')"
             class="hs-state-tab ${active === 'all' ? 'active' : ''}"
