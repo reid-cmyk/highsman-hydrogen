@@ -177,10 +177,18 @@ export function parseSalesFloorCookies(cookieHeader: string | null | undefined):
   return {authed, repId};
 }
 
-// Build the Set-Cookie header pair for a successful login. Path scoped to
-// /sales-floor so these cookies never leak to the rest of the site.
+// Build the Set-Cookie header pair for a successful login.
+//
+// Path=/ (NOT /sales-floor): the dashboard UI lives under /sales-floor/* but
+// every XHR it makes goes to /api/sales-floor-* (sync, send-email, send-sms,
+// set-account-buyer, task-complete, …). Per RFC 6265, a cookie scoped to
+// /sales-floor does NOT match request paths starting with /api, so those
+// endpoints received no cookie and silently 401'd (or fell back to an
+// unfiltered view). We hit this on Set Buyer in Apr 2026 — "Could not save
+// buyer: unauthorized" — even though the user was clearly logged in.
+// HttpOnly keeps the cookies out of page JS, so broadening Path to / is safe.
 export function buildLoginCookieHeaders(repId: SalesRepId): string[] {
-  const common = `Path=/sales-floor; HttpOnly; Secure; SameSite=Lax; Max-Age=86400`;
+  const common = `Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=86400`;
   return [
     `${AUTH_COOKIE_NAME}=1; ${common}`,
     `${REP_COOKIE_NAME}=${encodeURIComponent(repId)}; ${common}`,
@@ -188,11 +196,18 @@ export function buildLoginCookieHeaders(repId: SalesRepId): string[] {
 }
 
 // Build the expired Set-Cookie pair for logout (Max-Age=0 clears).
+// Also clear the legacy Path=/sales-floor cookies from pre-Apr-2026 sessions
+// so the logout actually clears state for users who logged in before the
+// cookie-path fix (browsers treat Path=/ and Path=/sales-floor as separate
+// cookie jars — we have to expire both).
 export function buildLogoutCookieHeaders(): string[] {
-  const common = `Path=/sales-floor; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
+  const common = `HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
   return [
-    `${AUTH_COOKIE_NAME}=; ${common}`,
-    `${REP_COOKIE_NAME}=; ${common}`,
+    `${AUTH_COOKIE_NAME}=; Path=/; ${common}`,
+    `${REP_COOKIE_NAME}=; Path=/; ${common}`,
+    // Legacy path — clears any cookie still lingering from before the broaden.
+    `${AUTH_COOKIE_NAME}=; Path=/sales-floor; ${common}`,
+    `${REP_COOKIE_NAME}=; Path=/sales-floor; ${common}`,
   ];
 }
 
