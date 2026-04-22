@@ -75,7 +75,15 @@ async function loadFreshAccounts(zohoToken: string): Promise<RouteStop[]> {
   );
   url.searchParams.set(
     'fields',
-    ['Deal_Name', 'Pipeline', 'Stage', 'Closing_Date', 'Created_Time', 'Account_Name'].join(','),
+    [
+      'Deal_Name',
+      'Pipeline',
+      'Stage',
+      'Closing_Date',
+      'Created_Time',
+      'Account_Name',
+      'Description',
+    ].join(','),
   );
   url.searchParams.set('per_page', '100');
 
@@ -88,7 +96,18 @@ async function loadFreshAccounts(zohoToken: string): Promise<RouteStop[]> {
     return [];
   }
   const data = await res.json();
-  const deals: any[] = data.data || [];
+  const allDeals: any[] = data.data || [];
+
+  // Only surface deals that were created from the Sales Floor "Brand Team
+  // Onboarding" button. Legacy / manually-created deals in this pipeline are
+  // preserved in Zoho for records but intentionally excluded here — Reid
+  // wanted the FRESH list to start empty and fill only from Sales Floor
+  // submissions going forward.
+  const SALES_FLOOR_SIGNATURE = 'Auto-created from /sales-floor';
+  const deals = allDeals.filter((d) => {
+    const desc = typeof d?.Description === 'string' ? d.Description : '';
+    return desc.includes(SALES_FLOOR_SIGNATURE);
+  });
 
   const freshStops: RouteStop[] = [];
   for (const deal of deals) {
