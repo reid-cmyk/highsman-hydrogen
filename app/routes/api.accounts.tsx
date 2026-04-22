@@ -97,15 +97,19 @@ async function searchAccounts(
   // records missing the Account_State picklist (common after migrations) are
   // not dropped.
   if (scope === 'nj') {
-    const q = query.replace(/[()\\]/g, '').trim();
+    const q = query.replace(/[()\\,]/g, '').trim();
     // `starts_with` matches the first word of the Account_Name — covers the
     // 90% case ("rise", "ayr", "garden", "ascend", "curaleaf", etc.). If the
     // user types a mid-word fragment we'll miss it, but that's rare in the
     // field and better than silently dropping known NJ stores.
-    const nameCriteria = `(Account_Name:starts_with:${q})`;
-    const stateCriteria =
-      `((Account_State:equals:NJ)or(Billing_State:equals:NJ)or(Billing_State:equals:New Jersey)or(Shipping_State:equals:NJ))`;
-    url.searchParams.set('criteria', `${stateCriteria}and${nameCriteria}`);
+    //
+    // Zoho's criteria parser is picky about arity — we stick to a clean
+    // 2-arity OR on the state picklist + free-text Billing_State, which
+    // covers both migrated and fresh records. Shipping_State alone rarely
+    // holds a value Billing_State doesn't also have.
+    const criteria =
+      `((Account_State:equals:NJ)or(Billing_State:equals:NJ))and(Account_Name:starts_with:${q})`;
+    url.searchParams.set('criteria', criteria);
   } else {
     url.searchParams.set('word', query);
   }
