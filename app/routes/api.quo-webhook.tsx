@@ -147,7 +147,10 @@ async function createZohoCall(
   });
   if (!res.ok) {
     const t = await res.text().catch(() => '');
-    throw new Error(`Zoho create Call (${res.status}): ${t.slice(0, 300)}`);
+    // Surface the full Zoho error + the payload we sent so we can diagnose
+    // MANDATORY_NOT_FOUND from the webhook event log without guessing.
+    const summary = `Zoho create Call (${res.status}): ${t.slice(0, 1500)} | sent=${JSON.stringify(payload).slice(0, 800)}`;
+    throw new Error(summary);
   }
   const data = await res.json();
   const details = data?.data?.[0]?.details;
