@@ -359,6 +359,12 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const candidateDomain = (explicitDomain || derivedDomain || '').toLowerCase() || null;
   const expansionDomain = isBusinessDomain(candidateDomain) ? candidateDomain : null;
 
+  // Opt-in debug mode surfaces Gmail API errors that the normal path
+  // swallows (so a transient 401/403 degrades to an empty-brief instead
+  // of a blank page). Add `?debug=1` when diagnosing "why zero results".
+  const debug = url.searchParams.get('debug') === '1';
+  const debugErrors: Array<{stage: string; message: string}> = [];
+
   try {
     const token = await getGmailAccessToken(rep.id, repEnv);
 
@@ -369,12 +375,14 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       isValidEmail(counterpartyEmail)
         ? listMessageIds(token, counterpartyEmail, limit).catch((err) => {
             console.warn('[gmail-thread] exact search failed:', err.message);
+            debugErrors.push({stage: 'exactSearch', message: String(err?.message || err)});
             return [];
           })
         : Promise.resolve([] as Array<{id: string; threadId: string}>),
       expansionDomain
         ? listMessageIdsForDomain(token, expansionDomain, limit * 2).catch((err) => {
             console.warn('[gmail-thread] domain search failed:', err.message);
+            debugErrors.push({stage: 'domainSearch', message: String(err?.message || err)});
             return [];
           })
         : Promise.resolve([] as Array<{id: string; threadId: string}>),
@@ -405,8 +413,20 @@ export async function loader({request, context}: LoaderFunctionArgs) {
           messages: [],
           queriedEmail: counterpartyEmail || null,
           queriedDomain: expansionDomain,
+          ...(debug
+            ? {
+                _debug: {
+                  repId: rep.id,
+                  repFrom: repEnv.from,
+                  exactCount: exactIds.length,
+                  domainCount: domainIds.length,
+                  errors: debugErrors,
+                  tokenPrefix: token.slice(0, 12),
+                },
+              }
+            : {}),
         },
-        {status: 200, headers: {'Cache-Control': 'private, max-age=60'}},
+        {status: 200, headers: {'Cache-Control': 'no-store'}},
       );
     }
 
