@@ -34,14 +34,14 @@ export type SalesRepGmailConfig = {
   // Hard-coded fallback address if the fromVar is missing (should match the
   // mailbox that actually granted the refresh token).
   defaultFrom: string;
-  // Display name rendered in the From header ("Sky Chen" not "Highsman Sales"
+  // Display name rendered in the From header ("Sky Lima" not "Highsman Sales"
   // is a deliberate swap — people reply faster to a human name).
   fromName: string;
 };
 
 export type SalesRep = {
   id: SalesRepId;
-  displayName: string;   // "Sky Chen"
+  displayName: string;   // "Sky Lima"
   firstName: string;     // used in greetings
   email: string;         // primary inbox
   password: string;      // login secret — rep-unique
@@ -60,7 +60,7 @@ export type SalesRep = {
 export const SALES_REPS: Record<SalesRepId, SalesRep> = {
   sky: {
     id: 'sky',
-    displayName: 'Sky Chen',
+    displayName: 'Sky Lima',
     firstName: 'Sky',
     email: 'sky@highsman.com',
     password: 'hmexec2025$$',
@@ -71,10 +71,10 @@ export const SALES_REPS: Record<SalesRepId, SalesRep> = {
       refreshTokenVar: 'GMAIL_REFRESH_TOKEN',
       fromVar: 'GMAIL_SALES_FROM',
       defaultFrom: 'sky@highsman.com',
-      fromName: 'Sky Chen — Highsman',
+      fromName: 'Sky Lima — Highsman',
     },
     signature: [
-      'Sky Chen',
+      'Sky Lima',
       'Highsman',
       'sky@highsman.com',
       'highsman.com',
