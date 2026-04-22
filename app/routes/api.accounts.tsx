@@ -89,11 +89,26 @@ async function searchAccounts(
 ): Promise<AccountResult[]> {
   const url = new URL('https://www.zohoapis.com/crm/v7/Accounts/search');
   // Zoho CRM's criteria API does NOT support `contains` on Account_Name — only
-  // `equals` and `starts_with`. For true partial matching we use `word=X`, which
-  // performs a broad text search across all fields. When scope is 'nj' we post-
-  // filter the results by Billing_State in the server so only NJ accounts are
-  // returned to the client.
-  url.searchParams.set('word', query);
+  // `equals` and `starts_with`. For the 'all' scope we use `word=X`, which does
+  // a broad text search across all fields (but caps at the top 50 global hits
+  // which miss NJ matches when non-NJ stores share the name). For NJ scope we
+  // use a criteria search that combines state + name prefix, so we get ALL NJ
+  // matches regardless of word-search ranking. We also OR in Billing_State so
+  // records missing the Account_State picklist (common after migrations) are
+  // not dropped.
+  if (scope === 'nj') {
+    const q = query.replace(/[()\\]/g, '').trim();
+    // `starts_with` matches the first word of the Account_Name — covers the
+    // 90% case ("rise", "ayr", "garden", "ascend", "curaleaf", etc.). If the
+    // user types a mid-word fragment we'll miss it, but that's rare in the
+    // field and better than silently dropping known NJ stores.
+    const nameCriteria = `(Account_Name:starts_with:${q})`;
+    const stateCriteria =
+      `((Account_State:equals:NJ)or(Billing_State:equals:NJ)or(Billing_State:equals:New Jersey)or(Shipping_State:equals:NJ))`;
+    url.searchParams.set('criteria', `${stateCriteria}and${nameCriteria}`);
+  } else {
+    url.searchParams.set('word', query);
+  }
   // Custom field API names were confirmed 2026-04-17 against a live Account:
   // - Email_to_book_pop_ups (lowercase)
   // - Link_for_Pop_Ups
@@ -155,25 +170,8 @@ async function searchAccounts(
     };
   });
 
-  // Post-filter for NJ when scope requires it. Check ALL state fields on the
-  // raw record — not just the reconciled display value — because a record can
-  // have Account_State='NJ' while Billing_State is empty (common after CRM
-  // migrations). `word` search doesn't accept a state filter, so we do it here.
-  if (scope === 'nj') {
-    const isNj = (v: any) =>
-      v === 'NJ' || v === 'New Jersey' || v === 'new jersey' || v === 'nj';
-    const rawById = new Map((data.data || []).map((a: any) => [a.id, a]));
-    return allAccounts
-      .filter((a) => {
-        const raw = rawById.get(a.id) as any;
-        return (
-          isNj(raw?.Billing_State) ||
-          isNj(raw?.Account_State) ||
-          isNj(raw?.Shipping_State)
-        );
-      })
-      .slice(0, 15);
-  }
+  // When scope=nj the criteria query already filtered to NJ at Zoho — no
+  // post-filter needed. The `word` path (scope=all) also returns the full set.
   return allAccounts.slice(0, 15);
 }
 
@@ -478,7 +476,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     });
   } catch (err: any) {
     console.error('[api/accounts] Error:', err.message);
-    return json({accounts: [], error: 'Search unavailable', debug: err.message}, {
+    return json({accounts: [], error: 'Search unavailable'}, {
       status: 200, // don't break the UI — degrade gracefully
       headers: {'Cache-Control': 'no-store'},
     });
