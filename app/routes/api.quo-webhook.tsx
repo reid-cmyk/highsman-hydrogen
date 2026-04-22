@@ -6,8 +6,10 @@ import {
   repByEmail,
   formatPhoneE164,
   type QuoCall,
+  type QuoMessage,
 } from '../lib/quo';
 import {SALES_REPS, type SalesRep} from '../lib/sales-floor-reps';
+import {createZohoNote, smsNoteTitle, smsNoteBody} from '../lib/zoho-notes';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Quo → Zoho CRM Bridge
@@ -281,6 +283,10 @@ export async function action({request, context}: ActionFunctionArgs) {
       await handleSummary(env, data);
     } else if (eventType === 'call.transcript.completed') {
       await handleTranscript(env, data);
+    } else if (eventType === 'message.received') {
+      await handleMessage(env, data, 'in');
+    } else if (eventType === 'message.delivered') {
+      await handleMessage(env, data, 'out');
     } else {
       // Acknowledge but do nothing — Quo won't retry on 200.
       return json({ok: true, ignored: eventType}, {status: 200});
@@ -302,7 +308,13 @@ export async function loader(_: LoaderFunctionArgs) {
   return json({
     ok: true,
     service: 'quo-webhook',
-    accepts: ['call.completed', 'call.summary.completed', 'call.transcript.completed'],
+    accepts: [
+      'call.completed',
+      'call.summary.completed',
+      'call.transcript.completed',
+      'message.received',
+      'message.delivered',
+    ],
   });
 }
 
@@ -405,4 +417,101 @@ async function handleTranscript(env: any, payload: any) {
   await updateZohoCall(token, zohoId, {
     Description: `Transcript: ${transcriptUrl}`,
   });
+}
+
+// ─── Message handler (SMS in/out → Zoho Note) ───────────────────────────────
+// Quo's `message.received` and `message.delivered` events both deliver a
+// QuoMessage object. The "counterparty" depends on direction:
+//   • inbound  → counterparty = `from`, our number = first of `to`
+//   • outbound → counterparty = first of `to`, our number = `from`
+//
+// We match the counterparty against Zoho Contacts (last-10 phone) to find
+// the parent Account/Contact, then write a Note. If no match, we create the
+// Note unattached — Reid said the most important thing is that texts
+// SHOW UP in Zoho; a no-match Note is still better than dropping the SMS.
+//
+// Dedupe: outbound messages we sent via /api/sales-floor-send-sms also get
+// `message.delivered` fired by Quo. To avoid double-Notes, the send route
+// embeds `[quo:<msgId>]` in its Note Title, and this handler skips notes
+// that already exist with the same Quo message id (cheap search by title).
+async function handleMessage(env: any, m: QuoMessage, dir: 'in' | 'out') {
+  if (!env.ZOHO_CLIENT_ID || !env.ZOHO_CLIENT_SECRET || !env.ZOHO_REFRESH_TOKEN) {
+    console.warn('[quo-webhook] Zoho not configured — skipping SMS Note');
+    return;
+  }
+  const token = await getZohoToken(env);
+
+  // Determine the counterparty (the non-Highsman number).
+  const ourNumber = dir === 'in'
+    ? (Array.isArray(m.to) ? m.to[0] : (m.to as any))
+    : m.from;
+  const counterparty = dir === 'in'
+    ? m.from
+    : (Array.isArray(m.to) ? m.to[0] : (m.to as any));
+
+  const counterpartyE164 = formatPhoneE164(counterparty);
+  const ourE164 = formatPhoneE164(ourNumber);
+  if (!counterpartyE164) {
+    console.warn('[quo-webhook] message has no counterparty', m.id);
+    return;
+  }
+
+  // Dedupe: if a Note with this Quo message id already exists, bail.
+  const existing = await findNoteByQuoMessageId(token, m.id);
+  if (existing) {
+    console.log('[quo-webhook] dedupe — note already exists for', m.id);
+    return;
+  }
+
+  const contact = await findContactByPhone(token, counterpartyE164);
+  // We need a parent — without one Zoho rejects the Note (Parent_Id is
+  // required). If no Contact match, write the Note unattached using a
+  // dedicated "SMS Inbox" Account if one exists, else log + skip.
+  let parent: {id: string; module: 'Accounts' | 'Contacts'} | null = null;
+  if (contact?.accountId) {
+    parent = {id: contact.accountId, module: 'Accounts'};
+  } else if (contact?.id) {
+    parent = {id: contact.id, module: 'Contacts'};
+  }
+  if (!parent) {
+    console.warn('[quo-webhook] no Zoho match for', counterpartyE164, '— skipping Note');
+    return;
+  }
+
+  // Resolve rep for outbound (Quo emits userId on delivered events).
+  let rep: SalesRep | null = null;
+  if (m.userId) {
+    const u = await fetchQuoUser(env.QUO_API_KEY, m.userId).catch(() => null);
+    rep = repByEmail(u?.email);
+  }
+
+  const text = m.text || '';
+  const title = `${smsNoteTitle(dir, counterpartyE164, text)} [quo:${m.id}]`;
+  const body = smsNoteBody({
+    direction: dir,
+    fromE164: formatPhoneE164(m.from),
+    toE164: counterpartyE164,
+    text,
+    timestamp: m.createdAt || new Date().toISOString(),
+    repName: rep?.displayName || null,
+    quoMessageId: m.id,
+  });
+
+  await createZohoNote({token, parent, title, content: body});
+}
+
+// Cheap dedupe — Notes don't have a "Quo id" custom field, so we search
+// Note Titles for the embedded `[quo:<id>]` marker. Returns the first
+// matching Note id or null.
+async function findNoteByQuoMessageId(token: string, quoMsgId: string): Promise<string | null> {
+  const url = new URL('https://www.zohoapis.com/crm/v7/Notes/search');
+  url.searchParams.set('criteria', `(Note_Title:contains:[quo:${quoMsgId}])`);
+  url.searchParams.set('per_page', '1');
+  const res = await fetch(url.toString(), {
+    headers: {Authorization: `Zoho-oauthtoken ${token}`},
+  });
+  if (res.status === 204) return null;
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data?.data?.[0]?.id || null;
 }

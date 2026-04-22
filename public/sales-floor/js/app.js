@@ -125,12 +125,19 @@ function showTab(tab) {
     pipeline: ['Pipeline', 'Open opportunities'],
     accounts: ['Accounts', 'Account management'],
     compose: ['Email Templates', 'One-click personalized emails'],
+    sms: ['Text', 'Two-way SMS via Quo'],
     issues: ['Issue Reporting', 'Customer issue tracking'],
   };
   const [title] = titles[tab] || [''];
   document.getElementById('page-title').textContent = title;
 
   if (tab === 'issues') initIssuesTab();
+  // SMS lazy-init — only spin up polling once the user opens the panel
+  if (tab === 'sms' && typeof SMS !== 'undefined' && typeof SMS.init === 'function') {
+    SMS.init();
+  } else if (tab !== 'sms' && typeof SMS !== 'undefined' && typeof SMS.pause === 'function') {
+    SMS.pause();
+  }
 }
 
 // ─── CRM Sync ─────────────────────────────────────────────────────────────────

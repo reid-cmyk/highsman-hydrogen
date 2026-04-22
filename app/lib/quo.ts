@@ -191,6 +191,104 @@ function constantTimeEquals(a: string, b: string): boolean {
   return mismatch === 0;
 }
 
+// ─── SMS / Messages ─────────────────────────────────────────────────────────
+// Quo's API expects:
+//   POST /v1/messages
+//     { content, from, to: [E.164], userId?, setInboxStatus? }
+//   GET /v1/messages?phoneNumberId=PN…&participants[]=+1…&maxResults=N
+// `from` accepts EITHER an E.164 number OR a phoneNumberId (PN…). E.164 is
+// less brittle (no env-var lookup needed) so that's our default.
+
+export type QuoMessage = {
+  id: string;
+  to: string[];
+  from: string;
+  text: string;
+  phoneNumberId: string;
+  direction: 'incoming' | 'outgoing';
+  userId?: string;
+  status: string;            // queued | sent | delivered | failed | received
+  createdAt: string;
+  updatedAt?: string;
+};
+
+export type SendSmsInput = {
+  apiKey: string;
+  fromE164: string;          // e.g. "+19297253511"
+  toE164: string;            // single recipient
+  content: string;           // 1-1600 chars, must contain non-whitespace
+  userId?: string;           // optional Quo user (US…) — attributes to a seat
+};
+
+export async function sendSms(input: SendSmsInput): Promise<QuoMessage> {
+  const body: any = {
+    content: input.content,
+    from: input.fromE164,
+    to: [input.toE164],
+  };
+  if (input.userId) body.userId = input.userId;
+  const data = await quoFetch<{data: QuoMessage}>(input.apiKey, '/messages', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return data?.data;
+}
+
+export async function listMessagesWith(
+  apiKey: string,
+  phoneNumberId: string,
+  participantE164: string,
+  maxResults = 50,
+): Promise<QuoMessage[]> {
+  const url = new URL(`${QUO_API_BASE}/messages`);
+  url.searchParams.set('phoneNumberId', phoneNumberId);
+  url.searchParams.append('participants[]', participantE164);
+  url.searchParams.set('maxResults', String(maxResults));
+  const res = await fetch(url.toString(), {
+    headers: {Authorization: apiKey, 'Content-Type': 'application/json'},
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    throw new Error(`Quo /messages ${res.status}: ${t.slice(0, 300)}`);
+  }
+  const data = await res.json();
+  return data?.data || [];
+}
+
+// Quo `/v1/conversations` returns one row per unique participant pairing
+// for a given phone number. Useful for the SMS thread list.
+export type QuoConversation = {
+  id: string;
+  phoneNumberId: string;
+  participants: string[];     // [counterparty E.164]
+  lastActivityAt?: string;
+  lastActivityType?: string;  // 'message' | 'call'
+  unreadCount?: number;
+  name?: string;
+};
+
+export async function listConversations(
+  apiKey: string,
+  phoneNumberId: string,
+  maxResults = 25,
+): Promise<QuoConversation[]> {
+  // The conversations endpoint accepts phoneNumbers[] (array). We pass the
+  // single rep number to get just their threads. Some shapes return `data`,
+  // some return `conversations` — handle both.
+  const url = new URL(`${QUO_API_BASE}/conversations`);
+  url.searchParams.append('phoneNumbers[]', phoneNumberId);
+  url.searchParams.set('maxResults', String(maxResults));
+  const res = await fetch(url.toString(), {
+    headers: {Authorization: apiKey, 'Content-Type': 'application/json'},
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    throw new Error(`Quo /conversations ${res.status}: ${t.slice(0, 300)}`);
+  }
+  const data = await res.json();
+  return data?.data || data?.conversations || [];
+}
+
 // ─── Format helpers (used by both server JSON shaping + webhook → Zoho) ─────
 export function formatPhoneE164(p: string | null | undefined): string {
   if (!p) return '';

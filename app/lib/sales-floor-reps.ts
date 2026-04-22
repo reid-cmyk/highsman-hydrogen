@@ -39,6 +39,32 @@ export type SalesRepGmailConfig = {
   fromName: string;
 };
 
+// Per-rep Quo (formerly OpenPhone) config. The Quo account model has one
+// phone number per Quo user — so each rep gets their own number + Quo user
+// ID, and we look those up by the env-var name pattern.
+//
+// For SMS send: we need either the rep's E.164 number (preferred — Quo's
+// `from` accepts E.164 directly) or their phone number id (PN...).
+// For Zoho attribution: we use the rep's existing `zohoOwnerId` field to
+// own the Note that gets created on send.
+//
+// Sky is the only Quo seat right now, so her phoneNumberIdVar can reuse the
+// workspace-wide QUO_PHONE_NUMBER_ID env (same number). When rep #2 gets a
+// Quo seat, give them their own QUO_PHONE_NUMBER_ID_<NAME> env var.
+export type SalesRepQuoConfig = {
+  // Display E.164 — used in UI and as the `from` value on outbound SMS.
+  // Authoritative source for "who is this rep texting from".
+  numberE164: string;
+  // Env var holding the Quo phoneNumberId (PN…). Optional: if numberE164
+  // is set we can use it as `from` directly. Keeping it lets us also
+  // pass phoneNumberId to message-list endpoints which require it.
+  phoneNumberIdVar?: string;
+  // Env var holding the Quo userId (US…) for this rep. Optional: when set,
+  // we attach `userId` to outbound POST /messages so the message shows up
+  // in the right rep's Quo inbox (not just the workspace's).
+  userIdVar?: string;
+};
+
 export type SalesRep = {
   id: SalesRepId;
   displayName: string;   // "Sky Lima"
@@ -51,6 +77,8 @@ export type SalesRep = {
   // to see everything until a second rep is in seat).
   zohoOwnerId: string | null;
   gmail: SalesRepGmailConfig;
+  // Quo (SMS + calling) config — null for reps who don't have a Quo seat.
+  quo?: SalesRepQuoConfig | null;
   // Plain-text signature appended to template emails after a blank line.
   signature: string;
   // Short tagline shown under the greeting on the dashboard.
@@ -72,6 +100,14 @@ export const SALES_REPS: Record<SalesRepId, SalesRep> = {
       fromVar: 'GMAIL_SALES_FROM',
       defaultFrom: 'sky@highsman.com',
       fromName: 'Sky Lima — Highsman',
+    },
+    quo: {
+      // Sky's Quo line — same number used by the workspace-wide
+      // QUO_PHONE_NUMBER_ID env, so we reuse that env var for the
+      // phoneNumberId. When Reid's seat goes live, give him QUO_PHONE_NUMBER_ID_REID.
+      numberE164: '+19297253511',
+      phoneNumberIdVar: 'QUO_PHONE_NUMBER_ID',
+      userIdVar: 'QUO_USER_ID_SKY',
     },
     signature: [
       'Sky Lima',

@@ -106,6 +106,11 @@
         <i class="fa-solid fa-envelope hs-nav-icon"></i>
         <span>Email</span>
       </button>
+      <button onclick="showTab('sms')" id="nav-sms" class="hs-nav-btn">
+        <i class="fa-solid fa-comment-sms hs-nav-icon"></i>
+        <span>Text</span>
+        <span id="sms-nav-badge" class="ml-auto hs-hot-badge hidden" style="background:#16A34A;"></span>
+      </button>
       <button onclick="showTab('issues')" id="nav-issues" class="hs-nav-btn">
         <i class="fa-solid fa-triangle-exclamation hs-nav-icon"></i>
         <span>Issues</span>
@@ -634,6 +639,82 @@
 
       </div><!-- /issues -->
 
+      <!-- ═══════════════════ SMS / TEXT ═══════════════════ -->
+      <div id="tab-sms" class="tab-content hidden">
+
+        <!-- Header strip — rep number + new conversation -->
+        <div class="hs-section-break" style="margin-top:0;">
+          <span class="hs-section-label">Texts</span>
+          <span class="hs-section-hint">
+            Sending from <strong id="sms-from-pretty">—</strong>. Live two-way SMS via Quo. Every text auto-logs to Zoho as a Note.
+          </span>
+        </div>
+
+        <!-- Chat split layout: thread list (left) + conversation (right) -->
+        <div class="hs-sms-shell">
+
+          <!-- LEFT — Threads list -->
+          <aside class="hs-sms-threads" aria-label="SMS conversations">
+            <div class="hs-sms-threads-header">
+              <span class="hs-sms-threads-title">Conversations</span>
+              <button onclick="SMS.openNew()" class="hs-sms-new-btn" aria-label="New text">
+                <i class="fa-solid fa-pen-to-square"></i>
+                <span>New</span>
+              </button>
+            </div>
+            <div id="sms-threads-list" class="hs-sms-threads-scroll">
+              <div class="hs-empty-state py-10">Loading conversations…</div>
+            </div>
+          </aside>
+
+          <!-- RIGHT — Conversation pane -->
+          <section class="hs-sms-conv" aria-label="SMS conversation">
+            <!-- Conversation header -->
+            <div class="hs-sms-conv-header">
+              <button class="hs-sms-back" onclick="SMS.closeConversation()" aria-label="Back to threads">
+                <i class="fa-solid fa-chevron-left"></i>
+              </button>
+              <div class="hs-sms-conv-title-wrap">
+                <div class="hs-sms-conv-title" id="sms-conv-title">Pick a conversation</div>
+                <div class="hs-sms-conv-sub"  id="sms-conv-sub">or start a new one</div>
+              </div>
+              <button class="hs-sms-refresh" onclick="SMS.refreshOpen()" aria-label="Refresh thread">
+                <i class="fa-solid fa-rotate" id="sms-refresh-icon"></i>
+              </button>
+            </div>
+
+            <!-- Conversation body — empty state + scroll feed -->
+            <div id="sms-conv-empty" class="hs-sms-empty">
+              <div class="hs-sms-empty-icon"><i class="fa-solid fa-comment-dots"></i></div>
+              <div class="hs-sms-empty-title">No conversation open</div>
+              <div class="hs-sms-empty-sub">Pick a thread on the left, or hit <strong>+ New</strong> to start one.</div>
+            </div>
+            <div id="sms-conv-feed" class="hs-sms-feed hidden" aria-live="polite"></div>
+
+            <!-- Composer -->
+            <div id="sms-composer" class="hs-sms-composer hidden">
+              <textarea
+                id="sms-input"
+                rows="2"
+                maxlength="1600"
+                class="hs-sms-input"
+                placeholder="Type a text… (Shift+Enter = new line)"
+                onkeydown="SMS.onComposerKey(event)"
+                oninput="SMS.onComposerInput(event)"
+              ></textarea>
+              <div class="hs-sms-composer-actions">
+                <span class="hs-sms-counter"><span id="sms-counter">0</span>/1600</span>
+                <button onclick="SMS.send()" id="sms-send-btn" class="hs-btn-primary" disabled>
+                  <i class="fa-solid fa-paper-plane mr-1"></i> Send
+                </button>
+              </div>
+            </div>
+          </section>
+
+        </div>
+
+      </div><!-- /sms -->
+
     </div><!-- /scroll area -->
   </main>
 </div><!-- /shell -->
@@ -678,6 +759,10 @@
     <button onclick="showTab('accounts'); closeMoreSheet();" class="hs-sheet-row">
       <i class="fa-solid fa-building"></i> Accounts
       <span id="sheet-alert-dot" class="hidden alert-sidebar-dot ml-auto"></span>
+    </button>
+    <button onclick="showTab('sms'); closeMoreSheet();" class="hs-sheet-row">
+      <i class="fa-solid fa-comment-sms"></i> Text
+      <span id="sheet-sms-badge" class="hs-hot-badge ml-auto hidden" style="background:#16A34A;"></span>
     </button>
     <button onclick="showTab('issues'); closeMoreSheet();" class="hs-sheet-row">
       <i class="fa-solid fa-triangle-exclamation"></i> Issues
@@ -726,6 +811,74 @@
 </div>
 
 
+<!-- ═══════════════════════════════════════════════
+     NEW TEXT MODAL — pick recipient + first message
+══════════════════════════════════════════════════ -->
+<div id="sms-new-modal" class="hs-overlay hidden" role="dialog" aria-modal="true" aria-label="New text">
+  <div class="hs-modal max-w-lg">
+    <div class="hs-modal-header">
+      <div>
+        <div class="hs-modal-eyebrow">Send a Text</div>
+        <div class="hs-modal-title">New conversation</div>
+      </div>
+      <button onclick="SMS.closeNew()" class="hs-close-btn" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="p-6 space-y-4">
+
+      <!-- Contact search — reuses the same Zoho-backed lookup -->
+      <div class="hs-contact-search">
+        <label class="hs-label" for="sms-contact-search-input">Search contact or dispensary</label>
+        <div class="hs-contact-search-wrap">
+          <i class="fa-solid fa-magnifying-glass hs-contact-search-icon"></i>
+          <input
+            id="sms-contact-search-input"
+            type="text"
+            class="hs-input hs-contact-search-input"
+            placeholder='e.g. "Jane Smith" or "RISE Paterson"'
+            autocomplete="off"
+            oninput="ContactSearch.onInput(event)"
+            onfocus="ContactSearch.onFocus(event)"
+            onblur="ContactSearch.onBlur(event)"
+            onkeydown="ContactSearch.onKeydown(event)"
+          />
+          <span id="sms-contact-search-spinner" class="hs-contact-search-spinner hidden">
+            <i class="fa-solid fa-circle-notch fa-spin"></i>
+          </span>
+        </div>
+        <div id="sms-contact-search-results" class="hs-contact-search-results hidden" role="listbox"></div>
+        <div class="hs-helper-note">Pick a contact to auto-fill mobile from Zoho.</div>
+      </div>
+
+      <div class="hs-form-grid">
+        <div>
+          <label class="hs-label">Mobile (E.164)</label>
+          <input id="sms-new-to" type="tel" inputmode="tel" autocomplete="tel" class="hs-input" placeholder="+15555550123" />
+        </div>
+        <div>
+          <label class="hs-label">Contact (optional)</label>
+          <input id="sms-new-name" type="text" class="hs-input" placeholder="Jane" />
+        </div>
+      </div>
+
+      <div>
+        <label class="hs-label">First message</label>
+        <textarea id="sms-new-body" rows="4" maxlength="1600" class="hs-input resize-none" placeholder="Hey Jane — quick one. Got a 2-min for the Highsman update?"></textarea>
+        <div class="hs-helper-note"><span id="sms-new-counter">0</span>/1600</div>
+      </div>
+
+    </div>
+    <div class="hs-modal-actions">
+      <button onclick="SMS.sendNew()" id="sms-new-send" class="hs-btn-primary" disabled>
+        <i class="fa-solid fa-paper-plane mr-1"></i> Send
+      </button>
+      <button onclick="SMS.closeNew()" class="hs-btn-ghost px-4">Cancel</button>
+    </div>
+  </div>
+</div>
+
+
 <!-- Legacy client-side "Connect Services" modal removed — Zoho + Gmail auth
      now runs entirely server-side (Oxygen env vars). Status is reflected in
      the top-bar/mobile pill via updateConnectionStatus() in app.js. -->
@@ -750,6 +903,7 @@
 <script src="/sales-floor/js/alerts.js"></script>
 <script src="/sales-floor/js/issues.js"></script>
 <script src="/sales-floor/js/contact-search.js"></script>
+<script src="/sales-floor/js/sms.js"></script>
 <script src="/sales-floor/js/app.js"></script>
 <script>
   // ───────────────────────────────────────────────────────────
@@ -804,6 +958,7 @@
       pipeline:  "Deals in motion. Keep them moving.",
       accounts:  "Your book of business. Protect it.",
       compose:   "Push-button plays. Personalized, ready to send.",
+      sms:       "Two-way texts. Logs straight to Zoho.",
       issues:    "Log it, solve it, keep it moving.",
     };
     const TITLES = {
@@ -812,6 +967,7 @@
       pipeline:  "Pipeline",
       accounts:  "Accounts",
       compose:   "Email",
+      sms:       "Text",
       issues:    "Issues",
     };
     const origShowTab = window.showTab;
