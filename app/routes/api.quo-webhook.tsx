@@ -227,15 +227,15 @@ export async function action({request, context}: ActionFunctionArgs) {
   const verified = await verifyQuoSignature(rawBody, sigHeader, env.QUO_WEBHOOK_SECRET);
   if (!verified) {
     // ── DIAGNOSTIC (remove after sig is working) ──────────────────────────
-    // Logs ENOUGH to debug without leaking the secret. We hash the secret
-    // so you can confirm it's the value you set without exposing it in logs.
+    // Return the diag info IN the response body so we can see it directly
+    // in Quo's test-request modal — no need to dig through Oxygen logs.
+    // Safe: the secret itself is never included; only a fingerprint + length.
+    let diag: any = {};
     try {
       const parts = (sigHeader || '').split(';');
       const ts = Number(parts[2]);
-      const drift = Number.isFinite(ts) ? Math.abs(Date.now() - ts) : null;
-      const driftSec = drift != null ? Math.round(drift / 1000) : null;
+      const driftMs = Number.isFinite(ts) ? Math.abs(Date.now() - ts) : null;
 
-      // Hash of secret (first 8 hex chars) so we can match values without exposing
       const enc = new TextEncoder();
       const sh = await crypto.subtle.digest('SHA-256', enc.encode(env.QUO_WEBHOOK_SECRET));
       const secretFp = Array.from(new Uint8Array(sh))
@@ -243,7 +243,6 @@ export async function action({request, context}: ActionFunctionArgs) {
         .map((b) => b.toString(16).padStart(2, '0'))
         .join('');
 
-      // Recompute the signature for comparison
       const key = await crypto.subtle.importKey(
         'raw',
         enc.encode(env.QUO_WEBHOOK_SECRET),
@@ -258,26 +257,27 @@ export async function action({request, context}: ActionFunctionArgs) {
       );
       const computedB64 = btoa(String.fromCharCode(...new Uint8Array(computed)));
 
-      console.warn('[quo-webhook] SIG_FAIL', JSON.stringify({
+      diag = {
         headerPresent: !!sigHeader,
         headerParts: parts.length,
         prefix: parts[0],
         version: parts[1],
         timestamp: parts[2],
-        driftSec,
-        driftLikelyUnit: drift && drift > 1e10 ? 'header-is-seconds' : 'header-is-ms',
-        sigFromHeader: parts[3]?.slice(0, 12) + '…',
-        sigComputed:   computedB64.slice(0, 12) + '…',
+        driftMs,
+        driftLikelyUnit: driftMs && driftMs > 1e10 ? 'header-is-seconds' : 'header-is-ms',
+        sigFromHeader: (parts[3] || '').slice(0, 16),
+        sigComputed: computedB64.slice(0, 16),
         sigMatch: computedB64 === parts[3],
         secretLen: env.QUO_WEBHOOK_SECRET.length,
         secretFp,
         bodyLen: rawBody.length,
         bodyHead: rawBody.slice(0, 80),
-      }));
+      };
+      console.warn('[quo-webhook] SIG_FAIL', JSON.stringify(diag));
     } catch (e: any) {
-      console.warn('[quo-webhook] SIG_FAIL diag error', e.message);
+      diag.diagError = e.message;
     }
-    return json({ok: false, error: 'invalid signature'}, {status: 401});
+    return json({ok: false, error: 'invalid signature', diag}, {status: 401});
   }
 
   let body: any;
