@@ -127,6 +127,42 @@ async function findExistingOnboardingDeal(
   return signed?.id || null;
 }
 
+// Look up a reference deal in the target pipeline so we can copy its
+// Stage + Layout onto the new deal. Zoho v7 rejects stage names that
+// don't belong to the pipeline (MAPPING_MISMATCH), and our org has
+// renamed stages enough times that hardcoding "Onboarding" no longer
+// matches. Pulling live values from an existing deal survives renames.
+//
+// We don't filter by account id here — any deal in the pipeline works
+// as a template. Picks the most recently modified row. Returns null if
+// the pipeline is empty, in which case the caller falls back to an
+// unstaged POST (Zoho auto-assigns the first stage of the pipeline).
+async function fetchPipelineReference(
+  token: string,
+): Promise<{stage: string; layoutId: string | null} | null> {
+  const url = new URL('https://www.zohoapis.com/crm/v7/Deals/search');
+  url.searchParams.set(
+    'criteria',
+    `(Pipeline:equals:${NEEDS_ONBOARDING_PIPELINE})`,
+  );
+  url.searchParams.set('fields', 'id,Stage,Layout,Pipeline');
+  url.searchParams.set('per_page', '1');
+  url.searchParams.set('sort_by', 'Modified_Time');
+  url.searchParams.set('sort_order', 'desc');
+  const res = await fetch(url.toString(), {
+    headers: {Authorization: `Zoho-oauthtoken ${token}`},
+  });
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => ({}));
+  const row = Array.isArray(data?.data) ? data.data[0] : null;
+  if (!row) return null;
+  const stage = typeof row.Stage === 'string' ? row.Stage : '';
+  const layoutId =
+    (row.Layout && typeof row.Layout === 'object' && row.Layout.id) || null;
+  if (!stage) return null;
+  return {stage, layoutId};
+}
+
 async function fetchAccountState(
   accountId: string,
   token: string,
@@ -273,17 +309,29 @@ export async function action({request, context}: ActionFunctionArgs) {
       .filter(Boolean)
       .join('\n');
 
+    // Copy Stage + Layout from a live reference deal in the pipeline so
+    // we always use the currently valid stage name. Falls back to the
+    // hardcoded constant only if the pipeline is empty (which it won't
+    // be in practice — Zoho auto-creates onboarding deals on every
+    // order placement).
+    const pipelineRef = await fetchPipelineReference(token);
+    const resolvedStage = pipelineRef?.stage || ONBOARDING_STAGE;
+    const dealRow: Record<string, any> = {
+      Deal_Name: dealName,
+      Account_Name: zohoAccountId,
+      Pipeline: NEEDS_ONBOARDING_PIPELINE,
+      Stage: resolvedStage,
+      Closing_Date: closingDate,
+      Description: description,
+    };
+    // Zoho requires the Layout id when writing into a non-default
+    // pipeline — without it, Zoho maps to the default layout's stages
+    // and throws MAPPING_MISMATCH for any stage outside that set.
+    if (pipelineRef?.layoutId) {
+      dealRow.Layout = {id: pipelineRef.layoutId};
+    }
     const dealPayload = {
-      data: [
-        {
-          Deal_Name: dealName,
-          Account_Name: zohoAccountId,
-          Pipeline: NEEDS_ONBOARDING_PIPELINE,
-          Stage: ONBOARDING_STAGE,
-          Closing_Date: closingDate,
-          Description: description,
-        },
-      ],
+      data: [dealRow],
       // Don't fire workflow rules — Vibes routing is read-driven.
       trigger: [],
     };
