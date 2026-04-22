@@ -350,6 +350,75 @@ function attachFirstOrderNumbers(accounts: any[], deals: any[]) {
   return accounts;
 }
 
+// ─── Vibes "Brand Team Booked" state ─────────────────────────────────────────
+// After a rep clicks Brand Team Onboarding on a New Customer card, we want the
+// card to stay visible (so the rep can still call/text/email the buyer) but
+// switch into a "booked" visual state instead of disappearing. The source of
+// truth is whether the account has a signed Sales Floor deal in the Needs
+// Onboarding pipeline — same signature the Vibes board filters on. Fetching
+// those deals up front and stamping `_vibesBooked` + `_checkInDueDate` onto
+// matching accounts lets the card survive across reloads without any extra
+// client roundtrips.
+const NEEDS_ONBOARDING_PIPELINE = '6699615000010154308';
+const SALES_FLOOR_SIGNATURE = 'Auto-created from /sales-floor';
+
+async function fetchSalesFloorOnboardingDeals(
+  accessToken: string,
+): Promise<Map<string, {dealId: string; checkInDueDate: string | null}>> {
+  // One search call, signature-filtered in memory. Deals/search supports the
+  // Pipeline criteria directly; we can't filter on Description text in the
+  // criteria (Zoho doesn't index it) so we do it client-side.
+  const url = new URL('https://www.zohoapis.com/crm/v7/Deals/search');
+  url.searchParams.set(
+    'criteria',
+    `(Pipeline:equals:${NEEDS_ONBOARDING_PIPELINE})`,
+  );
+  url.searchParams.set(
+    'fields',
+    ['id', 'Account_Name', 'Description', 'Closing_Date'].join(','),
+  );
+  url.searchParams.set('per_page', '200');
+  const res = await fetch(url.toString(), {
+    headers: {Authorization: `Zoho-oauthtoken ${accessToken}`},
+  });
+  const out = new Map<string, {dealId: string; checkInDueDate: string | null}>();
+  if (!res.ok) return out; // 204 → no deals; any error → empty map
+  const data: any = await res.json().catch(() => ({}));
+  const rows: any[] = Array.isArray(data?.data) ? data.data : [];
+  for (const row of rows) {
+    const desc = typeof row?.Description === 'string' ? row.Description : '';
+    if (!desc.includes(SALES_FLOOR_SIGNATURE)) continue;
+    const acctId = row?.Account_Name?.id ? String(row.Account_Name.id) : '';
+    if (!acctId) continue;
+    // Parse the "12-day check-in due: YYYY-MM-DD" line out of the Description
+    // so the card can render an exact "Check in by {date}" without another
+    // call. Regex match keeps this resilient to the line's position.
+    const match = desc.match(/12-day check-in due:\s*(\d{4}-\d{2}-\d{2})/);
+    const checkInDueDate = match ? match[1] : null;
+    // First signed deal wins — if the rep somehow got two created, we treat
+    // the account as booked regardless. Not overwriting avoids flipping the
+    // check-in date on every render.
+    if (!out.has(acctId)) {
+      out.set(acctId, {dealId: String(row.id || ''), checkInDueDate});
+    }
+  }
+  return out;
+}
+
+function attachVibesBookedStatus(
+  accounts: any[],
+  booked: Map<string, {dealId: string; checkInDueDate: string | null}>,
+) {
+  for (const a of accounts) {
+    const hit = booked.get(a.id);
+    if (!hit) continue;
+    a._vibesBooked = true;
+    a._vibesDealId = hit.dealId;
+    a._checkInDueDate = hit.checkInDueDate;
+  }
+  return accounts;
+}
+
 // MA-state filter shared by the Accounts + Contacts fetchers. Reid asked us to
 // hide MA from the sales-floor for now — easiest place to do it is right after
 // the Zoho fetch so downstream views never see them. We check both 'MA' (the
@@ -665,7 +734,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       ZOHO_REFRESH_TOKEN: refreshToken,
     });
 
-    const [leads, deals, accounts, contactsResult] = await Promise.all([
+    const [leads, deals, accounts, contactsResult, vibesBookedMap] = await Promise.all([
       fetchLeads(accessToken, ownerId).catch((e) => {
         console.error('[sales-floor-sync] leads fetch failed:', e.message);
         return [];
@@ -681,6 +750,14 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       fetchContacts(accessToken, ownerId).catch((e) => {
         console.error('[sales-floor-sync] contacts fetch failed:', e.message);
         return {contacts: []};
+      }),
+      // Signed Onboarding deals are NOT owner-scoped on purpose: the "booked"
+      // pill should show for every rep that opens the board, not just whoever
+      // clicked the button. If the account already has a Sales Floor deal in
+      // the Needs Onboarding pipeline, the card goes into booked mode.
+      fetchSalesFloorOnboardingDeals(accessToken).catch((e) => {
+        console.error('[sales-floor-sync] vibes-booked fetch failed:', e.message);
+        return new Map<string, {dealId: string; checkInDueDate: string | null}>();
       }),
     ]);
 
@@ -698,6 +775,12 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     // — no extra round-trip. Accounts without a matching Deal_Name that
     // carries "Order #N" stay as "First order {date}" (graceful fallback).
     attachFirstOrderNumbers(accounts, deals);
+
+    // Stamp _vibesBooked / _vibesDealId / _checkInDueDate onto any account
+    // that already has a signed Sales Floor Onboarding deal. The client uses
+    // these to render the "Brand Team Booked — Check in by {date}" pill on
+    // New Customer cards so the card stays visible instead of disappearing.
+    attachVibesBookedStatus(accounts, vibesBookedMap);
 
     return json(
       {

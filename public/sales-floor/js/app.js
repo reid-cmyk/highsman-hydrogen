@@ -628,6 +628,13 @@ function combinedNewCustomers() {
       // 4/20 cohort still applies: if the single first order landed on/after
       // 4/20/2026, mark it. Matches the LeafLink-side cohort rule.
       is420Cohort: isOnOrAfter420(a.First_Order_Date || a.Last_Order_Date),
+      // Brand Team "Booked" state. Either the server stamped _vibesBooked
+      // from a signed Onboarding deal (fetchSalesFloorOnboardingDeals), or
+      // markZohoReadyToBrandTeam just optimistically set it after a
+      // successful click. Card stays visible; primary CTA flips to a
+      // "Brand Team Booked" status pill with the 12-day check-in date.
+      vibesBooked: !!a._vibesBooked,
+      checkInDueDate: a._checkInDueDate || null,
     });
   }
 
@@ -766,10 +773,21 @@ function renderZohoNewCustCard(c, idx) {
     orderLine = `<div class="hs-newcust-order">First order ${dateLabel}</div>`;
   }
 
-  // Copy + actions split by state. NJ gets the full Brand Team Onboarding
-  // flow on top of the call/text/email row — the rep can route the visit in
-  // one click the same way the LeafLink-sourced cards do.
-  const body = c.vibesEligible
+  // Copy + actions split by state AND booked state. Once the rep has clicked
+  // Brand Team Onboarding (or the server sees a signed Onboarding deal from
+  // a previous click), the card stays visible but flips into a "booked" view
+  // — the primary CTA is replaced by a status pill showing the 12-day
+  // check-in date, and the copy switches to remind the rep to stay in touch
+  // until Sky visits.
+  const isBooked = !!c.vibesBooked;
+  const checkInLabel = c.checkInDueDate ? formatDate(c.checkInDueDate) : null;
+
+  const body = isBooked
+    ? `
+    <div class="hs-newcust-copy">
+      Brand team locked in. ${checkInLabel ? `Check in by <strong>${escapeHtml(checkInLabel)}</strong>` : 'Check in once Sky has walked product'} — keep the buyer warm until then.
+    </div>`
+    : c.vibesEligible
     ? `
     <div class="hs-newcust-copy">
       First order just landed. Send the brand team — Sky drops in to walk product and stock the shelves.
@@ -780,7 +798,7 @@ function renderZohoNewCustCard(c, idx) {
     </div>`;
 
   const actions = [];
-  if (c.vibesEligible) {
+  if (c.vibesEligible && !isBooked) {
     // NJ → Brand Team Onboarding is the primary CTA. Uses firstOrderDate as
     // the ship-date fallback (server accepts it for Zoho-sourced cards).
     // HTML-escape the JSON-stringified args so the interior double-quotes
@@ -811,14 +829,19 @@ function renderZohoNewCustCard(c, idx) {
   const cohortPill = c.is420Cohort
     ? `<span class="hs-newcust-pill is-420" title="First Highsman order on or after 4/20/2026">4/20 DROP</span>`
     : '';
+  const bookedPill = isBooked
+    ? `<span class="hs-newcust-pill is-booked" title="Brand Team visit booked${checkInLabel ? ` — check in by ${checkInLabel}` : ''}"><i class="fa-solid fa-check"></i> Brand Team Booked</span>`
+    : '';
   const cardClasses = ['hs-newcust-card', 'is-first-order'];
   if (c.is420Cohort) cardClasses.push('is-420-cohort');
+  if (isBooked) cardClasses.push('is-booked');
 
   return `
     <div class="${cardClasses.join(' ')}" data-newcust-id="${acctId}">
       <div class="hs-newcust-head">
         <div class="hs-newcust-name">${name}${state}</div>
         <div class="hs-newcust-pills">
+          ${bookedPill}
           ${cohortPill}
           <span class="hs-newcust-pill is-first-order">First Order</span>
         </div>
@@ -1053,11 +1076,18 @@ async function markZohoReadyToBrandTeam(zohoAccountId, customerName, firstOrderN
     if (!res.ok || !data?.ok) {
       throw new Error(data?.error || `Brand team onboarding failed (${res.status})`);
     }
-    // Optimistically remove this account from the Zoho-sourced first-order
-    // pool so the card disappears on the next render — it's now "booked".
-    // On next background refresh the server-side dedup will hold.
+    // Flip the account into "booked" state WITHOUT destroying _orderCount —
+    // doing that wiped the card entirely because combinedNewCustomers() gates
+    // Zoho-sourced cards on `_orderCount === 1`. We want the card to stay
+    // visible in a booked visual state so the rep can still call/text/email
+    // the buyer (and see the 12-day check-in date) until the actual check-in
+    // is logged. On the next server sync, fetchSalesFloorOnboardingDeals
+    // stamps _vibesBooked from the signed Deal so the state persists.
     const acct = accounts.find((a) => a && a.id === zohoAccountId);
-    if (acct) acct._orderCount = 0;
+    if (acct) {
+      acct._vibesBooked = true;
+      acct._checkInDueDate = data.checkInDueDate || null;
+    }
     renderNewCustomers();
     renderDashboard();
     updateStats();

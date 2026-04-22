@@ -3389,6 +3389,18 @@ a.hs-contact-meta-cell:hover i{ color:var(--gold); }
     var(--panel, #0E0E0E);
   box-shadow:0 0 0 1px rgba(245,228,0,0.18);
 }
+/* Booked state — Brand Team Onboarding clicked. Card stays visible, flips
+   to a calm green rail + muted tone so reps immediately read it as "done,
+   waiting for check-in" vs. a fresh "First Order" card that still needs
+   routing. Takes precedence over the gold 4/20 rail because booked is the
+   more actionable status signal for the rep. */
+.hs-newcust-card.is-booked{
+  border-left-color:#7BC47F;
+  background:
+    linear-gradient(180deg, rgba(123,196,127,0.06), var(--panel, #0E0E0E) 55%),
+    var(--panel, #0E0E0E);
+  box-shadow:0 0 0 1px rgba(123,196,127,0.18);
+}
 .hs-newcust-order{
   font-family:var(--barlow, 'Barlow Semi Condensed', sans-serif);
   font-size:12px;
