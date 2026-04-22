@@ -96,6 +96,55 @@ export async function fetchRecentCalls(
   return data?.data || [];
 }
 
+// ─── Calls with a specific counterparty ─────────────────────────────────────
+// Quo's `/calls` endpoint accepts `participants[]=+1…` to filter to a single
+// counterparty. This is what the Brief uses to pull call history for a lead.
+//
+// We intentionally ask for a larger page (default 15) than the UI shows so
+// Claude has enough context to spot patterns across several prior calls —
+// not just the most recent one.
+export async function fetchCallsForParticipant(
+  apiKey: string,
+  phoneNumberId: string,
+  participantE164: string,
+  maxResults = 15,
+): Promise<QuoCall[]> {
+  const url = new URL(`${QUO_API_BASE}/calls`);
+  url.searchParams.set('phoneNumberId', phoneNumberId);
+  url.searchParams.append('participants[]', participantE164);
+  url.searchParams.set('maxResults', String(maxResults));
+  const res = await fetch(url.toString(), {
+    headers: {Authorization: apiKey, 'Content-Type': 'application/json'},
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    throw new Error(`Quo /calls ${res.status}: ${t.slice(0, 300)}`);
+  }
+  const data = await res.json();
+  const calls: QuoCall[] = data?.data || [];
+  // Newest first — guarantee the order regardless of what Quo returns.
+  calls.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+  return calls;
+}
+
+// Fetch a single call with full AI payload (summary + transcript URL).
+// The list endpoint sometimes elides the ai block; hitting /calls/{id}
+// directly always returns the full shape.
+export async function fetchCallDetail(
+  apiKey: string,
+  callId: string,
+): Promise<QuoCall | null> {
+  try {
+    const data = await quoFetch<{data: QuoCall}>(
+      apiKey,
+      `/calls/${encodeURIComponent(callId)}`,
+    );
+    return data?.data || null;
+  } catch {
+    return null;
+  }
+}
+
 // Look up a single Quo user by id (used by webhook to attribute to the rep
 // who actually made/took the call — Sky vs Reid).
 export async function fetchQuoUser(

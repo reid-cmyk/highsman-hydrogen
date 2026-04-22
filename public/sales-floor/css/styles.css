@@ -3479,3 +3479,318 @@ a.hs-contact-meta-cell:hover i{ color:var(--gold); }
   .hs-orders-days{ font-size:20px; }
   .hs-orders-snap-name{ font-size:12px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   AI PRE-CALL BRIEF — new cold/warm/expandable layout
+   Paired with public/sales-floor/js/ai-brief.js. All color tokens
+   pull from the sales-floor palette above — gold accent for "our
+   recommendation", red/orange for warnings, chip for supporting info.
+═══════════════════════════════════════════════════════════════ */
+
+/* Source chips — "1 call · 3 texts · 2 emails" row at top. Shows the
+   rep where the brief got its evidence. Empty row = hidden. */
+.brief-chip-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-bottom:4px;
+}
+.brief-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:3px 9px;
+  background:var(--chip);
+  border:1px solid var(--line);
+  border-radius:999px;
+  font-family:var(--barlow);
+  font-size:11px;
+  color:var(--gray-dim);
+  letter-spacing:0.02em;
+  text-transform:uppercase;
+}
+.brief-chip i{ font-size:10px; color:var(--gray-dimmer); }
+
+/* Fallback banner — shown only when Claude couldn't run and we're
+   falling back to a template. Quiet amber, not alarming. */
+.brief-warn{
+  display:flex;
+  gap:10px;
+  align-items:flex-start;
+  padding:10px 12px;
+  background:rgba(255,138,0,0.08);
+  border:1px solid rgba(255,138,0,0.28);
+  border-radius:var(--r-sm);
+  color:var(--white);
+  font-family:var(--barlow);
+}
+.brief-warn > i{ color:var(--orange); margin-top:2px; }
+.brief-warn strong{ font-size:13px; letter-spacing:0.02em; }
+.brief-warn-sub{
+  font-size:11px;
+  color:var(--gray-dim);
+  margin-top:2px;
+}
+
+/* Last Contact block — warm mode only. The "here's where you left
+   off" headline summary. Gold stripe on the left marks it as
+   coach-authored narrative (vs raw data). */
+.brief-last-contact{
+  padding:12px 14px;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-left:3px solid var(--gold);
+  border-radius:var(--r-sm);
+}
+.brief-last-contact-head{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:6px;
+}
+.brief-last-icon{
+  width:28px; height:28px;
+  border-radius:999px;
+  background:var(--chip-strong);
+  display:flex; align-items:center; justify-content:center;
+  color:var(--gold);
+  font-size:12px;
+  flex-shrink:0;
+}
+.brief-last-label{
+  font-family:var(--teko);
+  font-size:13px;
+  letter-spacing:0.12em;
+  color:var(--gold);
+  line-height:1;
+}
+.brief-last-when{
+  font-family:var(--barlow);
+  font-size:11px;
+  color:var(--gray-dim);
+  margin-top:2px;
+  letter-spacing:0.02em;
+}
+.brief-last-summary{
+  margin:0;
+  font-family:var(--barlow);
+  font-size:13.5px;
+  color:var(--white);
+  line-height:1.55;
+}
+
+/* Sky's Play — the coaching block. Heavier visual weight than the
+   rest because this is the ONE thing the rep should read if they
+   only read one thing. */
+.brief-play{
+  padding:14px 16px;
+  background:linear-gradient(180deg, rgba(245,228,0,0.10) 0%, rgba(245,228,0,0.04) 100%);
+  border:1px solid rgba(245,228,0,0.38);
+  border-radius:var(--r-sm);
+}
+.brief-play-head{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-bottom:6px;
+}
+.brief-play-star{
+  width:22px; height:22px;
+  background:var(--gold);
+  color:var(--bg);
+  border-radius:999px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px;
+  flex-shrink:0;
+}
+.brief-play-label{
+  font-family:var(--teko);
+  font-size:15px;
+  letter-spacing:0.14em;
+  color:var(--gold);
+  line-height:1;
+}
+.brief-play-body{
+  margin:0;
+  font-family:var(--barlow);
+  font-size:14px;
+  color:var(--white);
+  line-height:1.55;
+}
+
+/* Generic brief section (Talking Points / Objections / Opener).
+   Matches the old look so existing rep muscle memory holds. */
+.brief-section{
+  padding:2px 0;
+}
+.brief-section > h4{
+  margin:0 0 8px 0;
+  font-family:var(--teko);
+  font-size:15px;
+  letter-spacing:0.12em;
+  color:var(--gold);
+  text-transform:uppercase;
+}
+.brief-list{
+  margin:0;
+  padding:0 0 0 18px;
+  color:var(--white);
+  font-family:var(--barlow);
+  font-size:13.5px;
+  line-height:1.55;
+}
+.brief-list li{
+  margin-bottom:4px;
+}
+
+/* Objections — Q over A, quote marks on the objection, arrow on the flip. */
+.brief-objection{
+  padding:10px 12px;
+  background:var(--chip);
+  border:1px solid var(--line);
+  border-radius:var(--r-sm);
+  margin-bottom:8px;
+}
+.brief-objection:last-child{ margin-bottom:0; }
+.brief-objection-q{
+  font-family:var(--barlow);
+  font-size:13px;
+  color:var(--white);
+  font-style:italic;
+  margin-bottom:4px;
+}
+.brief-objection-a{
+  font-family:var(--barlow);
+  font-size:13px;
+  color:var(--gray);
+  line-height:1.5;
+}
+.brief-objection-a i{
+  color:var(--gold);
+  margin-right:4px;
+}
+
+/* Opener — big-weight blockquote. Rep should be able to read this
+   straight off the screen while dialing. */
+.brief-opener{
+  margin:0;
+  padding:12px 14px;
+  background:rgba(255,255,255,0.03);
+  border-left:3px solid var(--white);
+  border-radius:var(--r-sm);
+  font-family:var(--barlow);
+  font-size:14.5px;
+  font-style:italic;
+  color:var(--white);
+  line-height:1.55;
+}
+
+/* History timeline — collapsed by default via <details>. Click to
+   expand a clean vertical list of prior interactions. */
+.brief-history,
+.brief-crm-notes{
+  border:1px solid var(--line);
+  border-radius:var(--r-sm);
+  background:var(--chip);
+  overflow:hidden;
+}
+.brief-history-summary,
+.brief-crm-notes-summary{
+  list-style:none;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 12px;
+  cursor:pointer;
+  font-family:var(--teko);
+  font-size:14px;
+  letter-spacing:0.12em;
+  color:var(--white);
+  text-transform:uppercase;
+  user-select:none;
+}
+.brief-history-summary::-webkit-details-marker,
+.brief-crm-notes-summary::-webkit-details-marker{ display:none; }
+.brief-history-summary > i:first-child,
+.brief-crm-notes-summary > i:first-child{
+  color:var(--gold);
+}
+.brief-history-count{
+  margin-left:auto;
+  padding:2px 8px;
+  background:var(--chip-strong);
+  border-radius:999px;
+  font-family:var(--barlow);
+  font-size:11px;
+  color:var(--gray-dim);
+  letter-spacing:0;
+}
+.brief-history-chev{
+  transition:transform 150ms ease;
+  color:var(--gray-dim);
+  font-size:11px;
+}
+details[open] > summary .brief-history-chev{
+  transform:rotate(180deg);
+}
+
+.brief-timeline{
+  border-top:1px solid var(--line);
+  padding:8px 12px 12px 12px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.brief-timeline-row{
+  display:flex;
+  gap:10px;
+}
+.brief-timeline-icon{
+  width:26px; height:26px;
+  border-radius:999px;
+  background:var(--chip-strong);
+  color:var(--gray);
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px;
+  flex-shrink:0;
+}
+.brief-timeline-meta{
+  font-family:var(--barlow);
+  font-size:11px;
+  color:var(--gray-dim);
+  letter-spacing:0.02em;
+  text-transform:uppercase;
+  margin-bottom:2px;
+}
+.brief-timeline-dot{ margin:0 5px; color:var(--gray-dimmer); }
+.brief-timeline-channel{ color:var(--white); font-weight:600; }
+.brief-timeline-summary{
+  margin:0;
+  font-family:var(--barlow);
+  font-size:13px;
+  color:var(--white);
+  line-height:1.5;
+}
+
+.brief-crm-notes-body{
+  margin:0;
+  padding:10px 12px 12px 12px;
+  border-top:1px solid var(--line);
+  font-family:var(--barlow);
+  font-size:13px;
+  color:var(--gray);
+  line-height:1.55;
+  white-space:pre-wrap;
+}
+
+/* Space the sections out inside #brief-content — existing parent uses
+   .space-y-4 (Tailwind-ish utility). Add our own vertical rhythm so
+   the new blocks breathe consistently even without that class. */
+#brief-content > * + *{ margin-top:12px; }
+
+@media (max-width:640px){
+  .brief-play-body,
+  .brief-last-summary{ font-size:14px; }
+  .brief-chip{ font-size:10px; padding:2px 7px; }
+  .brief-timeline-meta{ font-size:10px; }
+}
