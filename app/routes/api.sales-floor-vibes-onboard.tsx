@@ -41,6 +41,13 @@ import {getRepFromRequest} from '../lib/sales-floor-reps';
 const NEEDS_ONBOARDING_PIPELINE = '6699615000010154308';
 const ONBOARDING_STAGE = 'Onboarding';
 const VIBES_COVERED_STATES = new Set(['NJ', 'New Jersey']);
+// Shared signature between this route and /api/vibes-route. Only deals
+// whose Description contains this string are treated as "real" Brand
+// Team Onboarding deals. Keeps us in sync with the Zoho automation that
+// auto-creates Needs Onboarding deals on order placement — those don't
+// carry the signature and are transparent to both the dedup check here
+// and the Vibes board filter.
+const SALES_FLOOR_SIGNATURE = 'Auto-created from /sales-floor';
 const READY_STATUSES = new Set([
   'Accepted',
   'Backorder',
@@ -80,8 +87,17 @@ async function getZohoToken(env: any): Promise<string> {
 }
 
 // Look for an existing open Deal in the Needs Onboarding pipeline for this
-// account. Used to prevent duplicate onboarding Deals when a rep clicks the
-// Brand Team Onboarding button twice. Returns the Deal id or null.
+// account that was **created by the Sales Floor button** (not by the Zoho
+// order-placement automation). Used to prevent duplicate onboarding Deals
+// when a rep clicks Brand Team Onboarding twice.
+//
+// Important: we deliberately ignore automation-created deals here. Zoho
+// auto-creates a Needs Onboarding deal on order placement, but Vibes only
+// routes deals with the SALES_FLOOR_SIGNATURE Description marker. If we
+// treated automation deals as duplicates, the rep would see "Already
+// booked" while Vibes stayed empty — the exact collision bug this guards
+// against. Filtering by signature here aligns the dedup check with the
+// Vibes read predicate.
 async function findExistingOnboardingDeal(
   accountId: string,
   token: string,
@@ -91,8 +107,9 @@ async function findExistingOnboardingDeal(
     'criteria',
     `((Account_Name.id:equals:${accountId})and(Pipeline:equals:${NEEDS_ONBOARDING_PIPELINE}))`,
   );
-  url.searchParams.set('fields', 'id,Deal_Name,Stage,Pipeline');
-  url.searchParams.set('per_page', '5');
+  // Description is required to check for the sales-floor signature.
+  url.searchParams.set('fields', 'id,Deal_Name,Stage,Pipeline,Description');
+  url.searchParams.set('per_page', '10');
   const res = await fetch(url.toString(), {
     headers: {Authorization: `Zoho-oauthtoken ${token}`},
   });
@@ -101,7 +118,13 @@ async function findExistingOnboardingDeal(
   if (!res.ok) return null;
   const data = await res.json().catch(() => ({}));
   const rows = Array.isArray(data?.data) ? data.data : [];
-  return rows[0]?.id || null;
+  // Only sales-floor-signed deals count as duplicates. Automation deals
+  // coexist in the pipeline but are transparent to this button.
+  const signed = rows.find((r: any) => {
+    const desc = typeof r?.Description === 'string' ? r.Description : '';
+    return desc.includes(SALES_FLOOR_SIGNATURE);
+  });
+  return signed?.id || null;
 }
 
 async function fetchAccountState(
@@ -242,7 +265,7 @@ export async function action({request, context}: ActionFunctionArgs) {
       ? `Ship date: ${actualShipDate.slice(0, 10)}`
       : `First order date: ${baseDate.slice(0, 10)}`;
     const description = [
-      `Auto-created from /sales-floor New Customers tab by ${rep.displayName || rep.email || 'rep'}.`,
+      `${SALES_FLOOR_SIGNATURE} New Customers tab by ${rep.displayName || rep.email || 'rep'}.`,
       firstOrderNumber ? `LeafLink order: ${firstOrderNumber}` : '',
       dateLabel,
       `12-day check-in due: ${checkInDueDate}`,
