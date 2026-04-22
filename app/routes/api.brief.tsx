@@ -56,6 +56,14 @@ type LeadPayload = {
   _status?: string;
   Lead_Source?: string;
   Description?: string;
+  // ── Added for Gmail domain expansion ───────────────────────────────────
+  // Website / company URL from Zoho Account.Website. Used to derive a
+  // company domain for Gmail search when the primary buyer has no email.
+  Website?: string;
+  // Every email address known for contacts on this account. Lets us pick
+  // up a business-domain even when the buyer's email is blank or a
+  // consumer address (gmail.com, etc).
+  _contactEmails?: string[];
 };
 
 // ─── Claude tool schema ─────────────────────────────────────────────────────
@@ -370,6 +378,52 @@ function leadDomainForExpansion(email: string): string | null {
   return BRIEF_CONSUMER_DOMAINS.has(domain) ? null : domain;
 }
 
+// Parse a website URL into a bare, business-domain-only host. Strips
+// protocol, www., trailing path, and port. Returns null for consumer
+// hosts so we don't domain-search @gmail.com style junk values.
+// Handles messy Zoho inputs: 'rushbudz.com', 'http://rushbudz.com',
+// 'https://www.rushbudz.com/contact', 'rushbudz.com/', 'Rush Budz'.
+function websiteToDomain(raw: string | undefined | null): string | null {
+  if (!raw) return null;
+  let s = String(raw).trim().toLowerCase();
+  if (!s) return null;
+  // Drop anything before the :// for real URLs. Leave bare hosts alone.
+  s = s.replace(/^[a-z]+:\/\//, '');
+  // Drop leading 'www.'
+  s = s.replace(/^www\./, '');
+  // Cut at first slash or whitespace — path / query / anything trailing.
+  s = s.split(/[\/\s?#]/)[0];
+  // Strip port if present.
+  s = s.split(':')[0];
+  // Must look like a real domain: has a dot, has no @, no invalid chars.
+  if (!s || !s.includes('.') || s.includes('@')) return null;
+  if (!/^[a-z0-9.\-]+$/.test(s)) return null;
+  return BRIEF_CONSUMER_DOMAINS.has(s) ? null : s;
+}
+
+// Pick the best company domain across every signal we have on the lead:
+// 1. The primary Email (if business domain).
+// 2. Any other contact email at the account (if business domain).
+// 3. The Account's Website field.
+// Returns the first valid business domain, or null.
+function pickBestDomain(
+  primaryEmail: string,
+  contactEmails: string[] | undefined,
+  website: string | undefined,
+): string | null {
+  const fromPrimary = primaryEmail ? leadDomainForExpansion(primaryEmail) : null;
+  if (fromPrimary) return fromPrimary;
+  if (Array.isArray(contactEmails)) {
+    for (const e of contactEmails) {
+      const d = leadDomainForExpansion(e);
+      if (d) return d;
+    }
+  }
+  const fromWebsite = websiteToDomain(website);
+  if (fromWebsite) return fromWebsite;
+  return null;
+}
+
 // Build the user-content block for Claude — all evidence, nothing else.
 function buildClaudeContext(args: {
   rep: SalesRep;
@@ -600,12 +654,21 @@ export async function action({request, context}: ActionFunctionArgs) {
         })
       : Promise.resolve([]);
 
-  // Domain expansion: if the lead has a business email (foo@companyshop.com),
-  // also pull any correspondence Sky had with OTHER contacts at the same
-  // domain. Catches the "old buyer rolled off, new buyer took over" case
-  // where the exact-email search would return zero even though there's
-  // plenty of relevant shop history to surface.
-  const expandDomain = emailAddr ? leadDomainForExpansion(emailAddr) : null;
+  // Domain expansion: pull any correspondence the rep had with the company,
+  // not just the specific buyer on the card. Catches:
+  //   • "old buyer rolled off, new buyer took over" — exact-email returns
+  //     zero but there's plenty of relevant history at the shop.
+  //   • "Akshay TBD" placeholder buyers where the card has no email at all,
+  //     but the account has contacts + a Website we can mine for a domain.
+  //   • Buyer has a consumer email (buyer's personal gmail) but the shop has
+  //     a real website — use the website domain for the expanded search.
+  // Fallback priority: primary email → any other contact email at the
+  // account → Account.Website. All three are filtered to business domains.
+  const expandDomain = pickBestDomain(
+    emailAddr,
+    Array.isArray(lead._contactEmails) ? lead._contactEmails : [],
+    lead.Website,
+  );
   const gmailPromise = (emailAddr || expandDomain)
     ? fetchGmailThread(request, emailAddr, expandDomain, 10)
     : Promise.resolve({

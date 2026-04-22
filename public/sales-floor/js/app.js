@@ -1820,6 +1820,14 @@ function leadFromAccount(a) {
     '';
   const phone = buyer?.Mobile || buyer?.Phone || a.Phone || '';
   const email = buyer?.Email || a.Email || '';
+  // Collect EVERY email attached to the account — buyer + all linked contacts.
+  // The Brief route uses these to derive a company domain for the Gmail search
+  // when the primary buyer has no email on file (e.g. "Akshay TBD" placeholder
+  // buyers). Without this, Sky's history with OTHER contacts at the shop never
+  // surfaces and Claude produces a cold brief for a warm account.
+  const contactEmails = Array.isArray(a.contacts)
+    ? a.contacts.map((c) => (c?.Email || '').trim()).filter(Boolean)
+    : [];
   return {
     First_Name: firstName,
     Last_Name: lastName,
@@ -1834,6 +1842,11 @@ function leadFromAccount(a) {
     // Handy for the client-side render (Sky's Play "CRM notes" block pulls
     // from lead.Description — already covered above).
     _jobRole: buyer?._jobRole || '',
+    // Website + contact-email fallbacks — the Brief uses these to run a
+    // domain-wide Gmail search so existing-account briefs surface the real
+    // history even when the buyer has no email on file.
+    Website: a.Website || '',
+    _contactEmails: contactEmails,
   };
 }
 
@@ -1860,6 +1873,9 @@ function leadFromNewCust(c) {
     '';
   const phone = buyer?.Mobile || buyer?.Phone || acct?.Phone || c.phone || '';
   const email = buyer?.Email || acct?.Email || '';
+  const contactEmails = Array.isArray(acct?.contacts)
+    ? acct.contacts.map((x) => (x?.Email || '').trim()).filter(Boolean)
+    : [];
   return {
     First_Name: firstName,
     Last_Name: lastName,
@@ -1872,6 +1888,10 @@ function leadFromNewCust(c) {
     Lead_Source: c.is420Cohort ? '4/20 Drop' : 'First Order',
     Description: acct?.Description || buyer?.Description || '',
     _jobRole: buyer?._jobRole || '',
+    // Same Brief-domain fallbacks as leadFromAccount — otherwise New Customer
+    // briefs miss Sky's prior history with the shop.
+    Website: acct?.Website || '',
+    _contactEmails: contactEmails,
   };
 }
 
