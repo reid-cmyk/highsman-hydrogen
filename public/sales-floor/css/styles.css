@@ -3376,6 +3376,28 @@ a.hs-contact-meta-cell:hover i{ color:var(--gold); }
   color:var(--quarter-gray, #A9ACAF);
   letter-spacing:0.04em;
 }
+/* Buyer contact line on New Customer cards. Mirrors .hs-orders-buyer on the
+   Reorder Due cards — person icon, contact name in white, role in gray
+   after a middle dot. When no buyer is linked, we show a muted "No buyer
+   contact on file" so the rep always knows the contact status at a glance
+   (not just from the greyed-out CTA row). */
+.hs-newcust-buyer{
+  font-family:var(--barlow, 'Barlow Semi Condensed', sans-serif);
+  font-size:13px;
+  color:#fff;
+  margin-top:2px;
+  margin-bottom:2px;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  line-height:1.35;
+}
+.hs-newcust-buyer i{ color:var(--quarter-gray, #A9ACAF); font-size:11px; }
+.hs-newcust-buyer .hs-newcust-buyer-role{
+  color:var(--quarter-gray, #A9ACAF);
+  font-size:12px;
+}
+.hs-newcust-buyer.is-empty{ color:var(--quarter-gray, #A9ACAF); font-style:italic; }
 .hs-newcust-copy{
   font-family:var(--barlow, 'Barlow Semi Condensed', sans-serif);
   font-size:13px;

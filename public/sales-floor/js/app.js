@@ -716,6 +716,22 @@ function renderNewCustomers() {
   }).join('');
 }
 
+// Build the buyer contact line shown on each New Customer card. Rep asked
+// for the contact name to be visible on every card (not just buried in the
+// CTA buttons as a hover target). Shows "{Name} · {Role}" when we've got a
+// buyer, otherwise a muted "No buyer contact on file" line. Kept as a
+// helper so the Zoho-only and LeafLink card renderers stay in sync.
+function renderNewCustBuyerLine(buyer) {
+  if (!buyer) {
+    return `<div class="hs-newcust-buyer is-empty"><i class="fa-solid fa-user-slash"></i> No buyer contact on file</div>`;
+  }
+  const name = escapeHtml(buyer._fullName || 'Unnamed Contact');
+  const roleHtml = buyer._jobRole
+    ? ` <span class="hs-newcust-buyer-role">· ${escapeHtml(buyer._jobRole)}</span>`
+    : '';
+  return `<div class="hs-newcust-buyer"><i class="fa-solid fa-user"></i> ${name}${roleHtml}</div>`;
+}
+
 // Render a simpler "first order from Zoho" card for NY/RI/MO. No LeafLink
 // ship-date / order-status context and no Vibes-onboard button (Vibes is NJ
 // v1 only). The rep's job here is simpler: call/text the buyer to welcome
@@ -804,6 +820,7 @@ function renderZohoNewCustCard(c, idx) {
         </div>
       </div>
       ${orderLine}
+      ${renderNewCustBuyerLine(buyer)}
       ${body}
       ${actionRow}
     </div>`;
@@ -926,6 +943,7 @@ function renderNewCustCard(c, idx) {
         </div>
       </div>
       ${orderLine}
+      ${renderNewCustBuyerLine(buyer)}
       ${body}
       ${actionRow}
     </div>`;
