@@ -153,9 +153,14 @@ export async function verifyQuoSignature(
   if (drift > 5 * 60 * 1000) return false;
 
   const enc = new TextEncoder();
+  // Quo/OpenPhone issues the signing secret as a base64-encoded random byte
+  // sequence (44 chars = 32 decoded bytes). The HMAC key has to be the raw
+  // decoded bytes — NOT the base64 string itself. Using the string produces
+  // a signature that never matches what Quo sends, and every webhook 401s.
+  const keyBytes = base64ToBytes(secret);
   const key = await crypto.subtle.importKey(
     'raw',
-    enc.encode(secret),
+    keyBytes,
     {name: 'HMAC', hash: 'SHA-256'},
     false,
     ['sign'],
@@ -164,6 +169,17 @@ export async function verifyQuoSignature(
   const computed = await crypto.subtle.sign('HMAC', key, data);
   const computedB64 = btoa(String.fromCharCode(...new Uint8Array(computed)));
   return constantTimeEquals(computedB64, sig);
+}
+
+// Decode a base64 (standard or url-safe, padded or not) string into raw
+// bytes. Used to turn the Quo signing secret into HMAC key material.
+function base64ToBytes(b64: string): Uint8Array {
+  let s = b64.replace(/-/g, '+').replace(/_/g, '/');
+  while (s.length % 4) s += '=';
+  const bin = atob(s);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
 }
 
 function constantTimeEquals(a: string, b: string): boolean {
