@@ -59,8 +59,46 @@ type RouteStop = {
   meta?: Record<string, any>;
 };
 
+// Normalize a raw Zoho state value to a 2-letter code. Tolerates "NJ",
+// "New Jersey", "new jersey", trailing whitespace. Returns null when the
+// field is empty or unrecognized.
+function normalizeStateToCode(raw: any): string | null {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  if (s.length === 2) return s.toUpperCase();
+  const lower = s.toLowerCase();
+  if (lower === 'new jersey') return 'NJ';
+  return s; // fall-through — caller will check against known codes
+}
+
+// Pull an NJ match from ANY of the 3 state fields on an Account. Handles the
+// common case where Billing_State is empty or the old long form while
+// Account_State (the canonical picklist) carries the clean 2-letter code.
+function accountIsNJ(acct: any): boolean {
+  const candidates = [
+    normalizeStateToCode(acct?.Account_State),
+    normalizeStateToCode(acct?.Billing_State),
+    normalizeStateToCode(acct?.Shipping_State),
+  ];
+  return candidates.some((c) => c === 'NJ');
+}
+
 // ─── TIER 1 — FRESH (Deals in Needs Onboarding pipeline) ─────────────────────
-async function loadFreshAccounts(zohoToken: string): Promise<RouteStop[]> {
+type FreshLoadResult = {stops: RouteStop[]; debug: any};
+async function loadFreshAccounts(
+  zohoToken: string,
+): Promise<FreshLoadResult> {
+  const debug: any = {
+    pipelineQueried: NEEDS_ONBOARDING_PIPELINE,
+    dealsFetched: 0,
+    dealsAfterSignatureFilter: 0,
+    droppedNoAccount: 0,
+    droppedAccountFetchFailed: 0,
+    droppedNotNJ: [] as string[],
+    kept: [] as string[],
+  };
+
   // Zoho's COQL does NOT always allow filtering on Pipeline directly.
   // Use the Deals search endpoint with a criteria on Stage (which implicitly
   // belongs to a Pipeline). Because stages are unique per pipeline, we fetch a
@@ -90,13 +128,15 @@ async function loadFreshAccounts(zohoToken: string): Promise<RouteStop[]> {
   const res = await fetch(url.toString(), {
     headers: {Authorization: `Zoho-oauthtoken ${zohoToken}`},
   });
-  if (res.status === 204) return [];
+  if (res.status === 204) return {stops: [], debug};
   if (!res.ok) {
     console.warn('[vibes-route] FRESH deals query failed:', res.status);
-    return [];
+    debug.dealsQueryStatus = res.status;
+    return {stops: [], debug};
   }
   const data = await res.json();
   const allDeals: any[] = data.data || [];
+  debug.dealsFetched = allDeals.length;
 
   // Only surface deals that were created from the Sales Floor "Brand Team
   // Onboarding" button. Legacy / manually-created deals in this pipeline are
@@ -108,26 +148,42 @@ async function loadFreshAccounts(zohoToken: string): Promise<RouteStop[]> {
     const desc = typeof d?.Description === 'string' ? d.Description : '';
     return desc.includes(SALES_FLOOR_SIGNATURE);
   });
+  debug.dealsAfterSignatureFilter = deals.length;
 
   const freshStops: RouteStop[] = [];
   for (const deal of deals) {
     const acctRef = deal.Account_Name; // {id, name} or null
-    if (!acctRef || !acctRef.id) continue;
+    if (!acctRef || !acctRef.id) {
+      debug.droppedNoAccount++;
+      continue;
+    }
 
-    // Pull the full Account record for address + state + phone
+    // Pull the full Account record for address + state + phone. Fetch ALL 3
+    // state fields so the NJ check matches records where Billing_State is
+    // empty but Account_State (picklist) carries the clean 2-letter code — a
+    // known post-CRM-migration quirk that was silently dropping cards.
     try {
       const acctRes = await fetch(
-        `https://www.zohoapis.com/crm/v7/Accounts/${acctRef.id}?fields=Account_Name,Billing_Street,Billing_City,Billing_State,Phone,Account_State`,
+        `https://www.zohoapis.com/crm/v7/Accounts/${acctRef.id}?fields=Account_Name,Billing_Street,Billing_City,Billing_State,Shipping_State,Account_State,Phone`,
         {headers: {Authorization: `Zoho-oauthtoken ${zohoToken}`}},
       );
-      if (!acctRes.ok) continue;
+      if (!acctRes.ok) {
+        debug.droppedAccountFetchFailed++;
+        continue;
+      }
       const acctData = await acctRes.json();
       const acct = (acctData.data || [])[0];
-      if (!acct) continue;
+      if (!acct) {
+        debug.droppedAccountFetchFailed++;
+        continue;
+      }
 
-      // NJ filter
-      const state = acct.Billing_State || acct.Account_State;
-      if (state !== 'NJ' && state !== 'New Jersey') continue;
+      if (!accountIsNJ(acct)) {
+        debug.droppedNotNJ.push(
+          `${acct.Account_Name} (billing=${acct.Billing_State || '∅'} account=${acct.Account_State || '∅'} shipping=${acct.Shipping_State || '∅'})`,
+        );
+        continue;
+      }
 
       const closedDate = deal.Closing_Date || deal.Created_Time;
       const daysSinceClosed = closedDate
@@ -146,11 +202,13 @@ async function loadFreshAccounts(zohoToken: string): Promise<RouteStop[]> {
         daysSinceLast: null,
         daysSinceClosed,
       });
+      debug.kept.push(acct.Account_Name);
     } catch (err) {
       console.warn('[vibes-route] FRESH account fetch failed:', err);
+      debug.droppedAccountFetchFailed++;
     }
   }
-  return freshStops;
+  return {stops: freshStops, debug};
 }
 
 // ─── TIER 2 — TARGETS (Leads at Sampling stage, NJ) ──────────────────────────
@@ -281,15 +339,19 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     );
   }
 
+  const wantDebug = url.searchParams.get('debug') === '1';
+
   try {
     const zohoToken = await getZohoToken(env);
 
     // Parallelize the three Zoho pulls
-    const [freshRaw, targets, rotationRaw] = await Promise.all([
+    const [freshResult, targets, rotationRaw] = await Promise.all([
       loadFreshAccounts(zohoToken),
       loadTargetLeads(zohoToken),
       loadRotationAccounts(zohoToken, env.SUPABASE_URL || '', env.SUPABASE_SERVICE_KEY || ''),
     ]);
+    const freshRaw = freshResult.stops;
+    const freshDebug = freshResult.debug;
 
     // Cross-reference: if a FRESH account already has a Vibes visit, demote it
     // out of FRESH (it's been activated — it's now ROTATION).
@@ -326,21 +388,29 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       .filter((r) => !freshIdSet.has(r.accountId))
       .sort((a, b) => (b.daysSinceLast ?? 999) - (a.daysSinceLast ?? 999)); // most stale first
 
-    return json(
-      {
-        ok: true,
-        repId,
-        fresh,
-        targets,
-        rotation,
-        counts: {
-          fresh: fresh.length,
-          targets: targets.length,
-          rotation: rotation.length,
-        },
+    const responseBody: any = {
+      ok: true,
+      repId,
+      fresh,
+      targets,
+      rotation,
+      counts: {
+        fresh: fresh.length,
+        targets: targets.length,
+        rotation: rotation.length,
       },
-      {headers: {'Cache-Control': 'public, max-age=120'}},
-    );
+    };
+    if (wantDebug) {
+      responseBody.debug = {
+        fresh: {
+          ...freshDebug,
+          demotedByVisitedSet: freshRaw.length - fresh.length,
+        },
+      };
+    }
+    return json(responseBody, {
+      headers: {'Cache-Control': wantDebug ? 'no-store' : 'public, max-age=120'},
+    });
   } catch (err: any) {
     console.error('[api/vibes-route] Error:', err.message);
     return json(
