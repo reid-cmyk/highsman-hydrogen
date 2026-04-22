@@ -447,6 +447,12 @@ async function fetchAccounts(accessToken: string, ownerId: string | null) {
       'Total_Orders_Count',
       'First_Order_Date',
       'Last_Order_Date',
+      // Zoho Tags are what power the "Flag for Pete" feature — Sky tags an
+      // Account `pete-followup` on Sales Floor, Pete sees it on /new-business.
+      // Fetched here so every account card on Sky's side already knows its
+      // current tag state and can render the correct flag button without a
+      // separate round trip.
+      'Tag',
     ],
     200,
     accessToken,
@@ -502,6 +508,13 @@ async function fetchAccounts(accessToken: string, ownerId: string | null) {
       // can safely compare with >= 1 without null-checking. This is the ONLY
       // field the Accounts-tab filter should read.
       _orderCount: Number(a.Total_Orders_Count ?? 0) || 0,
+      // `_flaggedForPete` is true when the account carries the `pete-followup`
+      // Zoho tag — the cross-rep signal that puts it on Pete's /new-business
+      // Follow-Ups queue. Precomputed here so Sky's cards can render the
+      // correct flag toggle without every card needing its own tag API call.
+      _flaggedForPete: Array.isArray(a.Tag)
+        ? a.Tag.some((t: any) => String(t?.name || '').toLowerCase() === 'pete-followup')
+        : false,
       // Populated by attachContactsToAccounts() after the contacts fetch
       // resolves. `buyer` is the chosen primary contact (if one exists),
       // `contacts` is the full list for the account.

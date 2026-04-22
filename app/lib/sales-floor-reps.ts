@@ -19,7 +19,7 @@
 // a tiny KV lookup, and delete the inline passwords here.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type SalesRepId = 'sky';
+export type SalesRepId = 'sky' | 'pete';
 
 export type SalesRepGmailConfig = {
   // Env var NAMES that hold this rep's Google OAuth credentials on Oxygen.
@@ -116,6 +116,38 @@ export const SALES_REPS: Record<SalesRepId, SalesRep> = {
       'highsman.com',
     ].join('\n'),
     tagline: 'Spark Greatness™',
+  },
+  // Peter Casey — New Business BDR for New Jersey.
+  // Lives under /new-business (not /sales-floor). Same cookie scheme so auth
+  // + rep-scoped APIs (send-email, send-sms, contact-search, …) all work
+  // unchanged. Pete's Gmail + Quo env vars are separate from Sky's; until
+  // those are provisioned in Oxygen, the send-email route returns 503 and
+  // Pete's dashboard falls back to mailto:/sms: links that open his native
+  // mail/SMS client.
+  pete: {
+    id: 'pete',
+    displayName: 'Peter Casey',
+    firstName: 'Peter',
+    email: 'peter@highsman.com',
+    password: 'petenj2026$$',
+    zohoOwnerId: null, // unfiltered — same pattern as Sky; scope later if needed
+    gmail: {
+      clientIdVar: 'PETE_GMAIL_CLIENT_ID',
+      clientSecretVar: 'PETE_GMAIL_CLIENT_SECRET',
+      refreshTokenVar: 'PETE_GMAIL_REFRESH_TOKEN',
+      fromVar: 'PETE_GMAIL_FROM',
+      defaultFrom: 'peter@highsman.com',
+      fromName: 'Peter Casey — Highsman',
+    },
+    quo: null, // no Quo seat yet — dashboard uses tel:/sms: links + manual log
+    signature: [
+      'Peter Casey',
+      'New Business — New Jersey',
+      'Highsman',
+      'peter@highsman.com',
+      'highsman.com',
+    ].join('\n'),
+    tagline: 'New Business · New Jersey',
   },
 };
 

@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>HIGHSMAN — New Business</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Teko:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <style>
+    /* ─── RESET + BASE ─────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #000; color: #fff;
+      font-family: 'Barlow Semi Condensed', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased; min-height: 100vh; }
+    h1, h2, h3 { font-family: 'Teko', sans-serif; letter-spacing: 0.04em;
+      font-weight: 600; margin: 0; text-transform: uppercase; }
+    button { font-family: inherit; }
+    a { color: inherit; }
+    input, select, textarea { font-family: inherit; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+
+    /* ─── LAYOUT ────────────────────────────────────────────────────────── */
+    .hs-shell { max-width: 960px; margin: 0 auto; padding: 0 0 96px;
+      padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+
+    /* TOP BAR */
+    .hs-top { position: sticky; top: 0; z-index: 20; background: #000;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      padding: 12px 16px 10px; padding-top: calc(12px + env(safe-area-inset-top));
+      display: flex; align-items: center; gap: 12px; }
+    .hs-top-logo { height: 28px; }
+    .hs-top-title { flex: 1; min-width: 0; }
+    .hs-top-title h1 { font-size: 22px; line-height: 1.05; }
+    .hs-top-title .sub { font-size: 11px; color: #A9ACAF;
+      letter-spacing: 0.14em; text-transform: uppercase; margin-top: 2px; }
+    .hs-top-actions { display: flex; gap: 8px; align-items: center; }
+    .hs-top-icon { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+      color: #fff; border-radius: 999px; width: 40px; height: 40px; display: inline-flex;
+      align-items: center; justify-content: center; cursor: pointer; font-size: 15px; }
+    .hs-top-icon:hover { background: rgba(255,255,255,0.14); }
+    .hs-top-icon .fa-rotate.spin { animation: spin 0.9s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* REP CHIP */
+    .hs-rep-chip { padding: 8px 16px; display: flex; gap: 10px; align-items: center;
+      color: #A9ACAF; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
+      border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .hs-rep-chip strong { color: #fff; letter-spacing: 0.06em; font-weight: 600; }
+    .hs-rep-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: #16A34A; }
+
+    /* STAT STRIP */
+    .hs-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+      padding: 12px 16px 0; }
+    @media (min-width: 640px) { .hs-stats { grid-template-columns: repeat(3, 1fr); } }
+    .hs-stat { background: #0a0a0a; border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; padding: 12px 14px; }
+    .hs-stat-label { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+      color: #A9ACAF; }
+    .hs-stat-number { font-family: 'Teko', sans-serif; font-weight: 600;
+      font-size: 28px; line-height: 1.0; margin-top: 2px; color: #fff; }
+    .hs-stat-sub { font-size: 11px; color: #6a6d70; margin-top: 2px; }
+
+    /* TABS */
+    .hs-tabs { padding: 14px 16px 0; display: flex; gap: 8px; }
+    .hs-tab { flex: 1; min-height: 48px; background: #0a0a0a;
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+      color: #A9ACAF; padding: 10px 12px; font-family: 'Teko', sans-serif;
+      font-size: 18px; font-weight: 500; letter-spacing: 0.08em;
+      text-transform: uppercase; cursor: pointer; display: flex;
+      align-items: center; justify-content: center; gap: 8px; position: relative; }
+    .hs-tab.active { background: #fff; color: #000; border-color: #fff; }
+    .hs-tab .count { background: rgba(255,255,255,0.12); color: inherit;
+      font-family: 'Barlow Semi Condensed', sans-serif; font-weight: 600;
+      padding: 2px 8px; border-radius: 999px; font-size: 12px;
+      letter-spacing: 0.02em; min-width: 26px; text-align: center; }
+    .hs-tab.active .count { background: rgba(0,0,0,0.1); color: #000; }
+
+    /* SEARCH + FILTER */
+    .hs-toolbar { padding: 12px 16px 0; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .hs-search { flex: 1; min-width: 180px; position: relative; }
+    .hs-search i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+      color: #6a6d70; font-size: 13px; }
+    .hs-search input { width: 100%; background: #0a0a0a; color: #fff;
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+      padding: 12px 14px 12px 38px; font-size: 15px; outline: none; min-height: 44px; }
+    .hs-search input:focus { border-color: #A9ACAF; }
+    .hs-filter { background: #0a0a0a; color: #fff; border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px; padding: 10px 14px; font-size: 14px; min-height: 44px;
+      cursor: pointer; outline: none; }
+    .hs-filter:focus { border-color: #A9ACAF; }
+
+    /* LIST */
+    .hs-list { padding: 12px 16px 0; display: flex; flex-direction: column; gap: 10px; }
+    .hs-empty { text-align: center; padding: 40px 16px; color: #6a6d70; font-size: 14px; }
+    .hs-empty i { font-size: 32px; color: #2a2d30; margin-bottom: 10px; display: block; }
+    .hs-loading { text-align: center; padding: 40px 16px; color: #6a6d70; }
+    .hs-loading i { font-size: 22px; animation: spin 1s linear infinite; }
+
+    /* CARD */
+    .card { background: #0a0a0a; border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px; padding: 14px; }
+    .card.stale { border-color: rgba(220,38,38,0.4); }
+    .card-head { display: flex; justify-content: space-between; gap: 12px;
+      align-items: flex-start; }
+    .card-name { font-family: 'Teko', sans-serif; font-weight: 600;
+      font-size: 22px; line-height: 1.1; letter-spacing: 0.02em;
+      text-transform: uppercase; color: #fff; word-break: break-word; }
+    .card-sub { color: #A9ACAF; font-size: 12px; margin-top: 2px;
+      letter-spacing: 0.03em; }
+    .card-badge { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+      padding: 4px 8px; border-radius: 999px;
+      background: rgba(255,255,255,0.06); color: #A9ACAF; white-space: nowrap; }
+    .card-badge.new { background: rgba(34,197,94,0.15); color: #22C55E; }
+    .card-badge.stale { background: rgba(220,38,38,0.18); color: #ff6b6b; }
+    .card-contact { margin-top: 8px; font-size: 13px; color: #E5E7EB;
+      display: flex; flex-direction: column; gap: 2px; }
+    .card-contact i { width: 16px; color: #6a6d70; margin-right: 4px; }
+    .card-contact a { color: inherit; text-decoration: none; border-bottom: 1px dotted rgba(255,255,255,0.2); }
+    .card-notes { margin-top: 8px; font-size: 12px; color: #A9ACAF;
+      background: rgba(255,255,255,0.03); border-left: 2px solid rgba(255,255,255,0.15);
+      padding: 6px 10px; border-radius: 0 6px 6px 0; white-space: pre-wrap;
+      max-height: 80px; overflow: hidden; }
+
+    /* ACTIONS */
+    .card-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-top: 12px; }
+    @media (min-width: 480px) { .card-actions { grid-template-columns: repeat(5, 1fr); } }
+    .btn-action { min-height: 42px; background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1); color: #fff;
+      border-radius: 8px; padding: 8px; cursor: pointer;
+      font-family: 'Teko', sans-serif; font-size: 14px; font-weight: 500;
+      letter-spacing: 0.08em; text-transform: uppercase; display: flex;
+      align-items: center; justify-content: center; gap: 6px;
+      text-decoration: none; }
+    .btn-action:hover { background: rgba(255,255,255,0.12); }
+    .btn-action i { font-size: 12px; }
+    .btn-action.primary { background: #fff; color: #000; border-color: #fff; }
+    .btn-action.primary:hover { opacity: 0.9; }
+    .btn-action.danger { background: rgba(220,38,38,0.14); color: #ff9999;
+      border-color: rgba(220,38,38,0.3); }
+
+    /* MODAL */
+    .hs-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      display: none; align-items: flex-end; justify-content: center;
+      z-index: 100; padding: 0; }
+    .hs-modal.open { display: flex; }
+    @media (min-width: 640px) { .hs-modal { align-items: center; padding: 16px; } }
+    .hs-modal-inner { background: #0a0a0a; border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px 16px 0 0; width: 100%; max-width: 560px; padding: 20px 20px 24px;
+      max-height: 92vh; overflow-y: auto;
+      padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+    @media (min-width: 640px) { .hs-modal-inner { border-radius: 16px; } }
+    .hs-modal-head { display: flex; justify-content: space-between; align-items: flex-start;
+      margin-bottom: 16px; }
+    .hs-modal-title { font-family: 'Teko', sans-serif; font-size: 26px; line-height: 1;
+      text-transform: uppercase; letter-spacing: 0.04em; }
+    .hs-modal-sub { color: #A9ACAF; font-size: 12px; letter-spacing: 0.08em;
+      text-transform: uppercase; margin-top: 2px; }
+    .hs-modal-close { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+      color: #fff; width: 36px; height: 36px; border-radius: 999px; cursor: pointer; }
+
+    .form-row { margin-bottom: 14px; }
+    .form-label { display: block; font-size: 11px; letter-spacing: 0.16em;
+      text-transform: uppercase; color: #A9ACAF; margin-bottom: 6px; }
+    .form-input, .form-select, .form-textarea {
+      width: 100%; background: #000; color: #fff;
+      border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
+      padding: 12px 14px; font-size: 15px; outline: none; min-height: 44px; }
+    .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: #A9ACAF; }
+    .form-textarea { min-height: 96px; resize: vertical; font-family: inherit; }
+
+    .chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip { background: #0a0a0a; color: #A9ACAF;
+      border: 1px solid rgba(255,255,255,0.12); padding: 8px 12px;
+      border-radius: 999px; font-size: 12px; letter-spacing: 0.08em;
+      text-transform: uppercase; cursor: pointer; min-height: 36px; font-weight: 500; }
+    .chip.active { background: #fff; color: #000; border-color: #fff; }
+
+    .form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+    .btn-primary { background: #fff; color: #000; border: 1px solid #fff;
+      padding: 12px 18px; border-radius: 8px; font-family: 'Teko', sans-serif;
+      font-size: 18px; font-weight: 600; letter-spacing: 0.08em;
+      text-transform: uppercase; cursor: pointer; min-height: 48px; }
+    .btn-ghost { background: transparent; color: #A9ACAF;
+      border: 1px solid rgba(255,255,255,0.15); padding: 12px 18px;
+      border-radius: 8px; font-family: 'Teko', sans-serif; font-size: 18px;
+      letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer;
+      min-height: 48px; }
+
+    /* TOAST */
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: #fff; color: #000; padding: 12px 18px; border-radius: 999px;
+      font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase;
+      font-weight: 600; z-index: 200; opacity: 0; transition: opacity 0.25s;
+      pointer-events: none; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    .toast.show { opacity: 1; }
+    .toast.error { background: #DC2626; color: #fff; }
+
+    /* FAB — quick log any activity */
+    .fab { position: fixed; bottom: calc(18px + env(safe-area-inset-bottom));
+      right: 18px; width: 56px; height: 56px; border-radius: 50%;
+      background: #fff; color: #000; border: none; cursor: pointer; font-size: 22px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 50; }
+    .fab:hover { transform: translateY(-2px); }
+
+    .footer-mark { padding: 40px 16px 20px; text-align: center; color: #2a2d30;
+      font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase; }
+  </style>
+</head>
+<body>
+
+<div class="hs-shell">
+
+  <!-- TOP BAR -->
+  <header class="hs-top">
+    <img class="hs-top-logo" src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Logo_White.png?v=1775594430" alt="Highsman" />
+    <div class="hs-top-title">
+      <h1>New Business</h1>
+      <div class="sub">New Jersey · Leads &amp; Follow-Ups</div>
+    </div>
+    <div class="hs-top-actions">
+      <button class="hs-top-icon" onclick="refreshAll()" title="Refresh" aria-label="Refresh">
+        <i class="fa-solid fa-rotate" id="refresh-icon"></i>
+      </button>
+      <a class="hs-top-icon" href="/api/sales-floor-logout" title="Log out" aria-label="Log out">
+        <i class="fa-solid fa-right-from-bracket"></i>
+      </a>
+    </div>
+  </header>
+
+  <!-- REP CHIP -->
+  <div class="hs-rep-chip">
+    <span class="dot"></span>
+    Signed in as <strong>__REP_DISPLAY_NAME__</strong>
+  </div>
+
+  <!-- STATS -->
+  <div class="hs-stats">
+    <div class="hs-stat">
+      <div class="hs-stat-label">Active Leads</div>
+      <div class="hs-stat-number" id="stat-leads">—</div>
+      <div class="hs-stat-sub">Phone or email on file</div>
+    </div>
+    <div class="hs-stat">
+      <div class="hs-stat-label">Follow-Ups</div>
+      <div class="hs-stat-number" id="stat-followups">—</div>
+      <div class="hs-stat-sub">Flagged by Sky for reorder</div>
+    </div>
+    <div class="hs-stat">
+      <div class="hs-stat-label">Logged Today</div>
+      <div class="hs-stat-number" id="stat-activities">0</div>
+      <div class="hs-stat-sub">Calls · Texts · Visits</div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="hs-tabs" role="tablist">
+    <button class="hs-tab active" id="tab-leads-btn" onclick="showTab('leads')" role="tab" aria-selected="true">
+      <i class="fa-solid fa-fire"></i> Leads <span class="count" id="tab-leads-count">0</span>
+    </button>
+    <button class="hs-tab" id="tab-followups-btn" onclick="showTab('followups')" role="tab" aria-selected="false">
+      <i class="fa-solid fa-arrows-rotate"></i> Follow-Ups <span class="count" id="tab-followups-count">0</span>
+    </button>
+  </div>
+
+  <!-- SEARCH -->
+  <div class="hs-toolbar">
+    <div class="hs-search">
+      <i class="fa-solid fa-search"></i>
+      <input type="search" id="search-input" placeholder="Search business, contact, city…" oninput="renderCurrent()" />
+    </div>
+    <select class="hs-filter" id="state-filter" onchange="onStateFilterChange()">
+      <option value="NJ" selected>NJ only</option>
+      <option value="ALL">All states</option>
+    </select>
+  </div>
+
+  <!-- LIST -->
+  <div class="hs-list" id="card-list">
+    <div class="hs-loading">
+      <i class="fa-solid fa-circle-notch"></i>
+      <div style="margin-top:10px;">Loading leads…</div>
+    </div>
+  </div>
+
+  <div class="footer-mark">Spark Greatness™</div>
+</div>
+
+<!-- FAB -->
+<button class="fab" onclick="openLogModal(null)" title="Log activity" aria-label="Log activity">
+  <i class="fa-solid fa-plus"></i>
+</button>
+
+<!-- ══════════════ LOG ACTIVITY MODAL ══════════════ -->
+<div class="hs-modal" id="log-modal" role="dialog" aria-modal="true" aria-labelledby="log-modal-title">
+  <div class="hs-modal-inner">
+    <div class="hs-modal-head">
+      <div>
+        <div class="hs-modal-title" id="log-modal-title">Log Activity</div>
+        <div class="hs-modal-sub" id="log-modal-sub">Manual entry</div>
+      </div>
+      <button class="hs-modal-close" onclick="closeLogModal()" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <form id="log-form" onsubmit="submitLog(event)">
+      <!-- Parent: filled when opened from a card; hidden if FAB opened "standalone" -->
+      <div class="form-row" id="log-parent-row" style="display:none;">
+        <span class="form-label">Logging against</span>
+        <div id="log-parent-display" style="color:#fff;font-size:14px;padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;"></div>
+      </div>
+
+      <!-- When FAB opened w/o a record: pick one from current list -->
+      <div class="form-row" id="log-parent-picker-row" style="display:none;">
+        <label class="form-label" for="log-parent-select">Pick who this was with</label>
+        <select class="form-select" id="log-parent-select" required></select>
+      </div>
+
+      <div class="form-row">
+        <span class="form-label">Type</span>
+        <div class="chip-row" id="log-type-chips">
+          <button type="button" class="chip active" data-type="call"><i class="fa-solid fa-phone"></i> Call</button>
+          <button type="button" class="chip" data-type="text"><i class="fa-solid fa-comment-sms"></i> Text</button>
+          <button type="button" class="chip" data-type="email"><i class="fa-solid fa-envelope"></i> Email</button>
+          <button type="button" class="chip" data-type="visit"><i class="fa-solid fa-shop"></i> Visit</button>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <span class="form-label">Outcome</span>
+        <div class="chip-row" id="log-outcome-chips">
+          <button type="button" class="chip active" data-outcome="Connected">Connected</button>
+          <button type="button" class="chip" data-outcome="Voicemail">Voicemail</button>
+          <button type="button" class="chip" data-outcome="No Answer">No Answer</button>
+          <button type="button" class="chip" data-outcome="Interested">Interested</button>
+          <button type="button" class="chip" data-outcome="Not Interested">Not Interested</button>
+          <button type="button" class="chip" data-outcome="Follow Up">Follow Up</button>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label class="form-label" for="log-notes">Notes</label>
+        <textarea class="form-textarea" id="log-notes" rows="4"
+          placeholder="What was said? Any asks, objections, next steps?"></textarea>
+      </div>
+
+      <div class="form-row">
+        <label class="form-label" for="log-next-date">Next step date (optional)</label>
+        <input type="date" class="form-input" id="log-next-date" />
+      </div>
+
+      <div class="form-row">
+        <label class="form-label" for="log-next-note">Next step note (optional)</label>
+        <input type="text" class="form-input" id="log-next-note"
+          placeholder="E.g. Send menu · call back Tuesday · drop by" />
+      </div>
+
+      <div class="form-actions">
+        <button type="button" class="btn-ghost" onclick="closeLogModal()">Cancel</button>
+        <button type="submit" class="btn-primary" id="log-submit">
+          <i class="fa-solid fa-check"></i> Save to Zoho
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+  // ──────────────────────────────────────────────────────────────────────
+  // State
+  // ──────────────────────────────────────────────────────────────────────
+  const REP = window.__HS_REP__ || {id: 'unknown', displayName: 'Rep', email: '', signature: ''};
+  const NJMENU_URL = 'https://highsman.com/njmenu';
+  let currentTab = 'leads';
+  let leads = [];
+  let followups = [];
+  let activitiesToday = 0;
+  let activeParent = null;  // { id, module, name, phone, email }
+  let selectedType = 'call';
+  let selectedOutcome = 'Connected';
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Utilities
+  // ──────────────────────────────────────────────────────────────────────
+  function escapeHtml(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function telHref(raw) {
+    const digits = String(raw || '').replace(/[^\d+]/g, '');
+    return digits ? `tel:${digits}` : '';
+  }
+  function smsHref(raw, body) {
+    const digits = String(raw || '').replace(/[^\d+]/g, '');
+    if (!digits) return '';
+    const b = body ? `?&body=${encodeURIComponent(body)}` : '';
+    return `sms:${digits}${b}`;
+  }
+  function mailtoHref(email, subject, body) {
+    if (!email) return '';
+    const parts = [];
+    if (subject) parts.push(`subject=${encodeURIComponent(subject)}`);
+    if (body) parts.push(`body=${encodeURIComponent(body)}`);
+    return `mailto:${email}${parts.length ? '?' + parts.join('&') : ''}`;
+  }
+  function fmtDate(iso) {
+    if (!iso) return 'No activity yet';
+    try {
+      const d = new Date(iso);
+      const days = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
+      if (days < 1) return 'Today';
+      if (days < 2) return 'Yesterday';
+      if (days < 30) return `${days}d ago`;
+      if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+      return `${Math.floor(days / 365)}y ago`;
+    } catch { return '—'; }
+  }
+  function daysSince(iso) {
+    if (!iso) return Infinity;
+    try {
+      return Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24));
+    } catch { return Infinity; }
+  }
+  function toast(msg, kind) {
+    const el = document.getElementById('toast');
+    el.className = 'toast show' + (kind === 'error' ? ' error' : '');
+    el.textContent = msg;
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.className = 'toast'; }, 2600);
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Data loading
+  // ──────────────────────────────────────────────────────────────────────
+  async function loadLeads() {
+    const state = document.getElementById('state-filter').value;
+    const res = await fetch(`/api/new-business-leads?state=${encodeURIComponent(state)}`, {
+      credentials: 'same-origin',
+    });
+    const data = await res.json().catch(() => ({ok: false}));
+    if (!data.ok) {
+      leads = [];
+      toast(data.error || 'Could not load leads', 'error');
+      return;
+    }
+    leads = data.leads || [];
+    document.getElementById('stat-leads').textContent = leads.length;
+    document.getElementById('tab-leads-count').textContent = leads.length;
+  }
+
+  async function loadFollowUps() {
+    const res = await fetch('/api/new-business-followups', {credentials: 'same-origin'});
+    const data = await res.json().catch(() => ({ok: false}));
+    if (!data.ok) {
+      followups = [];
+      return;
+    }
+    followups = data.accounts || [];
+    document.getElementById('stat-followups').textContent = followups.length;
+    document.getElementById('tab-followups-count').textContent = followups.length;
+  }
+
+  async function refreshAll() {
+    const icon = document.getElementById('refresh-icon');
+    icon.classList.add('spin');
+    try {
+      await Promise.all([loadLeads(), loadFollowUps()]);
+      renderCurrent();
+    } finally {
+      setTimeout(() => icon.classList.remove('spin'), 300);
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Rendering
+  // ──────────────────────────────────────────────────────────────────────
+  function showTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.hs-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById(`tab-${tab}-btn`).classList.add('active');
+    document.querySelectorAll('.hs-tab').forEach(t => t.setAttribute('aria-selected', 'false'));
+    document.getElementById(`tab-${tab}-btn`).setAttribute('aria-selected', 'true');
+    renderCurrent();
+  }
+
+  function renderCurrent() {
+    if (currentTab === 'leads') renderLeads();
+    else renderFollowUps();
+  }
+
+  function searchFilter(rec, q) {
+    if (!q) return true;
+    const hay = [rec.Account_Name, rec.Company, rec._fullName,
+      rec.buyer?.Full_Name, rec.Email, rec.buyer?.Email,
+      rec.Phone, rec.buyer?.Phone, rec.City].filter(Boolean).join(' ').toLowerCase();
+    return hay.includes(q);
+  }
+
+  function renderLeads() {
+    const list = document.getElementById('card-list');
+    const q = document.getElementById('search-input').value.trim().toLowerCase();
+    const filtered = leads.filter(l => searchFilter(l, q));
+    if (!filtered.length) {
+      list.innerHTML = `<div class="hs-empty">
+        <i class="fa-solid fa-fire-flame-curved"></i>
+        ${leads.length ? 'No matches for that search.' : 'No leads yet. Add prospects in Zoho and hit refresh.'}
+      </div>`;
+      return;
+    }
+    list.innerHTML = filtered.map(l => leadCard(l)).join('');
+  }
+
+  function renderFollowUps() {
+    const list = document.getElementById('card-list');
+    const q = document.getElementById('search-input').value.trim().toLowerCase();
+    const filtered = followups.filter(a => searchFilter(a, q));
+    if (!filtered.length) {
+      list.innerHTML = `<div class="hs-empty">
+        <i class="fa-solid fa-check-double"></i>
+        ${followups.length ? 'No matches for that search.' : 'Nothing flagged yet. Sky will push accounts here when she needs your help.'}
+      </div>`;
+      return;
+    }
+    list.innerHTML = filtered.map(a => followupCard(a)).join('');
+  }
+
+  function leadCard(l) {
+    const name = l.Company || l._fullName || 'Unknown';
+    const contact = l._fullName && l.Company ? l._fullName : '';
+    const loc = [l.City, l._state].filter(Boolean).join(', ');
+    const phone = l.Phone || l.Mobile || '';
+    const email = l.Email || '';
+    const isNew = !l.Last_Activity_Time;
+    const badge = isNew
+      ? '<span class="card-badge new">New · Not Contacted</span>'
+      : `<span class="card-badge">Last touch: ${escapeHtml(fmtDate(l.Last_Activity_Time))}</span>`;
+
+    return `
+      <article class="card" data-id="${escapeHtml(l.id)}">
+        <div class="card-head">
+          <div>
+            <div class="card-name">${escapeHtml(name)}</div>
+            <div class="card-sub">
+              ${contact ? `<i class="fa-solid fa-user" style="margin-right:4px;"></i>${escapeHtml(contact)}${loc ? ' · ' : ''}` : ''}${escapeHtml(loc)}
+              ${l.Lead_Source ? ` · Source: ${escapeHtml(l.Lead_Source)}` : ''}
+            </div>
+          </div>
+          ${badge}
+        </div>
+        <div class="card-contact">
+          ${phone ? `<div><i class="fa-solid fa-phone"></i><a href="${telHref(phone)}">${escapeHtml(phone)}</a></div>` : ''}
+          ${email ? `<div><i class="fa-solid fa-envelope"></i><a href="${mailtoHref(email)}">${escapeHtml(email)}</a></div>` : ''}
+        </div>
+        ${l.Description ? `<div class="card-notes">${escapeHtml(l.Description)}</div>` : ''}
+        <div class="card-actions">
+          ${phone ? `<a class="btn-action" href="${telHref(phone)}"><i class="fa-solid fa-phone"></i> Call</a>` : `<button class="btn-action" disabled style="opacity:0.3;"><i class="fa-solid fa-phone"></i> No #</button>`}
+          ${phone ? `<a class="btn-action" href="${smsHref(phone, textScript(name))}"><i class="fa-solid fa-comment-sms"></i> Text</a>` : ''}
+          ${email ? `<a class="btn-action" href="${mailtoHref(email, menuSubject(name), menuBody(l._fullName || name))}"><i class="fa-solid fa-envelope"></i> Email</a>` : ''}
+          <button class="btn-action primary" onclick='sendMenuFromCard("Leads", ${JSON.stringify(l.id)}, ${JSON.stringify(l)})'>
+            <i class="fa-solid fa-paper-plane"></i> Send Menu
+          </button>
+          <button class="btn-action" onclick='openLogModal({module:"Leads", id:${JSON.stringify(l.id)}, name:${JSON.stringify(name)}, phone:${JSON.stringify(phone)}, email:${JSON.stringify(email)}})'>
+            <i class="fa-solid fa-pen-to-square"></i> Log
+          </button>
+        </div>
+      </article>`;
+  }
+
+  function followupCard(a) {
+    const stale = daysSince(a.Last_Activity_Time) >= 30;
+    const name = a.Account_Name || 'Unknown';
+    const loc = [a.City, a._state].filter(Boolean).join(', ');
+    const buyer = a.buyer;
+    const phone = buyer?.Phone || a.Phone || '';
+    const email = buyer?.Email || a.Email || '';
+
+    return `
+      <article class="card ${stale ? 'stale' : ''}" data-id="${escapeHtml(a.id)}">
+        <div class="card-head">
+          <div>
+            <div class="card-name">${escapeHtml(name)}</div>
+            <div class="card-sub">
+              ${buyer ? `<i class="fa-solid fa-user-tie" style="margin-right:4px;"></i>${escapeHtml(buyer.Full_Name || 'Buyer')}${buyer.Job_Role ? ' · ' + escapeHtml(buyer.Job_Role) : ''}${loc ? ' · ' : ''}` : ''}${escapeHtml(loc)}
+            </div>
+          </div>
+          <span class="card-badge ${stale ? 'stale' : ''}">
+            ${stale ? 'Stale · ' : 'Last touch: '}${escapeHtml(fmtDate(a.Last_Activity_Time))}
+          </span>
+        </div>
+        <div class="card-contact">
+          ${phone ? `<div><i class="fa-solid fa-phone"></i><a href="${telHref(phone)}">${escapeHtml(phone)}</a></div>` : ''}
+          ${email ? `<div><i class="fa-solid fa-envelope"></i><a href="${mailtoHref(email)}">${escapeHtml(email)}</a></div>` : ''}
+        </div>
+        <div class="card-actions">
+          ${phone ? `<a class="btn-action" href="${telHref(phone)}"><i class="fa-solid fa-phone"></i> Call</a>` : ''}
+          ${phone ? `<a class="btn-action" href="${smsHref(phone, reorderScript(name))}"><i class="fa-solid fa-comment-sms"></i> Text</a>` : ''}
+          ${email ? `<a class="btn-action" href="${mailtoHref(email, reorderSubject(name), reorderBody(buyer?.Full_Name || name))}"><i class="fa-solid fa-envelope"></i> Email</a>` : ''}
+          <button class="btn-action primary" onclick='sendMenuFromCard("Accounts", ${JSON.stringify(a.id)}, ${JSON.stringify({Account_Name:a.Account_Name, buyer:a.buyer, Email:a.Email})})'>
+            <i class="fa-solid fa-paper-plane"></i> Send Menu
+          </button>
+          <button class="btn-action" onclick='openLogModal({module:"Accounts", id:${JSON.stringify(a.id)}, name:${JSON.stringify(name)}, phone:${JSON.stringify(phone)}, email:${JSON.stringify(email)}})'>
+            <i class="fa-solid fa-pen-to-square"></i> Log
+          </button>
+          <button class="btn-action danger" onclick='handleUnflag(${JSON.stringify(a.id)}, ${JSON.stringify(name)})' title="Remove from Follow-Ups">
+            <i class="fa-solid fa-check"></i> Handled
+          </button>
+        </div>
+      </article>`;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Message templates — pre-fill mailto:/sms: so Pete isn't writing from scratch
+  // ──────────────────────────────────────────────────────────────────────
+  function firstName(full) {
+    return String(full || '').trim().split(/\s+/)[0] || 'there';
+  }
+  function textScript(business) {
+    return `Hey — ${REP.firstName || 'Peter'} from Highsman. Dropping by your area this week. Can I swing the NJ wholesale menu over?`;
+  }
+  function reorderScript(business) {
+    return `Hey — ${REP.firstName || 'Peter'} from Highsman. Checking in on ${business} — ready for a restock? I can turn an order around fast.`;
+  }
+  function menuSubject(business) {
+    return `Highsman NJ Wholesale Menu — ${business}`;
+  }
+  function menuBody(name) {
+    return `Hey ${firstName(name)},\n\n` +
+      `${REP.firstName || 'Peter'} with Highsman, Ricky Williams' brand. ` +
+      `Here's our NJ wholesale menu — Hit Sticks, Pre-Rolls, and Ground Game:\n\n${NJMENU_URL}\n\n` +
+      `Happy to swing by and walk you through everything. When works?\n\n` +
+      (REP.signature || `${REP.displayName}\nHighsman`);
+  }
+  function reorderSubject(business) {
+    return `Restock? — ${business}`;
+  }
+  function reorderBody(name) {
+    return `Hey ${firstName(name)},\n\n` +
+      `${REP.firstName || 'Peter'} with Highsman. Checking in to see if you're running low and ready for a restock. ` +
+      `Full NJ menu here: ${NJMENU_URL}\n\n` +
+      `Let me know and I'll get the order queued up.\n\n` +
+      (REP.signature || `${REP.displayName}\nHighsman`);
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Send Menu — tries rep-scoped Gmail send, falls back to mailto:
+  // ──────────────────────────────────────────────────────────────────────
+  async function sendMenuFromCard(module, id, record) {
+    const to = record?.buyer?.Email || record?.Email || '';
+    if (!to) {
+      toast('No email on file — add a contact first', 'error');
+      return;
+    }
+    const name = record?.Account_Name || record?.Company || record?._fullName || 'there';
+    const greeting = record?.buyer?.Full_Name || record?._fullName || name;
+    const subject = menuSubject(name);
+    const body = menuBody(greeting);
+
+    // Try the rep's Gmail account first (requires PETE_GMAIL_* env vars)
+    try {
+      const res = await fetch('/api/sales-floor-send-email', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'same-origin',
+        body: JSON.stringify({to, subject, body}),
+      });
+      const data = await res.json().catch(() => ({ok: false}));
+      if (data.ok) {
+        toast('Menu sent from ' + (data.from || REP.email));
+        await autoLogAfterSend(module, id, 'email', 'Sent menu via dashboard', `Sent NJ wholesale menu to ${to}.\nSubject: ${subject}`);
+        return;
+      }
+      // Fall through to mailto: when Gmail creds aren't set up yet for this rep
+      throw new Error(data.error || 'send failed');
+    } catch (err) {
+      // Soft fallback — open Pete's native mail client with the draft pre-filled.
+      // He still gets logged activity (via autoLogAfterSend) so we don't lose the touch.
+      toast('Opening your mail app (Gmail not wired yet)');
+      window.location.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      // Fire-and-forget log the send so Zoho records it even when Gmail isn't set up
+      await autoLogAfterSend(module, id, 'email', 'Sent menu (via native mail)', `Opened mailto draft to ${to}. Menu URL: ${NJMENU_URL}`);
+    }
+  }
+
+  async function autoLogAfterSend(module, parentId, type, outcome, notes) {
+    try {
+      await fetch('/api/new-business-log-activity', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          parent: {id: parentId, module},
+          type, outcome, direction: 'out', notes,
+        }),
+      });
+      activitiesToday += 1;
+      document.getElementById('stat-activities').textContent = activitiesToday;
+    } catch { /* non-fatal */ }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Follow-Up "Handled" → unflag
+  // ──────────────────────────────────────────────────────────────────────
+  async function handleUnflag(id, name) {
+    if (!confirm(`Mark "${name}" as handled and remove from Follow-Ups?`)) return;
+    const res = await fetch('/api/new-business-flag-followup', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      credentials: 'same-origin',
+      body: JSON.stringify({accountId: id, action: 'unflag'}),
+    });
+    const data = await res.json().catch(() => ({ok: false}));
+    if (!data.ok) return toast(data.error || 'Could not update', 'error');
+    toast('Marked as handled');
+    followups = followups.filter(a => a.id !== id);
+    document.getElementById('stat-followups').textContent = followups.length;
+    document.getElementById('tab-followups-count').textContent = followups.length;
+    renderCurrent();
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Log Modal
+  // ──────────────────────────────────────────────────────────────────────
+  function openLogModal(parent) {
+    activeParent = parent;
+    const modal = document.getElementById('log-modal');
+    const parentRow = document.getElementById('log-parent-row');
+    const pickerRow = document.getElementById('log-parent-picker-row');
+    const display = document.getElementById('log-parent-display');
+    const select = document.getElementById('log-parent-select');
+
+    if (parent) {
+      parentRow.style.display = '';
+      pickerRow.style.display = 'none';
+      display.innerHTML = `<strong>${escapeHtml(parent.name)}</strong> <span style="color:#A9ACAF;font-size:12px;margin-left:6px;">(${parent.module})</span>`;
+      document.getElementById('log-modal-sub').textContent = parent.module === 'Leads' ? 'Logging against Lead' : 'Logging against Account';
+    } else {
+      parentRow.style.display = 'none';
+      pickerRow.style.display = '';
+      document.getElementById('log-modal-sub').textContent = 'Manual entry';
+      // Fill the picker from whatever's in the current tab
+      const records = currentTab === 'leads' ? leads : followups;
+      const isLeads = currentTab === 'leads';
+      select.innerHTML = '<option value="">— Pick a record —</option>' +
+        records.slice(0, 200).map(r => {
+          const name = isLeads ? (r.Company || r._fullName) : r.Account_Name;
+          return `<option value="${r.id}|${isLeads ? 'Leads' : 'Accounts'}|${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+        }).join('');
+    }
+
+    // Reset chips
+    selectedType = 'call';
+    selectedOutcome = 'Connected';
+    setActiveChip('log-type-chips', 'call');
+    setActiveChip('log-outcome-chips', 'Connected');
+    document.getElementById('log-notes').value = '';
+    document.getElementById('log-next-date').value = '';
+    document.getElementById('log-next-note').value = '';
+
+    modal.classList.add('open');
+  }
+  function closeLogModal() {
+    document.getElementById('log-modal').classList.remove('open');
+    activeParent = null;
+  }
+  function setActiveChip(containerId, value) {
+    const container = document.getElementById(containerId);
+    container.querySelectorAll('.chip').forEach(c => {
+      const v = c.dataset.type || c.dataset.outcome;
+      c.classList.toggle('active', v === value);
+    });
+  }
+  // Chip click handling
+  document.addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    if (chip.dataset.type) {
+      selectedType = chip.dataset.type;
+      setActiveChip('log-type-chips', selectedType);
+    } else if (chip.dataset.outcome) {
+      selectedOutcome = chip.dataset.outcome;
+      setActiveChip('log-outcome-chips', selectedOutcome);
+    }
+  });
+
+  async function submitLog(event) {
+    event.preventDefault();
+    const btn = document.getElementById('log-submit');
+    btn.disabled = true;
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Saving…';
+
+    let parent = activeParent;
+    if (!parent) {
+      const raw = document.getElementById('log-parent-select').value;
+      if (!raw) { btn.disabled = false; btn.innerHTML = originalHtml; toast('Pick a record first', 'error'); return; }
+      const [id, module, name] = raw.split('|');
+      parent = {id, module, name};
+    }
+
+    const payload = {
+      parent: {id: parent.id, module: parent.module},
+      type: selectedType,
+      outcome: selectedOutcome,
+      direction: 'out',
+      notes: document.getElementById('log-notes').value.trim(),
+      nextStepDate: document.getElementById('log-next-date').value || null,
+      nextStepNote: document.getElementById('log-next-note').value.trim(),
+    };
+
+    try {
+      const res = await fetch('/api/new-business-log-activity', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'same-origin',
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({ok: false}));
+      if (!data.ok) throw new Error(data.error || 'Failed');
+      toast(`Logged · ${selectedOutcome}${data.taskId ? ' + follow-up task' : ''}`);
+      activitiesToday += 1;
+      document.getElementById('stat-activities').textContent = activitiesToday;
+      closeLogModal();
+    } catch (err) {
+      toast(err.message || 'Could not save', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Filter change → reload leads (follow-ups are NJ-only-ish today)
+  // ──────────────────────────────────────────────────────────────────────
+  async function onStateFilterChange() {
+    await loadLeads();
+    if (currentTab === 'leads') renderCurrent();
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Bootstrap
+  // ──────────────────────────────────────────────────────────────────────
+  (async function init() {
+    await refreshAll();
+  })();
+
+  // Close modal on ESC
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeLogModal();
+  });
+</script>
+
+</body>
+</html>

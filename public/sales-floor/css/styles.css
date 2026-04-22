@@ -2438,6 +2438,25 @@ a.hs-contact-meta-cell:hover i{ color:var(--gold); }
   border-color:rgba(184,132,255,0.45);
 }
 
+/* Flag-for-Pete pill — orange accent so the hand-off button reads as a
+   distinct action, not "just another utility button". When the account is
+   already on Pete's queue (.is-active), flip to a filled orange state so
+   Sky can scan the list and see at a glance which accounts are handed off. */
+.hs-action-pill.is-flag-pete{
+  border-left:2px solid #F59E0B;
+}
+.hs-action-pill.is-flag-pete i{ color:#F59E0B; }
+.hs-action-pill.is-flag-pete:hover:not(.is-disabled){
+  background:rgba(245,158,11,0.12);
+  border-color:rgba(245,158,11,0.45);
+}
+.hs-action-pill.is-flag-pete.is-active{
+  background:rgba(245,158,11,0.18);
+  border-color:rgba(245,158,11,0.55);
+  color:#F59E0B;
+}
+.hs-action-pill.is-flag-pete.is-active i{ color:#F59E0B; }
+
 /* ── Responsive: tighten pills on narrow phones ── */
 @media (max-width: 480px){
   .hs-contact-card{ padding:14px; }

@@ -1262,6 +1262,19 @@ function renderAccounts() {
         </div>`;
     }
 
+    // "Flag for Pete" toggle. When the account is already flagged, render an
+    // active pill so Sky sees at a glance that Pete is already on it; clicking
+    // removes the tag. When not flagged, clicking hands the account off to
+    // Pete's /new-business Follow-Ups queue via the Zoho Tag.
+    const flagged = !!a._flaggedForPete;
+    const flagPill = `
+      <button class="hs-action-pill is-flag-pete${flagged ? ' is-active' : ''}"
+              onclick="event.stopPropagation(); toggleFlagForPete(${idx})"
+              title="${flagged ? 'On Pete\\u2019s follow-up queue — click to remove' : 'Hand this account to Pete for follow-up'}">
+        <i class="fa-solid fa-flag"></i>
+        <span>${flagged ? 'On Pete' : 'Flag Pete'}</span>
+      </button>`;
+
     return contactCardHtml({
       idx,
       kind: 'account',
@@ -1275,11 +1288,53 @@ function renderAccounts() {
       briefHandler: `openBriefForAccount(${idx})`,
       extraRow,
       headerExtra,
+      extraAction: flagPill,
     });
   }).join('');
 }
 
 function searchAccounts() { renderAccounts(); }
+
+// ─── Flag for Pete ──────────────────────────────────────────────────────────
+// Hands off (or reclaims) an account between Sky's Sales Floor queue and
+// Pete's /new-business Follow-Ups queue. Single source of truth is the Zoho
+// `pete-followup` Tag — the client toggle is optimistic so Sky doesn't wait
+// on the round trip, but the UI reverts + toasts an error on failure.
+async function toggleFlagForPete(idx) {
+  const a = accounts[idx];
+  if (!a || !a.id) return;
+  const wasFlagged = !!a._flaggedForPete;
+  const nextAction = wasFlagged ? 'unflag' : 'flag';
+
+  // Optimistic flip. Sky sees the pill change state the instant she clicks;
+  // if the API fails we roll it back and surface a toast.
+  a._flaggedForPete = !wasFlagged;
+  renderAccounts();
+
+  try {
+    const res = await fetch('/api/new-business-flag-followup', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      credentials: 'same-origin',
+      body: JSON.stringify({accountId: a.id, action: nextAction}),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body.ok) {
+      throw new Error(body?.error || `HTTP ${res.status}`);
+    }
+    toast(
+      wasFlagged
+        ? `${a.Account_Name || 'Account'} removed from Pete\u2019s queue`
+        : `${a.Account_Name || 'Account'} flagged for Pete`,
+      'success',
+    );
+  } catch (err) {
+    // Roll back the optimistic flip and tell Sky what happened so she can retry.
+    a._flaggedForPete = wasFlagged;
+    renderAccounts();
+    toast(`Flag failed: ${err?.message || 'unknown error'}`, 'error');
+  }
+}
 
 // ─── State Filter Tabs (Leads + Accounts) ────────────────────────────────────
 // Reps want a one-click way to scope their list to a specific state market
@@ -1846,6 +1901,11 @@ function contactCardHtml(opts) {
                           // (used by Account cards to show the Buyer pill)
     headerExtra,          // optional HTML rendered to the right of the
                           // status badge in the header (e.g. "Change buyer" link)
+    extraAction,          // optional extra pill button rendered inside the
+                          // actions row after Brief. Used by Account cards for
+                          // the "Flag for Pete" follow-up toggle so Sky can
+                          // hand off an account to Pete's /new-business queue
+                          // without leaving Sales Floor.
   } = opts;
 
   const display = name || '—';
@@ -1939,6 +1999,7 @@ function contactCardHtml(opts) {
         ${textBtn}
         ${emailBtn}
         ${briefBtn}
+        ${extraAction || ''}
       </div>
     </div>`;
 }
