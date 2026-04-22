@@ -6,7 +6,11 @@ let accounts = [];
 let deals = [];
 let currentFilter = 'all';
 let currentBriefLead = null;
-let callsToday = 0;
+let callsToday = 0;          // legacy: local tel:-click counter (pre-Quo)
+let quoTodayCalls = null;    // real count from Quo; null = not yet fetched
+let quoConfigured = false;   // whether the Quo integration is live on this deploy
+let recentCalls = [];        // last 15 Quo calls (shaped by /api/sales-floor-quo-recent)
+let recentCallsRefreshTimer = null;
 
 const PIPELINE_STAGES = [
   { key: 'Qualification',    label: 'Qualification',    color: '#6366f1' },
@@ -187,7 +191,11 @@ function updateStats() {
     .reduce((sum, d) => sum + (parseFloat(d.Amount) || 0), 0);
   document.getElementById('stat-pipeline').textContent = formatCurrency(pipelineValue);
 
-  document.getElementById('stat-calls').textContent = callsToday;
+  // Calls Today: prefer the real Quo number when the integration is live;
+  // fall back to the local tel:-click counter otherwise so demo deploys
+  // still feel responsive.
+  const callsDisplay = quoTodayCalls != null ? quoTodayCalls : callsToday;
+  document.getElementById('stat-calls').textContent = callsDisplay;
   document.getElementById('stat-issues').textContent = Alerts.counts().total || '0';
 
   if (hot > 0) {
@@ -781,4 +789,173 @@ function loadDemoData() {
 
   loadDemoAlerts();
   renderAll();
+}
+
+// ─── Quo (phone system) ───────────────────────────────────────────────────────
+// Owns the Recent Calls panel + Calls Today stat. Fetches from
+// /api/sales-floor-quo-recent — server-side route that holds the API key and
+// caches the Quo response for 30s at the edge.
+//
+// Auto-refresh cadence is 45s (slightly longer than the server cache to
+// avoid hammering). Also refetched on tab focus so "I just hung up" appears
+// without a manual refresh.
+const Quo = (() => {
+  const ENDPOINT = '/api/sales-floor-quo-recent';
+  const REFRESH_MS = 45 * 1000;
+
+  async function load() {
+    try {
+      const res = await fetch(ENDPOINT, {credentials: 'same-origin'});
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      quoConfigured = !!data.configured;
+      recentCalls = Array.isArray(data.calls) ? data.calls : [];
+      quoTodayCalls = typeof data.todayCount === 'number' ? data.todayCount : null;
+
+      renderStatusPill(data.ok ? 'live' : 'error', data.error);
+      render();
+      updateStats();
+      return data;
+    } catch (err) {
+      console.warn('[quo] load failed:', err.message);
+      quoConfigured = false;
+      renderStatusPill('error', err.message);
+      render();
+      return null;
+    }
+  }
+
+  function render() {
+    const el = document.getElementById('recent-calls-list');
+    if (!el) return;
+
+    if (!quoConfigured) {
+      el.innerHTML = `
+        <div class="hs-empty-state py-8">
+          <div class="hs-empty-state-icon"><i class="fa-solid fa-phone"></i></div>
+          Quo isn't connected on this deploy yet.
+        </div>`;
+      return;
+    }
+    if (!recentCalls.length) {
+      el.innerHTML = `
+        <div class="hs-empty-state py-8">
+          <div class="hs-empty-state-icon"><i class="fa-solid fa-phone"></i></div>
+          No calls yet today — get on the phones.
+        </div>`;
+      return;
+    }
+    el.innerHTML = recentCalls.map(rowHtml).join('');
+  }
+
+  function rowHtml(c) {
+    const iconClass = c.direction === 'incoming'
+      ? (c.rawStatus === 'missed' || c.rawStatus === 'no-answer' ? 'is-missed' : 'is-incoming')
+      : 'is-outgoing';
+    const iconGlyph = c.direction === 'incoming'
+      ? (c.rawStatus === 'missed' || c.rawStatus === 'no-answer' ? 'fa-phone-slash' : 'fa-arrow-down-long')
+      : 'fa-arrow-up-long';
+
+    const name = c.contactName || c.otherPartyPretty || 'Unknown';
+    const phoneHtml = c.otherParty
+      ? `<a href="tel:${escapeAttr(c.otherParty)}" class="hs-tel-link" onclick="event.stopPropagation();">${escapeHtml(c.otherPartyPretty || c.otherParty)}</a>`
+      : '—';
+
+    const summaryBlock = c.summary
+      ? `<div class="hs-call-summary"><span class="hs-call-summary-label">AI Summary</span>${escapeHtml(c.summary)}</div>`
+      : '';
+
+    const recordBtn = c.recordingUrl
+      ? `<a class="hs-call-action" href="${escapeAttr(c.recordingUrl)}" target="_blank" rel="noopener" title="Play recording"><i class="fa-solid fa-play"></i></a>`
+      : '';
+
+    return `
+      <div class="hs-call-row">
+        <div class="hs-call-icon ${iconClass}"><i class="fa-solid ${iconGlyph}"></i></div>
+        <div class="hs-call-main">
+          <div class="hs-call-name">${escapeHtml(name)}</div>
+          <div class="hs-call-meta">
+            ${phoneHtml}
+            <span class="hs-call-time">${relativeTime(c.createdAt)} · ${escapeHtml(c.status)}${c.duration ? ' · ' + escapeHtml(c.durationLabel) : ''}</span>
+          </div>
+          ${summaryBlock}
+        </div>
+        <div class="hs-call-actions">
+          ${c.otherParty ? `<a class="hs-call-action" href="tel:${escapeAttr(c.otherParty)}" title="Call back"><i class="fa-solid fa-phone"></i></a>` : ''}
+          ${recordBtn}
+        </div>
+      </div>`;
+  }
+
+  function renderStatusPill(state, errMsg) {
+    const pill = document.getElementById('quo-status-pill');
+    if (!pill) return;
+    pill.classList.remove('hidden', 'is-live', 'is-error');
+    const label = pill.querySelector('.hs-panel-pill-label');
+
+    if (state === 'live') {
+      pill.classList.add('is-live');
+      if (label) label.textContent = 'Quo live';
+    } else if (state === 'error') {
+      pill.classList.add('is-error');
+      if (label) label.textContent = errMsg ? 'Quo offline' : 'Quo unavailable';
+      pill.title = errMsg || '';
+    } else {
+      if (label) label.textContent = 'Quo';
+    }
+  }
+
+  function relativeTime(iso) {
+    if (!iso) return '';
+    const then = new Date(iso).getTime();
+    if (!Number.isFinite(then)) return '';
+    const diff = Date.now() - then;
+    if (diff < 60_000) return 'just now';
+    const m = Math.floor(diff / 60_000);
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    const d = Math.floor(h / 24);
+    if (d === 1) return 'yesterday';
+    return `${d}d ago`;
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function escapeAttr(s) { return escapeHtml(s).replace(/`/g, '&#96;'); }
+
+  function start() {
+    load();
+    if (recentCallsRefreshTimer) clearInterval(recentCallsRefreshTimer);
+    recentCallsRefreshTimer = setInterval(load, REFRESH_MS);
+    // Refetch when the tab regains focus so reps see fresh data after a call.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') load();
+    });
+  }
+
+  return {load, render, start};
+})();
+
+// Exposed so the Refresh button in the panel header can call it inline.
+function refreshRecentCalls() {
+  const btn = event?.currentTarget;
+  const icon = btn?.querySelector('i');
+  icon?.classList.add('fa-spin');
+  Quo.load().finally(() => icon?.classList.remove('fa-spin'));
+}
+window.refreshRecentCalls = refreshRecentCalls;
+
+// Kick off after DOM is ready. Done here at the bottom so the Quo IIFE is
+// defined before start() references it. Safe to call even if the user is
+// on the /sales-floor _index (login) page — start() no-ops when the panel
+// isn't present.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => Quo.start());
+} else {
+  Quo.start();
 }

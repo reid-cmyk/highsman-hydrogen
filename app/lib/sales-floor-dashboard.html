@@ -311,6 +311,32 @@
           </div>
 
         </div>
+
+        <!-- Recent Calls (Quo) — full-width under the secondary grid.
+             Powered by /api/sales-floor-quo-recent (30s edge cache).
+             Rep attribution on each row comes from the call's userId,
+             which the webhook also uses to stamp the Zoho Call Owner. -->
+        <div class="hs-panel hs-recent-calls-panel">
+          <div class="hs-card-header">
+            <div class="hs-card-header-left">
+              <span class="hs-card-title">Recent Calls</span>
+              <span id="quo-status-pill" class="hs-panel-pill hidden">
+                <span class="hs-panel-pill-dot"></span>
+                <span class="hs-panel-pill-label">Quo</span>
+              </span>
+            </div>
+            <button onclick="refreshRecentCalls()" class="hs-link" title="Refresh">
+              <i class="fa-solid fa-rotate-right"></i> Refresh
+            </button>
+          </div>
+          <div id="recent-calls-list" class="hs-recent-calls">
+            <div class="hs-empty-state py-8">
+              <div class="hs-empty-state-icon"><i class="fa-solid fa-phone"></i></div>
+              Connect Quo to load your call history.
+            </div>
+          </div>
+        </div>
+
       </div><!-- /dashboard -->
 
 

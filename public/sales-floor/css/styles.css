@@ -550,6 +550,146 @@ a{ color:inherit; text-decoration:none; }
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   RECENT CALLS (Quo) — full-width panel below the secondary grid
+═══════════════════════════════════════════════════════════════ */
+.hs-recent-calls-panel{ margin-top:12px; }
+
+/* Header that supports a status pill next to the title. The existing
+   .hs-card-header is flex+space-between, so we group title+pill on the
+   left with .hs-card-header-left. */
+.hs-card-header-left{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.hs-panel-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:3px 9px 3px 7px;
+  border-radius:999px;
+  background:rgba(255,255,255,0.05);
+  border:1px solid rgba(255,255,255,0.12);
+  font-family:var(--barlow);
+  font-size:10.5px;
+  letter-spacing:0.06em;
+  text-transform:uppercase;
+  color:var(--gray-dim);
+}
+.hs-panel-pill-dot{
+  width:6px; height:6px; border-radius:50%;
+  background:#A9ACAF;
+  box-shadow:0 0 0 2px rgba(255,255,255,0.04);
+}
+.hs-panel-pill.is-live{ color:#FFFFFF; border-color:rgba(16,185,129,0.45); background:rgba(16,185,129,0.12); }
+.hs-panel-pill.is-live .hs-panel-pill-dot{ background:#10b981; box-shadow:0 0 0 3px rgba(16,185,129,0.18); }
+.hs-panel-pill.is-error{ color:#FFFFFF; border-color:rgba(239,68,68,0.45); background:rgba(239,68,68,0.12); }
+.hs-panel-pill.is-error .hs-panel-pill-dot{ background:#ef4444; box-shadow:0 0 0 3px rgba(239,68,68,0.18); }
+
+.hs-recent-calls{ display:flex; flex-direction:column; }
+.hs-call-row{
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  gap:14px;
+  align-items:center;
+  padding:14px 18px;
+  border-bottom:1px solid var(--line);
+}
+.hs-call-row:last-child{ border-bottom:none; }
+
+/* Direction icon — incoming arrow vs outgoing arrow, plus a subtle tint
+   so reps can scan inbound vs outbound at a glance. */
+.hs-call-icon{
+  width:36px; height:36px;
+  border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:14px;
+  background:rgba(255,255,255,0.05);
+  color:var(--gray-dim);
+}
+.hs-call-icon.is-incoming{ background:rgba(59,130,246,0.14); color:#60a5fa; }
+.hs-call-icon.is-outgoing{ background:rgba(16,185,129,0.14); color:#34d399; }
+.hs-call-icon.is-missed{   background:rgba(239,68,68,0.14);  color:#f87171; }
+
+.hs-call-main{ min-width:0; }
+.hs-call-name{
+  font-family:var(--teko);
+  font-size:18px;
+  letter-spacing:0.04em;
+  color:#FFFFFF;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.hs-call-meta{
+  font-family:var(--barlow);
+  font-size:12px;
+  color:var(--gray-dim);
+  margin-top:2px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.hs-call-meta .hs-tel-link{ font-size:12px; }
+.hs-call-actions{
+  display:flex; align-items:center; gap:6px;
+  flex-shrink:0;
+}
+.hs-call-action{
+  width:32px; height:32px;
+  display:flex; align-items:center; justify-content:center;
+  border-radius:6px;
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.08);
+  color:var(--gray-dim);
+  text-decoration:none;
+  transition:background 120ms, color 120ms, border-color 120ms;
+}
+.hs-call-action:hover{
+  background:rgba(255,255,255,0.10);
+  border-color:rgba(255,255,255,0.18);
+  color:#FFFFFF;
+}
+.hs-call-time{
+  font-family:var(--barlow);
+  font-size:11px;
+  color:var(--gray-dim);
+  letter-spacing:0.04em;
+  margin-left:6px;
+  white-space:nowrap;
+}
+
+/* AI summary — collapses into the row when present. */
+.hs-call-summary{
+  grid-column:2 / -1;
+  margin-top:8px;
+  padding:8px 10px;
+  background:rgba(255,255,255,0.04);
+  border-left:2px solid rgba(255,255,255,0.18);
+  border-radius:0 4px 4px 0;
+  font-family:var(--barlow);
+  font-size:12.5px;
+  color:#D6D8DA;
+  line-height:1.5;
+}
+.hs-call-summary-label{
+  font-family:var(--teko);
+  font-size:11px;
+  letter-spacing:0.1em;
+  text-transform:uppercase;
+  color:var(--gray-dim);
+  margin-right:6px;
+}
+
+@media (max-width: 720px){
+  .hs-call-row{
+    grid-template-columns:auto 1fr;
+    grid-template-areas: 'icon main' 'summary summary' 'actions actions';
+    padding:12px 14px;
+  }
+  .hs-call-icon{ grid-area:icon; }
+  .hs-call-main{ grid-area:main; }
+  .hs-call-actions{ grid-area:actions; justify-self:end; margin-top:6px; }
+  .hs-call-summary{ grid-area:summary; grid-column:auto; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
    CALL QUEUE / HOT LEADS
 ═══════════════════════════════════════════════════════════════ */
 .hs-lead-row{
