@@ -18,16 +18,15 @@ let quoConfigured = false;   // whether the Quo integration is live on this depl
 let recentCalls = [];        // last 15 Quo calls (shaped by /api/sales-floor-quo-recent)
 let recentCallsRefreshTimer = null;
 
-const PIPELINE_STAGES = [
-  { key: 'Qualification',    label: 'Qualification',    color: '#6366f1' },
-  { key: 'Needs Analysis',   label: 'Needs Analysis',   color: '#8b5cf6' },
-  { key: 'Value Proposition',label: 'Proposal',         color: '#f59e0b' },
-  { key: 'Proposal/Price Quote', label: 'Proposal',     color: '#f59e0b' },
-  { key: 'Id. Decision Makers', label: 'Decision',      color: '#ec4899' },
-  { key: 'Perception Analysis', label: 'Negotiating',   color: '#ef4444' },
-  { key: 'Closed Won',       label: 'Won',              color: '#10b981' },
-  { key: 'Closed Lost',      label: 'Lost',             color: '#94a3b8' },
-];
+// LeafLink-driven Orders Due + New Customers state. Both lists come from
+// /api/sales-floor-leaflink-orders in a single round-trip and are kept in
+// memory so the dashboard snapshot, Orders Due tab, and New Customers tab
+// stay in sync without separate fetches per tab.
+let reorderDue = [];      // shops 30d+ since last Highsman LeafLink order
+let newCustomers = [];    // first-time Highsman LeafLink orders + state machine
+let leaflinkOrdersMeta = null;
+let leaflinkOrdersFetched = 0;     // ms timestamp of last successful fetch
+let leaflinkOrdersLoading = false; // suppress overlapping fetches
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -128,7 +127,8 @@ function showTab(tab) {
   const titles = {
     dashboard: ['Dashboard', 'Your day at a glance'],
     leads: ['Leads', 'New business development'],
-    pipeline: ['Pipeline', 'Open opportunities'],
+    orders: ['Orders Due', 'Reorders, low inventory, off-menu shops'],
+    newcustomers: ['New Customers', 'First-time Highsman shops'],
     accounts: ['Accounts', 'Account management'],
     compose: ['Email Templates', 'One-click personalized emails'],
     sms: ['Text', 'Two-way SMS via Quo'],
@@ -143,6 +143,13 @@ function showTab(tab) {
     SMS.init();
   } else if (tab !== 'sms' && typeof SMS !== 'undefined' && typeof SMS.pause === 'function') {
     SMS.pause();
+  }
+
+  // Refresh LeafLink-driven tabs on view. We don't refetch every render —
+  // a 60s cache on the data lets reps tab around without hammering the API,
+  // but tab focus is a strong "I want fresh data" signal.
+  if (tab === 'orders' || tab === 'newcustomers') {
+    loadLeaflinkOrders({force: false}).catch(() => {});
   }
 }
 
@@ -191,11 +198,14 @@ function renderAll() {
   renderLeadStateTabs();
   renderAccountStateTabs();
   renderLeads();
-  renderPipeline();
   renderAccounts();
   renderDashboard();
   updateStats();
   populateIssueAccountDropdown();
+  // Orders Due + New Customers are LeafLink-driven, not Zoho-driven, so
+  // they have their own loader. Kick it off after the Zoho render lands so
+  // the dashboard's other panels paint first.
+  loadLeaflinkOrders({force: false}).catch(() => {});
 }
 
 // ─── Stats ────────────────────────────────────────────────────────────────────
@@ -203,10 +213,15 @@ function updateStats() {
   const hot = leads.filter(l => l._status === 'hot').length;
   document.getElementById('stat-hot').textContent = hot;
 
-  const pipelineValue = deals
-    .filter(d => !['Closed Won','Closed Lost'].includes(d.Stage))
-    .reduce((sum, d) => sum + (parseFloat(d.Amount) || 0), 0);
-  document.getElementById('stat-pipeline').textContent = formatCurrency(pipelineValue);
+  // Reorder Due: count of shops with no Highsman LeafLink order in 30+ days.
+  // Source: /api/sales-floor-leaflink-orders. Falls back to "—" until the
+  // first fetch completes so reps don't see a misleading "0" on slow loads.
+  const reorderEl = document.getElementById('stat-reorder-due');
+  if (reorderEl) {
+    reorderEl.textContent = leaflinkOrdersFetched
+      ? String(reorderDue.length)
+      : '—';
+  }
 
   // Calls Today: prefer the real Quo number when the integration is live;
   // fall back to the local tel:-click counter otherwise so demo deploys
@@ -219,6 +234,34 @@ function updateStats() {
     const badge = document.getElementById('hot-badge');
     badge.textContent = hot;
     badge.classList.remove('hidden');
+  }
+
+  // Orders Due nav badge (sidebar + bottom nav) — surface the reorder-due
+  // count on the nav itself so reps see the number without opening the tab.
+  syncCountBadge('orders-nav-badge', reorderDue.length);
+  syncCountBadge('bn-orders-badge', reorderDue.length);
+
+  // New Customers nav badge — count of pending/ready/checkin_due cards.
+  // We exclude vibes_booked because that one is "in flight" — the rep has
+  // already taken the next step. Done is filtered server-side.
+  const newcustActive = newCustomers.filter(c =>
+    c.cardState === 'pending' || c.cardState === 'ready' || c.cardState === 'checkin_due'
+  ).length;
+  syncCountBadge('newcust-nav-badge', newcustActive);
+  syncCountBadge('sheet-newcust-badge', newcustActive);
+}
+
+// Toggle a count badge element by ID — show with the integer when > 0,
+// hide when 0 or missing. Single helper because we mirror the same value
+// across sidebar nav, bottom nav, and the "More" sheet.
+function syncCountBadge(id, count) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (count > 0) {
+    el.textContent = String(count);
+    el.classList.remove('hidden');
+  } else {
+    el.classList.add('hidden');
   }
 }
 
@@ -276,23 +319,55 @@ function renderDashboard() {
   // Render alert panel
   Alerts.renderPanel();
 
-  const pipelineEl = document.getElementById('dashboard-pipeline');
-  if (deals.length === 0) {
-    pipelineEl.innerHTML = `<div class="hs-empty-state">No pipeline data yet</div>`;
-  } else {
-    const byStage = {};
-    deals.forEach(d => {
-      if (!byStage[d.Stage]) byStage[d.Stage] = { count: 0, value: 0 };
-      byStage[d.Stage].count++;
-      byStage[d.Stage].value += parseFloat(d.Amount) || 0;
-    });
-    pipelineEl.innerHTML = Object.entries(byStage)
-      .filter(([stage]) => !['Closed Lost'].includes(stage))
-      .map(([stage, data]) => `
-        <div class="pipeline-snap-row">
-          <span class="pipeline-snap-stage">${stage}<span class="pipeline-snap-count" style="font-family:'Barlow Semi Condensed';font-size:0.75rem;color:#A9ACAF;margin-left:4px;">(${data.count})</span></span>
-          <span class="pipeline-snap-value">${formatCurrency(data.value)}</span>
-        </div>`).join('');
+  // ─── Orders Due snapshot — surfaced on the dashboard "At a Glance" row.
+  // Renders the top 4 most-overdue reorder shops + a small "X new customers"
+  // pill that deep-links to the New Customers tab. Empty/loading states fall
+  // back to friendly copy so the panel never looks broken.
+  const ordersEl = document.getElementById('dashboard-orders');
+  if (ordersEl) {
+    if (!leaflinkOrdersFetched) {
+      ordersEl.innerHTML = `<div class="hs-empty-state">Loading orders…</div>`;
+    } else if (reorderDue.length === 0 && newCustomers.length === 0) {
+      ordersEl.innerHTML = `
+        <div class="hs-empty-state">
+          <div class="hs-empty-state-icon"><i class="fa-solid fa-clipboard-check"></i></div>
+          Inbox zero on reorders. Spark Greatness.
+        </div>`;
+    } else {
+      const newcustActive = newCustomers.filter(c =>
+        c.cardState === 'pending' || c.cardState === 'ready' || c.cardState === 'checkin_due'
+      ).length;
+      const newcustPill = newcustActive > 0
+        ? `<button onclick="showTab('newcustomers')" class="hs-orders-snap-pill">
+             <i class="fa-solid fa-user-plus"></i>
+             ${newcustActive} new ${newcustActive === 1 ? 'shop' : 'shops'} → onboard
+           </button>`
+        : '';
+      const top = reorderDue.slice(0, 4);
+      const overflow = reorderDue.length - top.length;
+      const rows = top.map(r => {
+        const days = Number.isFinite(r.daysSinceLastOrder) ? r.daysSinceLastOrder : 0;
+        const sev = days >= 60 ? 'is-critical' : days >= 45 ? 'is-warn' : '';
+        return `
+          <div class="hs-orders-snap-row">
+            <div class="hs-orders-snap-name">
+              ${escapeHtml(r.customerName || '—')}
+              ${r.state ? `<span class="hs-orders-snap-state">${escapeHtml(r.state)}</span>` : ''}
+            </div>
+            <div class="hs-orders-snap-days ${sev}">${days}d</div>
+          </div>`;
+      }).join('');
+      const overflowRow = overflow > 0
+        ? `<button onclick="showTab('orders')" class="hs-orders-snap-more">
+             + ${overflow} more →
+           </button>`
+        : '';
+      ordersEl.innerHTML = `
+        ${newcustPill}
+        ${rows || '<div class="hs-empty-state" style="padding:12px 0;">No reorders past 30 days.</div>'}
+        ${overflowRow}
+      `;
+    }
   }
 }
 
@@ -344,42 +419,390 @@ function filterLeads(status) {
 
 function searchLeads() { renderLeads(); }
 
-// ─── Pipeline Board ───────────────────────────────────────────────────────────
-function renderPipeline() {
-  const board = document.getElementById('pipeline-board');
-  if (deals.length === 0) {
-    board.innerHTML = `<div class="hs-empty-state py-16 bg-brand-black w-full">Connect Zoho CRM to load your pipeline</div>`;
+// ─── Orders Due (LeafLink-driven) ─────────────────────────────────────────────
+// Replaces the old Pipeline board. Three columns:
+//   1. Reorder Due  — Highsman shops with no LeafLink order in 30+ days (live)
+//   2. Low Inventory Alert  — placeholder (Phase 2)
+//   3. Off Menu Alert  — placeholder (Phase 2, most critical)
+// Data shape comes from /api/sales-floor-leaflink-orders.
+
+async function loadLeaflinkOrders({force = false} = {}) {
+  if (leaflinkOrdersLoading) return;
+  // 60-second cache unless force=true
+  if (!force && leaflinkOrdersFetched && Date.now() - leaflinkOrdersFetched < 60_000) {
+    return;
+  }
+  leaflinkOrdersLoading = true;
+  try {
+    const res = await fetch('/api/sales-floor-leaflink-orders', {
+      credentials: 'include',
+      headers: {Accept: 'application/json'},
+    });
+    if (!res.ok) throw new Error(`leaflink orders ${res.status}`);
+    const data = await res.json();
+    if (!data?.ok) throw new Error(data?.error || 'leaflink orders failed');
+    reorderDue = Array.isArray(data.reorderDue) ? data.reorderDue : [];
+    newCustomers = Array.isArray(data.newCustomers) ? data.newCustomers : [];
+    leaflinkOrdersMeta = data.meta || null;
+    leaflinkOrdersFetched = Date.now();
+  } catch (err) {
+    console.warn('[loadLeaflinkOrders] failed', err);
+    // Surface error in panel pill rather than blowing up the dashboard
+    leaflinkOrdersFetched = Date.now();
+    const pill = document.getElementById('reorder-due-meta');
+    if (pill) {
+      pill.textContent = 'Sync error — retry';
+      pill.classList.remove('is-live');
+      pill.classList.add('is-error');
+    }
+  } finally {
+    leaflinkOrdersLoading = false;
+    renderOrders();
+    renderNewCustomers();
+    renderDashboard();
+    updateStats();
+  }
+}
+
+function renderOrders() {
+  const list = document.getElementById('reorder-due-list');
+  const meta = document.getElementById('reorder-due-meta');
+  if (!list) return;
+
+  // Header pill — updates with live count + stale-state
+  if (meta) {
+    if (!leaflinkOrdersFetched) {
+      meta.textContent = 'Loading…';
+      meta.classList.remove('is-live', 'is-error');
+    } else if (!meta.classList.contains('is-error')) {
+      meta.textContent = `${reorderDue.length} due`;
+      meta.classList.add('is-live');
+    }
+  }
+
+  if (!leaflinkOrdersFetched) {
+    list.innerHTML = `<div class="hs-empty-state hs-empty-state--col">
+      <div class="hs-empty-state-icon"><i class="fa-solid fa-spinner fa-spin"></i></div>
+      Loading reorder data…
+    </div>`;
+    return;
+  }
+  if (reorderDue.length === 0) {
+    list.innerHTML = `<div class="hs-empty-state hs-empty-state--col">
+      <div class="hs-empty-state-icon"><i class="fa-solid fa-check"></i></div>
+      No shops past 30 days. Spark Greatness.
+    </div>`;
     return;
   }
 
-  const stageOrder = PIPELINE_STAGES.map(s => s.key);
-  const allStages = [...new Set([...stageOrder, ...deals.map(d => d.Stage)])];
+  // Sort: most overdue first
+  const sorted = [...reorderDue].sort(
+    (a, b) => (b.daysSinceLastOrder || 0) - (a.daysSinceLastOrder || 0),
+  );
 
-  board.innerHTML = allStages.map(stage => {
-    const stageDef = PIPELINE_STAGES.find(s => s.key === stage);
-    const label = stageDef?.label || stage;
-    const stageDeals = deals.filter(d => d.Stage === stage);
-    const total = stageDeals.reduce((s, d) => s + (parseFloat(d.Amount) || 0), 0);
-
-    if (stageDeals.length === 0 && !stageDef) return '';
+  list.innerHTML = sorted.map(r => {
+    const days = Number.isFinite(r.daysSinceLastOrder) ? r.daysSinceLastOrder : 0;
+    const sev = days >= 60 ? 'is-critical' : days >= 45 ? 'is-warn' : '';
+    const lastOrder = r.lastOrderDate
+      ? `Last: ${formatDate(r.lastOrderDate)}${r.lastOrderNumber ? ` · #${escapeHtml(String(r.lastOrderNumber))}` : ''}`
+      : 'No prior orders on file';
+    const statePill = r.state
+      ? `<span class="hs-orders-state">${escapeHtml(r.state)}</span>`
+      : '';
+    // Cross-reference the live accounts list to surface the buyer contact —
+    // /api/sales-floor-leaflink-orders returns the account-level phone, but
+    // the buyer's mobile is on the contact attached to the matched account.
+    const acct = r.zohoAccountId
+      ? accounts.find(a => a.id === r.zohoAccountId)
+      : null;
+    const buyer = acct?._buyer || null;
+    const buyerLine = buyer
+      ? `<div class="hs-orders-buyer"><i class="fa-solid fa-user"></i> ${escapeHtml(buyer._fullName || '')}${buyer.Job_Role ? ` · ${escapeHtml(buyer.Job_Role)}` : ''}</div>`
+      : '';
+    const phone = buyer?.Mobile || buyer?.Phone || r.phone || '';
+    const email = buyer?.Email || acct?.Email || '';
+    const actions = [];
+    if (phone) {
+      actions.push(`<a class="hs-orders-action" href="tel:${escapeAttr(phone)}"><i class="fa-solid fa-phone"></i> Call</a>`);
+      actions.push(`<button class="hs-orders-action" onclick="textBuyerByPhone('${escapeAttr(phone)}', '${escapeAttr(buyer?._fullName || r.customerName || '')}')"><i class="fa-solid fa-message"></i> Text</button>`);
+    }
+    if (email) {
+      actions.push(`<a class="hs-orders-action" href="mailto:${escapeAttr(email)}"><i class="fa-solid fa-envelope"></i> Email</a>`);
+    }
     return `
-      <div class="pipeline-column flex-shrink-0">
-        <div class="pipeline-column-header">
-          <span>${label}</span>
-          <span class="col-value">${total > 0 ? formatCurrency(total) : stageDeals.length}</span>
+      <div class="hs-orders-card ${sev}">
+        <div class="hs-orders-head">
+          <div class="hs-orders-name">
+            ${escapeHtml(r.customerName || '—')}
+            ${statePill}
+          </div>
+          <div class="hs-orders-days ${sev}">${days}d</div>
         </div>
-        <div class="pipeline-cards">
-          ${stageDeals.map(d => `
-            <div class="pipeline-card">
-              <div class="pipeline-card-name">${d.Deal_Name || '—'}</div>
-              <div class="pipeline-card-company">${d.Account_Name?.name || d.Account_Name || '—'}</div>
-              ${d.Amount ? `<div class="pipeline-card-amount">${formatCurrency(d.Amount)}</div>` : ''}
-              ${d.Closing_Date ? `<div class="pipeline-card-date">Closes ${formatDate(d.Closing_Date)}</div>` : ''}
-            </div>`).join('')}
-          ${stageDeals.length === 0 ? '<div style="font-family:\'Barlow Semi Condensed\';font-size:0.75rem;color:#A9ACAF;text-align:center;padding:16px 0;">No deals</div>' : ''}
-        </div>
+        <div class="hs-orders-meta">${escapeHtml(lastOrder)}</div>
+        ${buyerLine}
+        ${actions.length ? `<div class="hs-orders-actions">${actions.join('')}</div>` : ''}
       </div>`;
   }).join('');
+}
+
+// ─── New Customers (state-machine cards) ──────────────────────────────────────
+// Card lifecycle, driven by API + local optimistic updates:
+//   pending       — first order placed, no ship date yet (Vibes booking blocked)
+//   ready         — order Accepted+ AND ship date set (Vibes booking unlocked)
+//   vibes_booked  — Sky's onboard deal created, awaiting check-in window
+//   checkin_due   — 12 days post-ship, rep needs to call to verify sales
+//   done          — check-in logged; card removed
+function renderNewCustomers() {
+  const list = document.getElementById('newcust-list');
+  const meta = document.getElementById('newcust-count');
+  if (!list) return;
+
+  if (meta) {
+    const active = newCustomers.filter(c =>
+      c.cardState === 'pending' || c.cardState === 'ready' || c.cardState === 'checkin_due'
+    ).length;
+    meta.textContent = leaflinkOrdersFetched
+      ? `${active} active ${active === 1 ? 'shop' : 'shops'}`
+      : 'Loading…';
+  }
+
+  if (!leaflinkOrdersFetched) {
+    list.innerHTML = `<div class="hs-empty-state">
+      <div class="hs-empty-state-icon"><i class="fa-solid fa-spinner fa-spin"></i></div>
+      Loading new customers…
+    </div>`;
+    return;
+  }
+
+  // Filter out 'done' cards — they've graduated to the regular Accounts list.
+  const active = newCustomers.filter(c => c.cardState !== 'done');
+  if (active.length === 0) {
+    list.innerHTML = `<div class="hs-empty-state">
+      <div class="hs-empty-state-icon"><i class="fa-solid fa-user-plus"></i></div>
+      No new shops onboarding right now.
+    </div>`;
+    return;
+  }
+
+  // Order: checkin_due → ready → pending → vibes_booked
+  const order = {checkin_due: 0, ready: 1, pending: 2, vibes_booked: 3};
+  const sorted = [...active].sort(
+    (a, b) => (order[a.cardState] ?? 9) - (order[b.cardState] ?? 9),
+  );
+
+  list.innerHTML = sorted.map((c, idx) => renderNewCustCard(c, idx)).join('');
+}
+
+function renderNewCustCard(c, idx) {
+  const acctId = escapeAttr(c.zohoAccountId || '');
+  const name = escapeHtml(c.customerName || '—');
+  const state = c.state ? `<span class="hs-newcust-state">${escapeHtml(c.state)}</span>` : '';
+  const acct = c.zohoAccountId ? accounts.find(a => a.id === c.zohoAccountId) : null;
+  const buyer = acct?._buyer || null;
+  const buyerPhone = buyer?.Mobile || buyer?.Phone || c.phone || '';
+  const orderLine = c.firstOrderNumber
+    ? `<div class="hs-newcust-order">Order #${escapeHtml(String(c.firstOrderNumber))} · ${escapeHtml(c.firstOrderStatus || 'Pending')}</div>`
+    : '';
+
+  let pillCls = 'is-pending';
+  let pillText = 'Awaiting Ship Date';
+  let body = '';
+  let actionRow = '';
+
+  if (c.cardState === 'pending') {
+    pillCls = 'is-pending';
+    pillText = 'Awaiting Ship Date';
+    body = `
+      <div class="hs-newcust-copy">
+        First order in. Vibes visit unlocks the moment the order is Accepted with a ship date.
+      </div>`;
+    actionRow = `
+      <div class="hs-newcust-actions">
+        <button class="hs-newcust-btn is-disabled" disabled title="Waiting on Accepted status + ship date">
+          <i class="fa-solid fa-lock"></i> Ready to Account Visit
+        </button>
+      </div>`;
+  } else if (c.cardState === 'ready') {
+    if (!c.vibesEligible) {
+      pillCls = 'is-ready';
+      pillText = 'Order Ready';
+      body = `
+        <div class="hs-newcust-copy">
+          Order's locked in. Vibes coverage isn't live in ${escapeHtml(c.state || 'this state')} yet — give the buyer a call instead.
+        </div>`;
+      const tel = buyerPhone
+        ? `<a class="hs-newcust-btn" href="tel:${escapeAttr(buyerPhone)}"><i class="fa-solid fa-phone"></i> Call buyer</a>`
+        : '';
+      actionRow = `<div class="hs-newcust-actions">${tel}</div>`;
+    } else {
+      pillCls = 'is-ready';
+      pillText = 'Order Ready';
+      const safeName = JSON.stringify(c.customerName || '');
+      const safeOrder = JSON.stringify(c.firstOrderNumber || '');
+      const safeShip = JSON.stringify(c.actualShipDate || '');
+      const safeStatus = JSON.stringify(c.firstOrderStatus || '');
+      body = `
+        <div class="hs-newcust-copy">
+          Ship date locked. Send to Vibes — Sky drops in to walk product and stock the shelves.
+        </div>`;
+      actionRow = `
+        <div class="hs-newcust-actions">
+          <button class="hs-newcust-btn is-primary" data-newcust-idx="${idx}"
+            onclick="markReadyToVibesVisit('${acctId}', ${safeName}, ${safeOrder}, ${safeShip}, ${safeStatus}, ${idx})">
+            <i class="fa-solid fa-route"></i> Ready to Account Visit
+          </button>
+        </div>`;
+    }
+  } else if (c.cardState === 'vibes_booked') {
+    pillCls = 'is-booked';
+    pillText = 'Vibes Booked';
+    const due = c.checkInDueDate ? formatDate(c.checkInDueDate) : 'TBD';
+    body = `
+      <div class="hs-newcust-copy">
+        Visit on Sky's board. Check in by <strong>${escapeHtml(due)}</strong> to see how product is moving.
+      </div>`;
+  } else if (c.cardState === 'checkin_due') {
+    pillCls = 'is-checkin';
+    pillText = 'Check-in Due';
+    // Compute days post-ship from actualShipDate (server doesn't ship daysSinceShip).
+    let days = 12;
+    if (c.actualShipDate) {
+      const ship = new Date(c.actualShipDate).getTime();
+      if (!isNaN(ship)) days = Math.max(0, Math.floor((Date.now() - ship) / 86400000));
+    }
+    body = `
+      <div class="hs-newcust-copy">
+        ${days} days post-ship. Call the buyer — confirm sales, restock if they're flying.
+      </div>`;
+    const tel = buyerPhone
+      ? `<a class="hs-newcust-btn" href="tel:${escapeAttr(buyerPhone)}"><i class="fa-solid fa-phone"></i> Call</a>`
+      : '';
+    actionRow = `
+      <div class="hs-newcust-actions">
+        ${tel}
+        <button class="hs-newcust-btn is-primary" data-newcust-idx="${idx}"
+          onclick="logCheckin('${acctId}', ${JSON.stringify(c.customerName || '')}, ${idx})">
+          <i class="fa-solid fa-clipboard-check"></i> Log Check-in
+        </button>
+      </div>`;
+  }
+
+  return `
+    <div class="hs-newcust-card ${pillCls}" data-newcust-id="${acctId}">
+      <div class="hs-newcust-head">
+        <div class="hs-newcust-name">${name}${state}</div>
+        <span class="hs-newcust-pill ${pillCls}">${pillText}</span>
+      </div>
+      ${orderLine}
+      ${body}
+      ${actionRow}
+    </div>`;
+}
+
+// ─── New Customer state transitions ──────────────────────────────────────────
+async function markReadyToVibesVisit(zohoAccountId, customerName, firstOrderNumber, actualShipDate, firstOrderStatus, idx) {
+  const card = newCustomers[idx];
+  if (!card || card.zohoAccountId !== zohoAccountId) return;
+
+  // Optimistic: flip to vibes_booked locally
+  const prevState = card.cardState;
+  const prevDue = card.checkInDueDate;
+  card.cardState = 'vibes_booked';
+  card.checkInDueDate = card.checkInDueDate || estimateCheckinDue(actualShipDate);
+  renderNewCustomers();
+  renderDashboard();
+  updateStats();
+
+  try {
+    const res = await fetch('/api/sales-floor-vibes-onboard', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        zohoAccountId,
+        customerName,
+        firstOrderNumber,
+        actualShipDate,
+        firstOrderStatus,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.ok) {
+      throw new Error(data?.error || `Vibes onboard failed (${res.status})`);
+    }
+    // Lock in the server's check-in date (authoritative)
+    card.dealId = data.dealId || null;
+    card.checkInDueDate = data.checkInDueDate || card.checkInDueDate;
+    card.cardState = 'vibes_booked';
+    renderNewCustomers();
+    toast(`Sent to Vibes. Check in by ${formatDate(card.checkInDueDate)}.`);
+  } catch (err) {
+    // Rollback
+    card.cardState = prevState;
+    card.checkInDueDate = prevDue;
+    renderNewCustomers();
+    renderDashboard();
+    updateStats();
+    toast(err.message || 'Vibes onboard failed', 'error');
+  }
+}
+
+async function logCheckin(zohoAccountId, customerName, idx) {
+  const card = newCustomers[idx];
+  if (!card || card.zohoAccountId !== zohoAccountId) return;
+
+  const summary = (prompt(`Quick note on ${customerName} — how's product moving?`, '') || '').trim();
+  const prevState = card.cardState;
+
+  // Optimistic: graduate to done (will disappear from list)
+  card.cardState = 'done';
+  renderNewCustomers();
+  renderDashboard();
+  updateStats();
+
+  try {
+    const res = await fetch('/api/sales-floor-checkin-done', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({zohoAccountId, customerName, summary}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.ok) {
+      throw new Error(data?.error || `Check-in log failed (${res.status})`);
+    }
+    toast(`Check-in logged for ${customerName}.`);
+  } catch (err) {
+    // Rollback
+    card.cardState = prevState;
+    renderNewCustomers();
+    renderDashboard();
+    updateStats();
+    toast(err.message || 'Check-in log failed', 'error');
+  }
+}
+
+function estimateCheckinDue(shipISO) {
+  const ship = shipISO ? new Date(shipISO).getTime() : Date.now();
+  if (isNaN(ship)) return null;
+  return new Date(ship + 12 * 86400 * 1000).toISOString().slice(0, 10);
+}
+
+// Fire the Text action from an Orders Due card. The card is keyed by Zoho
+// account, not a leads/accounts index, so we open the SMS module directly.
+function textBuyerByPhone(phone, name) {
+  const e164 = normalizePhoneE164(phone);
+  showTab('sms');
+  setTimeout(() => {
+    if (!window.SMS) return;
+    if (e164) {
+      window.SMS.openConversation(e164);
+    } else {
+      window.SMS.openNew && window.SMS.openNew();
+      const nameEl = document.getElementById('sms-new-name');
+      if (nameEl && name) nameEl.value = name;
+    }
+  }, 60);
 }
 
 // ─── Accounts ─────────────────────────────────────────────────────────────────

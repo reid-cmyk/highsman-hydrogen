@@ -92,9 +92,15 @@
         <span>Leads</span>
         <span id="hot-badge" class="ml-auto hs-hot-badge hidden"></span>
       </button>
-      <button onclick="showTab('pipeline')" id="nav-pipeline" class="hs-nav-btn">
-        <i class="fa-solid fa-table-columns hs-nav-icon"></i>
-        <span>Pipeline</span>
+      <button onclick="showTab('orders')" id="nav-orders" class="hs-nav-btn">
+        <i class="fa-solid fa-clipboard-list hs-nav-icon"></i>
+        <span>Orders Due</span>
+        <span id="orders-nav-badge" class="ml-auto hs-hot-badge hidden" style="background:#DC2626;"></span>
+      </button>
+      <button onclick="showTab('newcustomers')" id="nav-newcustomers" class="hs-nav-btn">
+        <i class="fa-solid fa-user-plus hs-nav-icon"></i>
+        <span>New Customers</span>
+        <span id="newcust-nav-badge" class="ml-auto hs-hot-badge hidden" style="background:#F4B400;color:#000;"></span>
       </button>
       <button onclick="showTab('accounts')" id="nav-accounts" class="hs-nav-btn">
         <i class="fa-solid fa-building hs-nav-icon"></i>
@@ -202,10 +208,10 @@
             <div class="hs-stat-number text-white" id="stat-hot">—</div>
             <div class="hs-stat-sub">Call these first</div>
           </div>
-          <div class="stat-card">
-            <div class="hs-stat-label">Pipeline Value</div>
-            <div class="hs-stat-number text-white" id="stat-pipeline">—</div>
-            <div class="hs-stat-sub">Ready to close</div>
+          <div class="stat-card stat-card-orders" onclick="showTab('orders')">
+            <div class="hs-stat-label">Reorder Due</div>
+            <div class="hs-stat-number text-white" id="stat-reorder-due">—</div>
+            <div class="hs-stat-sub">Shops past 30 days</div>
           </div>
           <div class="stat-card stat-card-missed hidden" id="stat-card-missed" onclick="document.getElementById('missed-calls-panel')?.scrollIntoView({behavior:'smooth',block:'start'})">
             <div class="hs-stat-label"><i class="fa-solid fa-phone-slash mr-1"></i> Call Back</div>
@@ -243,21 +249,21 @@
           </div>
         </div>
 
-        <!-- Secondary row: Pipeline + Alerts + Quick Email -->
+        <!-- Secondary row: Orders Due snapshot + Alerts + Quick Email -->
         <div class="hs-section-break">
           <span class="hs-section-label">At a Glance</span>
         </div>
 
         <div class="hs-secondary-grid">
 
-          <!-- Pipeline Snapshot -->
+          <!-- Orders Due Snapshot — top reorders + new customer count -->
           <div class="hs-panel">
             <div class="hs-card-header">
-              <span class="hs-card-title">Pipeline</span>
-              <button onclick="showTab('pipeline')" class="hs-link">Full board</button>
+              <span class="hs-card-title">Orders Due</span>
+              <button onclick="showTab('orders')" class="hs-link">Full board</button>
             </div>
-            <div id="dashboard-pipeline" class="p-5 space-y-3">
-              <div class="hs-empty-state">No pipeline data yet</div>
+            <div id="dashboard-orders" class="p-5 space-y-3">
+              <div class="hs-empty-state">Loading orders...</div>
             </div>
           </div>
 
@@ -415,18 +421,91 @@
       </div><!-- /leads -->
 
 
-      <!-- ═══════════════════ PIPELINE ═══════════════════ -->
-      <div id="tab-pipeline" class="tab-content hidden">
-        <div class="hs-pipeline-hint">
-          <i class="fa-solid fa-arrows-left-right"></i> Swipe sideways to see every stage.
+      <!-- ═══════════════════ ORDERS DUE ═══════════════════ -->
+      <!-- Three columns powered by /api/sales-floor-leaflink-orders.
+           Reorder Due is wired now (any Highsman LeafLink order across all
+           Canfections sellers; 30-day gap on most-recent order). Low Inv
+           and Off Menu are placeholders — Reid will wire data sources later.
+           Off Menu is the most critical of the three per Reid; flagged
+           clearly in the placeholder copy so we don't forget. -->
+      <div id="tab-orders" class="tab-content hidden">
+        <div class="hs-orders-grid">
+
+          <!-- Column 1 — Reorder Due (LIVE) -->
+          <div class="hs-orders-col">
+            <div class="hs-orders-col-head">
+              <div class="hs-orders-col-title">
+                <i class="fa-solid fa-rotate-right"></i> Reorder Due
+              </div>
+              <div class="hs-orders-col-meta" id="reorder-due-meta">—</div>
+            </div>
+            <div class="hs-orders-col-sub">Shops with no Highsman LeafLink order in 30+ days. Order resets the clock.</div>
+            <div id="reorder-due-list" class="hs-orders-col-body">
+              <div class="hs-empty-state hs-empty-state--col">
+                <div class="hs-empty-state-icon"><i class="fa-solid fa-clipboard-list"></i></div>
+                Loading reorder list...
+              </div>
+            </div>
+          </div>
+
+          <!-- Column 2 — Low Inventory Alert (placeholder) -->
+          <div class="hs-orders-col hs-orders-col--placeholder">
+            <div class="hs-orders-col-head">
+              <div class="hs-orders-col-title">
+                <i class="fa-solid fa-warehouse"></i> Low Inventory Alert
+              </div>
+              <div class="hs-orders-col-meta">Coming soon</div>
+            </div>
+            <div class="hs-orders-col-sub">Shops sitting on 3+ days of cover. Wire this up when shop-level POS data is ready.</div>
+            <div class="hs-orders-col-body">
+              <div class="hs-empty-state hs-empty-state--col">
+                <div class="hs-empty-state-icon"><i class="fa-solid fa-toolbox"></i></div>
+                Data source pending.
+              </div>
+            </div>
+          </div>
+
+          <!-- Column 3 — Off Menu Alert (placeholder, most critical) -->
+          <div class="hs-orders-col hs-orders-col--placeholder hs-orders-col--critical">
+            <div class="hs-orders-col-head">
+              <div class="hs-orders-col-title">
+                <i class="fa-solid fa-triangle-exclamation"></i> Off Menu Alert
+              </div>
+              <div class="hs-orders-col-meta">Coming soon — critical</div>
+            </div>
+            <div class="hs-orders-col-sub">Shops where Highsman fell off the active menu. Drop everything and call.</div>
+            <div class="hs-orders-col-body">
+              <div class="hs-empty-state hs-empty-state--col">
+                <div class="hs-empty-state-icon"><i class="fa-solid fa-toolbox"></i></div>
+                Data source pending.
+              </div>
+            </div>
+          </div>
+
         </div>
-        <div id="pipeline-board" class="hs-pipeline-board">
-          <div class="hs-empty-state py-16 bg-brand-black w-full">
-            <div class="hs-empty-state-icon"><i class="fa-solid fa-table-columns"></i></div>
-            Connect Zoho CRM to load your pipeline.
+      </div><!-- /orders -->
+
+
+      <!-- ═══════════════════ NEW CUSTOMERS ═══════════════════ -->
+      <!-- First-time Highsman LeafLink orders, in a state machine:
+             pending     → waiting on Accepted + actual_ship_date
+             ready       → "Ready to Account Visit" enabled
+             vibes_booked → onboard deal exists; show 12-day check-in date
+             checkin_due → 12+ days post-ship; "Log Check-in" enabled
+             done        → checkin note exists (filtered out server-side)
+           Out-of-NJ accounts show "Vibes coverage isn't live in [state]"
+           because the Vibes program is NJ-only for v1. -->
+      <div id="tab-newcustomers" class="tab-content hidden">
+        <div class="hs-toolbar">
+          <div class="hs-toolbar-meta" id="newcust-count"></div>
+        </div>
+        <div id="newcust-list" class="hs-newcust-list">
+          <div class="hs-empty-state py-12">
+            <div class="hs-empty-state-icon"><i class="fa-solid fa-user-plus"></i></div>
+            Loading new customer onboarding...
           </div>
         </div>
-      </div><!-- /pipeline -->
+      </div><!-- /newcustomers -->
 
 
       <!-- ═══════════════════ ACCOUNTS ═══════════════════ -->
@@ -784,9 +863,10 @@
     <span>Leads</span>
     <span id="bn-hot-badge" class="hs-bn-badge hidden"></span>
   </button>
-  <button onclick="showTab('pipeline')" data-bottom-nav="pipeline" class="hs-bn-btn">
-    <i class="fa-solid fa-table-columns"></i>
-    <span>Pipeline</span>
+  <button onclick="showTab('orders')" data-bottom-nav="orders" class="hs-bn-btn">
+    <i class="fa-solid fa-clipboard-list"></i>
+    <span>Orders</span>
+    <span id="bn-orders-badge" class="hs-bn-badge hidden" style="background:#DC2626;"></span>
   </button>
   <button onclick="showTab('compose')" data-bottom-nav="compose" class="hs-bn-btn">
     <i class="fa-solid fa-envelope"></i>
@@ -807,6 +887,10 @@
   <div class="hs-sheet-card">
     <div class="hs-sheet-handle"></div>
     <div class="hs-sheet-title">Tools</div>
+    <button onclick="showTab('newcustomers'); closeMoreSheet();" class="hs-sheet-row">
+      <i class="fa-solid fa-user-plus"></i> New Customers
+      <span id="sheet-newcust-badge" class="hs-hot-badge ml-auto hidden" style="background:#F4B400;color:#000;"></span>
+    </button>
     <button onclick="showTab('accounts'); closeMoreSheet();" class="hs-sheet-row">
       <i class="fa-solid fa-building"></i> Accounts
       <span id="sheet-alert-dot" class="hidden alert-sidebar-dot ml-auto"></span>
@@ -1041,22 +1125,24 @@
   // ───────────────────────────────────────────────────────────
   (function () {
     const SUBS = {
-      dashboard: "Run the table today.",
-      leads:     "Top of the list = your next call. Move.",
-      pipeline:  "Deals in motion. Keep them moving.",
-      accounts:  "Your book of business. Protect it.",
-      compose:   "Push-button plays. Personalized, ready to send.",
-      sms:       "Two-way texts. Logs straight to Zoho.",
-      issues:    "Log it, solve it, keep it moving.",
+      dashboard:    "Run the table today.",
+      leads:        "Top of the list = your next call. Move.",
+      orders:       "Reorders due, low inventory, off-menu shops. Top priority.",
+      newcustomers: "First-time orders. Get out there for the welcome visit.",
+      accounts:     "Your book of business. Protect it.",
+      compose:      "Push-button plays. Personalized, ready to send.",
+      sms:          "Two-way texts. Logs straight to Zoho.",
+      issues:       "Log it, solve it, keep it moving.",
     };
     const TITLES = {
-      dashboard: "Dashboard",
-      leads:     "Leads",
-      pipeline:  "Pipeline",
-      accounts:  "Accounts",
-      compose:   "Email",
-      sms:       "Text",
-      issues:    "Issues",
+      dashboard:    "Dashboard",
+      leads:        "Leads",
+      orders:       "Orders Due",
+      newcustomers: "New Customers",
+      accounts:     "Accounts",
+      compose:      "Email",
+      sms:          "Text",
+      issues:       "Issues",
     };
     const origShowTab = window.showTab;
     if (typeof origShowTab === 'function') {
@@ -1169,7 +1255,7 @@
           focusCount.textContent = hotEl.textContent;
           if (focusVal) {
             const n = parseInt(hotEl.textContent, 10);
-            focusVal.textContent = (n > 0) ? 'Hot Leads' : 'Build Pipeline';
+            focusVal.textContent = (n > 0) ? 'Hot Leads' : 'Reorder Push';
           }
         }
       };
