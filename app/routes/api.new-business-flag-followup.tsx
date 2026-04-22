@@ -80,19 +80,28 @@ export async function action({request, context}: ActionFunctionArgs) {
     return json({ok: false, error: err?.message || 'Zoho auth failed'}, {status: 503});
   }
 
-  // Zoho v7 tag endpoints take ids + tag_names as query params. Bodies are
-  // unused for these actions but POST is still required.
+  // Zoho v7 tag endpoints — use the per-record path form and carry the tag in
+  // the body, matching the proven pattern in api.accounts.tsx. The mass-action
+  // form (`/Accounts/actions/add_tags?ids=...&tag_names=...`) used to accept a
+  // bodiless POST but as of Apr 2026 it rejects with
+  // `{"code":"INVALID_DATA","details":{"expected_data_type":"jsonobject"},"message":"body"}`
+  // because the v7 validator now requires a JSON-object body even when the
+  // identifying data is in the query string. Switching to the per-record path
+  // form sidesteps that: `tags` is carried in the body, which the validator
+  // accepts cleanly, and we keep the additive semantics (other tags on the
+  // record are preserved — add_tags never overwrites unrelated tags).
   const endpoint = act === 'flag' ? 'add_tags' : 'remove_tags';
-  const url = new URL(`https://www.zohoapis.com/crm/v7/Accounts/actions/${endpoint}`);
-  url.searchParams.set('ids', accountId);
-  url.searchParams.set('tag_names', FOLLOWUP_TAG);
-  // `over_write=false` on add keeps any OTHER tags already on the record —
-  // we only want to push ours in, not nuke Sky's tagging scheme.
-  if (act === 'flag') url.searchParams.set('over_write', 'false');
+  const url = `https://www.zohoapis.com/crm/v7/Accounts/${encodeURIComponent(accountId)}/actions/${endpoint}`;
 
-  const res = await fetch(url.toString(), {
+  const res = await fetch(url, {
     method: 'POST',
-    headers: {Authorization: `Zoho-oauthtoken ${token}`},
+    headers: {
+      Authorization: `Zoho-oauthtoken ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      tags: [{name: FOLLOWUP_TAG}],
+    }),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
