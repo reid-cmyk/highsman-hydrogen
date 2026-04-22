@@ -118,6 +118,7 @@ function zohoModuleUrl(
   ownerId: string | null,
   fields: string[],
   perPage: number,
+  page: number = 1,
 ): URL {
   const base = ownerId
     ? `https://www.zohoapis.com/crm/v7/${module}/search`
@@ -125,15 +126,51 @@ function zohoModuleUrl(
   const url = new URL(base);
   url.searchParams.set('fields', fields.join(','));
   url.searchParams.set('per_page', String(perPage));
+  url.searchParams.set('page', String(page));
   url.searchParams.set('sort_by', 'Modified_Time');
   url.searchParams.set('sort_order', 'desc');
   if (ownerId) url.searchParams.set('criteria', ownerCriteria(ownerId));
   return url;
 }
 
+// Loop through Zoho pages until `more_records` flips false or we hit MAX_PAGES.
+// The accounts module alone has 400+ records across 3+ pages once MA is filtered
+// in — without this, most of RI, MO, and anything older than Feb 2026 falls off.
+// Zoho v7 list endpoints cap at 200/page; 10 pages × 200 = 2000 records ceiling,
+// which comfortably covers the full Highsman book for every module right now.
+const MAX_PAGES = 10;
+
+async function fetchAllPages(
+  module: string,
+  ownerId: string | null,
+  fields: string[],
+  perPage: number,
+  accessToken: string,
+): Promise<any[]> {
+  const collected: any[] = [];
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const url = zohoModuleUrl(module, ownerId, fields, perPage, page);
+    const res = await fetch(url.toString(), {
+      headers: {Authorization: `Zoho-oauthtoken ${accessToken}`},
+    });
+    if (res.status === 204) break;
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Zoho ${module} fetch p${page} failed (${res.status}): ${text.slice(0, 300)}`);
+    }
+    const data = await res.json();
+    const rows = Array.isArray(data.data) ? data.data : [];
+    collected.push(...rows);
+    // `info.more_records` is the canonical "there's another page" signal in
+    // v7. Break as soon as Zoho tells us we're done to avoid a wasted fetch.
+    if (!data.info?.more_records) break;
+  }
+  return collected;
+}
+
 // ─── Zoho fetchers ───────────────────────────────────────────────────────────
 async function fetchLeads(accessToken: string, ownerId: string | null) {
-  const url = zohoModuleUrl(
+  const rows = await fetchAllPages(
     'Leads',
     ownerId,
     [
@@ -154,19 +191,10 @@ async function fetchLeads(accessToken: string, ownerId: string | null) {
       'Modified_Time',
       'Created_Time',
     ],
-    100,
+    200,
+    accessToken,
   );
-
-  const res = await fetch(url.toString(), {
-    headers: {Authorization: `Zoho-oauthtoken ${accessToken}`},
-  });
-  if (res.status === 204) return [];
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Zoho leads fetch failed (${res.status}): ${text.slice(0, 300)}`);
-  }
-  const data = await res.json();
-  return (data.data || [])
+  return rows
     // Drop leads whose Company starts with "Test" (same rule we use for
     // accounts) so throwaway seeded records don't clutter the Leads tab.
     .filter((l: any) => !isTestName(l.Company))
@@ -189,23 +217,14 @@ async function fetchLeads(accessToken: string, ownerId: string | null) {
 }
 
 async function fetchDeals(accessToken: string, ownerId: string | null) {
-  const url = zohoModuleUrl(
+  const rows = await fetchAllPages(
     'Deals',
     ownerId,
     ['Deal_Name', 'Account_Name', 'Stage', 'Amount', 'Closing_Date', 'Contact_Name', 'Description'],
     200,
+    accessToken,
   );
-
-  const res = await fetch(url.toString(), {
-    headers: {Authorization: `Zoho-oauthtoken ${accessToken}`},
-  });
-  if (res.status === 204) return [];
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Zoho deals fetch failed (${res.status}): ${text.slice(0, 300)}`);
-  }
-  const data = await res.json();
-  return (data.data || [])
+  return rows
     // Drop deals whose linked Account name or Deal_Name starts with "Test" so
     // throwaway pipeline records don't leak onto the dashboard.
     .filter((d: any) => {
@@ -297,7 +316,7 @@ function isTestName(name: string | null | undefined): boolean {
 }
 
 async function fetchAccounts(accessToken: string, ownerId: string | null) {
-  const url = zohoModuleUrl(
+  const rows = await fetchAllPages(
     'Accounts',
     ownerId,
     [
@@ -320,18 +339,9 @@ async function fetchAccounts(accessToken: string, ownerId: string | null) {
       'Modified_Time',
     ],
     200,
+    accessToken,
   );
-
-  const res = await fetch(url.toString(), {
-    headers: {Authorization: `Zoho-oauthtoken ${accessToken}`},
-  });
-  if (res.status === 204) return [];
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Zoho accounts fetch failed (${res.status}): ${text.slice(0, 300)}`);
-  }
-  const data = await res.json();
-  return (data.data || [])
+  return rows
     // Drop MA accounts before we even shape them — keeps the response leaner
     // and prevents any downstream join from reintroducing them. Check ALL three
     // state fields: some records have MA on Account_State but blank billing,
@@ -400,19 +410,8 @@ const CONTACT_BASE_FIELDS = [
 ];
 
 async function fetchContacts(accessToken: string, ownerId: string | null) {
-  const url = zohoModuleUrl('Contacts', ownerId, CONTACT_BASE_FIELDS, 200);
-
-  const res = await fetch(url.toString(), {
-    headers: {Authorization: `Zoho-oauthtoken ${accessToken}`},
-  });
-
-  if (res.status === 204) return {contacts: []};
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Zoho contacts fetch failed (${res.status}): ${text.slice(0, 300)}`);
-  }
-  const data = await res.json();
-  const contacts = (data.data || []).map((c: any) => {
+  const rows = await fetchAllPages('Contacts', ownerId, CONTACT_BASE_FIELDS, 200, accessToken);
+  const contacts = rows.map((c: any) => {
     const accountId = c.Account_Name?.id || null;
     const accountName = c.Account_Name?.name || '';
     // Role_Title is the real api_name for the "Job Role" picklist in Highsman's
