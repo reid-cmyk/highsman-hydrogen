@@ -800,6 +800,10 @@ function renderZohoNewCustCard(c, idx) {
   if (buyerEmail) {
     actions.push(`<a class="hs-newcust-btn" href="mailto:${escapeAttr(buyerEmail)}"><i class="fa-solid fa-envelope"></i> Email</a>`);
   }
+  // AI Brief — available regardless of whether we have a buyer yet. Without a
+  // buyer the brief runs against the account-level phone/email (still useful
+  // for the cold-open template and any CRM notes on the account).
+  actions.push(`<button class="hs-newcust-btn" onclick="openBriefForNewCust('${acctId}')"><i class="fa-solid fa-brain"></i> Brief</button>`);
   const actionRow = actions.length
     ? `<div class="hs-newcust-actions">${actions.join('')}</div>`
     : `<div class="hs-newcust-actions"><span class="hs-newcust-btn is-disabled" title="No buyer contact on file"><i class="fa-solid fa-user-slash"></i> No buyer yet</span></div>`;
@@ -925,6 +929,17 @@ function renderNewCustCard(c, idx) {
           <i class="fa-solid fa-clipboard-check"></i> Log Check-in
         </button>
       </div>`;
+  }
+
+  // AI Brief button — reps want this available on every LeafLink-sourced new
+  // customer card regardless of state (pending / ready / vibes_booked /
+  // checkin_due). Inject it into the existing actions row if we've built one,
+  // otherwise create a standalone row so the button is never missing.
+  const briefBtn = `<button class="hs-newcust-btn" onclick="openBriefForNewCust('${acctId}')"><i class="fa-solid fa-brain"></i> Brief</button>`;
+  if (actionRow.includes('</div>')) {
+    actionRow = actionRow.replace('</div>', `${briefBtn}</div>`);
+  } else {
+    actionRow = `<div class="hs-newcust-actions">${briefBtn}</div>`;
   }
 
   const cohortPill = c.is420Cohort
@@ -1257,7 +1272,7 @@ function renderAccounts() {
       email: cardEmail,
       emailHandler: `quickEmailAccount(${idx})`,
       textHandler: `quickText(${idx}, 'account')`,
-      briefHandler: null, // briefs are lead-only for now
+      briefHandler: `openBriefForAccount(${idx})`,
       extraRow,
       headerExtra,
     });
@@ -1527,10 +1542,21 @@ async function selectBuyer(contactId) {
 }
 
 // ─── AI Brief Modal ───────────────────────────────────────────────────────────
-async function openBrief(idx) {
-  currentBriefLead = leads[idx];
+// Shared open path — takes a pre-built lead-shape object and paints the modal.
+// Used by three entry points:
+//   openBrief(idx)               → Leads tab        → leads[idx]
+//   openBriefForAccount(idx)     → Accounts tab     → account + buyer synthesized
+//   openBriefForNewCust(acctId)  → New Customer tab → new-cust card + buyer synthesized
+//
+// The /api/brief server validates only that the lead has First_Name,
+// Last_Name, or _fullName — so synthesized objects are safe as long as we
+// fill those in plus the contact channels we know about.
+async function openBriefForLeadObj(leadObj) {
+  if (!leadObj) return;
+  currentBriefLead = leadObj;
   const lead = currentBriefLead;
-  document.getElementById('brief-lead-name').textContent = `${lead._fullName} — ${lead.Company || ''}`;
+  const companyLine = lead.Company ? ` — ${lead.Company}` : '';
+  document.getElementById('brief-lead-name').textContent = `${lead._fullName || '—'}${companyLine}`;
   document.getElementById('brief-content').innerHTML = `
     <div class="hs-loading">
       <div class="hs-spinner"></div>
@@ -1544,6 +1570,87 @@ async function openBrief(idx) {
   } catch (err) {
     document.getElementById('brief-content').innerHTML = `<p style="font-family:'Barlow Semi Condensed',sans-serif;color:#DC2626;padding:16px;">Could not generate brief: ${err.message}</p>`;
   }
+}
+
+async function openBrief(idx) {
+  return openBriefForLeadObj(leads[idx]);
+}
+
+// Build a lead-shape object from an Account card so the Brief can run the
+// same Quo+Gmail+Claude pipeline reps get on the Leads tab. Buyer info
+// takes precedence over the account-level contact data (calling the shop's
+// switchboard rarely reaches the person who signs the PO).
+function leadFromAccount(a) {
+  if (!a) return null;
+  const buyer = a.buyer || null;
+  const firstName = buyer?.First_Name || '';
+  const lastName = buyer?.Last_Name || '';
+  const fullName =
+    buyer?._fullName ||
+    [firstName, lastName].filter(Boolean).join(' ') ||
+    a.Account_Name ||
+    '';
+  const phone = buyer?.Mobile || buyer?.Phone || a.Phone || '';
+  const email = buyer?.Email || a.Email || '';
+  return {
+    First_Name: firstName,
+    Last_Name: lastName,
+    _fullName: fullName,
+    Company: a.Account_Name || '',
+    Phone: phone,
+    Mobile: buyer?.Mobile || '',
+    Email: email,
+    _status: a._orderCount >= 2 ? 'active' : (a._orderCount === 1 ? 'new customer' : 'account'),
+    Lead_Source: 'Existing Account',
+    Description: a.Description || buyer?.Description || '',
+    // Handy for the client-side render (Sky's Play "CRM notes" block pulls
+    // from lead.Description — already covered above).
+    _jobRole: buyer?._jobRole || '',
+  };
+}
+
+async function openBriefForAccount(idx) {
+  const a = accounts[idx];
+  return openBriefForLeadObj(leadFromAccount(a));
+}
+
+// Build a lead-shape object from a New Customer card. The card itself only
+// carries summary fields (customerName, state, order info, buyer pointer) —
+// we reach over to the matched Zoho account + its buyer to pull the phone,
+// email, and CRM notes the Brief pipeline expects.
+function leadFromNewCust(c) {
+  if (!c) return null;
+  const acct = c.zohoAccountId ? accounts.find(x => x.id === c.zohoAccountId) : null;
+  const buyer = acct?.buyer || null;
+  const firstName = buyer?.First_Name || '';
+  const lastName = buyer?.Last_Name || '';
+  const fullName =
+    buyer?._fullName ||
+    [firstName, lastName].filter(Boolean).join(' ') ||
+    c.customerName ||
+    acct?.Account_Name ||
+    '';
+  const phone = buyer?.Mobile || buyer?.Phone || acct?.Phone || c.phone || '';
+  const email = buyer?.Email || acct?.Email || '';
+  return {
+    First_Name: firstName,
+    Last_Name: lastName,
+    _fullName: fullName,
+    Company: c.customerName || acct?.Account_Name || '',
+    Phone: phone,
+    Mobile: buyer?.Mobile || '',
+    Email: email,
+    _status: 'new customer',
+    Lead_Source: c.is420Cohort ? '4/20 Drop' : 'First Order',
+    Description: acct?.Description || buyer?.Description || '',
+    _jobRole: buyer?._jobRole || '',
+  };
+}
+
+async function openBriefForNewCust(zohoAccountId) {
+  if (!zohoAccountId) return;
+  const c = combinedNewCustomers().find(x => x.zohoAccountId === zohoAccountId);
+  return openBriefForLeadObj(leadFromNewCust(c));
 }
 
 function closeBrief() {
