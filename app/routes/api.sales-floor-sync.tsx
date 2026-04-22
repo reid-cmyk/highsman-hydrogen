@@ -23,6 +23,8 @@ import {getRepFromRequest, type SalesRep} from '../lib/sales-floor-reps';
 //   Deal    → { id, Deal_Name, Account_Name, Stage, Amount, Closing_Date }
 //   Account → { Id, Account_Name, Industry, Billing_City, Billing_State,
 //               Account_State, Shipping_State, _state,
+//               Total_Orders_Count, First_Order_Date, Last_Order_Date,
+//               _orderCount,
 //               Phone, contacts: Contact[], buyer: Contact|null }
 //               NOTE: `_state` is the canonical 2-letter code the client's
 //               state-filter tabs key off of. Highsman's Zoho has three state
@@ -32,6 +34,15 @@ import {getRepFromRequest, type SalesRep} from '../lib/sales-floor-reps';
 //               Historical bug: the dashboard filtered by Billing_State alone
 //               and lost ~9/10 RI accounts because Billing_State was either
 //               "Rhode Island" (long form) or null on most records.
+//               NOTE: `_orderCount` is Highsman's custom "Orders Count" field
+//               (api_name `Total_Orders_Count`) maintained by the
+//               LeafLink→Zoho integration. This is the source of truth for
+//               "does this account have orders?" — the Accounts tab filters
+//               to >= 1. LeafLink is NOT the source (it only polls Canfections
+//               NJ; MO/NY/RI orders would disappear). LeafLink still owns
+//               ship date + order confirmation on the Orders Due / New
+//               Customers cards. `Order_Count` (singular) is a legacy duplicate
+//               field — do not use.
 //   Contact → { id, _fullName, Email, Phone, Mobile, Title, Role_Title,
 //               _jobRole, _accountId, _accountName }
 //               NOTE: "Job Role" in Zoho's UI has api_name `Role_Title`.
@@ -352,6 +363,12 @@ async function fetchAccounts(accessToken: string, ownerId: string | null) {
       'Account_Type',
       'Description',
       'Modified_Time',
+      // Order-tracking custom fields maintained by the LeafLink→Zoho
+      // integration. `Total_Orders_Count` is the live one; `Order_Count`
+      // (singular) is a legacy duplicate and always null — do not request it.
+      'Total_Orders_Count',
+      'First_Order_Date',
+      'Last_Order_Date',
     ],
     200,
     accessToken,
@@ -392,6 +409,15 @@ async function fetchAccounts(accessToken: string, ownerId: string | null) {
       Annual_Revenue: a.Annual_Revenue || 0,
       Description: a.Description || '',
       Modified_Time: a.Modified_Time || null,
+      // Order-tracking fields (LeafLink→Zoho integration writes these). Raw
+      // values pass through verbatim so the client can display exact figures.
+      Total_Orders_Count: a.Total_Orders_Count ?? null,
+      First_Order_Date: a.First_Order_Date || null,
+      Last_Order_Date: a.Last_Order_Date || null,
+      // Canonical "how many orders" signal. Coerce null → 0 so client filters
+      // can safely compare with >= 1 without null-checking. This is the ONLY
+      // field the Accounts-tab filter should read.
+      _orderCount: Number(a.Total_Orders_Count ?? 0) || 0,
       // Populated by attachContactsToAccounts() after the contacts fetch
       // resolves. `buyer` is the chosen primary contact (if one exists),
       // `contacts` is the full list for the account.

@@ -2630,6 +2630,36 @@ a.hs-contact-meta-cell:hover i{ color:var(--gold); }
   background:var(--chip-strong);
   color:rgba(255,255,255,0.55);
 }
+
+/* ─── Account header order badge ──────────────────────────────────────────
+   Lives in the card header (right of the identity block, passed through
+   contactCardHtml's headerExtra slot). Two variants:
+     - Default (2+ orders): muted chip, informational only.
+     - .is-new (exactly 1 order): gold-filled, black text, loud NEW flag.
+   Keeps the Accounts tab glanceable — reps see first-order accounts before
+   reading the name. */
+.hs-account-order-badge{
+  flex-shrink:0;
+  display:inline-flex;
+  align-items:center;
+  padding:4px 9px;
+  border-radius:999px;
+  background:var(--chip-strong);
+  color:rgba(255,255,255,0.7);
+  font-family:var(--teko);
+  font-size:11px;
+  letter-spacing:0.14em;
+  text-transform:uppercase;
+  font-weight:500;
+  white-space:nowrap;
+  line-height:1;
+}
+.hs-account-order-badge.is-new{
+  background:var(--gold);
+  color:#000;
+  font-weight:700;
+  letter-spacing:0.18em;
+}
 .hs-account-buyer-meta{
   flex:1;
   min-width:0;

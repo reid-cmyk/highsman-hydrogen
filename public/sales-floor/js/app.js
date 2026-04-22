@@ -831,8 +831,23 @@ function textBuyerByPhone(phone, name) {
 }
 
 // ─── Accounts ─────────────────────────────────────────────────────────────────
+// Accounts tab is gated to "has at least one order" — _orderCount >= 1. The
+// order count comes from the Zoho Accounts.Total_Orders_Count field, which the
+// LeafLink→Zoho integration maintains across every market (NJ + NY + MO + RI,
+// etc.). Zero-order accounts are temporarily hidden here; Reid plans to move
+// them to Leads in Zoho. We intentionally do NOT filter on LeafLink presence —
+// the LeafLink feed only polls Canfections NJ, which would hide valid orders
+// from MO/NY/RI etc. Zoho is the cross-state superset.
+//
+// `orderedAccounts` is shared with renderAccountStateTabs() so the tab chips
+// reflect the gated list, not the full list — otherwise "RI 2" could show when
+// clicking RI would return zero results.
+function orderedAccounts() {
+  return accounts.filter((a) => (a._orderCount || 0) >= 1);
+}
+
 function renderAccounts() {
-  let list = accounts;
+  let list = orderedAccounts();
   if (currentAccountState && currentAccountState !== 'all') {
     // `_state` is the server-resolved canonical state (Account_State picklist
     // first, Billing_State fallback, Shipping_State last). Filtering on
@@ -864,6 +879,19 @@ function renderAccounts() {
     // "Warwick, RI") and hides blank-billing records cleanly.
     const stateLabel = a._state || normalizeStateCode(a.Billing_State) || '';
     const location = [a.Billing_City, stateLabel].filter(Boolean).join(', ');
+
+    // Order-count badge in the card header. First-order accounts get a loud
+    // "NEW" flag so reps recognize them instantly; repeat accounts get a quiet
+    // "x orders" pill so the rep knows at a glance how engaged the shop is.
+    // Values come straight from Zoho's Total_Orders_Count (single source of
+    // truth across all markets — see server note in api.sales-floor-sync.tsx).
+    const orderCount = a._orderCount || 0;
+    let headerExtra = '';
+    if (orderCount === 1) {
+      headerExtra = `<span class="hs-account-order-badge is-new" title="First order on record">NEW</span>`;
+    } else if (orderCount >= 2) {
+      headerExtra = `<span class="hs-account-order-badge" title="${orderCount} orders on record">${orderCount} orders</span>`;
+    }
 
     // Buyer takes precedence over the account-level Email/Phone. The buyer's
     // contact info is the data the rep actually wants to act on — calling the
@@ -940,6 +968,7 @@ function renderAccounts() {
       textHandler: `quickText(${idx}, 'account')`,
       briefHandler: null, // briefs are lead-only for now
       extraRow,
+      headerExtra,
     });
   }).join('');
 }
@@ -1020,8 +1049,11 @@ function renderAccountStateTabs() {
   // Bucket off the server-resolved `_state` so the tab counts match what the
   // filter actually returns. Billing_State alone misses records where the
   // picklist holds the real state and billing is blank / long-form.
-  const buckets = tallyStates(accounts, (a) => a._state || a.Billing_State);
-  host.innerHTML = stateTabsHtml('account', buckets, currentAccountState, accounts.length);
+  // Use orderedAccounts() — not the full list — so "RI 2" never lies about
+  // what's behind the chip when the tab itself filters to ordered accounts.
+  const ordered = orderedAccounts();
+  const buckets = tallyStates(ordered, (a) => a._state || a.Billing_State);
+  host.innerHTML = stateTabsHtml('account', buckets, currentAccountState, ordered.length);
 }
 
 function stateTabsHtml(kind, buckets, active, totalCount) {
