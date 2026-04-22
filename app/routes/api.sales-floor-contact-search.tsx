@@ -6,14 +6,19 @@ import {getRepFromRequest} from '../lib/sales-floor-reps';
 // Sales Floor — Contact Search (Zoho Contacts + Accounts)
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/sales-floor-contact-search?q=green+leaf
-//   → { ok, results: [{id, name, title, email, phone, accountName, accountId,
-//                       city, state, isBuyer, source}] }
+//   → { ok, results: [{id, name, title, role, email, phone, accountName,
+//                       accountId, city, state, isBuyer, source}] }
 //
 // Powers the autocomplete in the /sales-floor "Email Templates" tab.
 // Lets a rep type either a contact name OR a dispensary name and pick the
 // buyer contact for that store. Contacts and Accounts are searched in
 // parallel; for top matching Accounts we also pull their related Contacts,
 // then merge, dedupe, and rank buyers first.
+//
+// Buyer signal: the "Job Role" picklist (api_name `Role_Title`) is the
+// canonical role field on Highsman's Zoho org. We read Role_Title first
+// and only fall back to the noisier `Title` field when Role_Title is
+// empty, so buyer detection no longer leaks "Owner" etc. from Title.
 //
 // NB — Contact search is intentionally NOT scoped by rep Owner. Zoho's
 // `/search` endpoint accepts one of `word|email|phone|criteria` at a time, so
@@ -60,6 +65,7 @@ type ContactResult = {
   id: string;
   name: string;
   title: string | null;
+  role: string | null;
   email: string | null;
   phone: string | null;
   accountName: string | null;
@@ -76,10 +82,17 @@ const BUYER_WORDS = [
   'inventory', 'merchandis',
 ];
 
-function isBuyerTitle(title: string | null | undefined): boolean {
-  if (!title) return false;
-  const t = title.toLowerCase();
-  return BUYER_WORDS.some((w) => t.includes(w));
+// Prefer Role_Title (the "Job Role" picklist) over Title. We only consider
+// Title as a fallback for records that genuinely have no role set.
+function isBuyerRole(
+  role: string | null | undefined,
+  title: string | null | undefined,
+): boolean {
+  const primary = String(role || '').toLowerCase();
+  if (primary) return BUYER_WORDS.some((w) => primary.includes(w));
+  const fallback = String(title || '').toLowerCase();
+  if (!fallback) return false;
+  return BUYER_WORDS.some((w) => fallback.includes(w));
 }
 
 function fullName(c: any): string {
@@ -108,7 +121,7 @@ async function searchContacts(query: string, token: string): Promise<ContactResu
     'fields',
     [
       'First_Name', 'Last_Name', 'Full_Name', 'Email', 'Phone', 'Mobile',
-      'Title', 'Account_Name', 'Mailing_City', 'Mailing_State',
+      'Title', 'Role_Title', 'Account_Name', 'Mailing_City', 'Mailing_State',
     ].join(','),
   );
   url.searchParams.set('per_page', '30');
@@ -126,13 +139,14 @@ async function searchContacts(query: string, token: string): Promise<ContactResu
     id: c.id,
     name: fullName(c),
     title: c.Title || null,
+    role: c.Role_Title || null,
     email: c.Email || null,
     phone: c.Phone || c.Mobile || null,
     accountName: lookupName(c.Account_Name),
     accountId: lookupId(c.Account_Name),
     city: c.Mailing_City || null,
     state: c.Mailing_State || null,
-    isBuyer: isBuyerTitle(c.Title),
+    isBuyer: isBuyerRole(c.Role_Title, c.Title),
     source: 'contact',
   }));
 }
@@ -177,7 +191,7 @@ async function fetchAccountContacts(
     'fields',
     [
       'First_Name', 'Last_Name', 'Full_Name', 'Email', 'Phone', 'Mobile',
-      'Title', 'Mailing_City', 'Mailing_State',
+      'Title', 'Role_Title', 'Mailing_City', 'Mailing_State',
     ].join(','),
   );
   url.searchParams.set('per_page', '20');
@@ -192,13 +206,14 @@ async function fetchAccountContacts(
     id: c.id,
     name: fullName(c),
     title: c.Title || null,
+    role: c.Role_Title || null,
     email: c.Email || null,
     phone: c.Phone || c.Mobile || null,
     accountName: account.name,
     accountId: account.id,
     city: c.Mailing_City || account.city,
     state: c.Mailing_State || account.state,
-    isBuyer: isBuyerTitle(c.Title),
+    isBuyer: isBuyerRole(c.Role_Title, c.Title),
     source: 'account',
   }));
 }
@@ -294,6 +309,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         id: `account:${a.id}`,
         name: 'No buyer linked',
         title: null,
+        role: null,
         email: null,
         phone: null,
         accountName: a.name,

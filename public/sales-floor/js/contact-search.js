@@ -204,7 +204,11 @@ const ContactSearch = (() => {
       ? '<span class="hs-contact-pill hs-contact-pill-buyer">Buyer</span>'
       : '';
     const subParts = [];
-    if (r.title) subParts.push(escapeHtml(r.title));
+    // Prefer Job Role (the picklist) for the sub-line — it's the field reps
+    // actually care about ("Purchasing & Inventory Management", "Owner", etc.).
+    // Fall back to the generic Job Title only when Role is blank.
+    const roleLine = r.role || r.title;
+    if (roleLine) subParts.push(escapeHtml(roleLine));
     if (r.accountName) subParts.push(escapeHtml(r.accountName));
     const locParts = [r.city, r.state].filter(Boolean);
     if (locParts.length) subParts.push(escapeHtml(locParts.join(', ')));

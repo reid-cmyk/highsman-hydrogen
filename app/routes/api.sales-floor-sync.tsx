@@ -19,8 +19,11 @@ import {getRepFromRequest, type SalesRep} from '../lib/sales-floor-reps';
 //   Deal    → { id, Deal_Name, Account_Name, Stage, Amount, Closing_Date }
 //   Account → { Id, Account_Name, Industry, Billing_City, Billing_State,
 //               Phone, contacts: Contact[], buyer: Contact|null }
-//   Contact → { id, _fullName, Email, Phone, Mobile, Title, Job_Role,
+//   Contact → { id, _fullName, Email, Phone, Mobile, Title, Role_Title,
 //               _jobRole, _accountId, _accountName }
+//               NOTE: "Job Role" in Zoho's UI has api_name `Role_Title`.
+//               `_jobRole` is the client-friendly normalized alias we read
+//               for buyer detection — Title / Job_Title are never used.
 //
 // MA accounts are hard-filtered out before the response is built (Reid's
 // request — sales-floor doesn't surface Massachusetts for now).
@@ -273,12 +276,14 @@ async function fetchAccounts(accessToken: string, ownerId: string | null) {
 // Pull every contact attached to an account so we can (a) surface the real
 // buyer on the account card, (b) let the rep swap who the buyer is.
 //
-// Highsman's Zoho org has a dedicated custom `Job_Role` picklist that holds
-// the role the contact owns at the shop ("Purchasing & Inventory Management",
-// "Owner", "Manager on Duty", etc.). `Title` is a separate generic field that
-// often holds noisy values (e.g. "Owner") and must NEVER be treated as the
-// buyer-role signal. `_jobRole` is sourced ONLY from `Job_Role`. If a contact
-// has no Job_Role, that's "no role on file" — full stop.
+// Highsman's Zoho org has a dedicated custom picklist labelled "Job Role" that
+// holds the role the contact owns at the shop ("Purchasing & Inventory
+// Management", "Owner", "Manager on Duty", etc.). The real api_name for that
+// field is `Role_Title` (NOT `Job_Role` — that field does not exist). `Title`
+// and `Job_Title` are separate generic text fields that often hold noisy
+// values (e.g. "Owner", "Buyer") and must NEVER be treated as the buyer-role
+// signal. `_jobRole` is sourced ONLY from `Role_Title`. If a contact has no
+// Role_Title, that's "no role on file" — full stop.
 const CONTACT_BASE_FIELDS = [
   'First_Name',
   'Last_Name',
@@ -286,7 +291,7 @@ const CONTACT_BASE_FIELDS = [
   'Phone',
   'Mobile',
   'Title',
-  'Job_Role',
+  'Role_Title',
   'Account_Name',
   'Modified_Time',
 ];
@@ -307,9 +312,10 @@ async function fetchContacts(accessToken: string, ownerId: string | null) {
   const contacts = (data.data || []).map((c: any) => {
     const accountId = c.Account_Name?.id || null;
     const accountName = c.Account_Name?.name || '';
-    // Job Role only — Title is held separately for display, never the
-    // buyer-role signal.
-    const jobRole = c.Job_Role || '';
+    // Role_Title is the real api_name for the "Job Role" picklist in Highsman's
+    // Zoho org. Title / Job_Title are held separately for display only, never
+    // the buyer-role signal.
+    const jobRole = c.Role_Title || '';
     const fn = c.First_Name || '';
     const ln = c.Last_Name || '';
     return {
@@ -321,7 +327,7 @@ async function fetchContacts(accessToken: string, ownerId: string | null) {
       Phone: c.Phone || '',
       Mobile: c.Mobile || '',
       Title: c.Title || '',
-      Job_Role: jobRole,
+      Role_Title: jobRole,
       _jobRole: jobRole,
       _accountId: accountId,
       _accountName: accountName,
@@ -332,11 +338,12 @@ async function fetchContacts(accessToken: string, ownerId: string | null) {
 }
 
 // ─── Buyer detection ─────────────────────────────────────────────────────────
-// We treat any contact whose Job_Role contains "buyer", "purchas" (catches
-// "Purchasing", "Purchaser"), or "inventory" (catches "Inventory Management")
-// as a candidate buyer. Exact match on the canonical "Purchasing & Inventory
-// Management" wins over loose matches when both exist. Title is never read
-// here — it's a separate generic field full of noise like "Owner".
+// We treat any contact whose Role_Title (the "Job Role" picklist) contains
+// "buyer", "purchas" (catches "Purchasing", "Purchaser"), or "inventory"
+// (catches "Inventory Management") as a candidate buyer. Exact match on the
+// canonical "Purchasing & Inventory Management" wins over loose matches when
+// both exist. Title / Job_Title are never read here — they're separate
+// generic text fields full of noise like "Owner".
 const CANONICAL_BUYER_ROLE = 'Purchasing & Inventory Management';
 
 function isBuyerRole(role: string | null | undefined): boolean {

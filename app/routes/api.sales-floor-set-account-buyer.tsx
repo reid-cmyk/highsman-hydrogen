@@ -10,12 +10,13 @@ import {getRepFromRequest} from '../lib/sales-floor-reps';
 //   → { ok, contactId, jobRole }
 //
 // Stamps the chosen Contact as the buyer for their account by writing the
-// canonical role string into the contact's `Job_Role` field in Zoho.
+// canonical role string into the contact's "Job Role" picklist in Zoho.
 //
-// Highsman's Zoho org uses a dedicated custom Job_Role picklist for buyer-
-// role tracking. `Title` is a separate generic field that frequently holds
-// noisy values (e.g. "Owner", "Manager") and must NEVER be used as the
-// buyer-role signal — never read it, never write to it.
+// Highsman's Zoho org labels the picklist "Job Role" in the UI but its real
+// api_name is `Role_Title` — we write to `Role_Title`. `Title` and `Job_Title`
+// are separate generic text fields that frequently hold noisy values (e.g.
+// "Owner", "Manager") and must NEVER be used as the buyer-role signal —
+// never read them, never write to them.
 //
 // We don't clear any other contact's role — multiple people can carry buyer
 // duties at the same account.
@@ -55,7 +56,7 @@ async function getZohoToken(env: any): Promise<string> {
   return cachedToken!;
 }
 
-// PUT the Job_Role field on a Contact.
+// PUT the Role_Title picklist (labelled "Job Role" in Zoho UI) on a Contact.
 async function putContactJobRole(
   contactId: string,
   value: string,
@@ -68,7 +69,7 @@ async function putContactJobRole(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      data: [{Job_Role: value}],
+      data: [{Role_Title: value}],
       // Don't fire workflow on every buyer reassignment — these get noisy
       // when a rep is reorganizing a few accounts in one sitting.
       trigger: [],
@@ -103,9 +104,10 @@ export async function action({request, context}: ActionFunctionArgs) {
   try {
     const token = await getZohoToken(env);
 
-    // Job_Role is the canonical buyer-role field on Highsman's Zoho org.
-    // No fallback to Title — it's a separate generic field that's never the
-    // buyer-role signal.
+    // Role_Title (labelled "Job Role" in the Zoho UI) is the canonical
+    // buyer-role field on Highsman's Zoho org. No fallback to Title /
+    // Job_Title — those are separate generic text fields that are never
+    // the buyer-role signal.
     const result = await putContactJobRole(contactId, CANONICAL_BUYER_ROLE, token);
     if (!result.ok) {
       throw new Error(
