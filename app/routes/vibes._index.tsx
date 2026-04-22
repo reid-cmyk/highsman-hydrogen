@@ -254,6 +254,46 @@ export default function VibesDashboard() {
   const weekDays = useMemo(() => buildWeek(rep), [rep]);
   const stops = useMemo(() => buildSequence(route), [route]);
 
+  // ── Weekly plan (lazy-loaded) ────────────────────────────────────────────
+  // Only fetched when the rep taps a FUTURE work day in the WeekStrip. The
+  // plan endpoint returns next Tue/Wed/Thu with stops + rationale, so we can
+  // preview any of those three days inline. Days outside that window fall
+  // back to an "ask Sky on Monday" placeholder. Fetch once per session.
+  const [weeklyPlan, setWeeklyPlan] = useState<any | null>(null);
+  const [weeklyPlanLoading, setWeeklyPlanLoading] = useState(false);
+  const [weeklyPlanError, setWeeklyPlanError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (selectedDayIdx === 0) return;
+    if (weeklyPlan || weeklyPlanLoading) return;
+    const day = weekDays[selectedDayIdx];
+    if (!day || !day.isWorkDay) return;
+    setWeeklyPlanLoading(true);
+    setWeeklyPlanError(null);
+    fetch('/api/vibes-weekly-plan', {credentials: 'include'})
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.ok) setWeeklyPlan(data);
+        else setWeeklyPlanError(data?.error || 'Plan unavailable');
+      })
+      .catch((err) => setWeeklyPlanError(err?.message || 'Plan unavailable'))
+      .finally(() => setWeeklyPlanLoading(false));
+  }, [selectedDayIdx, weekDays, weeklyPlan, weeklyPlanLoading]);
+
+  // Match the selected day's ISO against the plan's Tue/Wed/Thu dates. If the
+  // rep is looking two weeks out, no match — we render an "out-of-window"
+  // empty state instead of pretending we have a plan.
+  const previewDay = useMemo(() => {
+    if (selectedDayIdx === 0 || !weeklyPlan?.plan) return null;
+    const iso = weekDays[selectedDayIdx]?.dateIso;
+    if (!iso) return null;
+    const p = weeklyPlan.plan;
+    if (p.tuesday?.date === iso) return {label: 'TUE', data: p.tuesday};
+    if (p.wednesday?.date === iso) return {label: 'WED', data: p.wednesday};
+    if (p.thursday?.date === iso) return {label: 'THU', data: p.thursday};
+    return null;
+  }, [selectedDayIdx, weeklyPlan, weekDays]);
+
   if (!rep) {
     return (
       <Shell>
@@ -477,41 +517,76 @@ export default function VibesDashboard() {
         />
       </Section>
 
-      {/* Today's route — Tier 1 Onboarding / Tier 2 Training / Tier 3 Check-In.
-          Labels use the new 3-tier model. Data still comes from /api/vibes-route
-          which maps: fresh → Tier 1 (Needs Onboarding deals), targets → Tier 2
-          (Training deals), rotation → Tier 3 (30-day cadence check-ins). For the
-          full route with map + per-stop briefs + voice-note capture, reps tap
-          the "Today's Route" QuickTile above which opens /vibes/today. */}
-      <Section title="Today's Route" index="Route">
-        {stops.total === 0 ? (
-          <EmptyState
-            title="No route built yet"
-            sub="Onboarding, Training, and Check-In stops will appear once Sky books them or the 30-day cadence fires."
-          />
-        ) : (
-          <>
-            <TierBlock
-              tier="FRESH"
-              label="Tier 1 — Onboarding (60 min)"
-              color={BRAND.gold}
-              stops={route.fresh}
+      {/* Route section — today's live route OR preview of a future work day.
+          selectedDayIdx === 0 ⇒ live /api/vibes-route data (3 tiers).
+          selectedDayIdx > 0 + work day ⇒ lazy-fetched /api/vibes-weekly-plan
+          preview for the tapped Tue/Wed/Thu. Days outside the current Tue/Wed/Thu
+          window (weekend, off-schedule day, or two weeks out) render a lightweight
+          empty state. Full-map + brief view remains at /vibes/today via QuickTile. */}
+      {selectedDayIdx === 0 ? (
+        <Section title="Today's Route" index="Route">
+          {stops.total === 0 ? (
+            <EmptyState
+              title="No route built yet"
+              sub="Onboarding, Training, and Check-In stops will appear once Sky books them or the 30-day cadence fires."
             />
-            <TierBlock
-              tier="TARGET"
-              label="Tier 2 — Budtender Training (60 min)"
-              color={BRAND.purple}
-              stops={route.targets}
+          ) : (
+            <>
+              <TierBlock
+                tier="FRESH"
+                label="Tier 1 — Onboarding (60 min)"
+                color={BRAND.gold}
+                stops={route.fresh}
+              />
+              <TierBlock
+                tier="TARGET"
+                label="Tier 2 — Budtender Training (60 min)"
+                color={BRAND.purple}
+                stops={route.targets}
+              />
+              <TierBlock
+                tier="ROTATION"
+                label="Tier 3 — Check-In (30 min)"
+                color={BRAND.green}
+                stops={route.rotation}
+              />
+            </>
+          )}
+        </Section>
+      ) : (
+        <Section
+          title={`${weekDays[selectedDayIdx]?.label || ''} ${weekDays[selectedDayIdx]?.day || ''} — Planned Stops`}
+          index="Preview"
+        >
+          {!weekDays[selectedDayIdx]?.isWorkDay ? (
+            <EmptyState
+              title="Off day"
+              sub="No visits scheduled. Tap a Tue/Wed/Thu to preview the planned route."
             />
-            <TierBlock
-              tier="ROTATION"
-              label="Tier 3 — Check-In (30 min)"
-              color={BRAND.green}
-              stops={route.rotation}
+          ) : weeklyPlanLoading ? (
+            <EmptyState
+              title="Loading plan…"
+              sub="Pulling Sky's weekly plan. Hang tight."
             />
-          </>
-        )}
-      </Section>
+          ) : weeklyPlanError ? (
+            <EmptyState
+              title="Plan unavailable"
+              sub={weeklyPlanError}
+            />
+          ) : !previewDay ? (
+            <EmptyState
+              title="Beyond this week's plan"
+              sub="Sky rebuilds the weekly plan every Monday. Check back Monday for next week's routes."
+            />
+          ) : (
+            <WeeklyPlanPreview
+              dayLabel={previewDay.label}
+              day={previewDay.data}
+              accountsById={weeklyPlan?.accountsById || {}}
+            />
+          )}
+        </Section>
+      )}
 
       {/* Footer link back to /ops */}
       <div
@@ -1046,6 +1121,199 @@ function StopCard({stop, tierColor}: {stop: RouteStop; tierColor: string}) {
         {[stop.city, stop.state].filter(Boolean).join(', ') || '—'} · {daysLabel}
       </div>
     </Link>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Weekly-plan preview — rendered when a rep taps a future Tue/Wed/Thu in the
+// WeekStrip. Shows the planned stop order + rationale from /api/vibes-weekly-plan.
+// Stops are rendered as simple cards (not TierBlock) because the weekly plan
+// endpoint returns them as an optimized sequence, not split by tier. Each card
+// links to /vibes/store/$accountId for the full visit flow.
+// ─────────────────────────────────────────────────────────────────────────────
+function WeeklyPlanPreview({
+  dayLabel,
+  day,
+  accountsById,
+}: {
+  dayLabel: string;
+  day: {date?: string; stops?: string[]; rationale?: string} | null;
+  accountsById: Record<
+    string,
+    {
+      name: string;
+      address?: string;
+      city?: string;
+      state?: string;
+      tier?: string;
+      priority?: number;
+      staleDays?: number | null;
+      dwellMin?: number;
+      lastVisitDate?: string | null;
+      dealId?: string | null;
+    }
+  >;
+}) {
+  if (!day) return null;
+  const stops = day.stops || [];
+  return (
+    <div>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          marginBottom: 6,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: TEKO,
+            fontSize: 14,
+            letterSpacing: '0.18em',
+            color: BRAND.gold,
+            textTransform: 'uppercase',
+          }}
+        >
+          {dayLabel} · Optimized sequence
+        </div>
+        <div style={{fontSize: 11, color: BRAND.gray, fontFamily: BODY}}>
+          {stops.length} stop{stops.length === 1 ? '' : 's'}
+        </div>
+      </div>
+
+      {stops.length === 0 ? (
+        <div
+          style={{
+            fontSize: 12,
+            color: BRAND.gray,
+            padding: '8px 0',
+            fontStyle: 'italic',
+          }}
+        >
+          No stops planned for this day.
+        </div>
+      ) : (
+        <div style={{display: 'grid', gap: 6}}>
+          {stops.map((accountId, i) => {
+            const meta = accountsById[accountId];
+            if (!meta) return null;
+            const tierColor =
+              meta.tier === 'onboarding'
+                ? BRAND.gold
+                : meta.tier === 'training'
+                  ? BRAND.purple
+                  : BRAND.green;
+            const tierTag =
+              meta.tier === 'onboarding'
+                ? 'ONBOARDING'
+                : meta.tier === 'training'
+                  ? 'TRAINING'
+                  : 'CHECK-IN';
+            const staleLabel =
+              meta.staleDays == null
+                ? 'Never visited'
+                : `${meta.staleDays}d since last visit`;
+            return (
+              <Link
+                key={accountId}
+                to={`/vibes/store/${accountId}`}
+                style={{
+                  display: 'block',
+                  background: BRAND.chip,
+                  border: `1px solid ${BRAND.line}`,
+                  borderLeft: `3px solid ${tierColor}`,
+                  borderRadius: 6,
+                  padding: '10px 12px',
+                  textDecoration: 'none',
+                  color: BRAND.white,
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'baseline',
+                    gap: 8,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontFamily: TEKO,
+                      fontSize: 20,
+                      lineHeight: 1.05,
+                      color: BRAND.white,
+                    }}
+                  >
+                    <span style={{color: BRAND.gray, marginRight: 6}}>
+                      {i + 1}.
+                    </span>
+                    {meta.name}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 10,
+                      color: tierColor,
+                      fontFamily: TEKO,
+                      letterSpacing: '0.14em',
+                    }}
+                  >
+                    {tierTag}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    color: BRAND.gray,
+                    fontSize: 12,
+                    marginTop: 4,
+                    fontFamily: BODY,
+                  }}
+                >
+                  {[meta.city, meta.state].filter(Boolean).join(', ') || '—'} ·{' '}
+                  {staleLabel}
+                  {meta.dwellMin ? ` · ${meta.dwellMin} min` : null}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+
+      {day.rationale ? (
+        <div
+          style={{
+            marginTop: 14,
+            padding: '10px 12px',
+            background: BRAND.chip,
+            border: `1px solid ${BRAND.line}`,
+            borderRadius: 6,
+          }}
+        >
+          <div
+            style={{
+              fontFamily: TEKO,
+              fontSize: 11,
+              letterSpacing: '0.18em',
+              color: BRAND.gray,
+              textTransform: 'uppercase',
+              marginBottom: 4,
+            }}
+          >
+            Why this order
+          </div>
+          <div
+            style={{
+              fontFamily: BODY,
+              fontSize: 13,
+              color: BRAND.white,
+              lineHeight: 1.45,
+            }}
+          >
+            {day.rationale}
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
