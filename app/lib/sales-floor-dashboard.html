@@ -85,6 +85,7 @@
       <button onclick="showTab('dashboard')" id="nav-dashboard" class="hs-nav-btn active">
         <i class="fa-solid fa-chart-line hs-nav-icon"></i>
         <span>Dashboard</span>
+        <span id="missed-calls-nav-badge" class="ml-auto hs-hot-badge hidden" style="background:#DC2626;" title="Missed calls — call back"></span>
       </button>
       <button onclick="showTab('leads')" id="nav-leads" class="hs-nav-btn">
         <i class="fa-solid fa-fire hs-nav-icon"></i>
@@ -206,6 +207,11 @@
             <div class="hs-stat-number text-white" id="stat-pipeline">—</div>
             <div class="hs-stat-sub">Ready to close</div>
           </div>
+          <div class="stat-card stat-card-missed hidden" id="stat-card-missed" onclick="document.getElementById('missed-calls-panel')?.scrollIntoView({behavior:'smooth',block:'start'})">
+            <div class="hs-stat-label"><i class="fa-solid fa-phone-slash mr-1"></i> Call Back</div>
+            <div class="hs-stat-number text-white" id="stat-missed">0</div>
+            <div class="hs-stat-sub">Missed inbounds — return today</div>
+          </div>
           <div class="stat-card">
             <div class="hs-stat-label">Calls Today</div>
             <div class="hs-stat-number text-white" id="stat-calls">0</div>
@@ -315,6 +321,34 @@
             </div>
           </div>
 
+        </div>
+
+        <!-- Missed Calls — surfaced ABOVE Recent Calls because they're the
+             top action item: every row here is a deal that almost got away.
+             Powered by /api/sales-floor-missed-calls, which canonical-sources
+             from open Zoho Tasks (auto-created by the Quo webhook on every
+             missed inbound) and falls back to the raw Quo call log so the
+             panel populates even before the Task search index catches up.
+             Rep marks the underlying Zoho Task Completed → row disappears. -->
+        <div class="hs-panel hs-missed-calls-panel hidden" id="missed-calls-panel">
+          <div class="hs-card-header">
+            <div class="hs-card-header-left">
+              <span class="hs-card-title">Missed Calls — Call Back</span>
+              <span id="missed-calls-count-pill" class="hs-panel-pill is-error hidden">
+                <span class="hs-panel-pill-dot"></span>
+                <span class="hs-panel-pill-label">0 open</span>
+              </span>
+            </div>
+            <button onclick="refreshMissedCalls()" class="hs-link" title="Refresh">
+              <i class="fa-solid fa-rotate-right"></i> Refresh
+            </button>
+          </div>
+          <div id="missed-calls-list" class="hs-missed-calls">
+            <div class="hs-empty-state py-6">
+              <div class="hs-empty-state-icon"><i class="fa-solid fa-phone-slash"></i></div>
+              No missed calls — inbox zero.
+            </div>
+          </div>
         </div>
 
         <!-- Recent Calls (Quo) — full-width under the secondary grid.
@@ -727,6 +761,7 @@
   <button onclick="showTab('dashboard')" data-bottom-nav="dashboard" class="hs-bn-btn active">
     <i class="fa-solid fa-chart-line"></i>
     <span>Floor</span>
+    <span id="bn-missed-badge" class="hs-bn-badge hidden" style="background:#DC2626;"></span>
   </button>
   <button onclick="showTab('leads')" data-bottom-nav="leads" class="hs-bn-btn">
     <i class="fa-solid fa-fire"></i>
@@ -904,6 +939,7 @@
 <script src="/sales-floor/js/issues.js"></script>
 <script src="/sales-floor/js/contact-search.js"></script>
 <script src="/sales-floor/js/sms.js"></script>
+<script src="/sales-floor/js/missed-calls.js"></script>
 <script src="/sales-floor/js/app.js"></script>
 <script>
   // ───────────────────────────────────────────────────────────

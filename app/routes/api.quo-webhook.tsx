@@ -175,6 +175,54 @@ async function findZohoCallByQuoId(token: string, quoCallId: string): Promise<st
   return data?.data?.[0]?.id || null;
 }
 
+// ─── Task helpers (used by missed-call follow-up flow) ──────────────────────
+// Quo-only convention: every Task we create from a missed call embeds the
+// originating Quo call id in the Subject as `[quo:<id>]`. That lets the
+// webhook dedupe on retries (Quo will resend call.completed if we time out
+// or 5xx), and lets a future "mark complete when rep calls back" flow find
+// the right Task without an extra custom field.
+async function findZohoTaskByQuoId(token: string, quoCallId: string): Promise<string | null> {
+  const url = new URL('https://www.zohoapis.com/crm/v7/Tasks/search');
+  url.searchParams.set('criteria', `(Subject:contains:[quo:${quoCallId}])`);
+  url.searchParams.set('per_page', '1');
+  const res = await fetch(url.toString(), {
+    headers: {Authorization: `Zoho-oauthtoken ${token}`},
+  });
+  if (res.status === 204) return null;
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data?.data?.[0]?.id || null;
+}
+
+async function createZohoTask(token: string, payload: any): Promise<string | null> {
+  const res = await fetch('https://www.zohoapis.com/crm/v7/Tasks', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Zoho-oauthtoken ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({data: [payload]}),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    throw new Error(`Zoho create Task (${res.status}): ${t.slice(0, 300)}`);
+  }
+  const data = await res.json();
+  return data?.data?.[0]?.details?.id || null;
+}
+
+// Today's date in YYYY-MM-DD using America/New_York (Highsman ops tz).
+// Zoho Tasks.Due_Date is a date-only field — no timezone offset accepted.
+function nyToday(): string {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return fmt.format(new Date()); // en-CA → YYYY-MM-DD
+}
+
 // ─── Other-party extraction (mirrors quo.ts but runs against the webhook
 //     payload shape, which uses singular `to` for incoming and array for
 //     outgoing).
@@ -377,6 +425,64 @@ async function handleCallCompleted(env: any, c: QuoCall) {
     if (quoIdToZohoCallId.size > 200) {
       const firstKey = quoIdToZohoCallId.keys().next().value;
       if (firstKey) quoIdToZohoCallId.delete(firstKey);
+    }
+  }
+
+  // ── Missed-call follow-up Task ────────────────────────────────────────────
+  // If this was a missed inbound, create a Zoho Task so the rep gets a
+  // visible "call back" item in their queue. Why a Task and not just the
+  // Missed Call activity:
+  //   • Calls of type "Missed" in Zoho live in the activity timeline but
+  //     don't surface in the rep's Tasks/Open Activities widget — easy to
+  //     miss when the rep isn't watching the call log.
+  //   • A Task is the canonical "do this thing" surface in Zoho. Reid's
+  //     team already triages Tasks daily.
+  //   • Bonus: it gives us a closeable artifact so we can later build a
+  //     "missed calls returned today" KPI by counting Closed tasks with
+  //     `[quo:` prefix.
+  //
+  // We only create the Task on Missed type — Outbound and successful
+  // Inbound calls don't need a follow-up. Dedupe by searching for an
+  // existing Task whose Subject contains `[quo:<id>]` (Quo retries
+  // call.completed on 5xx, so this prevents dup tasks).
+  const isMissed = zohoCallType({direction: c.direction, status: c.status}) === 'Missed';
+  if (isMissed) {
+    try {
+      const existing = await findZohoTaskByQuoId(token, c.id);
+      if (!existing) {
+        const callerLabel = contact?.name || formatPhoneE164(c.from) || c.from || 'unknown number';
+        const taskPayload: any = {
+          // Subject is what reps see in their task list — lead with the
+          // action ("Call back"), then who, then the dedupe marker so
+          // it's still searchable but tucked at the end.
+          Subject: `Call back ${callerLabel} — missed call [quo:${c.id}]`,
+          Status: 'Not Started',
+          Priority: 'High',
+          Due_Date: nyToday(),
+          Description: [
+            `Missed inbound call from ${formatPhoneE164(c.from) || c.from || '?'}`,
+            `Quo call id: ${c.id}`,
+            c.recordingUrl ? `Voicemail/recording: ${c.recordingUrl}` : null,
+            rep ? `Originally rang: ${rep.displayName}` : null,
+            '',
+            'This task was auto-created from a missed Quo call. ' +
+              'Mark Completed once you reach them or determine no follow-up is needed.',
+          ].filter(Boolean).join('\n'),
+        };
+        if (contact?.id) taskPayload.Who_Id = contact.id;
+        if (contact?.accountId) {
+          taskPayload.What_Id = contact.accountId;
+          // Same Zoho v7 quirk as Calls — `$se_module` (with `$`) is required
+          // whenever What_Id points at a non-Lead/Contact module.
+          taskPayload.$se_module = 'Accounts';
+        }
+        if (rep?.zohoOwnerId) taskPayload.Owner = {id: rep.zohoOwnerId};
+        await createZohoTask(token, taskPayload);
+      }
+    } catch (err: any) {
+      // A failed Task shouldn't blow up the whole webhook (the Call
+      // record above is the source of truth). Log + continue.
+      console.error('[quo-webhook] missed-call task create failed', c.id, err.message);
     }
   }
 }

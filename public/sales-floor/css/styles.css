@@ -2142,3 +2142,84 @@ button:focus-visible{ outline-offset:1px; }
   .hs-sms-shell:not(.is-conv-open) .hs-sms-conv{ display: none; }
 }
 
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Missed Calls panel — "Call Back" queue at top of dashboard
+   Shares hs-call-icon / hs-call-row scale with Recent Calls; the panel chrome
+   itself is louder (red border accent) because each row is a deal at risk.
+   ─────────────────────────────────────────────────────────────────────────── */
+.hs-missed-calls-panel{
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.10) inset;
+}
+.hs-missed-calls-panel .hs-card-title{
+  color: #fff;
+}
+.hs-missed-calls{
+  padding: 4px 0;
+}
+.hs-mc-row{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-top: 1px solid rgba(255,255,255,0.04);
+  transition: background .12s ease;
+}
+.hs-mc-row:first-child{ border-top: none; }
+.hs-mc-row:hover{ background: rgba(255,255,255,0.02); }
+
+.hs-mc-tag{
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.55);
+  border-radius: 4px;
+  vertical-align: middle;
+}
+.hs-mc-tag.is-pending{
+  background: rgba(245, 228, 0, 0.10);
+  color: #F5E400;
+}
+
+.hs-mc-done{
+  background: rgba(16, 185, 129, 0.12) !important;
+  color: #10b981 !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+.hs-mc-done:hover{
+  background: rgba(16, 185, 129, 0.22) !important;
+}
+
+.hs-mc-warn{
+  margin: 8px 14px;
+  padding: 8px 12px;
+  background: rgba(245, 228, 0, 0.10);
+  border: 1px solid rgba(245, 228, 0, 0.3);
+  border-radius: 6px;
+  color: #F5E400;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+/* "Call Back" stat tile — same size as siblings, red accent so it pulls
+   the eye when it appears. Hidden by default; MissedCalls.updateBadges()
+   removes the .hidden class when count > 0. */
+.stat-card-missed{
+  border: 1px solid rgba(220, 38, 38, 0.4);
+  background: linear-gradient(180deg, rgba(220, 38, 38, 0.08) 0%, rgba(0,0,0,0) 100%);
+  cursor: pointer;
+}
+.stat-card-missed:hover{
+  border-color: rgba(220, 38, 38, 0.7);
+}
+.stat-card-missed .hs-stat-label{
+  color: #FCA5A5;
+}
+/* (Pill `.hs-panel-pill.is-error` already defined above — reused as-is.) */
