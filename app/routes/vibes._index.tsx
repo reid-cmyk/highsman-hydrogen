@@ -7,12 +7,16 @@ import {Link, useLoaderData} from '@remix-run/react';
 // /vibes — Highsman Vibes Team Dashboard (Brand Rep portal)
 // ─────────────────────────────────────────────────────────────────────────────
 // Mobile-first, dark, Klaviyo-suppressed. Reps see their:
-//   • Today's Route — Tier 1 FRESH / Tier 2 TARGETS / Tier 3 ROTATION
+//   • Today's Route — Tier 1 Onboarding / Tier 2 Training / Tier 3 Check-In
 //   • Week View — next 2–3 weeks of scheduled work-days
-//   • Quick tiles — Decks, Store Search, Start Check-In
+//   • Quick tiles — Today's Route (/vibes/today), Decks, Store Search, Start Check-In, File Receipt
 //   • Mini scoreboards — MTD goodie spend, store visits, trainings logged
 //
-// Data source: /api/vibes-route (Zoho + Supabase merged, cached 2 min)
+// Data source: /api/vibes-route (Zoho + Supabase merged, cached 2 min).
+// The internal `fresh / targets / rotation` keys are legacy — they now map
+// to the new tier model: fresh → Onboarding, targets → Training, rotation
+// → Check-In. Full-featured version of this page with map + AI briefs +
+// voice-note capture lives at /vibes/today.
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Env = {
@@ -439,9 +443,9 @@ export default function VibesDashboard() {
         }}
       >
         <QuickTile
-          href="/vibes/lead-visit"
-          label="Sampling Drop-in"
-          sub="Prospect → Zoho Lead"
+          href="/vibes/today"
+          label="Today's Route"
+          sub="Full map + briefs"
         />
         <QuickTile
           href="/vibes/decks"
@@ -473,30 +477,35 @@ export default function VibesDashboard() {
         />
       </Section>
 
-      {/* Today's route — Tier 1 / 2 / 3 */}
+      {/* Today's route — Tier 1 Onboarding / Tier 2 Training / Tier 3 Check-In.
+          Labels use the new 3-tier model. Data still comes from /api/vibes-route
+          which maps: fresh → Tier 1 (Needs Onboarding deals), targets → Tier 2
+          (Training deals), rotation → Tier 3 (30-day cadence check-ins). For the
+          full route with map + per-stop briefs + voice-note capture, reps tap
+          the "Today's Route" QuickTile above which opens /vibes/today. */}
       <Section title="Today's Route" index="Route">
         {stops.total === 0 ? (
           <EmptyState
             title="No route built yet"
-            sub="FRESH, TARGETS, and ROTATION will appear once Zoho Deals/Leads/Accounts are NJ-scoped."
+            sub="Onboarding, Training, and Check-In stops will appear once Sky books them or the 30-day cadence fires."
           />
         ) : (
           <>
             <TierBlock
               tier="FRESH"
-              label="Fresh — Needs Onboarding"
+              label="Tier 1 — Onboarding (60 min)"
               color={BRAND.gold}
               stops={route.fresh}
             />
             <TierBlock
               tier="TARGET"
-              label="Targets — Sampling"
+              label="Tier 2 — Budtender Training (60 min)"
               color={BRAND.purple}
               stops={route.targets}
             />
             <TierBlock
               tier="ROTATION"
-              label="Rotation — 21+ Days Stale"
+              label="Tier 3 — Check-In (30 min)"
               color={BRAND.green}
               stops={route.rotation}
             />
@@ -969,8 +978,10 @@ function TierBlock({
 
 function StopCard({stop, tierColor}: {stop: RouteStop; tierColor: string}) {
   // Prospects (Zoho Leads) skip the full Account visit flow — they don't stock
-  // Highsman yet, so SKU/Merch/Menu audits don't apply. Route straight to the
-  // 5-question Sampling drop-in with lead context pre-filled.
+  // Highsman yet, so the SKU/Merch/Menu audit fields on the store page don't
+  // apply. These edge-case Lead stops still route to /vibes/lead-visit with
+  // prospect context pre-filled. The vast majority of stops are Accounts
+  // (Tier 1/2/3) and go to /vibes/store/$accountId.
   const isLead = stop.accountId.startsWith('lead-');
   const href = isLead
     ? `/vibes/lead-visit?leadId=${encodeURIComponent(stop.leadId || '')}&company=${encodeURIComponent(stop.name)}&city=${encodeURIComponent(stop.city || '')}&state=${encodeURIComponent(stop.state || 'NJ')}`
