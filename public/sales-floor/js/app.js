@@ -589,8 +589,14 @@ function combinedNewCustomers() {
   );
   const leaf = (newCustomers || []).filter((c) => c.cardState !== 'done');
 
-  // Add Zoho first-order accounts that LeafLink didn't already surface. NY/RI/MO
-  // only — NJ is LeafLink's territory, MA is excluded per Reid.
+  // Add Zoho first-order accounts that LeafLink didn't already surface.
+  // Covers NJ / NY / RI / MO. MA is the only market we drop entirely.
+  //
+  // For NJ: LeafLink's richer state-machine card always wins via the
+  // `leafByAcct` dedup — this Zoho fallback only fills in when LeafLink
+  // didn't match the customer (e.g., name mismatch) or hasn't reported
+  // that account yet. That ensures the NJ tab never disappears just
+  // because LeafLink's feed is thin on a given day.
   const zohoOnly = [];
   for (const a of accounts) {
     if (!a || !a.id) continue;
@@ -598,7 +604,6 @@ function combinedNewCustomers() {
     if (leafByAcct.has(a.id)) continue;
     const stateCode = normalizeStateCode(a._state || a.Billing_State);
     if (!stateCode || stateCode === 'MA') continue;
-    if (stateCode === 'NJ') continue; // NJ comes from LeafLink
     zohoOnly.push({
       kind: 'zoho',
       cardState: 'zoho_new',
