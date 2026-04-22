@@ -229,6 +229,27 @@ function formatCallDuration(totalSeconds: number): string {
   return hh > 0 ? `${pad(hh)}:${pad(mm)}:${pad(ss)}` : `${pad(mm)}:${pad(ss)}`;
 }
 
+// ─── Zoho datetime normalizer ───────────────────────────────────────────────
+// Zoho v7 rejects ISO strings with millisecond precision or trailing `Z`.
+// It wants `YYYY-MM-DDTHH:mm:ss±HH:MM`. Confirmed via probe: `...Z` returns
+// INVALID_DATA, `+00:00` returns 201. Quo's `answeredAt`/`completedAt` are
+// already in the right shape, but `createdAt` (and our `new Date().toISOString()`
+// fallback) carry ms + Z and trip Zoho.
+function toZohoDateTime(input: string | Date): string {
+  const d = input instanceof Date ? input : new Date(input);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  // Format in UTC and emit +00:00 explicitly.
+  return (
+    d.getUTCFullYear() +
+    '-' + pad(d.getUTCMonth() + 1) +
+    '-' + pad(d.getUTCDate()) +
+    'T' + pad(d.getUTCHours()) +
+    ':' + pad(d.getUTCMinutes()) +
+    ':' + pad(d.getUTCSeconds()) +
+    '+00:00'
+  );
+}
+
 // ─── Subject builder ────────────────────────────────────────────────────────
 // Quo call id goes at the END so the human-readable bit is what shows in
 // the Zoho activity timeline. The id is what we search on later when
@@ -316,7 +337,8 @@ async function handleCallCompleted(env: any, c: QuoCall) {
 
   const rep = await resolveRepFromCall(env.QUO_API_KEY, c, (c as any).user);
 
-  const startISO = c.answeredAt || c.completedAt || c.createdAt || new Date().toISOString();
+  const startRaw = c.answeredAt || c.completedAt || c.createdAt || new Date().toISOString();
+  const startISO = toZohoDateTime(startRaw);
 
   const durSeconds = c.duration || 0;
   const payload: any = {
