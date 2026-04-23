@@ -39,6 +39,12 @@ type Stop = {
   arrival: string | null;
   departure: string | null;
   driveMinutesFromPrev: number | null;
+  // Serena's confirmed time commitment for Training stops:
+  //   "Exact: 14:00"  → pinned appointment
+  //   "Morning (10am-12pm)" → window
+  timeConstraintLabel?: string | null;
+  timeConflict?: boolean;
+  timeConflictReason?: string | null;
 };
 
 type RoutePayload = {
@@ -51,6 +57,10 @@ type RoutePayload = {
   totalDayMinutes: number;
   encodedPolyline: string;
   note?: string | null;
+  dayStart?: string | null;
+  dayStartLabel?: string | null;
+  anchor?: {accountId: string; name: string; time: string} | null;
+  timeConflicts?: Array<{accountId: string; name: string; reason: string}>;
 };
 
 export async function loader({context}: LoaderFunctionArgs) {
@@ -410,6 +420,58 @@ export default function VibesToday() {
             {data.note}
           </div>
         ) : null}
+
+        {data?.anchor ? (
+          <div
+            style={{
+              marginTop: 10,
+              padding: 10,
+              background: 'rgba(255,215,0,0.08)',
+              border: `1px solid ${BRAND.gold}`,
+              fontSize: 12,
+              color: BRAND.gold,
+              borderRadius: 4,
+              fontFamily: BODY,
+              letterSpacing: '0.04em',
+            }}
+          >
+            <strong style={{letterSpacing: '0.12em'}}>PINNED ANCHOR</strong>
+            &nbsp;· {data.anchor.name} at {data.anchor.time}
+            {data.dayStartLabel ? ` · day starts ${data.dayStartLabel}` : ''}
+          </div>
+        ) : null}
+
+        {data?.timeConflicts && data.timeConflicts.length > 0 ? (
+          <div
+            style={{
+              marginTop: 10,
+              padding: 10,
+              background: 'rgba(255,59,48,0.08)',
+              border: `1px solid ${BRAND.red}`,
+              fontSize: 12,
+              color: BRAND.red,
+              borderRadius: 4,
+              fontFamily: BODY,
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 700,
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                fontSize: 11,
+                marginBottom: 6,
+              }}
+            >
+              Time Conflicts · {data.timeConflicts.length}
+            </div>
+            {data.timeConflicts.map((c, i) => (
+              <div key={`${c.accountId}-${i}`} style={{marginTop: 2}}>
+                • {c.name}: {c.reason}
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {/* Map */}
@@ -690,6 +752,7 @@ function StopCard({stop, idx}: {stop: Stop; idx: number}) {
               marginTop: 8,
               fontSize: 11,
               color: BRAND.white,
+              flexWrap: 'wrap',
             }}
           >
             <div>
@@ -706,6 +769,41 @@ function StopCard({stop, idx}: {stop: Stop; idx: number}) {
               </div>
             ) : null}
           </div>
+          {stop.timeConstraintLabel ? (
+            <div
+              style={{
+                marginTop: 6,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '3px 8px',
+                border: `1px solid ${
+                  stop.timeConflict ? BRAND.red : BRAND.gold
+                }`,
+                color: stop.timeConflict ? BRAND.red : BRAND.gold,
+                borderRadius: 4,
+                fontFamily: BODY,
+                fontSize: 10,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                fontWeight: 600,
+              }}
+            >
+              <span>PINNED · {stop.timeConstraintLabel}</span>
+            </div>
+          ) : null}
+          {stop.timeConflict && stop.timeConflictReason ? (
+            <div
+              style={{
+                marginTop: 6,
+                color: BRAND.red,
+                fontSize: 11,
+                fontFamily: BODY,
+              }}
+            >
+              ⚠ {stop.timeConflictReason}
+            </div>
+          ) : null}
         </div>
       </div>
 

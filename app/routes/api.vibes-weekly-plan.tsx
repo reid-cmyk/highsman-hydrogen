@@ -54,6 +54,49 @@ const NEEDS_ONBOARDING_PIPELINE = '6699615000010154308';
 const SALES_FLOOR_SIGNATURE = 'Auto-created from /sales-floor';
 const TIER_MARKER_ONBOARDING = '[TIER:ONBOARDING]';
 const TIER_MARKER_TRAINING = '[TIER:TRAINING]';
+// Soft-request tag + sentinel date written by Sky's /sales-floor button when
+// a training needs Serena's confirmation before routing. Skip both here.
+const TIER_MARKER_PENDING_CONFIRM = '[PENDING_CONFIRM]';
+const PENDING_CLOSING_DATE = '2099-12-31';
+
+// ─── Training time constraints (written by /api/vibes-training-confirm) ─────
+// Serena's confirmation endpoint tags the deal Description with one of:
+//   [TIME:EXACT=HH:MM]   — appointment-time anchor
+//   [TIME:WINDOW=NAME]   — must land inside the window
+// The weekly planner surfaces these to Claude so the strategist never slots
+// a pinned-time stop on a day whose region would force it out of window.
+type TimeConstraint =
+  | {kind: 'exact'; time: string; label: string}
+  | {kind: 'window'; window: string; label: string}
+  | null;
+
+const WINDOW_LABEL: Record<string, string> = {
+  pre_open: 'Pre-Open (9-10am)',
+  morning: 'Morning (10am-12pm)',
+  midday: 'Midday (12-2pm)',
+  afternoon: 'Afternoon (2-5pm)',
+  post_close: 'Post-Close (5-8pm)',
+};
+
+function parseTimeConstraint(desc: string): TimeConstraint {
+  if (!desc) return null;
+  const exact = desc.match(/\[TIME:EXACT=(\d{2}):(\d{2})\]/);
+  if (exact) {
+    return {
+      kind: 'exact',
+      time: `${exact[1]}:${exact[2]}`,
+      label: `Exact ${exact[1]}:${exact[2]}`,
+    };
+  }
+  const win = desc.match(/\[TIME:WINDOW=([A-Z_]+)\]/);
+  if (win) {
+    const key = win[1].toLowerCase();
+    if (WINDOW_LABEL[key]) {
+      return {kind: 'window', window: key, label: WINDOW_LABEL[key]};
+    }
+  }
+  return null;
+}
 
 const SERENA_ORIGIN = {
   label: 'Union, NJ 07083 (Serena)',
@@ -63,21 +106,21 @@ const SERENA_ORIGIN = {
 };
 
 const DWELL_MIN = {onboarding: 60, training: 60, checkin: 30} as const;
-// Serena's day: 8.5 hours total (shift cap) minus 30 min lunch = 480 min of
-// effective "stops + drive" budget. If the plan packs more than that it's an
-// overbook and stops need to roll to the next work day.
-const DAY_SHIFT_MIN = 8.5 * 60; // 510 — total shift length, clock-in to clock-out
-const LUNCH_MIN = 30;
-const DAY_BUDGET_MIN = DAY_SHIFT_MIN - LUNCH_MIN; // 480 — effective stops+drive
+// Serena's day: 8 hours calendar (clock-in to clock-out) minus 30 min unpaid
+// lunch = 450 min of productive "stops + drive" budget. If the plan packs more
+// than that it's an overbook and stops need to roll to the next work day.
+const DAY_SHIFT_MIN = 8 * 60; // 480 — calendar day (clock-in to clock-out)
+const LUNCH_MIN = 30; // unpaid, on top of productive time
+const DAY_BUDGET_MIN = DAY_SHIFT_MIN - LUNCH_MIN; // 450 — productive stops+drive
 // NJ inter-city driving averages closer to 30 min between stops once you
 // cluster Union-out. 15 was unrealistic and caused the 11h+ overbook Reid
 // flagged. This is the per-stop drive cushion used by the pre-pack check; the
 // live Routes API still refines day-of.
 const TRAVEL_BUFFER_MIN = 30;
-// Hard cap per day. A Vibes day with 60-min onboardings + realistic drive
-// between stops tops out well under 6. Cap at 5 so we never surface a plan
-// that reads like 10 stops in one shift.
-const MAX_STOPS_PER_DAY = 5;
+// Hard cap per day. Mix of onboardings/trainings (60-min anchored) + drive-by
+// check-ins (30-min). 8 is the practical ceiling once bookings are in the mix;
+// pure check-in days may fit more but the dwell+buffer math catches that.
+const MAX_STOPS_PER_DAY = 8;
 const CHECKIN_MIN_STALE_DAYS = 20;
 
 // ─── NJ geography: 3-region split + outlier set ──────────────────────────────
@@ -143,6 +186,7 @@ type Candidate = {
   staleDays: number | null;
   region: NjRegion;
   infrequentDropIn: boolean;
+  timeConstraint: TimeConstraint;
 };
 
 async function fetchOpenVibesDeals(token: string): Promise<
@@ -151,11 +195,12 @@ async function fetchOpenVibesDeals(token: string): Promise<
     dealId: string;
     tier: Tier;
     stage: string;
+    timeConstraint: TimeConstraint;
   }>
 > {
   const url = new URL('https://www.zohoapis.com/crm/v7/Deals/search');
   url.searchParams.set('criteria', `(Pipeline:equals:${NEEDS_ONBOARDING_PIPELINE})`);
-  url.searchParams.set('fields', 'id,Stage,Account_Name,Description');
+  url.searchParams.set('fields', 'id,Stage,Account_Name,Description,Closing_Date');
   url.searchParams.set('per_page', '200');
   const res = await fetch(url.toString(), {
     headers: {Authorization: `Zoho-oauthtoken ${token}`},
@@ -163,13 +208,24 @@ async function fetchOpenVibesDeals(token: string): Promise<
   if (!res.ok) return [];
   const data = await res.json().catch(() => ({}));
   const rows: any[] = Array.isArray(data?.data) ? data.data : [];
-  const out: Array<{accountId: string; dealId: string; tier: Tier; stage: string}> = [];
+  const out: Array<{
+    accountId: string;
+    dealId: string;
+    tier: Tier;
+    stage: string;
+    timeConstraint: TimeConstraint;
+  }> = [];
   for (const r of rows) {
     const desc = String(r?.Description || '');
     const stage = String(r?.Stage || '').toLowerCase();
     // skip closed deals — only open pipeline stages
     if (/closed.*won|closed.*lost|done|complete/.test(stage)) continue;
     if (!desc.includes(SALES_FLOOR_SIGNATURE)) continue;
+    // Skip pending-confirm trainings — awaiting Serena's call to the store.
+    // Two-guard: description tag + sentinel Closing_Date. Either alone suffices;
+    // belt-and-suspenders protects against tag drift on Zoho edits.
+    if (desc.includes(TIER_MARKER_PENDING_CONFIRM)) continue;
+    if (r?.Closing_Date === PENDING_CLOSING_DATE) continue;
     let tier: Tier;
     if (desc.includes(TIER_MARKER_TRAINING)) tier = 'training';
     else if (desc.includes(TIER_MARKER_ONBOARDING)) tier = 'onboarding';
@@ -181,6 +237,7 @@ async function fetchOpenVibesDeals(token: string): Promise<
       dealId: String(r.id),
       tier,
       stage: r.Stage || '',
+      timeConstraint: parseTimeConstraint(desc),
     });
   }
   return out;
@@ -353,6 +410,12 @@ PRIORITY RULES:
 2. Tier 2 (TRAINING) — follow-ups to onboarded accounts. Schedule this week. Pair geographically with Tier 1 where possible.
 3. Tier 3 (CHECK-IN) — 30-day cadence. Oldest stale visits first. Fill open budget after Tier 1+2 are slotted.
 
+PINNED TIMES (HARD CONSTRAINT — HIGHEST PRIORITY):
+Some Training stops are tagged with a time commitment Serena made to the store:
+- "pinned: Exact HH:MM" — she promised to walk in at HH:MM.
+- "pinned: Morning (10am-12pm)" / similar — she promised a time window.
+Pinned-time stops are effectively promises. They MUST be scheduled this week. They also MUST land on a day whose region matches the stop's region — never force a NORTH-pinned stop onto a SOUTH day to honor the time. If two pinned Exact times in the same region can't both fit one day (drive time between them > spacing), split them across two days in the same region. Call out time pinning in the day's rationale.
+
 GEOGRAPHIC CLUSTERING IS THE HARDEST CONSTRAINT — HARDER THAN DAILY TIER MIX:
 - Soft floor: try to land at least ONE Onboarding or Training on each work day, so every day has a "reason to be there." This is subordinate to the region-lock rule.
 - HARD rule: NEVER force a Tier 1 or Tier 2 onto a day whose region doesn't match the stop. If the only Tier 1 on Wednesday is SOUTH but Wednesday is locked to NORTH, move it to a day that matches its region. If none of the 3 days matches, defer to unassigned.
@@ -504,14 +567,27 @@ export async function loader({request, context}: LoaderFunctionArgs) {
 
     // Tier 1 + Tier 2 pool — dedup per account; onboarding wins over training
     // on the same account (onboard first, then train).
-    const tierByAcct = new Map<string, {tier: Tier; dealId: string}>();
+    const tierByAcct = new Map<
+      string,
+      {tier: Tier; dealId: string; timeConstraint: TimeConstraint}
+    >();
     for (const d of openDeals) {
       if (!acctById.has(d.accountId)) continue; // deal for non-NJ account
       const existing = tierByAcct.get(d.accountId);
       if (!existing) {
-        tierByAcct.set(d.accountId, {tier: d.tier, dealId: d.dealId});
+        tierByAcct.set(d.accountId, {
+          tier: d.tier,
+          dealId: d.dealId,
+          timeConstraint: d.timeConstraint,
+        });
       } else if (existing.tier === 'training' && d.tier === 'onboarding') {
-        tierByAcct.set(d.accountId, {tier: d.tier, dealId: d.dealId});
+        tierByAcct.set(d.accountId, {
+          tier: d.tier,
+          dealId: d.dealId,
+          // Onboarding took over; training time constraint is no longer
+          // relevant because the onboarding visit happens first (no tag yet).
+          timeConstraint: d.timeConstraint,
+        });
       }
     }
 
@@ -519,7 +595,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     const candidates: Candidate[] = [];
 
     // Tier 1 + 2 from open deals
-    for (const [accountId, {tier, dealId}] of tierByAcct.entries()) {
+    for (const [accountId, {tier, dealId, timeConstraint}] of tierByAcct.entries()) {
       const a = acctById.get(accountId);
       if (!a) continue;
       const geo = njRegion(a.city);
@@ -531,8 +607,14 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         address: accountAddress(a),
         tier,
         dwellMin: DWELL_MIN[tier],
-        // onboarding = 1000, training = 900 — keeps them above any check-in
-        priority: tier === 'onboarding' ? 1000 : 900,
+        // onboarding = 1000, training = 900 — keeps them above any check-in.
+        // Pinned-time trainings get a small bump (+50) so they slot before
+        // flex trainings within the same region — Serena can't miss a time
+        // commitment to a store.
+        priority:
+          tier === 'onboarding'
+            ? 1000
+            : 900 + (timeConstraint ? 50 : 0),
         dealId,
         lastVisitDate: a.visitDate,
         staleDays: a.visitDate
@@ -540,6 +622,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
           : null,
         region: geo.region,
         infrequentDropIn: geo.infrequentDropIn,
+        timeConstraint,
       });
     }
 
@@ -569,6 +652,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         staleDays: stale,
         region: geo.region,
         infrequentDropIn: geo.infrequentDropIn,
+        timeConstraint: null, // Check-Ins are drop-by, never pinned
       });
     }
 
@@ -598,6 +682,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         dealId: c.dealId,
         region: c.region,
         infrequentDropIn: c.infrequentDropIn,
+        timeConstraint: c.timeConstraint,
+        timeConstraintLabel: c.timeConstraint ? c.timeConstraint.label : null,
       };
     }
 
@@ -665,8 +751,9 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       const tag = c.tier === 'onboarding' ? 'ONBOARDING' : c.tier === 'training' ? 'TRAINING' : 'CHECK-IN';
       const stale = c.staleDays != null ? ` · stale ${c.staleDays}d` : c.lastVisitDate ? '' : ' · never-visited';
       const region = c.region.toUpperCase();
+      const pin = c.timeConstraint ? ` · pinned: ${c.timeConstraint.label}` : '';
       userLines.push(
-        `  • ${c.accountId} — ${c.name} — ${c.city || '(no city)'} [${region}] — ${tag} · ${c.dwellMin}m${stale} · priority:${c.priority}`,
+        `  • ${c.accountId} — ${c.name} — ${c.city || '(no city)'} [${region}] — ${tag} · ${c.dwellMin}m${stale} · priority:${c.priority}${pin}`,
       );
     }
     if (outliers.length > 0) {
@@ -682,7 +769,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     }
     userLines.push('');
     userLines.push(
-      `TASK: Call build_weekly_plan once. LOCK each day to ONE region (NORTH / CENTRAL / SOUTH) based on REGION DISTRIBUTION — busiest region on Tuesday, lightest on Thursday. Never mix regions within a day. Within a region, pick the stops using priority rules. Target ≥1 Onboarding/Training per day ONLY when it fits that day's region; otherwise push to a day whose region matches. Keep every day under ${DAY_BUDGET_MIN} min (stops + drive) AND under ${MAX_STOPS_PER_DAY} stops. When in doubt, defer to unassigned — an overbooked or region-mixed day is worse than a light one.`,
+      `TASK: Call build_weekly_plan once. LOCK each day to ONE region (NORTH / CENTRAL / SOUTH) based on REGION DISTRIBUTION — busiest region on Tuesday, lightest on Thursday. Never mix regions within a day. Any stop marked "pinned" MUST be scheduled this week on a region-matched day — pinned times are Serena's commitments to the store, never defer them. Within a region, pick stops using priority rules. Target ≥1 Onboarding/Training per day ONLY when it fits that day's region; otherwise push to a day whose region matches. Keep every day under ${DAY_BUDGET_MIN} min (stops + drive) AND under ${MAX_STOPS_PER_DAY} stops. When in doubt, defer Check-Ins (never pinned trainings) to unassigned — an overbooked or region-mixed day is worse than a light one.`,
     );
 
     try {

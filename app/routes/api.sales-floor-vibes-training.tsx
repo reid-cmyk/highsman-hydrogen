@@ -1,12 +1,7 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getRepFromRequest} from '../lib/sales-floor-reps';
-import {
-  njRegion,
-  regionLabel,
-  defaultDayForRegion,
-  nextDateForWeekday,
-} from '../lib/nj-regions';
+import {njRegion, regionLabel, defaultDayForRegion} from '../lib/nj-regions';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sales Floor — Brand Team Training (Vibes Tier 2)
@@ -40,10 +35,14 @@ const DEFAULT_STAGE = 'Onboarding';
 const VIBES_COVERED_STATES = new Set(['NJ', 'New Jersey']);
 const SALES_FLOOR_SIGNATURE = 'Auto-created from /sales-floor';
 const TIER_MARKER_TRAINING = '[TIER:TRAINING]';
-// How many days out we target the training visit by default. Gives the
-// route builder a week of flexibility to route Serena through — she works
-// Tue/Wed/Thu so a 7-day window guarantees at least one eligible day.
-const TRAINING_TARGET_DAYS = 7;
+// Pending-confirm marker. Sky's button creates the deal with this tag; Serena
+// reviews in her inbox, calls the store to negotiate a time, then confirms
+// via /api/vibes-training-confirm which strips this tag and writes the real
+// Closing_Date + time marker. Route builders MUST skip deals with this tag.
+const TIER_MARKER_PENDING_CONFIRM = '[PENDING_CONFIRM]';
+// Sentinel far-future date. Zoho Deals layout requires Closing_Date; we use
+// 2099-12-31 as "no real date yet" so it never surfaces in any live week.
+const PENDING_CLOSING_DATE = '2099-12-31';
 
 let cachedToken: string | null = null;
 let tokenExpiresAt = 0;
@@ -196,57 +195,44 @@ export async function action({request, context}: ActionFunctionArgs) {
     const isOutlier = geo.infrequentDropIn;
 
     // Predicted day. Default: North=Tue, Central=Wed, South=Thu. Outliers
-    // get no predicted day — Sky must coordinate direct.
-    const today = new Date();
+    // get no predicted day — Sky must coordinate direct. This is ONLY a
+    // suggestion now — the real Closing_Date is set by Serena when she
+    // confirms the visit with the store. Sky's button is a soft request.
     let predictedDay: string | null = null;
-    let trainingDate: string;
-
-    if (isOutlier) {
-      // Still set a far-future Closing_Date so the deal isn't totally
-      // date-less — but it's deliberately outside the weekly window so
-      // the route builder won't pick it up.
-      trainingDate = new Date(today.getTime() + 60 * 86400 * 1000)
-        .toISOString()
-        .slice(0, 10);
-    } else {
-      const {dayName, weekday} = defaultDayForRegion(region);
+    if (!isOutlier) {
+      const {dayName} = defaultDayForRegion(region);
       predictedDay = dayName;
-      // Closing_Date = next occurrence of the anchor weekday, at least 2
-      // days out so Sky has time to give the store a heads-up.
-      trainingDate = nextDateForWeekday(today, weekday, 2);
     }
 
-    const closingDate = trainingDate;
-
-    // Dedup: one open Training deal per account.
+    // Dedup: one open Training deal per account (pending or confirmed).
     const existingDealId = await findExistingTrainingDeal(zohoAccountId, token);
     if (existingDealId) {
       return json({
         ok: true,
         dealId: existingDealId,
-        trainingDate,
         tier: 'training',
-        cardState: 'training_booked',
+        cardState: 'training_pending',
         alreadyBooked: true,
+        pendingConfirm: true,
         region,
         regionLabel: regionLabel(region),
         predictedDay,
         isOutlier,
         message: isOutlier
-          ? `${customerName} is a drop-in location. Serena doesn't route here weekly — reach out to her direct to arrange a Shore run visit.`
-          : `Training booked. ${customerName} sits in ${regionLabel(region)} so Serena will visit on a ${predictedDay}.`,
+          ? `Training request already logged. ${customerName} is a drop-in location — Serena will coordinate a direct Shore run.`
+          : `Training request already logged. Serena will confirm the day and time with the store (likely ${predictedDay} in ${regionLabel(region)}).`,
       });
     }
 
     const regionTag = isOutlier ? '[OUTLIER]' : `[REGION:${region.toUpperCase()}]`;
-    const dealName = `Training: ${customerName}`;
+    const dealName = `Training (pending): ${customerName}`;
     const description = [
-      `${SALES_FLOOR_SIGNATURE} ${TIER_MARKER_TRAINING} ${regionTag} Training booked by ${rep.displayName || rep.email || 'rep'}.`,
+      `${SALES_FLOOR_SIGNATURE} ${TIER_MARKER_TRAINING} ${TIER_MARKER_PENDING_CONFIRM} ${regionTag} Training request from ${rep.displayName || rep.email || 'rep'}.`,
       trainingFocus ? `Focus: ${trainingFocus}` : '',
       isOutlier
         ? `OUTLIER LOCATION (${acct.city || 'unknown city'}) — outside weekly route. Serena to arrange direct Shore run.`
-        : `Region: ${regionLabel(region)} · Predicted day: ${predictedDay}`,
-      `Target visit: on or before ${trainingDate}`,
+        : `Region: ${regionLabel(region)} · Suggested day: ${predictedDay}`,
+      `Status: AWAITING SERENA CONFIRMATION. Serena will call the store to set the exact day + time.`,
       `Stop duration: 60 min`,
     ]
       .filter(Boolean)
@@ -259,7 +245,10 @@ export async function action({request, context}: ActionFunctionArgs) {
       Account_Name: zohoAccountId,
       Pipeline: NEEDS_ONBOARDING_PIPELINE,
       Stage: resolvedStage,
-      Closing_Date: closingDate,
+      // Sentinel — real date written by /api/vibes-training-confirm when
+      // Serena locks the visit in. Route builders must treat this sentinel
+      // as "not scheduled yet" and skip it.
+      Closing_Date: PENDING_CLOSING_DATE,
       Description: description,
     };
     if (pipelineRef?.layoutId) {
@@ -291,16 +280,16 @@ export async function action({request, context}: ActionFunctionArgs) {
     return json({
       ok: true,
       dealId,
-      trainingDate,
       tier: 'training',
-      cardState: 'training_booked',
+      cardState: 'training_pending',
+      pendingConfirm: true,
       region,
       regionLabel: regionLabel(region),
       predictedDay,
       isOutlier,
       message: isOutlier
-        ? `${customerName} is a drop-in location (${acct.city || 'outside weekly coverage'}). Serena doesn't route here weekly — reach out to her direct to arrange a Shore run visit.`
-        : `Training booked. ${customerName} sits in ${regionLabel(region)} so Serena will visit on a ${predictedDay}.`,
+        ? `Training request sent. ${customerName} is a drop-in (${acct.city || 'outside weekly coverage'}) — Serena will coordinate a Shore run direct. You don't need to follow up.`
+        : `Training request sent. Serena will call the store to confirm the exact day + time (likely ${predictedDay} in ${regionLabel(region)}).`,
     });
   } catch (err: any) {
     console.error('[sf-vibes-training] failed', zohoAccountId, err.message);

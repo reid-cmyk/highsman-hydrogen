@@ -59,6 +59,33 @@ type GoodieBudget = {
   today_spent: number;
 };
 
+// Pending training requests from Sky's /sales-floor button. Serena reviews
+// these in her inbox, calls the store to negotiate time, then confirms via
+// /api/vibes-training-confirm — which writes Closing_Date + [TIME:*] tag and
+// promotes the deal into the weekly route queue.
+type PendingTraining = {
+  dealId: string;
+  accountId: string | null;
+  customerName: string;
+  city: string | null;
+  region: 'north' | 'central' | 'south';
+  regionLabel: string;
+  isOutlier: boolean;
+  predictedDay: string | null;
+  trainingFocus: string | null;
+  requestedBy: string | null;
+  requestedAt: string | null;
+};
+
+const TIME_WINDOWS: Array<{key: string; label: string}> = [
+  {key: 'flexible', label: 'Flexible — any time'},
+  {key: 'pre_open', label: 'Pre-Open (9-10am)'},
+  {key: 'morning', label: 'Morning (10am-12pm)'},
+  {key: 'midday', label: 'Midday (12-2pm)'},
+  {key: 'afternoon', label: 'Afternoon (2-5pm)'},
+  {key: 'post_close', label: 'Post-Close (5-8pm)'},
+];
+
 export async function loader({request, context}: LoaderFunctionArgs) {
   const env = context.env as Env;
   const url = new URL(request.url);
@@ -171,6 +198,21 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     }
   }
 
+  // Pending training requests (Zoho, independent of Supabase rep data). Used
+  // by the "Trainings to Book" inbox on Serena's dashboard. Non-fatal — if the
+  // fetch fails the rest of the dashboard still renders.
+  let pendingTrainings: PendingTraining[] = [];
+  try {
+    const origin = new URL(request.url).origin;
+    const pRes = await fetch(`${origin}/api/vibes-pending-trainings`);
+    if (pRes.ok) {
+      const pj = await pRes.json();
+      if (pj.ok && Array.isArray(pj.pending)) pendingTrainings = pj.pending;
+    }
+  } catch (err) {
+    console.warn('[vibes] /api/vibes-pending-trainings failed', err);
+  }
+
   return json({
     rep,
     reps,
@@ -179,6 +221,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     mtdTrainings,
     route,
     hasSupabase,
+    pendingTrainings,
   });
 }
 
@@ -225,7 +268,36 @@ const DAY_LABELS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 // ─────────────────────────────────────────────────────────────────────────────
 export default function VibesDashboard() {
   const data = useLoaderData<typeof loader>();
-  const {rep, reps, goodie, mtdVisits, mtdTrainings, route, hasSupabase} = data;
+  const {
+    rep,
+    reps,
+    goodie,
+    mtdVisits,
+    mtdTrainings,
+    route,
+    hasSupabase,
+    pendingTrainings: initialPending,
+  } = data;
+
+  // Pending-training inbox state. Seeded from the loader; re-fetched from
+  // /api/vibes-pending-trainings when Serena confirms or dismisses a row so
+  // the count stays accurate without a full reload.
+  const [pending, setPending] = useState<PendingTraining[]>(
+    (initialPending as PendingTraining[]) || [],
+  );
+  const [confirmingDealId, setConfirmingDealId] = useState<string | null>(null);
+
+  async function refetchPending() {
+    try {
+      const r = await fetch('/api/vibes-pending-trainings', {
+        credentials: 'include',
+      });
+      const j = await r.json();
+      if (j?.ok && Array.isArray(j.pending)) setPending(j.pending);
+    } catch {
+      // fail silent — inbox just won't refresh until next full page load
+    }
+  }
 
   useEffect(() => {
     if (document.getElementById('vibes-font-link')) return;
@@ -508,6 +580,21 @@ export default function VibesDashboard() {
         />
       </div>
 
+      {/* Trainings to Book — Sky's inbox. Pending soft-requests awaiting
+          Serena's confirmation call. Hidden when empty so the page stays
+          clean on quiet weeks. */}
+      {pending.length > 0 ? (
+        <Section
+          title="Trainings to Book"
+          index={`Inbox · ${pending.length}`}
+        >
+          <TrainingInbox
+            pending={pending}
+            onConfirmClick={(dealId) => setConfirmingDealId(dealId)}
+          />
+        </Section>
+      ) : null}
+
       {/* Week view */}
       <Section title="This Week" index="Schedule">
         <WeekStrip
@@ -516,6 +603,20 @@ export default function VibesDashboard() {
           onSelect={setSelectedDayIdx}
         />
       </Section>
+
+      {/* Confirm-training modal — overlays the whole app when Serena opens a
+          pending request. Closes on submit (calls /api/vibes-training-confirm
+          then re-fetches the inbox). */}
+      {confirmingDealId ? (
+        <ConfirmTrainingModal
+          pending={pending.find((p) => p.dealId === confirmingDealId) || null}
+          onClose={() => setConfirmingDealId(null)}
+          onConfirmed={async () => {
+            setConfirmingDealId(null);
+            await refetchPending();
+          }}
+        />
+      ) : null}
 
       {/* Route section — today's live route OR preview of a future work day.
           selectedDayIdx === 0 ⇒ live /api/vibes-route data (3 tiers).
@@ -811,6 +912,452 @@ function QuickTile({
       ) : null}
     </Link>
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Trainings to Book — Serena's inbox
+// ─────────────────────────────────────────────────────────────────────────────
+// Sky's /sales-floor button creates a Training deal marked [PENDING_CONFIRM].
+// It sits here until Serena calls the store, picks a real day + time window,
+// and confirms. That's when it promotes into the weekly route queue.
+// ─────────────────────────────────────────────────────────────────────────────
+function TrainingInbox({
+  pending,
+  onConfirmClick,
+}: {
+  pending: PendingTraining[];
+  onConfirmClick: (dealId: string) => void;
+}) {
+  return (
+    <div style={{display: 'grid', gap: 10}}>
+      {pending.map((p) => (
+        <div
+          key={p.dealId}
+          style={{
+            background: BRAND.chip,
+            border: `1px solid ${p.isOutlier ? BRAND.orange : BRAND.line}`,
+            borderLeft: `3px solid ${p.isOutlier ? BRAND.orange : BRAND.purple}`,
+            borderRadius: 8,
+            padding: '12px 14px',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'baseline',
+              justifyContent: 'space-between',
+              gap: 8,
+              flexWrap: 'wrap',
+            }}
+          >
+            <div
+              style={{
+                fontFamily: TEKO,
+                fontSize: 22,
+                lineHeight: 1.1,
+                color: BRAND.white,
+                letterSpacing: '0.01em',
+              }}
+            >
+              {p.customerName}
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                gap: 6,
+                flexWrap: 'wrap',
+              }}
+            >
+              {p.isOutlier ? (
+                <RegionPill label="Shore / Outlier" color={BRAND.orange} />
+              ) : (
+                <RegionPill label={p.regionLabel} color={BRAND.purple} />
+              )}
+              {p.predictedDay ? (
+                <RegionPill
+                  label={`Suggest ${p.predictedDay.toUpperCase()}`}
+                  color={BRAND.gold}
+                />
+              ) : null}
+            </div>
+          </div>
+          <div
+            style={{
+              fontFamily: BODY,
+              fontSize: 12,
+              color: BRAND.gray,
+              marginTop: 6,
+              lineHeight: 1.4,
+            }}
+          >
+            {p.city ? <>{p.city} · </> : null}
+            {p.requestedBy ? <>Requested by {p.requestedBy}</> : null}
+            {p.trainingFocus ? (
+              <>
+                {' '}· Focus: <span style={{color: BRAND.white}}>{p.trainingFocus}</span>
+              </>
+            ) : null}
+          </div>
+          {p.isOutlier ? (
+            <div
+              style={{
+                fontFamily: BODY,
+                fontSize: 11,
+                color: BRAND.orange,
+                marginTop: 6,
+                fontStyle: 'italic',
+              }}
+            >
+              Drop-in location — route direct on a Shore run, not the weekly loop.
+            </div>
+          ) : null}
+          <div style={{display: 'flex', gap: 8, marginTop: 10}}>
+            <button
+              type="button"
+              onClick={() => onConfirmClick(p.dealId)}
+              style={{
+                background: BRAND.gold,
+                color: BRAND.black,
+                border: 'none',
+                borderRadius: 6,
+                padding: '8px 14px',
+                fontFamily: TEKO,
+                fontSize: 16,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+              }}
+            >
+              Confirm Visit
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RegionPill({label, color}: {label: string; color: string}) {
+  return (
+    <span
+      style={{
+        display: 'inline-block',
+        padding: '3px 8px',
+        border: `1px solid ${color}`,
+        borderRadius: 4,
+        fontFamily: TEKO,
+        fontSize: 11,
+        letterSpacing: '0.1em',
+        color,
+        textTransform: 'uppercase',
+        lineHeight: 1.2,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Confirm-Training modal
+// ─────────────────────────────────────────────────────────────────────────────
+// Opens when Serena taps "Confirm Visit" on a pending row. She picks a date
+// (defaults to next predicted day for the region), a time window, and an
+// optional exact time if the buyer gave her one. On submit we POST to
+// /api/vibes-training-confirm which strips [PENDING_CONFIRM], writes the
+// real Closing_Date, and appends a [TIME:*] tag the route builder honors.
+// ─────────────────────────────────────────────────────────────────────────────
+function ConfirmTrainingModal({
+  pending,
+  onClose,
+  onConfirmed,
+}: {
+  pending: PendingTraining | null;
+  onClose: () => void;
+  onConfirmed: () => void;
+}) {
+  const [date, setDate] = useState(() => defaultConfirmDate(pending));
+  const [timeWindow, setTimeWindow] = useState<string>('flexible');
+  const [useExact, setUseExact] = useState(false);
+  const [exactTime, setExactTime] = useState('10:00');
+  const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!pending) return null;
+
+  async function handleSubmit() {
+    if (!pending) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/vibes-training-confirm', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'include',
+        body: JSON.stringify({
+          dealId: pending.dealId,
+          date,
+          timeWindow,
+          exactTime: useExact ? exactTime : '',
+          notes,
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j?.ok) {
+        throw new Error(j?.error || `Confirm failed (${res.status})`);
+      }
+      onConfirmed();
+    } catch (err: any) {
+      setError(err?.message || 'Confirm failed');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.72)',
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+        padding: 16,
+        overflowY: 'auto',
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: BRAND.surface,
+          border: `1px solid ${BRAND.lineStrong}`,
+          borderRadius: 12,
+          width: '100%',
+          maxWidth: 440,
+          padding: '20px 18px 22px',
+          marginTop: 48,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: TEKO,
+            fontSize: 28,
+            color: BRAND.white,
+            textTransform: 'uppercase',
+            letterSpacing: '0.02em',
+            lineHeight: 1,
+          }}
+        >
+          Confirm Training
+        </div>
+        <div
+          style={{
+            fontFamily: BODY,
+            fontSize: 13,
+            color: BRAND.gray,
+            marginTop: 6,
+            lineHeight: 1.4,
+          }}
+        >
+          {pending.customerName}
+          {pending.city ? ` · ${pending.city}` : ''} ·{' '}
+          {pending.isOutlier ? 'Shore drop-in' : pending.regionLabel}
+        </div>
+
+        <FieldLabel>Visit Date</FieldLabel>
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          style={fieldStyle()}
+        />
+        {!pending.isOutlier && pending.predictedDay ? (
+          <div
+            style={{
+              fontFamily: BODY,
+              fontSize: 11,
+              color: BRAND.gray,
+              marginTop: 4,
+            }}
+          >
+            Suggested day for {pending.regionLabel}:{' '}
+            <span style={{color: BRAND.gold}}>{pending.predictedDay}</span>
+          </div>
+        ) : null}
+
+        <FieldLabel>Time Window</FieldLabel>
+        <select
+          value={timeWindow}
+          onChange={(e) => setTimeWindow(e.target.value)}
+          disabled={useExact}
+          style={fieldStyle(useExact)}
+        >
+          {TIME_WINDOWS.map((w) => (
+            <option key={w.key} value={w.key}>
+              {w.label}
+            </option>
+          ))}
+        </select>
+
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            marginTop: 12,
+            fontFamily: BODY,
+            fontSize: 13,
+            color: BRAND.white,
+            cursor: 'pointer',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={useExact}
+            onChange={(e) => setUseExact(e.target.checked)}
+          />
+          Store gave a hard appointment time
+        </label>
+        {useExact ? (
+          <>
+            <FieldLabel>Exact Time (24h)</FieldLabel>
+            <input
+              type="time"
+              value={exactTime}
+              onChange={(e) => setExactTime(e.target.value)}
+              style={fieldStyle()}
+            />
+          </>
+        ) : null}
+
+        <FieldLabel>Notes (optional)</FieldLabel>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="e.g. Ask for Maria at the front desk"
+          rows={2}
+          style={{
+            ...fieldStyle(),
+            fontFamily: BODY,
+            resize: 'vertical',
+          }}
+        />
+
+        {error ? (
+          <div
+            style={{
+              background: 'rgba(255,59,48,0.10)',
+              border: `1px solid ${BRAND.red}`,
+              borderRadius: 6,
+              padding: '8px 10px',
+              marginTop: 12,
+              fontFamily: BODY,
+              fontSize: 12,
+              color: BRAND.red,
+            }}
+          >
+            {error}
+          </div>
+        ) : null}
+
+        <div style={{display: 'flex', gap: 8, marginTop: 18}}>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            style={{
+              flex: 1,
+              background: 'transparent',
+              color: BRAND.white,
+              border: `1px solid ${BRAND.lineStrong}`,
+              borderRadius: 6,
+              padding: '10px 14px',
+              fontFamily: TEKO,
+              fontSize: 16,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              cursor: submitting ? 'default' : 'pointer',
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={submitting}
+            style={{
+              flex: 2,
+              background: submitting ? BRAND.goldDark : BRAND.gold,
+              color: BRAND.black,
+              border: 'none',
+              borderRadius: 6,
+              padding: '10px 14px',
+              fontFamily: TEKO,
+              fontSize: 16,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              cursor: submitting ? 'default' : 'pointer',
+            }}
+          >
+            {submitting ? 'Saving…' : 'Lock It In'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FieldLabel({children}: {children: React.ReactNode}) {
+  return (
+    <div
+      style={{
+        fontFamily: TEKO,
+        fontSize: 12,
+        letterSpacing: '0.18em',
+        textTransform: 'uppercase',
+        color: BRAND.gray,
+        marginTop: 14,
+        marginBottom: 4,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function fieldStyle(disabled = false): React.CSSProperties {
+  return {
+    width: '100%',
+    padding: '10px 12px',
+    background: disabled ? 'rgba(255,255,255,0.03)' : BRAND.chip,
+    color: disabled ? BRAND.gray : BRAND.white,
+    border: `1px solid ${BRAND.line}`,
+    borderRadius: 6,
+    fontFamily: BODY,
+    fontSize: 14,
+    boxSizing: 'border-box',
+    opacity: disabled ? 0.5 : 1,
+  };
+}
+
+// Next Tue/Wed/Thu for the region (at least 2 days out), YYYY-MM-DD.
+// Outliers default to 30 days out — Serena can override in the picker.
+function defaultConfirmDate(pending: PendingTraining | null): string {
+  const today = new Date();
+  if (!pending || pending.isOutlier) {
+    const d = new Date(today.getTime() + 30 * 86400 * 1000);
+    return d.toISOString().slice(0, 10);
+  }
+  const targetWeekday =
+    pending.region === 'north' ? 2 : pending.region === 'central' ? 3 : 4;
+  const start = new Date(today.getTime() + 2 * 86400 * 1000);
+  const diff = (targetWeekday - start.getDay() + 7) % 7;
+  const target = new Date(start.getTime() + diff * 86400 * 1000);
+  return target.toISOString().slice(0, 10);
 }
 
 function EmptyState({title, sub}: {title: string; sub: string}) {

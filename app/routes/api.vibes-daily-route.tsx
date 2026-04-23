@@ -41,6 +41,80 @@ const NEEDS_ONBOARDING_PIPELINE = '6699615000010154308';
 const SALES_FLOOR_SIGNATURE = 'Auto-created from /sales-floor';
 const TIER_MARKER_ONBOARDING = '[TIER:ONBOARDING]';
 const TIER_MARKER_TRAINING = '[TIER:TRAINING]';
+// Soft-request marker written by /api/sales-floor-vibes-training when Sky
+// flags a training from the sales floor. Those deals are awaiting Serena's
+// confirmation call to the store — route builders must skip them.
+const TIER_MARKER_PENDING_CONFIRM = '[PENDING_CONFIRM]';
+// Sentinel date the pending-confirm flow writes so required Closing_Date is
+// satisfied without polluting any real week. Extra filter guard.
+const PENDING_CLOSING_DATE = '2099-12-31';
+
+// ─── Training time constraints (written by /api/vibes-training-confirm) ─────
+// Serena confirms the visit with the store and we tag the deal Description
+// with one of:
+//   [TIME:EXACT=HH:MM]   — hard appointment time (routes around it)
+//   [TIME:WINDOW=NAME]   — must land inside the window (pre_open, morning,
+//                          midday, afternoon, post_close)
+// The daily builder reads these and (a) anchors the day around the exact time
+// when one exists, (b) flags per-stop conflicts when Google's optimized order
+// puts a stop outside its window.
+
+type TimeConstraint =
+  | {kind: 'exact'; time: string; targetMin: number}
+  | {kind: 'window'; window: string; startMin: number; endMin: number; label: string}
+  | null;
+
+const WINDOW_RANGES: Record<
+  string,
+  {start: number; end: number; label: string}
+> = {
+  pre_open: {start: 9 * 60, end: 10 * 60, label: 'Pre-Open (9-10am)'},
+  morning: {start: 10 * 60, end: 12 * 60, label: 'Morning (10am-12pm)'},
+  midday: {start: 12 * 60, end: 14 * 60, label: 'Midday (12-2pm)'},
+  afternoon: {start: 14 * 60, end: 17 * 60, label: 'Afternoon (2-5pm)'},
+  post_close: {start: 17 * 60, end: 20 * 60, label: 'Post-Close (5-8pm)'},
+};
+
+function parseTimeConstraint(desc: string): TimeConstraint {
+  if (!desc) return null;
+  const exact = desc.match(/\[TIME:EXACT=(\d{2}):(\d{2})\]/);
+  if (exact) {
+    const h = parseInt(exact[1], 10);
+    const m = parseInt(exact[2], 10);
+    if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+      return {
+        kind: 'exact',
+        time: `${exact[1]}:${exact[2]}`,
+        targetMin: h * 60 + m,
+      };
+    }
+  }
+  const win = desc.match(/\[TIME:WINDOW=([A-Z_]+)\]/);
+  if (win) {
+    const key = win[1].toLowerCase();
+    const range = WINDOW_RANGES[key];
+    if (range) {
+      return {
+        kind: 'window',
+        window: key,
+        startMin: range.start,
+        endMin: range.end,
+        label: range.label,
+      };
+    }
+  }
+  return null;
+}
+
+// Extract minutes-from-midnight (local, ET) out of an ISO timestamp that was
+// built with the '-04:00' offset we set on dayStart. We parse the hh:mm after
+// 'T' directly rather than calling getHours() — the stop ISO strings are kept
+// in ET to match how Serena reads them.
+function minutesFromIsoLocal(iso: string): number {
+  const m = iso.match(/T(\d{2}):(\d{2})/);
+  if (!m) return 0;
+  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+}
 
 // Serena's home base — her own address is kept private; Union NJ 07083 is the
 // zip-centered origin we plan around. Approximate lat/lng for Union NJ.
@@ -56,19 +130,20 @@ const DWELL_MIN: Record<string, number> = {
   training: 60,
   checkin: 30,
 };
-// Serena's shift is 8.5 hours; 30 min is reserved for lunch, leaving 480 min
-// of effective stops + driving. The pre-pack check uses DAY_BUDGET_MIN so the
-// stop list fits before Google Routes even runs; if the live route pushes the
-// day past DAY_SHIFT_MIN we surface a warning.
-const DAY_SHIFT_MIN = 8.5 * 60; // 510 — clock-in to clock-out
-const LUNCH_MIN = 30;
-const DAY_BUDGET_MIN = DAY_SHIFT_MIN - LUNCH_MIN; // 480 — stops + drive
+// Serena's calendar day is 8 hours door-to-door; 30 min is unpaid lunch on top,
+// leaving 450 min of productive stops + driving. The pre-pack check uses
+// DAY_BUDGET_MIN so the stop list fits before Google Routes even runs; if the
+// live route pushes the day past DAY_SHIFT_MIN + LUNCH_MIN we surface a warning.
+const DAY_SHIFT_MIN = 8 * 60; // 480 — clock-in to clock-out (8 hr calendar day)
+const LUNCH_MIN = 30; // unpaid, sits on top of productive time
+const DAY_BUDGET_MIN = DAY_SHIFT_MIN - LUNCH_MIN; // 450 — productive stops + drive
 // Realistic NJ inter-city cushion. The pre-pack used 15 which caused
 // 10-stop overbooks — Routes would later clock the day at 11h+.
 const TRAVEL_BUFFER_MIN = 30;
-// Hard cap on stops per day. Covers the realistic shape of a Vibes day:
-// 2–3 bookings + 1–2 check-ins. Never surface a 10-stop plan.
-const MAX_STOPS_PER_DAY = 5;
+// Hard cap on stops per day. Shape of a realistic Vibes day: mix of
+// onboardings/trainings (anchored, longer dwell) + drive-by check-ins.
+// 8 is the practical ceiling once onboardings or trainings are in the mix.
+const MAX_STOPS_PER_DAY = 8;
 const CHECKIN_CADENCE_DAYS = 30;
 
 // Serena works Tue/Wed/Thu. Anything else → workday:false. We still return a
@@ -144,6 +219,11 @@ async function fetchOpenVibesDeals(token: string): Promise<any[]> {
     if (!desc.includes(TIER_MARKER_ONBOARDING) && !desc.includes(TIER_MARKER_TRAINING)) {
       return false;
     }
+    // Skip pending-confirm trainings — they haven't been locked in with the
+    // store yet. Two guards: the description tag AND the sentinel Closing_Date.
+    // Either alone catches it; both together covers tag drift or API weirdness.
+    if (desc.includes(TIER_MARKER_PENDING_CONFIRM)) return false;
+    if (d?.Closing_Date === PENDING_CLOSING_DATE) return false;
     // Treat a "Closed Won"/"Closed Lost" stage as done — don't route it again.
     const stage = (d.Stage || '').toLowerCase();
     if (stage.includes('closed')) return false;
@@ -233,10 +313,17 @@ type Stop = {
   staleDays?: number | null;
   region: NjRegion;
   infrequentDropIn: boolean;
+  timeConstraint?: TimeConstraint;
 };
 
 function daysBetween(a: Date, b: Date): number {
   return Math.floor((b.getTime() - a.getTime()) / 86400000);
+}
+
+function formatHHMM(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
 export async function loader({request, context}: LoaderFunctionArgs) {
@@ -305,6 +392,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         ? 'training'
         : 'onboarding';
       const geo = njRegion(acct.Billing_City);
+      const timeConstraint = parseTimeConstraint(desc);
       candidates.push({
         accountId: acctId,
         name: acct.Account_Name || '—',
@@ -317,6 +405,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         dealId: d.id,
         region: geo.region,
         infrequentDropIn: geo.infrequentDropIn,
+        timeConstraint,
       });
     }
 
@@ -571,20 +660,66 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       ? optOrder.map((idx) => packed[idx])
       : packed;
 
-    // Walk the legs to compute arrival/departure per stop. Start at 9am local.
+    // Walk the legs to compute arrival/departure per stop. Start at 9am local
+    // unless an exact-time anchor is present — in that case we shift the whole
+    // day so the anchor arrives at its pinned time.
     const legs = route.legs || [];
     const totalDriveSec =
       (parseInt(String(route.duration || '0s').replace(/s$/, ''), 10) || 0);
 
-    // Day start: 9:00 AM local (ET). Represent as ISO with offset so the UI
-    // can render it in NJ time.
-    const dayStart = new Date(`${targetISO}T09:00:00-04:00`);
+    // Find the first exact-time anchor in the optimized order. If multiple
+    // exist we honor the earliest one and flag conflicts on the others.
+    let anchorIdx = -1;
+    let anchorTargetMin = 0;
+    let anchorDriveBeforeMin = 0;
+    for (let i = 0; i < orderedStops.length; i++) {
+      const tc = orderedStops[i].timeConstraint;
+      if (tc && tc.kind === 'exact') {
+        const priorLegSec = legs
+          .slice(0, i + 1)
+          .reduce(
+            (acc: number, leg: any) =>
+              acc +
+              (parseInt(String(leg?.duration || '0s').replace(/s$/, ''), 10) || 0),
+            0,
+          );
+        const priorDwellMin = orderedStops
+          .slice(0, i)
+          .reduce((acc, s) => acc + s.dwellMin, 0);
+        anchorIdx = i;
+        anchorTargetMin = tc.targetMin;
+        anchorDriveBeforeMin = Math.round(priorLegSec / 60) + priorDwellMin;
+        break;
+      }
+    }
+
+    // Default start: 9:00 AM local (ET). If an anchor exists, compute the
+    // start that makes the anchor arrive at target. If that start would be
+    // before 9:00 AM we still pin to 9:00 AM and the anchor will land early
+    // — that case gets flagged as a conflict below.
+    const DEFAULT_START_MIN = 9 * 60;
+    let startMin = DEFAULT_START_MIN;
+    if (anchorIdx >= 0) {
+      const shifted = anchorTargetMin - anchorDriveBeforeMin;
+      startMin = Math.max(DEFAULT_START_MIN, shifted);
+    }
+    const startH = Math.floor(startMin / 60);
+    const startM = startMin % 60;
+    const startISO = `${targetISO}T${String(startH).padStart(2, '0')}:${String(
+      startM,
+    ).padStart(2, '0')}:00-04:00`;
+    const dayStart = new Date(startISO);
     let cursor = dayStart.getTime();
     const stopsOut: Array<Stop & {
       arrival: string;
       departure: string;
       driveMinutesFromPrev: number;
+      timeConstraint: TimeConstraint;
+      timeConstraintLabel: string | null;
+      timeConflict: boolean;
+      timeConflictReason: string | null;
     }> = [];
+    const timeConflicts: Array<{accountId: string; name: string; reason: string}> = [];
 
     for (let i = 0; i < orderedStops.length; i++) {
       const leg = legs[i] || {};
@@ -594,11 +729,72 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       const dwellMs = orderedStops[i].dwellMin * 60 * 1000;
       cursor += dwellMs;
       const departure = new Date(cursor);
+      // Check this stop against its time constraint (if any).
+      const tc = orderedStops[i].timeConstraint || null;
+      const arrMin = minutesFromIsoLocal(arrival.toISOString());
+      const depMin = minutesFromIsoLocal(departure.toISOString());
+      let timeConflict = false;
+      let timeConflictReason: string | null = null;
+      let timeConstraintLabel: string | null = null;
+      if (tc) {
+        if (tc.kind === 'exact') {
+          timeConstraintLabel = `Exact: ${tc.time}`;
+          // Tolerance: 10 min on either side accommodates Routes traffic drift.
+          const drift = Math.abs(arrMin - tc.targetMin);
+          if (drift > 10) {
+            timeConflict = true;
+            timeConflictReason = `Arrival ${formatHHMM(arrMin)} misses pinned ${tc.time} by ${drift} min`;
+          }
+        } else {
+          timeConstraintLabel = tc.label;
+          // Window check: arrival must be >= start and departure (stop end)
+          // must be <= end. If arrival is before start it counts as early
+          // (flag so Sky can delay); if arrival is after end it counts as
+          // missed (flag as conflict).
+          if (arrMin < tc.startMin) {
+            timeConflict = true;
+            timeConflictReason = `Arrival ${formatHHMM(arrMin)} is before ${tc.label}`;
+          } else if (arrMin > tc.endMin) {
+            timeConflict = true;
+            timeConflictReason = `Arrival ${formatHHMM(arrMin)} is after ${tc.label}`;
+          } else if (depMin > tc.endMin) {
+            // Stop fits the window start but overflows the end during dwell.
+            timeConflict = true;
+            timeConflictReason = `Dwell runs past ${tc.label} (leaves ${formatHHMM(depMin)})`;
+          }
+        }
+      }
+      if (timeConflict && timeConflictReason) {
+        timeConflicts.push({
+          accountId: orderedStops[i].accountId,
+          name: orderedStops[i].name,
+          reason: timeConflictReason,
+        });
+      }
       stopsOut.push({
         ...orderedStops[i],
         arrival: arrival.toISOString(),
         departure: departure.toISOString(),
         driveMinutesFromPrev: Math.round(legSec / 60),
+        timeConstraint: tc,
+        timeConstraintLabel,
+        timeConflict,
+        timeConflictReason,
+      });
+    }
+
+    // If there was more than one exact anchor on the same day, flag the
+    // extras — the loop above only anchored around the first. Two anchors
+    // create an unavoidable conflict unless their spacing matches drive time,
+    // which we don't try to solve automatically.
+    const exactAnchors = orderedStops.filter(
+      (s) => s.timeConstraint && s.timeConstraint.kind === 'exact',
+    );
+    if (exactAnchors.length > 1) {
+      timeConflicts.push({
+        accountId: '',
+        name: 'Multiple exact-time stops',
+        reason: `Day has ${exactAnchors.length} pinned times — routing can only anchor the earliest. Reconfirm the rest with the stores.`,
       });
     }
 
@@ -621,9 +817,22 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       region: anchorRegion,
       regionLabel: regionLabel(anchorRegion),
       droppedForOutlier: droppedOutliers.map((s) => s.accountId),
+      dayStart: startISO,
+      dayStartLabel: formatHHMM(startMin),
+      anchor:
+        anchorIdx >= 0
+          ? {
+              accountId: orderedStops[anchorIdx].accountId,
+              name: orderedStops[anchorIdx].name,
+              time: formatHHMM(anchorTargetMin),
+            }
+          : null,
+      timeConflicts,
       note:
         totalMinutes + LUNCH_MIN > DAY_SHIFT_MIN
-          ? `Plan runs ${totalMinutes} min stops+drive + ${LUNCH_MIN} min lunch — over the 8.5-hour shift. Roll tail Check-Ins to the next day.`
+          ? `Plan runs ${totalMinutes} min stops+drive + ${LUNCH_MIN} min lunch — over the 8-hour shift. Roll tail Check-Ins to the next day.`
+          : timeConflicts.length > 0
+          ? `${timeConflicts.length} time conflict${timeConflicts.length === 1 ? '' : 's'} on today's plan — review pinned trainings.`
           : null,
     });
   } catch (err: any) {
