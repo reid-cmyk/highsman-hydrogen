@@ -116,28 +116,32 @@ export type StoreTrainingRollup = {
   }>;
 };
 
-// ─── Primary entry point: rollup ALL stores in one pass ─────────────────────
+// ─── Shared low-level fetch: raw training profiles + completion events ─────
+//
+// Both /vibes (per-store rollup) and /staff-dashboard (flat budtender table)
+// start from the exact same 3-step Klaviyo fetch. This helper is the single
+// source of truth — downstream dashboards decide how to filter and aggregate.
 
-/**
- * Returns a Map keyed by store_account_id. Used by /vibes index loader
- * so we hit Klaviyo once for the entire dashboard instead of N times.
- *
- * Cache for ~5 min in-memory at the loader level — Klaviyo's list endpoint
- * is not cheap, but budtender enrollment doesn't change second-to-second.
- */
-export async function rollupEnrollmentByStore(
+export type TrainingProfilesAndEvents = {
+  profiles: any[];
+  eventsByProfile: Map<string, any[]>;
+};
+
+export async function fetchTrainingProfilesAndEvents(
   apiKey: string,
-): Promise<Map<string, StoreTrainingRollup>> {
-  // 1. Fetch all profile IDs in the training list
+): Promise<TrainingProfilesAndEvents> {
+  // 1. Profile IDs on the training list
   const idsUrl =
     `https://a.klaviyo.com/api/lists/${KLAVIYO_TRAINING_LIST_ID}` +
     `/relationships/profiles/?page[size]=100`;
   const idRecords = await fetchAllPages(idsUrl, apiKey);
   const profileIds: string[] = idRecords.map((r: any) => r.id).filter(Boolean);
 
-  if (profileIds.length === 0) return new Map();
+  if (profileIds.length === 0) {
+    return {profiles: [], eventsByProfile: new Map()};
+  }
 
-  // 2. Fetch full profile attributes (batch of 50 due to URL length)
+  // 2. Full profile attributes (batch of 50 — URL-length guard)
   const profiles: any[] = [];
   const BATCH = 50;
   for (let i = 0; i < profileIds.length; i += BATCH) {
@@ -151,7 +155,7 @@ export async function rollupEnrollmentByStore(
     profiles.push(...rows);
   }
 
-  // 3. Fetch all course completion events (paginated, sorted newest-first)
+  // 3. All course completion events, newest-first
   const eventsUrl =
     `https://a.klaviyo.com/api/events/?filter=equals(metric_id,"${KLAVIYO_COURSE_COMPLETED_METRIC_ID}")` +
     `&include=profile&fields[event]=event_properties,datetime&page[size]=100&sort=-datetime`;
@@ -169,7 +173,26 @@ export async function rollupEnrollmentByStore(
     eventsByProfile.get(pid)!.push(ev);
   }
 
-  // 5. Bucket profiles by store_account_id
+  return {profiles, eventsByProfile};
+}
+
+// ─── Primary entry point: rollup ALL stores in one pass ─────────────────────
+
+/**
+ * Returns a Map keyed by store_account_id. Used by /vibes index loader
+ * so we hit Klaviyo once for the entire dashboard instead of N times.
+ *
+ * Cache for ~5 min in-memory at the loader level — Klaviyo's list endpoint
+ * is not cheap, but budtender enrollment doesn't change second-to-second.
+ */
+export async function rollupEnrollmentByStore(
+  apiKey: string,
+): Promise<Map<string, StoreTrainingRollup>> {
+  const {profiles, eventsByProfile} = await fetchTrainingProfilesAndEvents(apiKey);
+
+  if (profiles.length === 0) return new Map();
+
+  // Bucket profiles by store_account_id
   const byStore = new Map<string, StoreTrainingRollup>();
   const now = new Date().toISOString();
 
