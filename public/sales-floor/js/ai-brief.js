@@ -144,6 +144,22 @@ const AIBrief = (() => {
   function fallbackBanner(brief) {
     if (!brief._fallback) return '';
     const reason = esc(brief._fallbackReason || 'AI coach unavailable.');
+    // A cold lead (no prior calls/texts/emails) is not an error — it's the
+    // expected starting state for every new lead. Render that case as a
+    // calm informational note, not a yellow "warning" banner. Only treat
+    // it as a real warning when Claude actually failed (missing API key,
+    // timeout, rate limit, etc.).
+    const isColdFastPath = brief._fastPath === 'cold';
+    if (isColdFastPath) {
+      return `
+        <div class="brief-info">
+          <i class="fa-solid fa-circle-info"></i>
+          <div>
+            <strong>Cold open</strong>
+            <div class="brief-warn-sub">${reason}</div>
+          </div>
+        </div>`;
+    }
     return `
       <div class="brief-warn">
         <i class="fa-solid fa-triangle-exclamation"></i>

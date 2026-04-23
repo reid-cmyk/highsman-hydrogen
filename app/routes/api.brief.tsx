@@ -855,6 +855,15 @@ export async function action({request, context}: ActionFunctionArgs) {
   if (!anyHistoryFound) {
     const brief = buildFallbackBrief(lead, rep);
     brief._fastPath = 'cold';
+    // IMPORTANT: buildFallbackBrief() hardcodes _fallbackReason as the
+    // "API key not configured" string because that was its original caller
+    // (path #1 above). The cold fast-path reuses the same template but for
+    // a completely different reason — the lead simply has no history yet.
+    // Overwrite the reason so reps don't see a misleading "misconfigured"
+    // banner on every cold lead. (Before this fix, every brand-new lead
+    // looked like the deploy was broken.)
+    brief._fallbackReason =
+      'No prior calls, texts, or emails found for this lead — cold open. Nothing for Claude to synthesize yet.';
     const responseBody = {ok: true, brief, mode: brief.mode, sources};
     setCachedBrief(cacheKey, responseBody);
     return json(responseBody, {headers: {'Cache-Control': 'no-store'}});

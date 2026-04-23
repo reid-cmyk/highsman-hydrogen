@@ -3582,6 +3582,23 @@ a.hs-contact-meta-cell:hover i{ color:var(--gold); }
   margin-top:2px;
 }
 
+/* Informational variant — used when the fallback is expected (cold lead
+   with no prior history), not when something is broken. Calm steel-gray
+   so reps don't mistake "brand new lead" for "AI misconfigured." */
+.brief-info{
+  display:flex;
+  gap:10px;
+  align-items:flex-start;
+  padding:10px 12px;
+  background:rgba(169,172,175,0.08);
+  border:1px solid rgba(169,172,175,0.24);
+  border-radius:var(--r-sm);
+  color:var(--white);
+  font-family:var(--barlow);
+}
+.brief-info > i{ color:var(--gray); margin-top:2px; }
+.brief-info strong{ font-size:13px; letter-spacing:0.02em; }
+
 /* Last Contact block — warm mode only. The "here's where you left
    off" headline summary. Gold stripe on the left marks it as
    coach-authored narrative (vs raw data). */
