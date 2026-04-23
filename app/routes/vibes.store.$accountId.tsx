@@ -2,6 +2,7 @@ import {useEffect} from 'react';
 import type {LoaderFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {Link, useLoaderData} from '@remix-run/react';
+import {VibesTrainingPanel} from '~/components/vibes/VibesTrainingPanel';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // /vibes/store/:accountId — Vibes Team Store Profile
@@ -21,11 +22,14 @@ export async function loader({params, request, context}: LoaderFunctionArgs) {
   if (!accountId) throw new Response('Missing accountId', {status: 400});
 
   const origin = new URL(request.url).origin;
+  // Rep context: reps enter this page from /vibes with ?repId=...; we preserve
+  // it so roster saves + manual signups get attributed to the correct rep.
+  const repId = new URL(request.url).searchParams.get('repId') || '';
   const res = await fetch(
     `${origin}/api/vibes-store?accountId=${encodeURIComponent(accountId)}`,
   );
   const data = await res.json();
-  return json({...data, accountId});
+  return json({...data, accountId, repId});
 }
 
 export const handle = {hideHeader: true, hideFooter: true};
@@ -116,8 +120,9 @@ export default function VibesStoreProfile() {
     );
   }
 
-  const {account, contactsByRole, training, recentVisits, lastVisit, daysSinceLastVisit} =
+  const {account, contactsByRole, training, recentVisits, lastVisit, daysSinceLastVisit, repId} =
     data as any;
+  const vibesPanel = training?.vibesPanel || null;
 
   return (
     <Shell>
@@ -314,6 +319,24 @@ export default function VibesStoreProfile() {
           )}
         </div>
       </Section>
+
+      {/* Training Camp — pinned Vibes signup panel (enrolled/roster + QR). */}
+      {vibesPanel?.signup_url ? (
+        <div style={{padding: '0 0 12px'}}>
+          <VibesTrainingPanel
+            account={{
+              id: account?.id || '',
+              name: account?.name || '',
+              city: account?.city || null,
+              state: account?.state || null,
+            }}
+            progress={vibesPanel}
+            repId={repId || ''}
+            signupUrl={vibesPanel.signup_url}
+            qrDataUrl={vibesPanel.qr_data_url || ''}
+          />
+        </div>
+      ) : null}
 
       {/* Training */}
       <Section title="Budtender Training" index="Knowledge">

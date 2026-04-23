@@ -1,6 +1,7 @@
 import type {LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getZohoAccessToken as getZohoToken} from '~/lib/zoho-auth';
+import {buildQrDataUrl, buildSignupUrl, makeSignupToken} from '~/lib/qr';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Vibes Team — Store Profile bundle
@@ -11,6 +12,7 @@ import {getZohoAccessToken as getZohoToken} from '~/lib/zoho-auth';
 //   • Zoho Contacts grouped by role (Buyer / Manager / Owner / Head Budtender)
 //   • Klaviyo budtender training (self-serve) matched to the store by dispensary
 //   • Supabase live-training log + brand_visits for this account
+//   • Vibes Training Panel payload — roster + % enrolled + per-store QR token
 // ─────────────────────────────────────────────────────────────────────────────
 
 const KLAVIYO_LIST_ID = 'WBSrLZ';
@@ -241,6 +243,80 @@ async function supaGet(
   }
 }
 
+// ─── Training signup token helpers ──────────────────────────────────────────
+// Each store gets exactly one active opaque QR token. It's minted lazily the
+// first time Serena opens the store profile — she never has to "set up" the
+// QR code. Rotating a token means revoking the old row (future feature);
+// until then, the token is stable for the life of the store.
+async function getOrMintSignupToken(
+  env: any,
+  accountId: string,
+): Promise<string | null> {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY || !accountId) return null;
+
+  const existing = await supaGet(
+    env,
+    `training_signup_tokens?account_id=eq.${encodeURIComponent(accountId)}&revoked_at=is.null&select=token&limit=1`,
+  );
+  if (existing?.[0]?.token) return existing[0].token;
+
+  const token = makeSignupToken();
+  try {
+    const res = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/training_signup_tokens`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          apikey: env.SUPABASE_SERVICE_KEY,
+          Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+          prefer: 'return=minimal',
+        },
+        body: JSON.stringify({token, account_id: accountId}),
+      },
+    );
+    if (!res.ok) {
+      console.warn('[vibes-store] mint token failed', res.status);
+      return null;
+    }
+    return token;
+  } catch (err) {
+    console.warn('[vibes-store] mint token threw', err);
+    return null;
+  }
+}
+
+// Derive the per-store training status chip.
+// Thresholds mirror the spec so the UI chip stays readable at a glance:
+//   complete   — ≥100% of roster enrolled
+//   needs_attn — roster known but 0 enrolled
+//   stale      — has enrollments but none in the last 30 days
+//   in_progress — any enrollment in the last 30 days
+//   not_started — roster set, no one enrolled yet
+//   no_roster  — Serena hasn't entered the headcount yet
+function computeTrainingStatus(args: {
+  enrolled: number;
+  roster: number | null;
+  lastSignupAt: string | null;
+}):
+  | 'no_roster'
+  | 'not_started'
+  | 'in_progress'
+  | 'complete'
+  | 'needs_attention'
+  | 'stale' {
+  const {enrolled, roster, lastSignupAt} = args;
+  if (roster == null) return 'no_roster';
+  if (enrolled === 0) return roster > 0 ? 'needs_attention' : 'not_started';
+  if (enrolled >= roster) return 'complete';
+
+  const ageMs = lastSignupAt
+    ? Date.now() - new Date(lastSignupAt).getTime()
+    : null;
+  if (ageMs != null && ageMs > 30 * 24 * 60 * 60 * 1000) return 'stale';
+  return 'in_progress';
+}
+
 // ─── Loader ──────────────────────────────────────────────────────────────────
 export async function loader({request, context}: LoaderFunctionArgs) {
   const url = new URL(request.url);
@@ -288,6 +364,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       recentVisits,
       goodieRecent,
       trainingSummaryRows,
+      rosterProfileRows,
+      signupToken,
     ] = await Promise.all([
       fetchKlaviyoBudtendersForStore(storeName, env.KLAVIYO_PRIVATE_KEY),
       supaGet(
@@ -306,6 +384,11 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         env,
         `store_training_summary?store_account_id=eq.${encodeURIComponent(accountId)}&select=*`,
       ),
+      supaGet(
+        env,
+        `vibes_store_profiles?account_id=eq.${encodeURIComponent(accountId)}&select=account_id,account_name,budtender_headcount,headcount_updated_at&limit=1`,
+      ),
+      getOrMintSignupToken(env, accountId),
     ]);
 
     // Group contacts by role
@@ -328,6 +411,79 @@ export async function loader({request, context}: LoaderFunctionArgs) {
             (1000 * 60 * 60 * 24),
         )
       : null;
+
+    // ── VibesTrainingPanel payload ───────────────────────────────────────────
+    // Build the numbers the store-card panel renders at a glance. Roster lives
+    // in Supabase (Serena-edited), enrollment comes from Klaviyo via the
+    // `selfServeTraining` array above. We derive tier1 completion and last
+    // activity from the same rows so enrolled/tier1/% all tell one story.
+    const enrolled = Array.isArray(selfServeTraining)
+      ? selfServeTraining.length
+      : 0;
+    const tier1Completed = Array.isArray(selfServeTraining)
+      ? selfServeTraining.filter((b: any) =>
+          Array.isArray(b.coursesCompleted)
+            ? b.coursesCompleted.includes('meet-ricky')
+            : false,
+        ).length
+      : 0;
+    const lastSignupAt = Array.isArray(selfServeTraining)
+      ? selfServeTraining.reduce<string | null>((max, b: any) => {
+          const d = b.lastActivity || '';
+          if (!d) return max;
+          return !max || d > max ? d : max;
+        }, null)
+      : null;
+
+    // Roster: prefer the Serena-edited Supabase value. Fall back to the Zoho
+    // `Number_of_Budtenders` field so stores we haven't formally onboarded yet
+    // still show a denominator when one exists upstream.
+    const rosterProfile = rosterProfileRows?.[0] || null;
+    const rosterFromSupabase =
+      rosterProfile?.budtender_headcount != null
+        ? Number(rosterProfile.budtender_headcount)
+        : null;
+    const rosterFromZoho =
+      account.Number_of_Budtenders != null &&
+      account.Number_of_Budtenders !== ''
+        ? Number(account.Number_of_Budtenders)
+        : null;
+    const roster =
+      rosterFromSupabase != null && !Number.isNaN(rosterFromSupabase)
+        ? rosterFromSupabase
+        : rosterFromZoho != null && !Number.isNaN(rosterFromZoho)
+          ? rosterFromZoho
+          : null;
+
+    const pctEnrolled =
+      roster && roster > 0
+        ? Math.min(100, Math.round((enrolled / roster) * 100))
+        : null;
+
+    const status = computeTrainingStatus({enrolled, roster, lastSignupAt});
+
+    const requestOrigin = new URL(request.url).origin;
+    const signupUrl = signupToken
+      ? buildSignupUrl(requestOrigin, signupToken)
+      : null;
+    const qrDataUrl = signupUrl ? buildQrDataUrl(signupUrl) : null;
+
+    const vibesPanel = {
+      account_id: accountId,
+      account_name: storeName || null,
+      roster,
+      enrolled,
+      self_serve_count: enrolled,
+      live_count: Array.isArray(liveTraining) ? liveTraining.length : 0,
+      tier1_completed: tier1Completed,
+      last_signup_at: lastSignupAt,
+      pct_enrolled: pctEnrolled,
+      status,
+      signup_token: signupToken,
+      signup_url: signupUrl,
+      qr_data_url: qrDataUrl,
+      roster_updated_at: rosterProfile?.headcount_updated_at || null,
+    };
 
     return json(
       {
@@ -358,6 +514,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
           selfServe: selfServeTraining,
           live: liveTraining,
           summary: trainingSummaryRows?.[0] || null,
+          vibesPanel,
         },
         recentVisits,
         goodieRecent,
