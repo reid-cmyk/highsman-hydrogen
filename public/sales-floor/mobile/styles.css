@@ -1635,6 +1635,18 @@ a.hs-contact-meta-cell:active {
   color: #fbbf24;
 }
 
+/* LinkedIn pill — uses LinkedIn brand blue for instant recognizability.
+ * Hidden by render-site when linkedinUrl is absent; when present it slots
+ * right after Brief in the action row. Clicking fires openLinkedInProfile()
+ * which tries linkedin:// (native app) then falls back to the web profile. */
+.hs-action-pill.is-linkedin {
+  border-top: 2px solid #0A66C2;
+}
+.hs-action-pill.is-linkedin i { color: #4f9fe0; }
+.hs-action-pill.is-linkedin:active {
+  background: rgba(10, 102, 194, 0.12);
+}
+
 /* ── Accent rail on the left of every card for scannability ── */
 .hs-contact-card::before {
   content: '';

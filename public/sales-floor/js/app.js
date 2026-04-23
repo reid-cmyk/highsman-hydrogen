@@ -429,6 +429,7 @@ function renderLeads(filter = currentFilter) {
       // Inline add-field pills write back to the Leads module.
       zohoModule: 'Leads',
       zohoId: l.id,
+      linkedinUrl: l.LinkedIn_URL || '',
     });
   }).join('');
 }
@@ -1498,6 +1499,9 @@ function renderAccounts() {
       // to set one first, then adds the number/email.
       zohoModule: buyer?.id ? 'Contacts' : undefined,
       zohoId: buyer?.id || undefined,
+      // LinkedIn URL — prefer the buyer's personal profile over the shop's
+      // company page. Populated via Apollo enrichment; hidden when empty.
+      linkedinUrl: buyer?.LinkedIn_URL || a.LinkedIn_URL || '',
     });
   }).join('');
 }
@@ -1899,6 +1903,10 @@ function leadFromAccount(a) {
     // Account so the button still works on shops with no buyer assigned.
     _zohoModule: buyer?.id ? 'Contacts' : 'Accounts',
     _zohoId: buyer?.id || a.id || null,
+    // LinkedIn URL — prefer the buyer's personal profile; fall back to the
+    // shop's company page if that's all we have on file. Populated via the
+    // Apollo enrichment sweep, never hand-entered.
+    LinkedIn_URL: buyer?.LinkedIn_URL || a.LinkedIn_URL || '',
   };
 }
 
@@ -1948,6 +1956,8 @@ function leadFromNewCust(c) {
     // one matched, else the Account shell.
     _zohoModule: buyer?.id ? 'Contacts' : (acct?.id ? 'Accounts' : null),
     _zohoId: buyer?.id || acct?.id || null,
+    // LinkedIn URL — buyer first, then the matched shop account.
+    LinkedIn_URL: buyer?.LinkedIn_URL || acct?.LinkedIn_URL || '',
   };
 }
 
@@ -2169,6 +2179,11 @@ function contactCardHtml(opts) {
                           // "+ Add email" pills when the field is missing.
     zohoId,               // Zoho record id for the module above (lead id for
                           // Leads cards, buyer contact id for Account cards).
+    linkedinUrl,          // Optional LinkedIn profile URL. When present we
+                          // render a blue LinkedIn pill in the action row
+                          // that native-opens the profile in the LinkedIn
+                          // iOS/Android app (falls back to browser). Safe
+                          // to leave undefined — pill just doesn't render.
   } = opts;
 
   const display = name || '—';
@@ -2329,6 +2344,18 @@ function contactCardHtml(opts) {
        </button>`
     : '';
 
+  // ── LinkedIn pill — only renders when we have a URL on file (populated by
+  // the Apollo enrichment sweep). Click tries the native app via linkedin://
+  // first and falls back to the web profile. Never auto-sends messages —
+  // auto-connect/auto-message is a LinkedIn TOS violation. The "Copy intro"
+  // pill (next task) handles the pre-drafted-message flow.
+  const liSlug = linkedinUrl ? linkedInSlugFromUrl(linkedinUrl) : '';
+  const linkedinBtn = liSlug
+    ? `<button class="hs-action-pill is-linkedin" onclick="event.stopPropagation(); openLinkedInProfile(${JSON.stringify(liSlug)})" title="Open LinkedIn profile">
+         <i class="fa-brands fa-linkedin-in"></i><span>LinkedIn</span>
+       </button>`
+    : '';
+
   return `
     ${headerOpen}
       <div class="hs-contact-header">
@@ -2347,10 +2374,61 @@ function contactCardHtml(opts) {
         ${textBtn}
         ${emailBtn}
         ${briefBtn}
+        ${linkedinBtn}
         ${extraAction || ''}
       </div>
     </div>`;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LinkedIn deep-link helpers
+// ─────────────────────────────────────────────────────────────────────────────
+// We never scrape LinkedIn — that's a TOS violation and gets accounts banned.
+// URLs are populated via the Apollo enrichment sweep (task #31) which already
+// licenses the data. These helpers just parse out the /in/{slug} portion and
+// hand the OS a linkedin:// URL so the native app opens instantly on mobile.
+// Desktop falls back to a new tab. Reps never hand-enter LinkedIn URLs.
+
+function linkedInSlugFromUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  // Accepts https://linkedin.com/in/jamie-buyer-nj/, linkedin.com/in/xyz, or
+  // the bare slug itself. Trailing slash, query string, utm params all fine.
+  const m = url.match(/linkedin\.com\/in\/([^/?#\s]+)/i);
+  if (m && m[1]) return m[1];
+  // Allow a bare slug as a fallback so Zoho rows with just "jamie-buyer-nj"
+  // still open correctly — some CRM imports strip the domain.
+  if (/^[a-z0-9\-_.%]+$/i.test(url) && !url.includes('.')) return url;
+  return '';
+}
+
+function openLinkedInProfile(slug) {
+  if (!slug) return;
+  // iOS + Android: linkedin:// scheme routes to the native app. If the app
+  // isn't installed the browser handles the URL and falls back to https
+  // automatically via the setTimeout fallback below. Desktop just opens the
+  // web profile in a new tab — linkedin:// is a no-op there.
+  const web = `https://www.linkedin.com/in/${encodeURIComponent(slug)}/`;
+  const ua = navigator.userAgent || '';
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(ua);
+
+  if (!isMobile) {
+    window.open(web, '_blank', 'noopener');
+    return;
+  }
+
+  // On mobile: try native first. If we're still on the page after 700ms the
+  // app didn't catch it — open the web profile as a fallback.
+  const deep = `linkedin://in/${encodeURIComponent(slug)}`;
+  const started = Date.now();
+  window.location.href = deep;
+  setTimeout(() => {
+    if (Date.now() - started < 2000 && document.visibilityState === 'visible') {
+      window.open(web, '_blank', 'noopener');
+    }
+  }, 700);
+}
+
+window.openLinkedInProfile = openLinkedInProfile;
 
 function escapeHtml(s) {
   return String(s == null ? '' : s)
