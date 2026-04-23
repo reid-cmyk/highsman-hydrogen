@@ -2252,8 +2252,16 @@ function contactCardHtml(opts) {
     ? '<i class="fa-solid fa-building"></i>'
     : initials(display);
 
+  // CRITICAL: every onclick="..." that interpolates a handler with embedded
+  // string literals (JSON.stringify(leadId), JSON.stringify(display), etc.)
+  // MUST pass through escapeAttr() or the inner double-quotes truncate the
+  // HTML attribute mid-expression and the browser throws
+  // `SyntaxError: Failed to execute 'click': Unexpected end of input`.
+  // That exact bug silently broke every Lead card action (Brief/Email/Text/
+  // Add) for 2 days until 2026-04-23 — see memory
+  // feedback_sales_floor_onclick_escape.md.
   const headerOpen = onOpen
-    ? `<div class="hs-contact-card" data-idx="${idx}" onclick="${onOpen}">`
+    ? `<div class="hs-contact-card" data-idx="${idx}" onclick="${escapeAttr(onOpen)}">`
     : `<div class="hs-contact-card" data-idx="${idx}">`;
 
   const statusBadge = status
@@ -2320,14 +2328,14 @@ function contactCardHtml(opts) {
   // Otherwise we drop back to the single Call pill (phoneE164 prefers cell).
   const shopPill = hasBoth
     ? `<a class="hs-action-pill is-call" href="tel:${escapeAttr(shopE164)}"
-          onclick="event.stopPropagation(); ${isLead ? `callLead(leads[${idx}]);` : ''}"
+          onclick="${escapeAttr(`event.stopPropagation(); ${isLead ? `callLead(leads[${idx}]);` : ''}`)}"
           title="Call shop line">
          <i class="fa-solid fa-store"></i><span>Shop</span>
        </a>`
     : '';
   const cellPill = hasBoth
     ? `<a class="hs-action-pill is-call" href="tel:${escapeAttr(cellE164)}"
-          onclick="event.stopPropagation(); ${isLead ? `callLead(leads[${idx}]);` : ''}"
+          onclick="${escapeAttr(`event.stopPropagation(); ${isLead ? `callLead(leads[${idx}]);` : ''}`)}"
           title="Call cell">
          <i class="fa-solid fa-mobile-screen"></i><span>Cell</span>
        </a>`
@@ -2336,11 +2344,11 @@ function contactCardHtml(opts) {
   const callBtn = hasBoth
     ? `${shopPill}${cellPill}`
     : (phoneE164
-        ? `<a class="hs-action-pill is-call" href="tel:${escapeAttr(phoneE164)}" onclick="event.stopPropagation(); ${kind === 'lead' ? `callLead(leads[${idx}]);` : ''}" title="Call">
+        ? `<a class="hs-action-pill is-call" href="tel:${escapeAttr(phoneE164)}" onclick="${escapeAttr(`event.stopPropagation(); ${kind === 'lead' ? `callLead(leads[${idx}]);` : ''}`)}" title="Call">
              <i class="fa-solid fa-phone"></i><span>Call</span>
            </a>`
         : (canAdd
-            ? `<button class="hs-action-pill is-call is-add" onclick="event.stopPropagation(); ${addPhoneCall}" title="Add a phone number for ${safeNameAttr}">
+            ? `<button class="hs-action-pill is-call is-add" onclick="${escapeAttr(`event.stopPropagation(); ${addPhoneCall}`)}" title="Add a phone number for ${safeNameAttr}">
                  <i class="fa-solid fa-plus"></i><span>${isLead ? 'Add phones' : 'Add phone'}</span>
                </button>`
             : `<button class="hs-action-pill is-call is-disabled" disabled title="No phone on record">
@@ -2353,11 +2361,11 @@ function contactCardHtml(opts) {
   // Sky can capture both numbers at once.
   const textTarget = isLead ? cellE164 : phoneE164;
   const textBtn = textTarget
-    ? `<button class="hs-action-pill is-text" onclick="event.stopPropagation(); ${textHandler}" title="Send text">
+    ? `<button class="hs-action-pill is-text" onclick="${escapeAttr(`event.stopPropagation(); ${textHandler}`)}" title="Send text">
          <i class="fa-solid fa-comment-sms"></i><span>Text</span>
        </button>`
     : (canAdd
-        ? `<button class="hs-action-pill is-text is-add" onclick="event.stopPropagation(); ${addPhoneCall}" title="Add a cell number for ${safeNameAttr}">
+        ? `<button class="hs-action-pill is-text is-add" onclick="${escapeAttr(`event.stopPropagation(); ${addPhoneCall}`)}" title="Add a cell number for ${safeNameAttr}">
              <i class="fa-solid fa-plus"></i><span>Add cell</span>
            </button>`
         : `<button class="hs-action-pill is-text is-disabled" disabled title="No mobile number on record">
@@ -2365,11 +2373,11 @@ function contactCardHtml(opts) {
            </button>`);
 
   const emailBtn = email
-    ? `<button class="hs-action-pill is-email" onclick="event.stopPropagation(); ${emailHandler}" title="Send email">
+    ? `<button class="hs-action-pill is-email" onclick="${escapeAttr(`event.stopPropagation(); ${emailHandler}`)}" title="Send email">
          <i class="fa-solid fa-envelope"></i><span>Email</span>
        </button>`
     : (canAdd
-        ? `<button class="hs-action-pill is-email is-add" onclick="event.stopPropagation(); ${addEmailCall}" title="Add an email for ${safeNameAttr}">
+        ? `<button class="hs-action-pill is-email is-add" onclick="${escapeAttr(`event.stopPropagation(); ${addEmailCall}`)}" title="Add an email for ${safeNameAttr}">
              <i class="fa-solid fa-plus"></i><span>Add email</span>
            </button>`
         : `<button class="hs-action-pill is-email is-disabled" disabled title="No email on record">
@@ -2377,7 +2385,7 @@ function contactCardHtml(opts) {
            </button>`);
 
   const briefBtn = briefHandler
-    ? `<button class="hs-action-pill is-brief" onclick="event.stopPropagation(); ${briefHandler}" title="AI Brief">
+    ? `<button class="hs-action-pill is-brief" onclick="${escapeAttr(`event.stopPropagation(); ${briefHandler}`)}" title="AI Brief">
          <i class="fa-solid fa-brain"></i><span>Brief</span>
        </button>`
     : '';
@@ -2389,7 +2397,7 @@ function contactCardHtml(opts) {
   // pill (next task) handles the pre-drafted-message flow.
   const liSlug = linkedinUrl ? linkedInSlugFromUrl(linkedinUrl) : '';
   const linkedinBtn = liSlug
-    ? `<button class="hs-action-pill is-linkedin" onclick="event.stopPropagation(); openLinkedInProfile(${JSON.stringify(liSlug)})" title="Open LinkedIn profile">
+    ? `<button class="hs-action-pill is-linkedin" onclick="${escapeAttr(`event.stopPropagation(); openLinkedInProfile(${JSON.stringify(liSlug)})`)}" title="Open LinkedIn profile">
          <i class="fa-brands fa-linkedin-in"></i><span>LinkedIn</span>
        </button>`
     : '';
@@ -2400,7 +2408,7 @@ function contactCardHtml(opts) {
   // clipboard, then opens the LinkedIn profile. Rep pastes + sends manually.
   // Auto-send is a LinkedIn TOS violation.
   const copyIntroBtn = liSlug && isLead
-    ? `<button class="hs-action-pill is-copy-intro" onclick="event.stopPropagation(); copyLinkedInIntro(${idx}, ${JSON.stringify(liSlug)})" title="Draft a 2-line intro and copy to clipboard">
+    ? `<button class="hs-action-pill is-copy-intro" onclick="${escapeAttr(`event.stopPropagation(); copyLinkedInIntro(${idx}, ${JSON.stringify(liSlug)})`)}" title="Draft a 2-line intro and copy to clipboard">
          <i class="fa-solid fa-wand-magic-sparkles"></i><span>Copy intro</span>
        </button>`
     : '';
@@ -2535,7 +2543,7 @@ function buildClaimChip({leadId, ownerId, claimedAt, lastActivityAt}) {
 
   if (isMine) {
     return `<button class="hs-claim-chip ${tone} is-mine" data-leadid="${escapeAttr(leadId)}"
-               onclick="event.stopPropagation(); releaseLeadClaim(${JSON.stringify(leadId)})"
+               onclick="${escapeAttr(`event.stopPropagation(); releaseLeadClaim(${JSON.stringify(leadId)})`)}"
                title="Release back to pool">
               <i class="fa-solid fa-lock"></i>
               <span>You · ${escapeHtml(formatTtlRemaining(msLeft))}</span>
@@ -2545,7 +2553,7 @@ function buildClaimChip({leadId, ownerId, claimedAt, lastActivityAt}) {
 
   // Claimed by another rep. Click = try Senior Staff override via prompt.
   return `<button class="hs-claim-chip ${tone} is-others" data-leadid="${escapeAttr(leadId)}"
-             onclick="event.stopPropagation(); releaseLeadClaimForce(${JSON.stringify(leadId)}, ${JSON.stringify(ownerName)})"
+             onclick="${escapeAttr(`event.stopPropagation(); releaseLeadClaimForce(${JSON.stringify(leadId)}, ${JSON.stringify(ownerName)})`)}"
              title="Claimed by ${escapeAttr(ownerName)} — Senior Staff can force-release">
             <i class="fa-solid fa-user-lock"></i>
             <span><strong>${escapeHtml(ownerName)}</strong> · ${escapeHtml(formatTtlRemaining(msLeft))}</span>

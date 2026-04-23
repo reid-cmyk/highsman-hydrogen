@@ -6,7 +6,7 @@
  * need fresh data, not yesterday's queue.
  */
 
-const VERSION = 'hs-floor-mobile-v11';
+const VERSION = 'hs-floor-mobile-v12';
 const PRECACHE = `${VERSION}-static`;
 const RUNTIME = `${VERSION}-runtime`;
 
