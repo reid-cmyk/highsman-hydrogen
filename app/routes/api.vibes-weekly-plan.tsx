@@ -320,15 +320,21 @@ SERENA'S CONSTRAINTS (HARD CAPS — never exceed):
 - Mileage sanity check: a day with 5 stops should be roughly 80–150 miles, not 300+. If your plan implies more than ~200 miles in a day, you're bouncing too much — re-cluster.
 
 PRIORITY RULES:
-1. Tier 1 (ONBOARDING) — never push to next week. These are first-ever brand visits. Always scheduled.
+1. Tier 1 (ONBOARDING) — never push out of the week. These are first-ever brand visits. Always scheduled SOMEWHERE in the 3 days.
 2. Tier 2 (TRAINING) — follow-ups to onboarded accounts. Schedule this week. Pair geographically with Tier 1 where possible.
 3. Tier 3 (CHECK-IN) — 30-day cadence. Oldest stale visits first. Fill open budget after Tier 1+2 are slotted.
 
+GEOGRAPHIC CLUSTERING IS THE HARDEST CONSTRAINT — HARDER THAN DAILY TIER MIX:
+- Soft floor: try to land at least ONE Onboarding or Training on each work day, so every day has a "reason to be there."
+- HARD rule: NEVER force a Tier 1 or Tier 2 onto a day if it's geographically isolated from the rest of that day's cluster. If an Onboarding or Training is far from the other bookings, push it to a DIFFERENT day of the same week where it can anchor its own cluster. A day of pure Check-Ins in a tight cluster beats a day that bounces across the state chasing a single Onboarding.
+- If two Onboardings are on opposite ends of NJ (e.g., Cherry Hill and Jersey City), split them: one day for each. Do not pair them just to hit a "booking per day" quota.
+- The day's cluster comes first. Tier floor is a nice-to-have, not a reason to add 60+ miles.
+
 DAY STRUCTURE:
-- Tuesday = high-energy launch day. Lead with Tier 1 if available.
-- Wednesday = middle of the week, heaviest Tier 2 training day.
+- Tuesday = high-energy launch day. Lead with Tier 1 if available AND it fits the Tue cluster.
+- Wednesday = middle of the week, heaviest Tier 2 training day IF the geography supports it.
 - Thursday = wrap-up, often mixed, good for clusters Sky wants visibility on before the weekend.
-- If all 3 tiers represented, spread them across the week — don't dump all training on one day.
+- Assignment priority: pick the day whose cluster best fits the stop's address, NOT the day with the "right" tier mix.
 
 VOICE (when writing rationale fields): Highsman Training Register — declarative, no hedging, no "could/might/perhaps". Explain the logic in 2–3 sentences per day.
 
@@ -559,7 +565,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     }
     userLines.push('');
     userLines.push(
-      `TASK: Call build_weekly_plan once. Cluster geographically, respect priority rules, keep every day under ${DAY_BUDGET_MIN} min (stops + drive) AND under ${MAX_STOPS_PER_DAY} stops. When in doubt, defer to unassigned — an overbooked day is worse than a light one.`,
+      `TASK: Call build_weekly_plan once. Cluster geographically FIRST — a day of tight check-ins beats a day chasing a lone Onboarding 90 min away. Target ≥1 Onboarding/Training per day ONLY when it fits that day's cluster; otherwise push it to a different day of this week. Respect priority rules. Keep every day under ${DAY_BUDGET_MIN} min (stops + drive) AND under ${MAX_STOPS_PER_DAY} stops. When in doubt, defer to unassigned — an overbooked or out-of-way day is worse than a light one.`,
     );
 
     try {
