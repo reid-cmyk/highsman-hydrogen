@@ -6,7 +6,7 @@
  * need fresh data, not yesterday's queue.
  */
 
-const VERSION = 'hs-floor-mobile-v3';
+const VERSION = 'hs-floor-mobile-v4';
 const PRECACHE = `${VERSION}-static`;
 const RUNTIME = `${VERSION}-runtime`;
 
@@ -14,7 +14,7 @@ const RUNTIME = `${VERSION}-runtime`;
 // — we fetch it fresh every time so rep token injection stays current.
 const PRECACHE_URLS = [
   '/sales-floor/mobile/styles.css',
-  '/sales-floor/mobile/manifest.webmanifest',
+  '/sales-floor/mobile/manifest.json',
   '/sales-floor/js/config/config.js',
   '/sales-floor/js/templates.js',
   '/sales-floor/js/zoho.js',
