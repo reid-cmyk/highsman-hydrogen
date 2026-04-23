@@ -204,16 +204,63 @@ export default function ShiftReportPage() {
   const [aggression, setAggression] = useState(0);
   const [improvementNotes, setImprovementNotes] = useState('');
 
-  // ─── Dispensary live search (reuses /api/accounts) ────────────────────────
+  // ─── Dispensary live search (Accounts + Leads, merged) ────────────────────
+  // A rep's shift might be at a dispensary that's still a prospect (Zoho Lead,
+  // e.g. Nova Farms, The Apothecarium) OR an active customer (Zoho Account).
+  // Query both in parallel and merge — dedupe by lowercased name so a
+  // Lead that's mid-conversion to an Account doesn't appear twice.
   const accountFetcher = useFetcher<{accounts?: ApiAccount[]; error?: string}>();
+  const leadFetcher = useFetcher<{
+    leads?: Array<{
+      id: string;
+      company: string;
+      city: string | null;
+      state: string | null;
+      street: string | null;
+      phone: string | null;
+    }>;
+    error?: string;
+  }>();
   useEffect(() => {
     const q = dispensaryQuery.trim();
     if (q.length < 2 || dispensary) return;
     const t = setTimeout(() => {
       accountFetcher.load(`/api/accounts?scope=nj&q=${encodeURIComponent(q)}`);
+      leadFetcher.load(`/api/leads?scope=nj&q=${encodeURIComponent(q)}`);
     }, 200);
     return () => clearTimeout(t);
   }, [dispensaryQuery, dispensary]);
+
+  // Merge Accounts + Leads into a single ApiAccount-shaped list. Leads carry
+  // a `lead_` prefix on their id so downstream (/api/shift-report-submit)
+  // keeps the two CRM sources distinguishable in Supabase. Dedupe matches
+  // Account name (case-insensitive) against Lead company — Accounts win on
+  // collision since they're the richer record.
+  const searchResults = useMemo<ApiAccount[]>(() => {
+    const accounts = accountFetcher.data?.accounts || [];
+    const leads = leadFetcher.data?.leads || [];
+    const accountNames = new Set(
+      accounts.map((a) => (a.name || '').trim().toLowerCase()),
+    );
+    const leadsAsAccounts: ApiAccount[] = leads
+      .filter((l) => !accountNames.has((l.company || '').trim().toLowerCase()))
+      .map((l) => ({
+        id: `lead_${l.id}`,
+        name: l.company,
+        city: l.city,
+        state: l.state,
+        street: l.street,
+        phone: l.phone,
+        popUpEmail: null,
+        popUpLink: null,
+        lastVisitDate: null,
+      }));
+    // Show accounts first (active customers prioritized in the list), then leads.
+    return [...accounts, ...leadsAsAccounts].slice(0, 15);
+  }, [accountFetcher.data, leadFetcher.data]);
+
+  const searchLoading =
+    accountFetcher.state === 'loading' || leadFetcher.state === 'loading';
 
   // ─── Suppress Klaviyo popup (staff-only page) ────────────────────────────
   useEffect(() => {
@@ -485,8 +532,8 @@ export default function ShiftReportPage() {
                 <DispensaryPicker
                   query={dispensaryQuery}
                   setQuery={setDispensaryQuery}
-                  results={accountFetcher.data?.accounts || []}
-                  loading={accountFetcher.state === 'loading'}
+                  results={searchResults}
+                  loading={searchLoading}
                   onPick={(acct) =>
                     setDispensary({
                       id: acct.id,
