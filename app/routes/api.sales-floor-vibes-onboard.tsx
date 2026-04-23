@@ -1,6 +1,7 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getRepFromRequest} from '../lib/sales-floor-reps';
+import {njRegion, regionLabel} from '../lib/nj-regions';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sales Floor — Brand Team Onboarding (Vibes onboard)
@@ -173,9 +174,9 @@ async function fetchPipelineReference(
 async function fetchAccountState(
   accountId: string,
   token: string,
-): Promise<{name: string; state: string | null} | null> {
+): Promise<{name: string; state: string | null; city: string | null} | null> {
   const res = await fetch(
-    `https://www.zohoapis.com/crm/v7/Accounts/${accountId}?fields=Account_Name,Billing_State,Account_State`,
+    `https://www.zohoapis.com/crm/v7/Accounts/${accountId}?fields=Account_Name,Billing_State,Billing_City,Account_State`,
     {headers: {Authorization: `Zoho-oauthtoken ${token}`}},
   );
   if (!res.ok) return null;
@@ -185,6 +186,7 @@ async function fetchAccountState(
   return {
     name: a.Account_Name || '',
     state: a.Billing_State || a.Account_State || null,
+    city: a.Billing_City || null,
   };
 }
 
@@ -272,6 +274,21 @@ export async function action({request, context}: ActionFunctionArgs) {
       );
     }
 
+    // Classify by region. Outliers (Shore House Canna, Cape May, LBI) stay
+    // off the weekly route — Serena runs them quarterly. We still create
+    // the onboard deal so it's tracked, but Sky gets a "coordinate direct"
+    // message in the response.
+    const geo = njRegion(acct.city);
+    const region = geo.region;
+    const isOutlier = geo.infrequentDropIn;
+    const predictedDay = isOutlier
+      ? null
+      : region === 'north'
+        ? 'Tuesday'
+        : region === 'central'
+          ? 'Wednesday'
+          : 'Thursday';
+
     // Compute check-in due date (12 days post base-date).
     const base = new Date(baseDate).getTime();
     if (isNaN(base)) {
@@ -300,17 +317,28 @@ export async function action({request, context}: ActionFunctionArgs) {
         checkInDueDate,
         cardState: 'vibes_booked',
         alreadyBooked: true,
+        region,
+        regionLabel: regionLabel(region),
+        predictedDay,
+        isOutlier,
+        message: isOutlier
+          ? `${customerName} is a drop-in location (${acct.city || 'outside weekly coverage'}). Serena doesn't route here weekly — reach out direct to arrange a Shore run.`
+          : `Onboarding booked. ${customerName} sits in ${regionLabel(region)} so Serena will visit on a ${predictedDay}.`,
       });
     }
 
+    const regionTag = isOutlier ? '[OUTLIER]' : `[REGION:${region.toUpperCase()}]`;
     const dealName = `Onboarding: ${customerName}`;
     const dateLabel = actualShipDate
       ? `Ship date: ${actualShipDate.slice(0, 10)}`
       : `First order date: ${baseDate.slice(0, 10)}`;
     const description = [
-      `${SALES_FLOOR_SIGNATURE} ${TIER_MARKER_ONBOARDING} New Customers tab by ${rep.displayName || rep.email || 'rep'}.`,
+      `${SALES_FLOOR_SIGNATURE} ${TIER_MARKER_ONBOARDING} ${regionTag} New Customers tab by ${rep.displayName || rep.email || 'rep'}.`,
       firstOrderNumber ? `LeafLink order: ${firstOrderNumber}` : '',
       dateLabel,
+      isOutlier
+        ? `OUTLIER LOCATION (${acct.city || 'unknown city'}) — outside weekly route. Serena to arrange direct Shore run.`
+        : `Region: ${regionLabel(region)} · Predicted day: ${predictedDay}`,
       `Stop duration: 60 min`,
       `12-day check-in due: ${checkInDueDate}`,
     ]
@@ -372,6 +400,13 @@ export async function action({request, context}: ActionFunctionArgs) {
       dealId,
       checkInDueDate,
       cardState: 'vibes_booked',
+      region,
+      regionLabel: regionLabel(region),
+      predictedDay,
+      isOutlier,
+      message: isOutlier
+        ? `${customerName} is a drop-in location (${acct.city || 'outside weekly coverage'}). Serena doesn't route here weekly — reach out direct to arrange a Shore run visit.`
+        : `Onboarding booked. ${customerName} sits in ${regionLabel(region)} so Serena will visit on a ${predictedDay}.`,
     });
   } catch (err: any) {
     console.error('[sf-vibes-onboard] failed', zohoAccountId, err.message);

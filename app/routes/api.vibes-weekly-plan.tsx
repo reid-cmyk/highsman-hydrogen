@@ -2,6 +2,8 @@ import type {LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getRepFromRequest} from '../lib/sales-floor-reps';
 import {claudeTool, isAnthropicConfigured, type ClaudeToolSchema} from '../lib/anthropic';
+import type {NjRegion} from '../lib/nj-regions';
+import {njRegion} from '../lib/nj-regions';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Vibes — Weekly Strategist (Tue/Wed/Thu)
@@ -88,79 +90,9 @@ const CHECKIN_MIN_STALE_DAYS = 20;
 // belong in a Tue/Wed/Thu plan — they're flagged for quarterly drop-in runs
 // (e.g., a dedicated Shore day) and skipped by the weekly strategist.
 
-type NjRegion = 'north' | 'central' | 'south';
-
-const NORTH_CITIES = new Set<string>([
-  // Bergen, Hudson, Passaic, Essex, Union, Morris, Sussex, Warren — the I-78/I-80 corridor
-  'newark', 'jersey city', 'hoboken', 'union city', 'west new york', 'bayonne', 'weehawken',
-  'north bergen', 'fort lee', 'englewood', 'hackensack', 'paramus', 'fair lawn', 'ridgewood',
-  'clifton', 'paterson', 'passaic', 'wayne', 'west milford', 'ringwood', 'kinnelon',
-  'east orange', 'orange', 'irvington', 'bloomfield', 'montclair', 'west orange', 'livingston',
-  'millburn', 'short hills', 'maplewood', 'south orange', 'south hackensack', 'cedar grove',
-  'union', 'elizabeth', 'linden', 'roselle', 'hillside', 'cranford', 'westfield', 'summit',
-  'morristown', 'madison', 'chatham', 'denville', 'dover', 'parsippany', 'rockaway',
-  'hackettstown', 'phillipsburg', 'washington', 'belvidere',
-  'newton', 'sparta', 'vernon', 'sussex',
-  'secaucus', 'lyndhurst', 'kearny', 'north arlington', 'rutherford', 'carlstadt',
-  'teaneck', 'bergenfield', 'dumont', 'new milford', 'tenafly', 'cliffside park',
-  'garfield', 'lodi', 'elmwood park', 'saddle brook', 'rochelle park',
-]);
-
-const CENTRAL_CITIES = new Set<string>([
-  // Middlesex, Monmouth, Somerset, Hunterdon, Mercer — I-195 and north of it
-  'new brunswick', 'north brunswick', 'south brunswick', 'east brunswick', 'edison',
-  'woodbridge', 'piscataway', 'highland park', 'metuchen', 'iselin', 'perth amboy',
-  'sayreville', 'south amboy', 'old bridge', 'spotswood', 'matawan', 'aberdeen',
-  'red bank', 'middletown', 'long branch', 'asbury park', 'ocean', 'neptune',
-  'eatontown', 'tinton falls', 'oakhurst', 'freehold', 'howell', 'marlboro', 'manalapan',
-  'colts neck', 'holmdel', 'hazlet',
-  'somerville', 'bridgewater', 'bound brook', 'franklin', 'hillsborough', 'raritan',
-  'watchung', 'warren', 'basking ridge', 'bernardsville',
-  'flemington', 'clinton', 'lambertville',
-  'princeton', 'trenton', 'hamilton', 'ewing', 'lawrenceville', 'west windsor', 'east windsor',
-  'plainsboro', 'cranbury', 'jamesburg', 'monroe',
-]);
-
-const SOUTH_CITIES = new Set<string>([
-  // Burlington, Camden, Gloucester, Salem, Cumberland, Atlantic, Ocean County north
-  'cherry hill', 'camden', 'collingswood', 'haddonfield', 'voorhees', 'marlton', 'mount laurel',
-  'moorestown', 'medford', 'mount holly', 'burlington', 'willingboro', 'maple shade',
-  'pennsauken', 'merchantville', 'audubon', 'barrington', 'magnolia', 'lindenwold',
-  'deptford', 'woodbury', 'glassboro', 'pitman', 'washington township', 'sewell',
-  'vineland', 'millville', 'bridgeton', 'pennsville', 'salem',
-  'toms river', 'brick', 'lakewood', 'jackson', 'point pleasant', 'bayville', 'manchester',
-  'lakehurst', 'whiting', 'forked river',
-  'hammonton', 'egg harbor', 'mays landing', 'pleasantville',
-]);
-
-// ≥2 hrs one-way from Union NJ — route to a dedicated Shore day, not a weekly plan.
-const OUTLIER_CITIES = new Set<string>([
-  'atlantic city', 'ventnor', 'ventnor city', 'margate', 'margate city', 'longport',
-  'ocean city', 'sea isle city', 'avalon', 'stone harbor', 'wildwood', 'wildwood crest',
-  'north wildwood', 'cape may', 'cape may court house', 'rio grande',
-  'beach haven', 'long beach island', 'lbi', 'barnegat light', 'ship bottom', 'surf city',
-  'seaside heights', 'seaside park',
-]);
-
-function normalizeCity(city: string | null | undefined): string {
-  return (city || '').toLowerCase().trim().replace(/\s+/g, ' ');
-}
-
-// Returns [region, infrequentDropIn]. If outlier, region is the closest match
-// for rough sorting but infrequentDropIn=true flags it OUT of weekly planning.
-function njRegion(city: string | null | undefined): {region: NjRegion; infrequentDropIn: boolean} {
-  const c = normalizeCity(city);
-  if (!c) return {region: 'central', infrequentDropIn: false};
-  if (OUTLIER_CITIES.has(c)) {
-    // outliers are almost all south-coastal
-    return {region: 'south', infrequentDropIn: true};
-  }
-  if (NORTH_CITIES.has(c)) return {region: 'north', infrequentDropIn: false};
-  if (SOUTH_CITIES.has(c)) return {region: 'south', infrequentDropIn: false};
-  if (CENTRAL_CITIES.has(c)) return {region: 'central', infrequentDropIn: false};
-  // Fallback — unknown city. Default to central. Sky can reclassify via Zoho.
-  return {region: 'central', infrequentDropIn: false};
-}
+// NjRegion + njRegion() live in app/lib/nj-regions.ts — shared with the
+// daily route planner and Sky's Sales Floor booking buttons. Single source
+// of truth for the North / Central / South split and Shore outlier set.
 
 type Tier = 'onboarding' | 'training' | 'checkin';
 type Day = 'tuesday' | 'wednesday' | 'thursday';

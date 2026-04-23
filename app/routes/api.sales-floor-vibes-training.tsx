@@ -1,6 +1,12 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getRepFromRequest} from '../lib/sales-floor-reps';
+import {
+  njRegion,
+  regionLabel,
+  defaultDayForRegion,
+  nextDateForWeekday,
+} from '../lib/nj-regions';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sales Floor — Brand Team Training (Vibes Tier 2)
@@ -122,9 +128,9 @@ async function fetchPipelineReference(
 async function fetchAccountState(
   accountId: string,
   token: string,
-): Promise<{name: string; state: string | null} | null> {
+): Promise<{name: string; state: string | null; city: string | null} | null> {
   const res = await fetch(
-    `https://www.zohoapis.com/crm/v7/Accounts/${accountId}?fields=Account_Name,Billing_State,Account_State`,
+    `https://www.zohoapis.com/crm/v7/Accounts/${accountId}?fields=Account_Name,Billing_State,Billing_City,Account_State`,
     {headers: {Authorization: `Zoho-oauthtoken ${token}`}},
   );
   if (!res.ok) return null;
@@ -134,6 +140,7 @@ async function fetchAccountState(
   return {
     name: a.Account_Name || '',
     state: a.Billing_State || a.Account_State || null,
+    city: a.Billing_City || null,
   };
 }
 
@@ -180,13 +187,35 @@ export async function action({request, context}: ActionFunctionArgs) {
       );
     }
 
-    // Training target date = 7 days out. The route builder will slot it onto
-    // whichever Tue/Wed/Thu fits the geography best; this date is the
-    // "booked-by" marker, not the hard visit date.
+    // Classify the store by region. Outliers (Shore House Canna, Cape May,
+    // LBI, Atlantic City etc.) never make the weekly route — they get
+    // quarterly drop-in runs. We still create the deal so it's on Serena's
+    // radar, but we flag it and tell Sky to arrange direct.
+    const geo = njRegion(acct.city);
+    const region = geo.region;
+    const isOutlier = geo.infrequentDropIn;
+
+    // Predicted day. Default: North=Tue, Central=Wed, South=Thu. Outliers
+    // get no predicted day — Sky must coordinate direct.
     const today = new Date();
-    const trainingDate = new Date(today.getTime() + TRAINING_TARGET_DAYS * 86400 * 1000)
-      .toISOString()
-      .slice(0, 10);
+    let predictedDay: string | null = null;
+    let trainingDate: string;
+
+    if (isOutlier) {
+      // Still set a far-future Closing_Date so the deal isn't totally
+      // date-less — but it's deliberately outside the weekly window so
+      // the route builder won't pick it up.
+      trainingDate = new Date(today.getTime() + 60 * 86400 * 1000)
+        .toISOString()
+        .slice(0, 10);
+    } else {
+      const {dayName, weekday} = defaultDayForRegion(region);
+      predictedDay = dayName;
+      // Closing_Date = next occurrence of the anchor weekday, at least 2
+      // days out so Sky has time to give the store a heads-up.
+      trainingDate = nextDateForWeekday(today, weekday, 2);
+    }
+
     const closingDate = trainingDate;
 
     // Dedup: one open Training deal per account.
@@ -199,13 +228,24 @@ export async function action({request, context}: ActionFunctionArgs) {
         tier: 'training',
         cardState: 'training_booked',
         alreadyBooked: true,
+        region,
+        regionLabel: regionLabel(region),
+        predictedDay,
+        isOutlier,
+        message: isOutlier
+          ? `${customerName} is a drop-in location. Serena doesn't route here weekly — reach out to her direct to arrange a Shore run visit.`
+          : `Training booked. ${customerName} sits in ${regionLabel(region)} so Serena will visit on a ${predictedDay}.`,
       });
     }
 
+    const regionTag = isOutlier ? '[OUTLIER]' : `[REGION:${region.toUpperCase()}]`;
     const dealName = `Training: ${customerName}`;
     const description = [
-      `${SALES_FLOOR_SIGNATURE} ${TIER_MARKER_TRAINING} Training booked by ${rep.displayName || rep.email || 'rep'}.`,
+      `${SALES_FLOOR_SIGNATURE} ${TIER_MARKER_TRAINING} ${regionTag} Training booked by ${rep.displayName || rep.email || 'rep'}.`,
       trainingFocus ? `Focus: ${trainingFocus}` : '',
+      isOutlier
+        ? `OUTLIER LOCATION (${acct.city || 'unknown city'}) — outside weekly route. Serena to arrange direct Shore run.`
+        : `Region: ${regionLabel(region)} · Predicted day: ${predictedDay}`,
       `Target visit: on or before ${trainingDate}`,
       `Stop duration: 60 min`,
     ]
@@ -254,6 +294,13 @@ export async function action({request, context}: ActionFunctionArgs) {
       trainingDate,
       tier: 'training',
       cardState: 'training_booked',
+      region,
+      regionLabel: regionLabel(region),
+      predictedDay,
+      isOutlier,
+      message: isOutlier
+        ? `${customerName} is a drop-in location (${acct.city || 'outside weekly coverage'}). Serena doesn't route here weekly — reach out to her direct to arrange a Shore run visit.`
+        : `Training booked. ${customerName} sits in ${regionLabel(region)} so Serena will visit on a ${predictedDay}.`,
     });
   } catch (err: any) {
     console.error('[sf-vibes-training] failed', zohoAccountId, err.message);

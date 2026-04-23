@@ -1064,7 +1064,14 @@ async function markReadyToVibesVisit(zohoAccountId, customerName, firstOrderNumb
     card.checkInDueDate = data.checkInDueDate || card.checkInDueDate;
     card.cardState = 'vibes_booked';
     renderNewCustomers();
-    toast(`Brand team locked in. Check in by ${formatDate(card.checkInDueDate)}.`);
+    // Outlier locations (Shore House Canna, Cape May, LBI) get a longer toast
+    // with an info/warning tone so Sky knows to arrange the visit direct with
+    // Serena instead of waiting for the weekly route to pick it up.
+    if (data.isOutlier) {
+      toast(data.message || 'Outlier location — arrange direct with Serena.', 'info', 8000);
+    } else {
+      toast(data.message || `Brand team locked in. Check in by ${formatDate(card.checkInDueDate)}.`);
+    }
   } catch (err) {
     // Rollback
     card.cardState = prevState;
@@ -1130,11 +1137,19 @@ async function markZohoReadyToBrandTeam(zohoAccountId, customerName, firstOrderN
     renderDashboard();
     updateStats();
     const when = data.checkInDueDate ? formatDate(data.checkInDueDate) : 'soon';
-    toast(
-      data.alreadyBooked
-        ? `Already on Sky's board. Check in by ${when}.`
-        : `Brand team locked in. Check in by ${when}.`,
-    );
+    // Outlier drops don't ride the weekly route — Sky needs to know to text
+    // Serena direct. Longer toast + info tone so the message lands.
+    if (data.isOutlier) {
+      toast(data.message || 'Outlier location — arrange direct with Serena.', 'info', 8000);
+    } else {
+      toast(
+        data.message || (
+          data.alreadyBooked
+            ? `Already on Sky's board. Check in by ${when}.`
+            : `Brand team locked in. Check in by ${when}.`
+        ),
+      );
+    }
   } catch (err) {
     for (const b of buttons) {
       if (b.tagName === 'BUTTON') {
@@ -1196,12 +1211,24 @@ async function markZohoTraining(zohoAccountId, customerName, idx, opts) {
     renderNewCustomers();
     renderDashboard();
     updateStats();
-    const when = data.trainingDate ? formatDate(data.trainingDate) : 'this week';
-    toast(
-      data.alreadyBooked
-        ? `Training already on Sky's board. Target ${when}.`
-        : `Training booked. Serena in by ${when}.`,
-    );
+    // Training on an outlier location → tell Sky to coordinate direct with
+    // Serena instead of waiting for the weekly route to pick it up.
+    if (data.isOutlier) {
+      toast(
+        data.message || 'Outlier location — reach out to Serena direct to arrange a Shore run.',
+        'info',
+        8000,
+      );
+    } else {
+      const when = data.trainingDate ? formatDate(data.trainingDate) : 'this week';
+      toast(
+        data.message || (
+          data.alreadyBooked
+            ? `Training already on Sky's board. Target ${when}.`
+            : `Training booked. Serena in by ${when}.`
+        ),
+      );
+    }
   } catch (err) {
     for (const b of buttons) {
       if (b.tagName === 'BUTTON') {
@@ -2236,7 +2263,7 @@ function updateConnectionStatus(state = 'connected') {
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 let toastTimer;
-function toast(msg, type = 'success') {
+function toast(msg, type = 'success', durationMs = 3500) {
   const el = document.getElementById('toast');
   const icon = document.getElementById('toast-icon');
   document.getElementById('toast-msg').textContent = msg;
@@ -2244,7 +2271,7 @@ function toast(msg, type = 'success') {
   icon.className = `fa-solid ${icons[type] || icons.success}`;
   el.classList.remove('hidden');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.add('hidden'), 3500);
+  toastTimer = setTimeout(() => el.classList.add('hidden'), durationMs);
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
