@@ -422,14 +422,23 @@ function renderLeads(filter = currentFilter) {
       phone: l.Phone,
       mobile: l.Mobile,
       email: l.Email,
-      onOpen: `openBrief(${idx})`,
-      emailHandler: `quickEmail(${idx})`,
-      textHandler: `quickText(${idx}, 'lead')`,
-      briefHandler: `openBrief(${idx})`,
+      // Every rep-initiated action on a Lead card fires a claim POST first.
+      // The tel:/mailto: href still wins the UX race (the dialer opens
+      // instantly) but the /api/lead-claim call stakes ownership server-side
+      // so other reps see the lock. 'heartbeat' mode is a no-op if the lead
+      // is unclaimed — the server promotes it to a full claim.
+      onOpen: `claimOrHeartbeat(${JSON.stringify(l.id)}, 'claim'); openBrief(${idx})`,
+      emailHandler: `claimOrHeartbeat(${JSON.stringify(l.id)}, 'claim'); quickEmail(${idx})`,
+      textHandler: `claimOrHeartbeat(${JSON.stringify(l.id)}, 'claim'); quickText(${idx}, 'lead')`,
+      briefHandler: `claimOrHeartbeat(${JSON.stringify(l.id)}, 'claim'); openBrief(${idx})`,
       // Inline add-field pills write back to the Leads module.
       zohoModule: 'Leads',
       zohoId: l.id,
       linkedinUrl: l.LinkedIn_URL || '',
+      // Phase B — TTL chip.
+      workingOwner: l.Working_Owner || '',
+      workingClaimedAt: l.Working_Claimed_At || null,
+      workingLastActivityAt: l.Working_Last_Activity_At || null,
     });
   }).join('');
 }
@@ -1842,6 +1851,23 @@ async function openBriefForLeadObj(leadObj) {
     zohoBtn.classList.toggle('hidden', !hasZoho);
   }
 
+  // Phase D task #30 — show the Enrich button only when the brief is backed
+  // by a Zoho Lead (not synthesized from an Account). Leads are the only
+  // module today with the Working_* + LinkedIn_URL fields the enrichment
+  // endpoint writes to.
+  const enrichBtn = document.getElementById('brief-enrich-btn');
+  if (enrichBtn) {
+    const isLeadBacked = !!(lead.id && !lead._zohoModule);
+    enrichBtn.classList.toggle('hidden', !isLeadBacked);
+  }
+  // Always reset the tray when a new brief opens — stale chips from the
+  // previous lead would mislead the rep into accepting the wrong number.
+  const tray = document.getElementById('brief-enrich-tray');
+  if (tray) {
+    tray.classList.add('hidden');
+    tray.innerHTML = '';
+  }
+
   try {
     const brief = await AIBrief.generate(lead);
     document.getElementById('brief-content').innerHTML = AIBrief.renderBrief(brief);
@@ -1981,6 +2007,12 @@ function callLead(lead) {
   callsToday++;
   document.getElementById('stat-calls').textContent = callsToday;
   toast(`Call logged for ${lead._fullName}`, 'success');
+  // Phase B — stake the claim server-side. Sky/Pete dialing a lead on their
+  // card is the strongest "I'm working this one" signal we have, so we fire
+  // a claim POST in parallel with the tel: href. No-op if already owned.
+  if (lead.id) {
+    try { claimOrHeartbeat(lead.id, 'claim'); } catch {}
+  }
   if (lead.Phone) window.location.href = `tel:${lead.Phone}`;
 }
 
@@ -2184,6 +2216,12 @@ function contactCardHtml(opts) {
                           // that native-opens the profile in the LinkedIn
                           // iOS/Android app (falls back to browser). Safe
                           // to leave undefined — pill just doesn't render.
+    // Phase B — claim/TTL state. Only Lead cards pass these today; Account
+    // cards leave them undefined and the TTL chip is skipped. The renderer
+    // decides visibility + color purely from these three fields.
+    workingOwner,         // rep id string ('sky'|'pete') or '' if unclaimed
+    workingClaimedAt,     // ISO datetime of initial claim (anchors rolling 48h)
+    workingLastActivityAt,// ISO datetime of last heartbeat (anchors cold 8h)
   } = opts;
 
   const display = name || '—';
@@ -2356,6 +2394,34 @@ function contactCardHtml(opts) {
        </button>`
     : '';
 
+  // ── Copy Intro pill — Phase D task #33. Only renders when we have a
+  // LinkedIn URL (pointless otherwise — no target app for the paste). Calls
+  // /api/linkedin-intro (Haiku 4.5), copies the generated line to the
+  // clipboard, then opens the LinkedIn profile. Rep pastes + sends manually.
+  // Auto-send is a LinkedIn TOS violation.
+  const copyIntroBtn = liSlug && isLead
+    ? `<button class="hs-action-pill is-copy-intro" onclick="event.stopPropagation(); copyLinkedInIntro(${idx}, ${JSON.stringify(liSlug)})" title="Draft a 2-line intro and copy to clipboard">
+         <i class="fa-solid fa-wand-magic-sparkles"></i><span>Copy intro</span>
+       </button>`
+    : '';
+
+  // ── Claim/TTL chip — Phase B. Renders on Lead cards when the lead has a
+  // live claim. Three visual states:
+  //   mine    — green "You · 6h left" (click = release)
+  //   others  — red  "Pete · 2h left" (no click; Senior Staff can force
+  //             via long-press — see releaseLeadClaimForce())
+  //   stale   — amber "stale · released in 30m" (caught between sweeper runs)
+  // The chip is rendered ABOVE the actions row so it doesn't shift button
+  // layout when it appears/disappears.
+  const ttlChip = isLead && zohoId
+    ? buildClaimChip({
+        leadId: zohoId,
+        ownerId: String(workingOwner || '').trim(),
+        claimedAt: workingClaimedAt,
+        lastActivityAt: workingLastActivityAt,
+      })
+    : '';
+
   return `
     ${headerOpen}
       <div class="hs-contact-header">
@@ -2369,16 +2435,245 @@ function contactCardHtml(opts) {
       </div>
       ${metaCells.length ? `<div class="hs-contact-meta">${metaCells.join('')}</div>` : ''}
       ${extraRow || ''}
+      ${ttlChip}
       <div class="hs-contact-actions">
         ${callBtn}
         ${textBtn}
         ${emailBtn}
         ${briefBtn}
         ${linkedinBtn}
+        ${copyIntroBtn}
         ${extraAction || ''}
       </div>
     </div>`;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase B — claim/TTL client helpers
+// ─────────────────────────────────────────────────────────────────────────────
+// Mirror the server-side constants in app/routes/api.lead-claim.tsx. Keeping
+// these in sync is a known risk — if Reid tunes one, tune both. A mismatched
+// client will render a "time left" that disagrees with the server's decision,
+// but the server always wins: a POST to /api/lead-claim returns the truth.
+const CLAIM_TTL_COLD_MS = 8 * 60 * 60 * 1000;    // 8h since last activity
+const CLAIM_TTL_ROLLING_MS = 48 * 60 * 60 * 1000; // 48h absolute from claim
+
+function isClaimLiveClient(claimedAtIso, lastActIso, now = Date.now()) {
+  if (!claimedAtIso) return false;
+  const claimed = Date.parse(claimedAtIso);
+  if (!Number.isFinite(claimed)) return false;
+  if (now - claimed > CLAIM_TTL_ROLLING_MS) return false;
+  const lastAct = lastActIso ? Date.parse(lastActIso) : claimed;
+  if (!Number.isFinite(lastAct)) return false;
+  if (now - lastAct > CLAIM_TTL_COLD_MS) return false;
+  return true;
+}
+
+// Returns the smaller of the two remaining TTLs — whichever will expire first
+// determines the chip's countdown. Cold TTL almost always wins (8h < 48h) but
+// after a long session of heartbeats the rolling cap kicks in.
+function claimTtlRemainingMs(claimedAtIso, lastActIso, now = Date.now()) {
+  const claimed = claimedAtIso ? Date.parse(claimedAtIso) : NaN;
+  const lastAct = lastActIso ? Date.parse(lastActIso) : claimed;
+  if (!Number.isFinite(claimed) || !Number.isFinite(lastAct)) return 0;
+  const coldLeft = CLAIM_TTL_COLD_MS - (now - lastAct);
+  const rollingLeft = CLAIM_TTL_ROLLING_MS - (now - claimed);
+  return Math.max(0, Math.min(coldLeft, rollingLeft));
+}
+
+function formatTtlRemaining(ms) {
+  if (ms <= 0) return 'expiring';
+  const totalMin = Math.floor(ms / 60000);
+  if (totalMin < 60) return `${totalMin}m left`;
+  const hours = Math.floor(totalMin / 60);
+  const mins = totalMin % 60;
+  if (hours < 24) return mins > 0 ? `${hours}h ${mins}m left` : `${hours}h left`;
+  return `${Math.floor(hours / 24)}d left`;
+}
+
+// Rep display name lookup. The Floor PWA already has the logged-in rep in
+// `currentRep` (set at boot) but we need to render OTHER reps' names from
+// their id. Keep this in sync with app/lib/sales-floor-reps.ts.
+const CLAIM_REP_NAMES = {
+  sky: 'Sky',
+  pete: 'Pete',
+};
+
+function currentRepId() {
+  try {
+    return (window.currentRep?.id || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+function buildClaimChip({leadId, ownerId, claimedAt, lastActivityAt}) {
+  if (!ownerId || !claimedAt) return '';
+  const now = Date.now();
+  const live = isClaimLiveClient(claimedAt, lastActivityAt, now);
+  const msLeft = claimTtlRemainingMs(claimedAt, lastActivityAt, now);
+  const meId = currentRepId();
+  const isMine = ownerId === meId;
+  const ownerName = CLAIM_REP_NAMES[ownerId] || ownerId;
+
+  // A past-its-TTL claim is shown as amber "stale — freeing up" so Sky/Pete
+  // know the sweeper will release it shortly and don't try to muscle past a
+  // 409. We don't auto-steal client-side; the next claim POST does that.
+  if (!live) {
+    return `<div class="hs-claim-chip is-stale" data-leadid="${escapeAttr(leadId)}" title="Claim lapsed — releasing on next sweep">
+              <i class="fa-solid fa-hourglass-half"></i>
+              <span><strong>${escapeHtml(ownerName)}</strong> · stale, releasing</span>
+            </div>`;
+  }
+
+  // <50% of cold TTL remaining → green, plenty of time
+  // 50-90% → amber, getting close
+  // >90% → red, about to lapse
+  const usedFrac = 1 - (msLeft / CLAIM_TTL_COLD_MS);
+  const tone =
+    usedFrac < 0.5 ? 'is-ok' : usedFrac < 0.9 ? 'is-warn' : 'is-danger';
+
+  if (isMine) {
+    return `<button class="hs-claim-chip ${tone} is-mine" data-leadid="${escapeAttr(leadId)}"
+               onclick="event.stopPropagation(); releaseLeadClaim(${JSON.stringify(leadId)})"
+               title="Release back to pool">
+              <i class="fa-solid fa-lock"></i>
+              <span>You · ${escapeHtml(formatTtlRemaining(msLeft))}</span>
+              <i class="fa-solid fa-xmark hs-claim-chip-x"></i>
+            </button>`;
+  }
+
+  // Claimed by another rep. Click = try Senior Staff override via prompt.
+  return `<button class="hs-claim-chip ${tone} is-others" data-leadid="${escapeAttr(leadId)}"
+             onclick="event.stopPropagation(); releaseLeadClaimForce(${JSON.stringify(leadId)}, ${JSON.stringify(ownerName)})"
+             title="Claimed by ${escapeAttr(ownerName)} — Senior Staff can force-release">
+            <i class="fa-solid fa-user-lock"></i>
+            <span><strong>${escapeHtml(ownerName)}</strong> · ${escapeHtml(formatTtlRemaining(msLeft))}</span>
+          </button>`;
+}
+
+// Fire-and-(soft)-forget claim POST. Called by every card-level action
+// (Call/Text/Email/Brief) to stake or bump activity. The response updates
+// the lead object so the next render shows accurate TTL + owner without
+// waiting on a full Zoho resync.
+async function claimOrHeartbeat(leadId, mode = 'claim') {
+  if (!leadId) return {ok: false};
+  try {
+    const res = await fetch('/api/lead-claim', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({leadId: String(leadId), mode}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.ok) {
+      // Patch the in-memory lead so the re-render reflects the new claim
+      // state without forcing a full sync. Both renderLeads() and the
+      // Brief drawer read from window.leads.
+      updateLeadClaimLocal(leadId, {
+        Working_Owner: data.ownedBy || '',
+        Working_Claimed_At: data.claimedAt || null,
+        Working_Last_Activity_At: data.lastActivityAt || null,
+      });
+      if (typeof renderLeads === 'function') renderLeads();
+      return data;
+    }
+    if (res.status === 409) {
+      // Conflict — another rep has an active claim. Surface in toast so the
+      // rep knows WHY they can't Call/Text, but don't block the dialer — the
+      // tel: href already fired on click. The point of the 409 is just to
+      // prevent a second rep from overwriting Working_Owner.
+      try {
+        toast(`Lead claimed by ${CLAIM_REP_NAMES[data?.ownedBy] || data?.ownedBy || 'another rep'} — can't heartbeat`, 'warn');
+      } catch {}
+      return data;
+    }
+    return data || {ok: false};
+  } catch (e) {
+    console.warn('[claimOrHeartbeat] network err', e?.message);
+    return {ok: false};
+  }
+}
+
+function updateLeadClaimLocal(leadId, patch) {
+  try {
+    const list = Array.isArray(window.leads) ? window.leads : [];
+    const idx = list.findIndex((l) => String(l?.id) === String(leadId));
+    if (idx >= 0) {
+      list[idx] = Object.assign({}, list[idx], patch);
+    }
+  } catch {}
+}
+
+async function releaseLeadClaim(leadId) {
+  if (!leadId) return;
+  if (!confirm('Release this lead back to the open pool?')) return;
+  try {
+    const res = await fetch('/api/lead-release', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({leadId: String(leadId)}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.ok) {
+      updateLeadClaimLocal(leadId, {
+        Working_Owner: '',
+        Working_Claimed_At: null,
+        Working_Last_Activity_At: null,
+      });
+      if (typeof renderLeads === 'function') renderLeads();
+      try { toast('Lead returned to pool', 'ok'); } catch {}
+    } else {
+      try { toast(data?.error || 'Release failed', 'err'); } catch {}
+    }
+  } catch (e) {
+    console.warn('[releaseLeadClaim]', e?.message);
+    try { toast('Release failed — network', 'err'); } catch {}
+  }
+}
+
+// Senior Staff force-release — bypasses the "only owner can release" rule
+// so exec staff can unblock a stuck claim without waiting for the sweeper.
+// Pass is the same hmexec2025$ pattern used elsewhere (see
+// feedback_njpopups_rep_coverage memory). Never cache the entered pass.
+async function releaseLeadClaimForce(leadId, ownerName) {
+  if (!leadId) return;
+  const pass = prompt(`Lead claimed by ${ownerName}. Enter Senior Staff pass to force-release:`);
+  if (!pass) return;
+  try {
+    const res = await fetch('/api/lead-release', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-HS-Senior': pass,
+      },
+      body: JSON.stringify({leadId: String(leadId), reason: 'senior-force'}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.ok) {
+      updateLeadClaimLocal(leadId, {
+        Working_Owner: '',
+        Working_Claimed_At: null,
+        Working_Last_Activity_At: null,
+      });
+      if (typeof renderLeads === 'function') renderLeads();
+      try { toast('Force-released — lead back in pool', 'ok'); } catch {}
+    } else if (res.status === 403) {
+      try { toast('Senior Staff pass rejected', 'err'); } catch {}
+    } else {
+      try { toast(data?.error || 'Force-release failed', 'err'); } catch {}
+    }
+  } catch (e) {
+    console.warn('[releaseLeadClaimForce]', e?.message);
+    try { toast('Force-release failed — network', 'err'); } catch {}
+  }
+}
+
+window.releaseLeadClaim = releaseLeadClaim;
+window.releaseLeadClaimForce = releaseLeadClaimForce;
+window.claimOrHeartbeat = claimOrHeartbeat;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LinkedIn deep-link helpers
@@ -2429,6 +2724,289 @@ function openLinkedInProfile(slug) {
 }
 
 window.openLinkedInProfile = openLinkedInProfile;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Copy LinkedIn intro — Phase D task #33
+// ─────────────────────────────────────────────────────────────────────────────
+// One-tap workflow:
+//   1. POST to /api/linkedin-intro with the Lead's name + company + location.
+//      Haiku 4.5 returns a 2-sentence brand-voice opener ≤ 280 chars.
+//   2. Copy the intro to the clipboard.
+//   3. Open the LinkedIn profile (native app first, browser fallback).
+//   4. Rep pastes it into the connect-request note or DM. Auto-sending is
+//      a LinkedIn TOS violation and gets accounts banned.
+// The pill shows a tiny spinner while Haiku drafts (~1-2s). If clipboard
+// write is blocked (Safari private browsing, permissions denied, etc.)
+// we fall back to a share-sheet / textarea-select so the rep can still
+// grab the text.
+async function copyLinkedInIntro(leadIdx, slug) {
+  const lead = Array.isArray(window.leads) ? window.leads[leadIdx] : null;
+  if (!lead) {
+    try { toast('Lead not found — try reloading', 'err'); } catch {}
+    return;
+  }
+
+  // Stake the claim while we're here — opening a LinkedIn intro is a
+  // stronger signal of intent than just viewing the card.
+  try { claimOrHeartbeat(lead.id, 'claim'); } catch {}
+
+  try { toast('Drafting intro…', 'info'); } catch {}
+
+  let intro = '';
+  try {
+    const res = await fetch('/api/linkedin-intro', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        leadId: lead.id,
+        name: lead._fullName || '',
+        company: lead.Company || '',
+        city: lead.City || '',
+        state: lead._state || '',
+        notes: lead.Description || '',
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.ok || !data?.intro) {
+      throw new Error(data?.error || `HTTP ${res.status}`);
+    }
+    intro = String(data.intro).trim();
+  } catch (e) {
+    console.warn('[copyLinkedInIntro] generation failed', e?.message);
+    try { toast('Intro draft failed — try again', 'err'); } catch {}
+    return;
+  }
+
+  // Clipboard write — modern navigator.clipboard first, textarea fallback.
+  let copied = false;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(intro);
+      copied = true;
+    }
+  } catch {}
+  if (!copied) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = intro;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      copied = document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch {}
+  }
+
+  if (copied) {
+    try { toast('Intro copied — opening LinkedIn', 'ok'); } catch {}
+  } else {
+    // Surface the intro in a prompt as a last-resort so the rep can still
+    // grab it — preferable to silently losing the draft.
+    try { prompt('Copy your intro:', intro); } catch {}
+  }
+
+  // Native app or browser fallback.
+  setTimeout(() => openLinkedInProfile(slug), 200);
+}
+
+window.copyLinkedInIntro = copyLinkedInIntro;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// In-brief enrichment chip — Phase D task #30
+// ─────────────────────────────────────────────────────────────────────────────
+// Rep taps "Enrich" inside the Brief drawer. We call /api/lead-enrichment in
+// preview mode — that fans out to Google Places, Apollo, Gmail signature scan
+// (Haiku 4.5), and a tel: regex on the company website, then dedupes + ranks
+// candidates by cross-source corroboration. Each candidate renders as a
+// one-tap chip; clicking POSTs to the same endpoint in apply mode with the
+// specific candidate picked, which writes ONLY to empty fields (never
+// overwrites the rep's existing data).
+const ENRICH_CONFIDENCE_LABEL = {
+  high: 'High confidence',
+  medium: 'Medium confidence',
+  low: 'Low confidence',
+};
+const ENRICH_FIELD_LABEL = {
+  Phone: 'Shop line',
+  Mobile: 'Cell',
+  Email: 'Email',
+  LinkedIn_URL: 'LinkedIn',
+};
+const ENRICH_FIELD_ICON = {
+  Phone: 'fa-solid fa-store',
+  Mobile: 'fa-solid fa-mobile-screen',
+  Email: 'fa-solid fa-envelope',
+  LinkedIn_URL: 'fa-brands fa-linkedin-in',
+};
+
+async function enrichBriefLead() {
+  const lead = currentBriefLead;
+  if (!lead || !lead.id) {
+    try { toast('Open a Zoho Lead brief first', 'warn'); } catch {}
+    return;
+  }
+  const tray = document.getElementById('brief-enrich-tray');
+  if (!tray) return;
+  tray.classList.remove('hidden');
+  tray.innerHTML = `
+    <div class="hs-enrich-loading">
+      <div class="hs-spinner hs-spinner-sm"></div>
+      <span>Scanning Places · Apollo · Gmail · site…</span>
+    </div>`;
+
+  let candidates = [];
+  try {
+    const res = await fetch('/api/lead-enrichment', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        leadId: lead.id,
+        mode: 'preview',
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.ok) {
+      throw new Error(data?.error || `HTTP ${res.status}`);
+    }
+    candidates = Array.isArray(data.candidates) ? data.candidates : [];
+  } catch (e) {
+    console.warn('[enrichBriefLead] preview failed', e?.message);
+    tray.innerHTML = `
+      <div class="hs-enrich-empty">
+        Enrichment failed — ${escapeHtml(e?.message || 'unknown error')}
+        <button class="hs-enrich-dismiss" onclick="document.getElementById('brief-enrich-tray').classList.add('hidden')">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>`;
+    return;
+  }
+
+  // Filter out any candidate whose target field already has a non-empty value
+  // on the current Lead — we don't want to show "Phone: (201) …" when Zoho
+  // already has a Phone. Apply mode would reject it anyway (never overwrite).
+  const filtered = candidates.filter((c) => {
+    const existing = String(lead[c.field] || '').trim();
+    return !existing;
+  });
+
+  if (filtered.length === 0) {
+    tray.innerHTML = `
+      <div class="hs-enrich-empty">
+        Nothing new to add — all fields look filled.
+        <button class="hs-enrich-dismiss" onclick="document.getElementById('brief-enrich-tray').classList.add('hidden')">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>`;
+    return;
+  }
+
+  const chips = filtered.map((c, i) => {
+    const fieldLabel = ENRICH_FIELD_LABEL[c.field] || c.field;
+    const icon = ENRICH_FIELD_ICON[c.field] || 'fa-solid fa-circle-plus';
+    const conf = c.confidence || 'low';
+    const confLabel = ENRICH_CONFIDENCE_LABEL[conf] || conf;
+    const source = c.source || 'unknown';
+    const note = c.note ? ` · ${escapeHtml(c.note)}` : '';
+    const value = String(c.value || '');
+    const prettyValue =
+      c.field === 'Phone' || c.field === 'Mobile'
+        ? (typeof prettyPhone === 'function' ? prettyPhone(value) : value)
+        : value;
+    return `
+      <div class="hs-enrich-chip hs-enrich-${escapeAttr(conf)}" data-idx="${i}">
+        <div class="hs-enrich-chip-head">
+          <i class="${icon}"></i>
+          <span class="hs-enrich-chip-field">${escapeHtml(fieldLabel)}</span>
+          <span class="hs-enrich-chip-conf">${escapeHtml(confLabel)}</span>
+        </div>
+        <div class="hs-enrich-chip-value">${escapeHtml(prettyValue)}</div>
+        <div class="hs-enrich-chip-source">via ${escapeHtml(source)}${note}</div>
+        <div class="hs-enrich-chip-actions">
+          <button class="hs-enrich-accept" onclick="acceptEnrichCandidate(${i})">
+            <i class="fa-solid fa-check"></i> Save to Zoho
+          </button>
+          <button class="hs-enrich-dismiss-chip" onclick="dismissEnrichCandidate(${i})" title="Not this one">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+
+  tray.innerHTML = `
+    <div class="hs-enrich-header">
+      <span>${filtered.length} suggestion${filtered.length === 1 ? '' : 's'} for ${escapeHtml(lead._fullName || 'this lead')}</span>
+      <button class="hs-enrich-close" onclick="document.getElementById('brief-enrich-tray').classList.add('hidden')">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="hs-enrich-chips">${chips}</div>`;
+
+  // Stash candidates on the lead so accept/dismiss handlers can read them by
+  // index without re-fetching. Cleared when the brief closes or a new one
+  // opens (openBriefForLeadObj resets the tray).
+  lead._enrichCandidates = filtered;
+}
+
+async function acceptEnrichCandidate(idx) {
+  const lead = currentBriefLead;
+  if (!lead || !Array.isArray(lead._enrichCandidates)) return;
+  const cand = lead._enrichCandidates[idx];
+  if (!cand) return;
+
+  // Optimistically mark the chip as saving — the POST roundtrip is 500-1500ms.
+  const chipEl = document.querySelector(`.hs-enrich-chip[data-idx="${idx}"]`);
+  if (chipEl) chipEl.classList.add('is-saving');
+
+  try {
+    const res = await fetch('/api/lead-enrichment', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        leadId: lead.id,
+        mode: 'apply',
+        // Narrow the server to just this one candidate — don't let it
+        // opportunistically write every other field in the background.
+        onlyFields: [cand.field],
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.ok) {
+      throw new Error(data?.error || `HTTP ${res.status}`);
+    }
+    // Patch the local Lead so re-renders show the new value immediately.
+    lead[cand.field] = cand.value;
+    if (chipEl) {
+      chipEl.classList.remove('is-saving');
+      chipEl.classList.add('is-accepted');
+      chipEl.querySelector('.hs-enrich-chip-actions').innerHTML =
+        '<span class="hs-enrich-accepted"><i class="fa-solid fa-check"></i> Saved</span>';
+    }
+    try { toast(`${ENRICH_FIELD_LABEL[cand.field] || cand.field} saved`, 'ok'); } catch {}
+    if (typeof renderLeads === 'function') renderLeads();
+  } catch (e) {
+    if (chipEl) chipEl.classList.remove('is-saving');
+    try { toast('Save failed — try again', 'err'); } catch {}
+    console.warn('[acceptEnrichCandidate] write failed', e?.message);
+  }
+}
+
+function dismissEnrichCandidate(idx) {
+  const chipEl = document.querySelector(`.hs-enrich-chip[data-idx="${idx}"]`);
+  if (chipEl) chipEl.remove();
+  const tray = document.getElementById('brief-enrich-tray');
+  if (tray && !tray.querySelector('.hs-enrich-chip')) {
+    tray.classList.add('hidden');
+  }
+}
+
+window.enrichBriefLead = enrichBriefLead;
+window.acceptEnrichCandidate = acceptEnrichCandidate;
+window.dismissEnrichCandidate = dismissEnrichCandidate;
 
 function escapeHtml(s) {
   return String(s == null ? '' : s)

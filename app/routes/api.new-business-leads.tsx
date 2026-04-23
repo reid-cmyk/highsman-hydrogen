@@ -35,6 +35,12 @@ type Lead = {
   Created_Time: string | null;
   Modified_Time: string | null;
   Last_Activity_Time: string | null;
+  // Phase B — claim/TTL (Companion: project_njpopups_rep_coverage.md)
+  Working_Owner: string;
+  Working_Claimed_At: string | null;
+  Working_Last_Activity_At: string | null;
+  // Phase D — LinkedIn deep-link
+  LinkedIn_URL: string;
 };
 
 // Wraps the shared Zoho helper to preserve the "return null on missing creds
@@ -86,6 +92,12 @@ async function fetchAllLeads(accessToken: string, ownerId: string | null): Promi
     'Created_Time',
     'Modified_Time',
     'Last_Activity_Time',
+    // Phase B — claim/TTL fields read by the Floor PWA to render owner pill + TTL chip.
+    'Working_Owner',
+    'Working_Claimed_At',
+    'Working_Last_Activity_At',
+    // Phase D — LinkedIn pill
+    'LinkedIn_URL',
   ].join(',');
 
   const collected: any[] = [];
@@ -176,6 +188,10 @@ export async function loader({request, context}: LoaderFunctionArgs) {
           Created_Time: l.Created_Time || null,
           Modified_Time: l.Modified_Time || null,
           Last_Activity_Time: l.Last_Activity_Time || null,
+          Working_Owner: String(l.Working_Owner || '').trim(),
+          Working_Claimed_At: l.Working_Claimed_At || null,
+          Working_Last_Activity_At: l.Working_Last_Activity_At || null,
+          LinkedIn_URL: String(l.LinkedIn_URL || '').trim(),
         };
       });
 

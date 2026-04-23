@@ -418,6 +418,14 @@ export async function action({request, context}: ActionFunctionArgs) {
   const sources: string[] = Array.isArray(body?.sources)
     ? body.sources
     : ['places', 'apollo', 'gmail', 'website'];
+  // In-brief "rep picked this chip" path passes an explicit allow-list. When
+  // present we narrow apply-mode to just those fields AND relax the
+  // high-confidence filter — the rep looked at the candidate and picked it,
+  // that's a stronger signal than any automated ranker. The nightly sweep
+  // leaves onlyFields undefined and keeps its high-confidence guardrail.
+  const onlyFields: string[] = Array.isArray(body?.onlyFields)
+    ? body.onlyFields.filter((f: any) => typeof f === 'string')
+    : [];
   if (!/^\d{6,}$/.test(leadId)) {
     return json({ok: false, error: 'invalid leadId'}, {status: 400});
   }
@@ -480,9 +488,20 @@ export async function action({request, context}: ActionFunctionArgs) {
   // that's a rep-with-Brief-drawer decision, not a cron decision.
   const patch: Record<string, string> = {};
   const applied: Candidate[] = [];
+  const fieldAllow: Set<string> = onlyFields.length > 0
+    ? new Set(onlyFields)
+    : new Set(['Phone', 'Mobile', 'Email', 'LinkedIn_URL']);
+  // When the rep explicitly picks a chip (onlyFields set), trust any candidate
+  // tier — the rep eyeballed it. For the nightly sweep, stay strict.
+  const acceptConfidence = onlyFields.length > 0
+    ? new Set(['high', 'medium', 'low'])
+    : new Set(['high']);
   for (const field of ['Phone', 'Mobile', 'Email', 'LinkedIn_URL'] as const) {
+    if (!fieldAllow.has(field)) continue;
     if (String(lead[field] || '').trim()) continue; // already filled
-    const top = ranked.find((c) => c.field === field && c.confidence === 'high');
+    const top = ranked.find(
+      (c) => c.field === field && acceptConfidence.has(c.confidence),
+    );
     if (!top) continue;
     patch[field] = top.value;
     applied.push(top);

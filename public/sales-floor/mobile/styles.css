@@ -1647,6 +1647,234 @@ a.hs-contact-meta-cell:active {
   background: rgba(10, 102, 194, 0.12);
 }
 
+/* ── Copy Intro pill — Phase D task #33.
+ * One-tap: Haiku drafts a 2-line brand-voice opener, copies to clipboard,
+ * opens the LinkedIn profile. Purple-ish accent so reps can tell at a glance
+ * this is an AI-assisted action (distinct from the plain LinkedIn pill). */
+.hs-action-pill.is-copy-intro {
+  border-top: 2px solid var(--hs-gold);
+}
+.hs-action-pill.is-copy-intro i { color: var(--hs-gold); }
+.hs-action-pill.is-copy-intro:active {
+  background: rgba(230, 170, 80, 0.14);
+}
+
+/* ── Claim/TTL chip — Phase B ──────────────────────────────────────────────
+ * Renders above the action row on Lead cards when the lead has a live claim.
+ * Four tones keyed off ownership + time remaining:
+ *   .is-mine.is-ok     green   — you own it, plenty of TTL left
+ *   .is-mine.is-warn   amber   — you own it, >50% used
+ *   .is-mine.is-danger red-ish — you own it, <10% left — heartbeat now
+ *   .is-others.*       gray-red — someone else owns it, can't act
+ *   .is-stale          amber   — claim lapsed, releasing on next sweep
+ */
+.hs-claim-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  margin: 4px 0 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--hs-gray);
+  font-family: 'Barlow Semi Condensed', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.hs-claim-chip i { font-size: 10px; }
+.hs-claim-chip strong { color: var(--hs-white); font-weight: 700; }
+.hs-claim-chip-x {
+  margin-left: 4px;
+  opacity: 0.6;
+}
+.hs-claim-chip.is-mine {
+  color: var(--hs-white);
+}
+.hs-claim-chip.is-mine.is-ok {
+  border-color: rgba(100, 200, 140, 0.45);
+  background: rgba(40, 140, 80, 0.18);
+}
+.hs-claim-chip.is-mine.is-warn {
+  border-color: rgba(255, 177, 100, 0.55);
+  background: rgba(200, 140, 60, 0.18);
+}
+.hs-claim-chip.is-mine.is-danger {
+  border-color: rgba(255, 107, 99, 0.65);
+  background: rgba(180, 60, 50, 0.22);
+}
+.hs-claim-chip.is-mine:active {
+  background: rgba(255, 255, 255, 0.12);
+}
+.hs-claim-chip.is-others {
+  border-color: rgba(255, 107, 99, 0.5);
+  background: rgba(180, 60, 50, 0.14);
+  color: #FFB8B4;
+}
+.hs-claim-chip.is-others strong { color: #FF9A94; }
+.hs-claim-chip.is-stale {
+  border-color: rgba(255, 177, 100, 0.4);
+  background: rgba(120, 85, 30, 0.16);
+  color: #FFB164;
+  cursor: default;
+}
+
+/* ── In-brief enrichment tray — Phase D task #30 ───────────────────────────
+ * Rep taps "Enrich" in the Brief drawer → we fan out to Places/Apollo/Gmail/
+ * site, then render one-tap chips. Sits ABOVE the Brief body so it doesn't
+ * push the Claude-generated content out of the scrollable viewport. */
+.hs-enrich-tray {
+  padding: 12px 16px 0;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.hs-enrich-tray.hidden { display: none; }
+.hs-enrich-loading,
+.hs-enrich-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  color: var(--hs-gray);
+  font-family: 'Barlow Semi Condensed', sans-serif;
+  font-size: 0.9rem;
+}
+.hs-enrich-empty { color: #FFB164; }
+.hs-spinner-sm {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+}
+.hs-enrich-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 2px 8px;
+  font-family: 'Barlow Semi Condensed', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--hs-gold);
+}
+.hs-enrich-close,
+.hs-enrich-dismiss {
+  background: transparent;
+  border: none;
+  color: var(--hs-gray);
+  cursor: pointer;
+  padding: 2px 6px;
+}
+.hs-enrich-chips {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  padding-bottom: 12px;
+}
+.hs-enrich-chip {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.hs-enrich-chip.is-saving {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.hs-enrich-chip.is-accepted {
+  border-color: rgba(100, 200, 140, 0.5);
+  background: rgba(40, 140, 80, 0.1);
+}
+.hs-enrich-chip.hs-enrich-high { border-color: rgba(230, 170, 80, 0.4); }
+.hs-enrich-chip.hs-enrich-medium { border-color: rgba(255, 255, 255, 0.12); }
+.hs-enrich-chip.hs-enrich-low { border-color: rgba(255, 255, 255, 0.06); }
+.hs-enrich-chip-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Barlow Semi Condensed', sans-serif;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--hs-gray);
+}
+.hs-enrich-chip-field {
+  color: var(--hs-white);
+  font-weight: 700;
+}
+.hs-enrich-chip-conf {
+  margin-left: auto;
+  font-size: 0.7rem;
+  color: var(--hs-gold);
+}
+.hs-enrich-chip-value {
+  font-family: 'Teko', 'Barlow Semi Condensed', sans-serif;
+  font-size: 1.15rem;
+  color: var(--hs-white);
+  word-break: break-all;
+}
+.hs-enrich-chip-source {
+  font-family: 'Barlow Semi Condensed', sans-serif;
+  font-size: 0.75rem;
+  color: var(--hs-gray);
+}
+.hs-enrich-chip-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.hs-enrich-accept {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: none;
+  background: var(--hs-gold);
+  color: var(--hs-black);
+  font-family: 'Barlow Semi Condensed', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.hs-enrich-accept:active { filter: brightness(0.92); }
+.hs-enrich-dismiss-chip {
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: transparent;
+  color: var(--hs-gray);
+  cursor: pointer;
+}
+.hs-enrich-accepted {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 12px;
+  color: #7FE0A0;
+  font-family: 'Barlow Semi Condensed', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 /* ── Accent rail on the left of every card for scannability ── */
 .hs-contact-card::before {
   content: '';

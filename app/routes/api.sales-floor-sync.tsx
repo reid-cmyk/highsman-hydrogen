@@ -174,6 +174,12 @@ async function fetchLeads(accessToken: string, ownerId: string | null) {
       'City',
       'Modified_Time',
       'Created_Time',
+      // Phase B — claim/TTL. Floor PWA renders owner pill + TTL chip off these.
+      'Working_Owner',
+      'Working_Claimed_At',
+      'Working_Last_Activity_At',
+      // Phase D — LinkedIn deep-link pill.
+      'LinkedIn_URL',
     ],
     200,
     accessToken,
@@ -215,6 +221,12 @@ async function fetchLeads(accessToken: string, ownerId: string | null) {
     _state: normalizeStateCode(l.States) || normalizeStateCode(l.State) || '',
     City: l.City || '',
     Modified_Time: l.Modified_Time || null,
+    // Phase B — claim/TTL. Empty strings / null when the lead is in the open pool.
+    Working_Owner: String(l.Working_Owner || '').trim(),
+    Working_Claimed_At: l.Working_Claimed_At || null,
+    Working_Last_Activity_At: l.Working_Last_Activity_At || null,
+    // Phase D — LinkedIn deep-link pill.
+    LinkedIn_URL: String(l.LinkedIn_URL || '').trim(),
   }));
 }
 

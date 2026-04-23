@@ -39,7 +39,7 @@
 
   <!-- App styles — mobile-first, overrides desktop defaults.
        ?v= busts Cloudflare edge + SW precache when styles.css ships changes. -->
-  <link rel="stylesheet" href="/sales-floor/mobile/styles.css?v=9" />
+  <link rel="stylesheet" href="/sales-floor/mobile/styles.css?v=10" />
 
   <style>
     /* Inline: suppress desktop-only top bar even if referenced */
@@ -728,6 +728,11 @@
         <i class="fa-solid fa-xmark"></i>
       </button>
     </div>
+    <!-- Phase D task #30 — Enrichment chip tray. Rendered above brief-content
+         when the rep taps "Enrich" and we've got candidates back. Each chip
+         is a one-tap accept: clicking writes that specific field to Zoho and
+         updates the in-memory lead. Unwanted chips can be dismissed. -->
+    <div id="brief-enrich-tray" class="hs-enrich-tray hidden"></div>
     <div id="brief-content" class="p-6 space-y-4 max-h-[55vh] overflow-y-auto">
       <div class="hs-loading">
         <div class="hs-spinner"></div>
@@ -743,6 +748,14 @@
       </button>
       <button onclick="emailFromBrief()" class="hs-btn-secondary">
         <i class="fa-solid fa-envelope mr-1"></i> Email
+      </button>
+      <!-- Phase D task #30 — Enrichment chip. Runs /api/lead-enrichment in
+           preview mode (Places + Apollo + Gmail sigs + website scrape) and
+           shows one-tap accept chips for anything the lead is missing.
+           Hidden for Account- and New-Cust-shaped briefs (only Leads have
+           the Working_* + LinkedIn_URL fields today). -->
+      <button id="brief-enrich-btn" onclick="enrichBriefLead()" class="hs-btn-ghost px-3 hidden" title="Find missing phones, emails & LinkedIn for this lead">
+        <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Enrich
       </button>
       <button id="brief-open-zoho-btn" onclick="openCurrentBriefInZoho()" class="hs-btn-ghost px-3 hidden" title="Open full record in Zoho CRM">
         <i class="fa-solid fa-arrow-up-right-from-square mr-1"></i> Zoho

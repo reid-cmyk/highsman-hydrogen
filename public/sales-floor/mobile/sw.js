@@ -6,14 +6,14 @@
  * need fresh data, not yesterday's queue.
  */
 
-const VERSION = 'hs-floor-mobile-v10';
+const VERSION = 'hs-floor-mobile-v11';
 const PRECACHE = `${VERSION}-static`;
 const RUNTIME = `${VERSION}-runtime`;
 
 // Static assets safe to precache. The HTML shell itself is NOT in this list
 // — we fetch it fresh every time so rep token injection stays current.
 const PRECACHE_URLS = [
-  '/sales-floor/mobile/styles.css?v=9',
+  '/sales-floor/mobile/styles.css?v=10',
   '/sales-floor/mobile/manifest.json',
   '/sales-floor/js/config/config.js',
   '/sales-floor/js/templates.js',
