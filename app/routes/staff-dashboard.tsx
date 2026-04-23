@@ -2,6 +2,11 @@ import type {LoaderFunctionArgs, ActionFunctionArgs, MetaFunction} from '@shopif
 import {useLoaderData, useActionData, Form} from '@remix-run/react';
 import {json} from '@shopify/remix-oxygen';
 import {useState, useEffect, useMemo} from 'react';
+import {
+  COURSE_ORDER,
+  computeTier,
+  fetchTrainingProfilesAndEvents,
+} from '~/lib/vibes-klaviyo-training';
 
 export const meta: MetaFunction = () => {
   return [
@@ -11,63 +16,19 @@ export const meta: MetaFunction = () => {
 };
 
 // ââ Constants ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-const KLAVIYO_LIST_ID = 'WBSrLZ';
-const COURSE_COMPLETED_METRIC_ID = 'UwTaBd';
-const SIGNUP_METRIC_ID = 'Uir9Fc';
-
-const COURSE_ORDER = [
-  {id: 'meet-ricky', title: 'Meet Ricky', level: 'Rookie'},
-  {id: 'meet-highsman', title: 'Highsman Brand Training', level: 'Starting Lineup'},
-  {id: 'the-science', title: 'The Science', level: 'Franchise Player'},
-  {id: 'product-training', title: 'Highsman Product Training', level: 'Hall of Flame'},
-  {id: 'rushing-bonus', title: 'Rushing Bonus', level: 'Hall of Flame'},
-];
+// Training list ID, metric IDs, course order, tier computation and the Klaviyo
+// fetch layer all live in `~/lib/vibes-klaviyo-training` so the /vibes store
+// cards and this dashboard never drift.
 
 const TIER_NAMES = ['Unsigned', 'Rookie', 'Starting Lineup', 'Franchise Player', 'Hall of Flame'];
 
 // ââ Helpers ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-function computeTier(completedCourses: Set<string>): string {
-  const allDone = completedCourses.size >= COURSE_ORDER.length;
-  const franchDone = completedCourses.has('meet-ricky') && completedCourses.has('meet-highsman') && completedCourses.has('the-science');
-  const startDone = completedCourses.has('meet-ricky') && completedCourses.has('meet-highsman');
-  const rookDone = completedCourses.has('meet-ricky');
-  if (allDone) return 'Hall of Flame';
-  if (franchDone) return 'Franchise Player';
-  if (startDone) return 'Starting Lineup';
-  if (rookDone) return 'Rookie';
-  return 'Unsigned';
-}
-
 function daysBetween(d1: Date, d2: Date): number {
   return Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-// ââ Klaviyo API fetch helper ââââââââââââââââââââââââââââââââââââââââââââââââ
-async function klaviyoFetch(url: string, apiKey: string) {
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Klaviyo-API-Key ${apiKey}`,
-      Accept: 'application/json',
-      revision: '2024-10-15',
-    },
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`Klaviyo API error: ${res.status} â ${body.slice(0, 200)}`);
-  }
-  return res.json();
-}
 
-async function fetchAllPages(baseUrl: string, apiKey: string) {
-  const results: any[] = [];
-  let url: string | null = baseUrl;
-  while (url) {
-    const data = await klaviyoFetch(url, apiKey);
-    results.push(...(data.data || []));
-    url = data.links?.next || null;
-  }
-  return results;
-}
+// Klaviyo fetch layer is imported from `~/lib/vibes-klaviyo-training`.
 
 // ââ Types ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 type BudtenderRow = {
@@ -127,37 +88,9 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   }
 
   try {
-    // 1a. Fetch profile IDs from the list (relationship endpoint)
-    const idsUrl = `https://a.klaviyo.com/api/lists/${KLAVIYO_LIST_ID}/relationships/profiles/?page[size]=100`;
-    const idRecords = await fetchAllPages(idsUrl, apiKey);
-    const profileIds = idRecords.map((r: any) => r.id).filter(Boolean);
-
-    // 1b. Fetch full profiles in batches (direct endpoint returns properties)
-    const profiles: any[] = [];
-    const BATCH = 50;
-    for (let i = 0; i < profileIds.length; i += BATCH) {
-      const batch = profileIds.slice(i, i + BATCH);
-      const idFilter = batch.map((id: string) => `"${id}"`).join(',');
-      const profilesUrl = `https://a.klaviyo.com/api/profiles/?filter=any(id,[${idFilter}])&fields[profile]=email,first_name,last_name,organization,properties,location,created&page[size]=100`;
-      const batchProfiles = await fetchAllPages(profilesUrl, apiKey);
-      profiles.push(...batchProfiles);
-    }
-
-    // 2. Fetch all course completion events (include=profile ensures relationship IDs are returned)
-    const eventsUrl = `https://a.klaviyo.com/api/events/?filter=equals(metric_id,"${COURSE_COMPLETED_METRIC_ID}")&include=profile&fields[event]=event_properties,datetime&page[size]=100&sort=-datetime`;
-    const events = await fetchAllPages(eventsUrl, apiKey);
-
-    // 3. Build a map of profile_id â events
-    const eventsByProfile = new Map<string, any[]>();
-    for (const ev of events) {
-      // Try multiple paths for profile ID
-      const pid = ev.relationships?.profile?.data?.id
-        || ev.relationships?.profiles?.data?.[0]?.id
-        || ev.attributes?.profile_id;
-      if (!pid) continue;
-      if (!eventsByProfile.has(pid)) eventsByProfile.set(pid, []);
-      eventsByProfile.get(pid)!.push(ev);
-    }
+    // Hit Klaviyo once: list profiles + course-completion events, indexed by profile.
+    // Shared with /vibes so per-store rollups and this flat table never drift.
+    const {profiles, eventsByProfile} = await fetchTrainingProfilesAndEvents(apiKey);
 
     // 4. Build budtender rows
     const now = new Date();
