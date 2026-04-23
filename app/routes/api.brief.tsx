@@ -253,8 +253,11 @@ type EmailForContext = {
 };
 function renderEmailForContext(e: EmailForContext): string {
   const dir = e.direction === 'outgoing' ? 'OUT' : 'IN';
-  const subj = (e.subject || '(no subject)').slice(0, 120);
-  const snip = (e.snippet || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+  const subj = (e.subject || '(no subject)').slice(0, 100);
+  // Tightened to 180 chars — Claude was aborting on 10-email threads when
+  // snippets were 300 chars each. 5 emails × 180 chars is plenty of signal
+  // for a brief while staying well inside the 24s synthesis budget.
+  const snip = (e.snippet || '').replace(/\s+/g, ' ').trim().slice(0, 180);
   // Domain matches = correspondence with a DIFFERENT contact at the same
   // shop (e.g. the previous buyer). Flag them so Claude can say "you spoke
   // with Mike 3 weeks ago about reorders" rather than implying the current
@@ -552,7 +555,16 @@ function buildClaudeContext(args: {
         `  (${exactEmails.length} message${exactEmails.length === 1 ? '' : 's'} with the current lead, ${domainEmails.length} with OTHER contact${domainEmails.length === 1 ? '' : 's'} at the same shop)`,
       );
     }
-    for (const e of emails.slice(0, 10)) lines.push(renderEmailForContext(e));
+    // Cap at 5 emails in the prompt. Prioritize exact-email matches (current
+    // buyer) over domain matches (other contacts at the shop) so the most
+    // relevant signal is guaranteed to land. Tail of list is already sorted
+    // newest-first by the gmail-thread route. Claude was aborting at 7–10
+    // emails + longer snippets; 5 tight ones keeps synthesis reliable.
+    const prioritized = [
+      ...exactEmails.slice(0, 5),
+      ...domainEmails.slice(0, Math.max(0, 5 - exactEmails.length)),
+    ].slice(0, 5);
+    for (const e of prioritized) lines.push(renderEmailForContext(e));
     if (domainEmails.length > 0) {
       lines.push(
         '  NOTE: Messages tagged [OTHER CONTACT AT SAME DOMAIN] are with different people at the same company. Attribute those correctly — do not imply the current lead said them.',
@@ -765,7 +777,10 @@ export async function action({request, context}: ActionFunctionArgs) {
       tool: BUILD_BRIEF_TOOL,
       maxTokens: 1800,
       temperature: 0.35,
-      timeoutMs: 24000,
+      // 27s — Oxygen worker budget is 30s, Gmail+Zoho fetches finish in 2–4s,
+      // which leaves the remainder for Claude synthesis. Was 24s — too tight
+      // on slower worker cold starts.
+      timeoutMs: 27000,
     });
 
     const brief = result.input || {};
