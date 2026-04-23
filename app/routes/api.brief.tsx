@@ -832,6 +832,34 @@ export async function action({request, context}: ActionFunctionArgs) {
     );
   }
 
+  // ─── Cold-lead fast-path — skip Claude when there's nothing to synthesize ──
+  // If every channel came back empty (no calls, no SMS, no emails — across the
+  // lead's own number/email AND any domain-expanded contacts at the shop),
+  // Claude would produce a brief essentially identical to our deterministic
+  // fallback. There's no history to narrate. Skip the 4–8s Claude round-trip
+  // and return the fallback immediately.
+  //
+  // Why this is safe: the fallback's cold template (`buildFallbackBrief`) is
+  // already on-brand and assumptive — "Lead with the Hit Stick, close on a
+  // sample pack + visit this week." For a lead with zero prior contact,
+  // that's exactly what Sky would get from Claude anyway, minus a few
+  // stylistic flourishes Haiku might add.
+  //
+  // We DO cache this response (same 8hr TTL as warm briefs). The cold
+  // fast-path is deterministic, not transient — unlike a Claude-error
+  // fallback, which we don't cache because we want the next click to retry.
+  // If new evidence arrives mid-shift (Sky texts the lead, the reply lands
+  // in Quo), she hits `?nocache=1` or waits 8hrs for a fresh pull.
+  const anyHistoryFound =
+    calls.length > 0 || sms.length > 0 || gmail.messages.length > 0;
+  if (!anyHistoryFound) {
+    const brief = buildFallbackBrief(lead, rep);
+    brief._fastPath = 'cold';
+    const responseBody = {ok: true, brief, mode: brief.mode, sources};
+    setCachedBrief(cacheKey, responseBody);
+    return json(responseBody, {headers: {'Cache-Control': 'no-store'}});
+  }
+
   // ─── Build context + call Claude ──────────────────────────────────────────
   const userContent = buildClaudeContext({
     rep,
@@ -848,15 +876,28 @@ export async function action({request, context}: ActionFunctionArgs) {
   try {
     const result = await claudeTool<any>({
       apiKey: env.ANTHROPIC_API_KEY!,
-      model: env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
+      // Haiku 4.5 by default for the brief. Rationale: the brief is a
+      // schema-constrained synthesis task over pre-summarized evidence —
+      // Quo has already AI-summarized calls, Gmail snippets are truncated
+      // to 180 chars, SMS is short. That's Haiku's strike zone (structured
+      // tool-use, short context, checklist-driven voice rules). Sonnet-4.6
+      // was the fallback while we debugged streaming aborts; with streaming
+      // now stable AND Haiku running 3–5x faster, perceived brief latency
+      // drops from ~15–25s to ~4–8s with negligible quality loss on the
+      // 80% of briefs (cold + light-warm accounts).
+      //
+      // Escape hatch: set ANTHROPIC_MODEL=claude-sonnet-4-6 in Oxygen env
+      // to roll back instantly. If we later add a "Deep Brief" button for
+      // dense warm accounts, it can pass an explicit model override.
+      model: env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001',
       system: SYSTEM_PROMPT,
       user: userContent,
       tool: BUILD_BRIEF_TOOL,
       maxTokens: 1800,
       temperature: 0.35,
-      // Streaming — claudeTool now reads the SSE stream incrementally, so
-      // a slow synthesis tail no longer looks like a dead connection. Default
-      // 45s wall clock is fine; Oxygen worker stays alive through the stream.
+      // Streaming — claudeTool reads the SSE stream incrementally so a slow
+      // tail doesn't look like a dead connection. 45s ceiling is generous
+      // headroom; Haiku typically closes the stream in 4–8s.
       timeoutMs: 45000,
     });
 
