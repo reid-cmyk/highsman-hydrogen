@@ -73,6 +73,75 @@ const CHECKIN_CADENCE_DAYS = 30;
 // preview plan so Sky/Serena can scan what's queued for her next work day.
 const WORK_DOW = new Set([2, 3, 4]); // JS Date.getDay(): 0=Sun..6=Sat
 
+// ─── NJ 3-region geography (same model as api.vibes-weekly-plan) ────────────
+// Each day locks to ONE region so Serena isn't zig-zagging across the state.
+// Outliers (Shore House Canna, Cape May, LBI, Atlantic City, etc.) are excluded
+// entirely — they get quarterly drop-in runs, not weekly routing.
+
+type NjRegion = 'north' | 'central' | 'south';
+
+const NORTH_CITIES = new Set<string>([
+  'newark','jersey city','hoboken','union city','west new york','bayonne','weehawken',
+  'north bergen','fort lee','englewood','hackensack','paramus','fair lawn','ridgewood',
+  'clifton','paterson','passaic','wayne','west milford','ringwood','kinnelon',
+  'east orange','orange','irvington','bloomfield','montclair','west orange','livingston',
+  'millburn','short hills','maplewood','south orange','south hackensack','cedar grove',
+  'union','elizabeth','linden','roselle','hillside','cranford','westfield','summit',
+  'morristown','madison','chatham','denville','dover','parsippany','rockaway',
+  'hackettstown','phillipsburg','washington','belvidere',
+  'newton','sparta','vernon','sussex',
+  'secaucus','lyndhurst','kearny','north arlington','rutherford','carlstadt',
+  'teaneck','bergenfield','dumont','new milford','tenafly','cliffside park',
+  'garfield','lodi','elmwood park','saddle brook','rochelle park',
+]);
+
+const CENTRAL_CITIES = new Set<string>([
+  'new brunswick','north brunswick','south brunswick','east brunswick','edison',
+  'woodbridge','piscataway','highland park','metuchen','iselin','perth amboy',
+  'sayreville','south amboy','old bridge','spotswood','matawan','aberdeen',
+  'red bank','middletown','long branch','asbury park','ocean','neptune',
+  'eatontown','tinton falls','oakhurst','freehold','howell','marlboro','manalapan',
+  'colts neck','holmdel','hazlet',
+  'somerville','bridgewater','bound brook','franklin','hillsborough','raritan',
+  'watchung','warren','basking ridge','bernardsville',
+  'flemington','clinton','lambertville',
+  'princeton','trenton','hamilton','ewing','lawrenceville','west windsor','east windsor',
+  'plainsboro','cranbury','jamesburg','monroe',
+]);
+
+const SOUTH_CITIES = new Set<string>([
+  'cherry hill','camden','collingswood','haddonfield','voorhees','marlton','mount laurel',
+  'moorestown','medford','mount holly','burlington','willingboro','maple shade',
+  'pennsauken','merchantville','audubon','barrington','magnolia','lindenwold',
+  'deptford','woodbury','glassboro','pitman','washington township','sewell',
+  'vineland','millville','bridgeton','pennsville','salem',
+  'toms river','brick','lakewood','jackson','point pleasant','bayville','manchester',
+  'lakehurst','whiting','forked river',
+  'hammonton','egg harbor','mays landing','pleasantville',
+]);
+
+const OUTLIER_CITIES = new Set<string>([
+  'atlantic city','ventnor','ventnor city','margate','margate city','longport',
+  'ocean city','sea isle city','avalon','stone harbor','wildwood','wildwood crest',
+  'north wildwood','cape may','cape may court house','rio grande',
+  'beach haven','long beach island','lbi','barnegat light','ship bottom','surf city',
+  'seaside heights','seaside park',
+]);
+
+function normalizeCity(city: string | null | undefined): string {
+  return (city || '').toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+function njRegion(city: string | null | undefined): {region: NjRegion; infrequentDropIn: boolean} {
+  const c = normalizeCity(city);
+  if (!c) return {region: 'central', infrequentDropIn: false};
+  if (OUTLIER_CITIES.has(c)) return {region: 'south', infrequentDropIn: true};
+  if (NORTH_CITIES.has(c)) return {region: 'north', infrequentDropIn: false};
+  if (SOUTH_CITIES.has(c)) return {region: 'south', infrequentDropIn: false};
+  if (CENTRAL_CITIES.has(c)) return {region: 'central', infrequentDropIn: false};
+  return {region: 'central', infrequentDropIn: false};
+}
+
 let cachedToken: string | null = null;
 let tokenExpiresAt = 0;
 
@@ -212,12 +281,15 @@ type Stop = {
   accountId: string;
   name: string;
   address: string;
+  city: string;
   tier: 'onboarding' | 'training' | 'checkin';
   dwellMin: number;
   priority: number; // lower = higher priority
   dealId?: string | null;
   lastVisitDate?: string | null;
   staleDays?: number | null;
+  region: NjRegion;
+  infrequentDropIn: boolean;
 };
 
 function daysBetween(a: Date, b: Date): number {
@@ -289,15 +361,19 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       const tier: 'onboarding' | 'training' = desc.includes(TIER_MARKER_TRAINING)
         ? 'training'
         : 'onboarding';
+      const geo = njRegion(acct.Billing_City);
       candidates.push({
         accountId: acctId,
         name: acct.Account_Name || '—',
         address: addr,
+        city: acct.Billing_City || '',
         tier,
         dwellMin: DWELL_MIN[tier],
         // Onboarding 0-99 bucket, Training 100-199 bucket.
         priority: tier === 'onboarding' ? 0 : 100,
         dealId: d.id,
+        region: geo.region,
+        infrequentDropIn: geo.infrequentDropIn,
       });
     }
 
@@ -335,35 +411,81 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       const priority = lastVisit
         ? Math.max(200, 500 - (stale || 0))
         : 500;
+      const geo = njRegion(a.Billing_City);
       tier3.push({
         accountId: a.id,
         name: a.Account_Name || '—',
         address: addr,
+        city: a.Billing_City || '',
         tier: 'checkin',
         dwellMin: DWELL_MIN.checkin,
         priority,
         dealId: null,
         lastVisitDate: a.Visit_Date || null,
         staleDays: stale,
+        region: geo.region,
+        infrequentDropIn: geo.infrequentDropIn,
       });
     }
     tier3.sort((a, b) => a.priority - b.priority);
 
-    // 4) Pack to time budget. Greedy by priority.
-    // Two hard caps enforced here so the stop list is realistic BEFORE Routes
-    // runs: (1) dwell + TRAVEL_BUFFER_MIN per stop must fit DAY_BUDGET_MIN,
-    // (2) total stops ≤ MAX_STOPS_PER_DAY. Tier 1/2 booked deals still get
-    // priority; overflow Tier 3 cadence falls off the tail.
+    // 4) Pick a single anchor region for the day, then pack.
+    //
+    // Outliers (Shore House Canna, LBI, Cape May, Atlantic City, etc.) are
+    // excluded entirely — they live on quarterly drop-in runs, not the weekly
+    // plan.
+    //
+    // Anchor-region rule: pick the region that has the most high-priority
+    // demand (counts Tier 1 > Tier 2 > Tier 3 by inverse priority). Lock the
+    // whole day to that region. This keeps drive time tight — no zig-zagging
+    // from Jersey City to Cherry Hill in one day.
+    //
+    // Each work day uses a different region naturally as stops roll out of the
+    // pool (Sky logging visits, deals closing). If Tuesday nails the NORTH
+    // cluster, Wednesday's anchor shifts to whatever region is newly heaviest.
+    //
+    // To spread work across regions WITHIN one pool read, we also apply a
+    // DOW-based bias: Tue favors the busiest region, Wed favors second, Thu
+    // favors third. This is only a tie-break nudge — if NORTH has 8 Tier 1
+    // opens and SOUTH has 1, NORTH still wins every day until that cluster
+    // empties.
     const all = [...tier12.sort((a, b) => a.priority - b.priority), ...tier3];
+    const inRegion = all.filter((s) => !s.infrequentDropIn);
+    const droppedOutliers = all.filter((s) => s.infrequentDropIn);
+
+    // Rank regions by sum of inverse-priority weight (lower priority = higher
+    // weight). Each region's score sums 1/(priority+1) over its candidates,
+    // which pushes Onboardings (priority 0) to the top.
+    const regionScore: Record<NjRegion, number> = {north: 0, central: 0, south: 0};
+    for (const s of inRegion) regionScore[s.region] += 1 / (s.priority + 1);
+
+    const dow = target.getDay(); // 2=Tue, 3=Wed, 4=Thu
+    const dowSlot = dow === 2 ? 0 : dow === 3 ? 1 : 2;
+    const regionRank = (['north', 'central', 'south'] as NjRegion[])
+      .sort((a, b) => regionScore[b] - regionScore[a]);
+    // Pick region for this DOW; fall back to the heaviest non-empty region.
+    let anchorRegion: NjRegion = regionRank[dowSlot] || regionRank[0];
+    if (regionScore[anchorRegion] === 0) {
+      anchorRegion = regionRank.find((r) => regionScore[r] > 0) || 'central';
+    }
+
+    const regionPool = inRegion.filter((s) => s.region === anchorRegion);
+
+    // Two hard caps: (1) dwell + TRAVEL_BUFFER_MIN per stop must fit
+    // DAY_BUDGET_MIN, (2) total stops ≤ MAX_STOPS_PER_DAY. Tier 1/2 booked
+    // deals still get priority; overflow Tier 3 cadence falls off the tail.
     const packed: Stop[] = [];
     let dwellTotal = 0;
-    for (const s of all) {
+    for (const s of regionPool) {
       if (packed.length >= MAX_STOPS_PER_DAY) break;
       const estimatedCost = s.dwellMin + TRAVEL_BUFFER_MIN;
       if (dwellTotal + estimatedCost > DAY_BUDGET_MIN) break;
       packed.push(s);
       dwellTotal += estimatedCost;
     }
+
+    const regionLabel = (r: NjRegion) =>
+      r === 'north' ? 'North NJ' : r === 'central' ? 'Central NJ' : 'South NJ';
 
     if (packed.length === 0) {
       return json({
@@ -375,7 +497,13 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         totalDriveMinutes: 0,
         totalDayMinutes: 0,
         encodedPolyline: '',
-        note: 'No Tier 1/2/3 candidates due. Cadence caught up.',
+        region: anchorRegion,
+        regionLabel: regionLabel(anchorRegion),
+        droppedForOutlier: droppedOutliers.map((s) => s.accountId),
+        note:
+          regionScore[anchorRegion] === 0
+            ? 'No Tier 1/2/3 candidates due. Cadence caught up.'
+            : `No stops packed for ${regionLabel(anchorRegion)} — budget or pool empty.`,
       });
     }
 
@@ -398,6 +526,9 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         totalDriveMinutes: 0,
         totalDayMinutes: dwellTotal,
         encodedPolyline: '',
+        region: anchorRegion,
+        regionLabel: regionLabel(anchorRegion),
+        droppedForOutlier: droppedOutliers.map((s) => s.accountId),
         note: 'Route geometry unavailable (Google Maps key not configured).',
       });
     }
@@ -460,6 +591,9 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         totalDriveMinutes: 0,
         totalDayMinutes: dwellTotal,
         encodedPolyline: '',
+        region: anchorRegion,
+        regionLabel: regionLabel(anchorRegion),
+        droppedForOutlier: droppedOutliers.map((s) => s.accountId),
         note: `Route optimization unavailable (Routes API ${routesRes.status}).`,
       });
     }
@@ -481,6 +615,9 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         totalDriveMinutes: 0,
         totalDayMinutes: dwellTotal,
         encodedPolyline: '',
+        region: anchorRegion,
+        regionLabel: regionLabel(anchorRegion),
+        droppedForOutlier: droppedOutliers.map((s) => s.accountId),
         note: 'Google Routes returned no route.',
       });
     }
@@ -538,6 +675,9 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       totalDriveMinutes: Math.round(totalDriveSec / 60),
       totalDayMinutes: totalMinutes,
       encodedPolyline: route.polyline?.encodedPolyline || '',
+      region: anchorRegion,
+      regionLabel: regionLabel(anchorRegion),
+      droppedForOutlier: droppedOutliers.map((s) => s.accountId),
       note:
         totalMinutes + LUNCH_MIN > DAY_SHIFT_MIN
           ? `Plan runs ${totalMinutes} min stops+drive + ${LUNCH_MIN} min lunch — over the 8.5-hour shift. Roll tail Check-Ins to the next day.`

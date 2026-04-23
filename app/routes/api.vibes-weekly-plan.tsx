@@ -78,6 +78,90 @@ const TRAVEL_BUFFER_MIN = 30;
 const MAX_STOPS_PER_DAY = 5;
 const CHECKIN_MIN_STALE_DAYS = 20;
 
+// ─── NJ geography: 3-region split + outlier set ──────────────────────────────
+// Serena is based in Union, NJ (Union County). To keep daily drive sane we
+// assign every NJ account a region and lock each planning day to ONE region.
+// Unknown cities default to "central" (Union is technically north but Middlesex
+// County is a short hop — central absorbs the ambiguity safely).
+//
+// Outlier = ≥2 hrs one-way from Union. These are valid accounts but do NOT
+// belong in a Tue/Wed/Thu plan — they're flagged for quarterly drop-in runs
+// (e.g., a dedicated Shore day) and skipped by the weekly strategist.
+
+type NjRegion = 'north' | 'central' | 'south';
+
+const NORTH_CITIES = new Set<string>([
+  // Bergen, Hudson, Passaic, Essex, Union, Morris, Sussex, Warren — the I-78/I-80 corridor
+  'newark', 'jersey city', 'hoboken', 'union city', 'west new york', 'bayonne', 'weehawken',
+  'north bergen', 'fort lee', 'englewood', 'hackensack', 'paramus', 'fair lawn', 'ridgewood',
+  'clifton', 'paterson', 'passaic', 'wayne', 'west milford', 'ringwood', 'kinnelon',
+  'east orange', 'orange', 'irvington', 'bloomfield', 'montclair', 'west orange', 'livingston',
+  'millburn', 'short hills', 'maplewood', 'south orange', 'south hackensack', 'cedar grove',
+  'union', 'elizabeth', 'linden', 'roselle', 'hillside', 'cranford', 'westfield', 'summit',
+  'morristown', 'madison', 'chatham', 'denville', 'dover', 'parsippany', 'rockaway',
+  'hackettstown', 'phillipsburg', 'washington', 'belvidere',
+  'newton', 'sparta', 'vernon', 'sussex',
+  'secaucus', 'lyndhurst', 'kearny', 'north arlington', 'rutherford', 'carlstadt',
+  'teaneck', 'bergenfield', 'dumont', 'new milford', 'tenafly', 'cliffside park',
+  'garfield', 'lodi', 'elmwood park', 'saddle brook', 'rochelle park',
+]);
+
+const CENTRAL_CITIES = new Set<string>([
+  // Middlesex, Monmouth, Somerset, Hunterdon, Mercer — I-195 and north of it
+  'new brunswick', 'north brunswick', 'south brunswick', 'east brunswick', 'edison',
+  'woodbridge', 'piscataway', 'highland park', 'metuchen', 'iselin', 'perth amboy',
+  'sayreville', 'south amboy', 'old bridge', 'spotswood', 'matawan', 'aberdeen',
+  'red bank', 'middletown', 'long branch', 'asbury park', 'ocean', 'neptune',
+  'eatontown', 'tinton falls', 'oakhurst', 'freehold', 'howell', 'marlboro', 'manalapan',
+  'colts neck', 'holmdel', 'hazlet',
+  'somerville', 'bridgewater', 'bound brook', 'franklin', 'hillsborough', 'raritan',
+  'watchung', 'warren', 'basking ridge', 'bernardsville',
+  'flemington', 'clinton', 'lambertville',
+  'princeton', 'trenton', 'hamilton', 'ewing', 'lawrenceville', 'west windsor', 'east windsor',
+  'plainsboro', 'cranbury', 'jamesburg', 'monroe',
+]);
+
+const SOUTH_CITIES = new Set<string>([
+  // Burlington, Camden, Gloucester, Salem, Cumberland, Atlantic, Ocean County north
+  'cherry hill', 'camden', 'collingswood', 'haddonfield', 'voorhees', 'marlton', 'mount laurel',
+  'moorestown', 'medford', 'mount holly', 'burlington', 'willingboro', 'maple shade',
+  'pennsauken', 'merchantville', 'audubon', 'barrington', 'magnolia', 'lindenwold',
+  'deptford', 'woodbury', 'glassboro', 'pitman', 'washington township', 'sewell',
+  'vineland', 'millville', 'bridgeton', 'pennsville', 'salem',
+  'toms river', 'brick', 'lakewood', 'jackson', 'point pleasant', 'bayville', 'manchester',
+  'lakehurst', 'whiting', 'forked river',
+  'hammonton', 'egg harbor', 'mays landing', 'pleasantville',
+]);
+
+// ≥2 hrs one-way from Union NJ — route to a dedicated Shore day, not a weekly plan.
+const OUTLIER_CITIES = new Set<string>([
+  'atlantic city', 'ventnor', 'ventnor city', 'margate', 'margate city', 'longport',
+  'ocean city', 'sea isle city', 'avalon', 'stone harbor', 'wildwood', 'wildwood crest',
+  'north wildwood', 'cape may', 'cape may court house', 'rio grande',
+  'beach haven', 'long beach island', 'lbi', 'barnegat light', 'ship bottom', 'surf city',
+  'seaside heights', 'seaside park',
+]);
+
+function normalizeCity(city: string | null | undefined): string {
+  return (city || '').toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+// Returns [region, infrequentDropIn]. If outlier, region is the closest match
+// for rough sorting but infrequentDropIn=true flags it OUT of weekly planning.
+function njRegion(city: string | null | undefined): {region: NjRegion; infrequentDropIn: boolean} {
+  const c = normalizeCity(city);
+  if (!c) return {region: 'central', infrequentDropIn: false};
+  if (OUTLIER_CITIES.has(c)) {
+    // outliers are almost all south-coastal
+    return {region: 'south', infrequentDropIn: true};
+  }
+  if (NORTH_CITIES.has(c)) return {region: 'north', infrequentDropIn: false};
+  if (SOUTH_CITIES.has(c)) return {region: 'south', infrequentDropIn: false};
+  if (CENTRAL_CITIES.has(c)) return {region: 'central', infrequentDropIn: false};
+  // Fallback — unknown city. Default to central. Sky can reclassify via Zoho.
+  return {region: 'central', infrequentDropIn: false};
+}
+
 type Tier = 'onboarding' | 'training' | 'checkin';
 type Day = 'tuesday' | 'wednesday' | 'thursday';
 
@@ -125,6 +209,8 @@ type Candidate = {
   dealId: string | null;
   lastVisitDate: string | null;
   staleDays: number | null;
+  region: NjRegion;
+  infrequentDropIn: boolean;
 };
 
 async function fetchOpenVibesDeals(token: string): Promise<
@@ -319,22 +405,32 @@ SERENA'S CONSTRAINTS (HARD CAPS — never exceed):
 - Each day should be a tight geographic cluster — do not bounce across the state. If a cluster forces >5 stops, split it across two days.
 - Mileage sanity check: a day with 5 stops should be roughly 80–150 miles, not 300+. If your plan implies more than ~200 miles in a day, you're bouncing too much — re-cluster.
 
+NJ 3-REGION MODEL (THIS IS HOW YOU CLUSTER):
+Each candidate is tagged region=NORTH / CENTRAL / SOUTH.
+- NORTH = Bergen, Hudson, Passaic, Essex, Union, Morris, Sussex, Warren (I-78/I-80 corridor).
+- CENTRAL = Middlesex, Monmouth, Somerset, Hunterdon, Mercer (Princeton/New Brunswick/Red Bank).
+- SOUTH = Burlington, Camden, Gloucester, Ocean, Atlantic (Cherry Hill/Toms River/Atlantic).
+HARD RULE: each day locks to ONE region. A Tuesday in CENTRAL means every Tuesday stop is CENTRAL. Do not mix regions within a day. If a region has too much demand for one day, use two days for that region.
+ASSIGN DAYS TO REGIONS: look at the pool. Put the busiest region on Tuesday, second busiest on Wednesday, lightest on Thursday. If a region has zero candidates, that day can absorb overflow from the busier adjacent region (NORTH↔CENTRAL or CENTRAL↔SOUTH are acceptable spill-overs — never NORTH↔SOUTH in a single day).
+
+OUTLIERS (INFREQUENT DROP-INS — DO NOT SCHEDULE THIS WEEK):
+Candidates marked infrequent_dropin=true (e.g. Atlantic City, Cape May, Ocean City/Shore House Canna, LBI) are ≥2 hrs one-way from Union. They are excluded from weekly planning entirely. If any sneak into the pool, push them straight to "unassigned" with a note. These get picked up on dedicated quarterly Shore runs.
+
 PRIORITY RULES:
 1. Tier 1 (ONBOARDING) — never push out of the week. These are first-ever brand visits. Always scheduled SOMEWHERE in the 3 days.
 2. Tier 2 (TRAINING) — follow-ups to onboarded accounts. Schedule this week. Pair geographically with Tier 1 where possible.
 3. Tier 3 (CHECK-IN) — 30-day cadence. Oldest stale visits first. Fill open budget after Tier 1+2 are slotted.
 
 GEOGRAPHIC CLUSTERING IS THE HARDEST CONSTRAINT — HARDER THAN DAILY TIER MIX:
-- Soft floor: try to land at least ONE Onboarding or Training on each work day, so every day has a "reason to be there."
-- HARD rule: NEVER force a Tier 1 or Tier 2 onto a day if it's geographically isolated from the rest of that day's cluster. If an Onboarding or Training is far from the other bookings, push it to a DIFFERENT day of the same week where it can anchor its own cluster. A day of pure Check-Ins in a tight cluster beats a day that bounces across the state chasing a single Onboarding.
-- If two Onboardings are on opposite ends of NJ (e.g., Cherry Hill and Jersey City), split them: one day for each. Do not pair them just to hit a "booking per day" quota.
-- The day's cluster comes first. Tier floor is a nice-to-have, not a reason to add 60+ miles.
+- Soft floor: try to land at least ONE Onboarding or Training on each work day, so every day has a "reason to be there." This is subordinate to the region-lock rule.
+- HARD rule: NEVER force a Tier 1 or Tier 2 onto a day whose region doesn't match the stop. If the only Tier 1 on Wednesday is SOUTH but Wednesday is locked to NORTH, move it to a day that matches its region. If none of the 3 days matches, defer to unassigned.
+- The day's region comes first. Tier floor is a nice-to-have, not a reason to break the region lock.
 
 DAY STRUCTURE:
-- Tuesday = high-energy launch day. Lead with Tier 1 if available AND it fits the Tue cluster.
-- Wednesday = middle of the week, heaviest Tier 2 training day IF the geography supports it.
-- Thursday = wrap-up, often mixed, good for clusters Sky wants visibility on before the weekend.
-- Assignment priority: pick the day whose cluster best fits the stop's address, NOT the day with the "right" tier mix.
+- Tuesday = busiest region of the week.
+- Wednesday = second busiest.
+- Thursday = lightest / wrap-up.
+- Assignment priority: the stop's region determines its day. Within a day, order by rough geography starting closest to Union NJ (for north/central days) or closest to the region's entry highway (for south days).
 
 VOICE (when writing rationale fields): Highsman Training Register — declarative, no hedging, no "could/might/perhaps". Explain the logic in 2–3 sentences per day.
 
@@ -347,61 +443,113 @@ function greedyFallback(candidates: Candidate[]): {
   unassigned: string[];
   overallRationale: string;
 } {
-  // Sort: Tier 1 first, then Tier 2, then Tier 3 by priority (highest = oldest stale).
+  // Region-first greedy packer. Each day is locked to ONE NJ region so drive
+  // time stays tight. Which region a day gets depends on where the demand is
+  // heaviest — we count candidates per region and assign the busiest two to
+  // the first two days, the lightest to Thursday. Ties break N > C > S.
   const tierOrder: Record<Tier, number> = {onboarding: 0, training: 1, checkin: 2};
-  const sorted = [...candidates].sort((a, b) => {
-    const t = tierOrder[a.tier] - tierOrder[b.tier];
-    if (t !== 0) return t;
-    return b.priority - a.priority;
-  });
 
-  const days: Record<Day, {stops: string[]; used: number}> = {
-    tuesday: {stops: [], used: 0},
-    wednesday: {stops: [], used: 0},
-    thursday: {stops: [], used: 0},
+  const byRegion: Record<NjRegion, Candidate[]> = {
+    north: [],
+    central: [],
+    south: [],
   };
+  for (const c of candidates) byRegion[c.region].push(c);
+
+  // Sort each region bucket: Tier 1 → Tier 2 → Tier 3 by priority desc.
+  for (const r of ['north', 'central', 'south'] as NjRegion[]) {
+    byRegion[r].sort((a, b) => {
+      const t = tierOrder[a.tier] - tierOrder[b.tier];
+      if (t !== 0) return t;
+      return b.priority - a.priority;
+    });
+  }
+
+  // Rank regions by total candidates (heaviest first). Break ties N > C > S.
+  const regionOrder = (['north', 'central', 'south'] as NjRegion[])
+    .sort((a, b) => {
+      const diff = byRegion[b].length - byRegion[a].length;
+      if (diff !== 0) return diff;
+      const rank: Record<NjRegion, number> = {north: 0, central: 1, south: 2};
+      return rank[a] - rank[b];
+    });
+
+  // Assign days — heaviest region gets Tue (fresh energy), next gets Wed,
+  // lightest gets Thu. If two regions are empty, the same region can pick up
+  // two days (overflow spills into the second slot).
   const dayList: Day[] = ['tuesday', 'wednesday', 'thursday'];
+  const dayRegion: Record<Day, NjRegion> = {
+    tuesday: regionOrder[0],
+    wednesday: regionOrder[1],
+    thursday: regionOrder[2],
+  };
+
+  const days: Record<Day, {stops: string[]; used: number; region: NjRegion}> = {
+    tuesday: {stops: [], used: 0, region: dayRegion.tuesday},
+    wednesday: {stops: [], used: 0, region: dayRegion.wednesday},
+    thursday: {stops: [], used: 0, region: dayRegion.thursday},
+  };
+
   const unassigned: string[] = [];
 
-  // Round-robin by tier so each day gets a mix rather than tuesday eating all T1.
-  // Two hard caps: (1) time budget with realistic 30-min drive buffer, (2)
-  // MAX_STOPS_PER_DAY. Either cap blocks a placement and sends the stop to
-  // unassigned — Sky reviews those manually or they roll to next week.
-  let di = 0;
-  for (const c of sorted) {
-    let placed = false;
-    for (let attempts = 0; attempts < 3 && !placed; attempts++) {
-      const d = dayList[(di + attempts) % 3];
-      if (days[d].stops.length >= MAX_STOPS_PER_DAY) continue;
-      if (days[d].used + c.dwellMin + TRAVEL_BUFFER_MIN <= DAY_BUDGET_MIN) {
-        days[d].stops.push(c.accountId);
-        days[d].used += c.dwellMin + TRAVEL_BUFFER_MIN;
-        placed = true;
+  // Pack each day from its region's queue. Hard caps: MAX_STOPS_PER_DAY and
+  // DAY_BUDGET_MIN. Stops that don't fit roll to unassigned — NOT to the next
+  // day (that would violate the one-region-per-day rule).
+  for (const d of dayList) {
+    const queue = byRegion[days[d].region];
+    while (queue.length > 0) {
+      const c = queue[0];
+      if (days[d].stops.length >= MAX_STOPS_PER_DAY) break;
+      if (days[d].used + c.dwellMin + TRAVEL_BUFFER_MIN > DAY_BUDGET_MIN) break;
+      days[d].stops.push(c.accountId);
+      days[d].used += c.dwellMin + TRAVEL_BUFFER_MIN;
+      queue.shift();
+    }
+  }
+
+  // Second pass — if a day was over-assigned and another day has room AND the
+  // same region, spill there. (Happens when two days land the same region due
+  // to region emptiness.)
+  for (const d of dayList) {
+    const queue = byRegion[days[d].region];
+    for (const otherDay of dayList) {
+      if (otherDay === d) continue;
+      if (days[otherDay].region !== days[d].region) continue;
+      while (queue.length > 0) {
+        const c = queue[0];
+        if (days[otherDay].stops.length >= MAX_STOPS_PER_DAY) break;
+        if (days[otherDay].used + c.dwellMin + TRAVEL_BUFFER_MIN > DAY_BUDGET_MIN) break;
+        days[otherDay].stops.push(c.accountId);
+        days[otherDay].used += c.dwellMin + TRAVEL_BUFFER_MIN;
+        queue.shift();
       }
     }
-    if (!placed) unassigned.push(c.accountId);
-    di = (di + 1) % 3;
   }
+
+  // Anything still in a region queue = unassigned for the week.
+  for (const r of ['north', 'central', 'south'] as NjRegion[]) {
+    for (const c of byRegion[r]) unassigned.push(c.accountId);
+  }
+
+  const regionLabel = (r: NjRegion) =>
+    r === 'north' ? 'North NJ' : r === 'central' ? 'Central NJ' : 'South NJ';
 
   return {
     tuesday: {
       stops: days.tuesday.stops,
-      rationale:
-        'Deterministic fallback — no Anthropic key available. Stops packed greedily by tier priority.',
+      rationale: `Region-locked fallback — Tuesday targets ${regionLabel(days.tuesday.region)} to keep drive time tight. Tier 1 and Tier 2 lead; oldest Check-Ins fill the rest.`,
     },
     wednesday: {
       stops: days.wednesday.stops,
-      rationale:
-        'Deterministic fallback — balanced across the week to respect day budgets.',
+      rationale: `Region-locked fallback — Wednesday covers ${regionLabel(days.wednesday.region)}. One cluster, no cross-state zigzag.`,
     },
     thursday: {
       stops: days.thursday.stops,
-      rationale:
-        'Deterministic fallback — remaining stops, oldest check-ins first.',
+      rationale: `Region-locked fallback — Thursday wraps ${regionLabel(days.thursday.region)}. Stops ordered by priority within the cluster.`,
     },
     unassigned,
     overallRationale:
-      'AI strategist offline — this plan is a deterministic tier-priority split. Sky should review manually before Serena heads out.',
+      'AI strategist offline — deterministic plan. Each day locked to one NJ region (North / Central / South) to minimize drive. Outliers like Shore House Canna are held for quarterly drop-in runs, not this week.',
   };
 }
 
@@ -442,6 +590,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     for (const [accountId, {tier, dealId}] of tierByAcct.entries()) {
       const a = acctById.get(accountId);
       if (!a) continue;
+      const geo = njRegion(a.city);
       candidates.push({
         accountId,
         name: a.name,
@@ -457,6 +606,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         staleDays: a.visitDate
           ? daysBetween(today, new Date(a.visitDate))
           : null,
+        region: geo.region,
+        infrequentDropIn: geo.infrequentDropIn,
       });
     }
 
@@ -471,6 +622,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       // never-visited accounts with orders: low priority here — Sky's workflow
       // should catch them via New Customer onboard flow.
       const priority = stale != null ? Math.min(500, 400 + (stale - CHECKIN_MIN_STALE_DAYS)) : 300;
+      const geo = njRegion(a.city);
       candidates.push({
         accountId: a.id,
         name: a.name,
@@ -483,16 +635,24 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         dealId: null,
         lastVisitDate: a.visitDate,
         staleDays: stale,
+        region: geo.region,
+        infrequentDropIn: geo.infrequentDropIn,
       });
     }
 
-    // Cap the pool for Claude — anything beyond top-30 by priority is not
+    // Pull outliers OUT of the weekly plan — they go on a quarterly "Shore
+    // day" run, not a Tue/Wed/Thu route. Keep them discoverable via a separate
+    // `droppedForOutlier` list on the response so Sky can see what was excluded.
+    const outliers = candidates.filter((c) => c.infrequentDropIn);
+    const inRegion = candidates.filter((c) => !c.infrequentDropIn);
+
+    // Cap the pool for Claude — anything beyond top-40 by priority is not
     // landing on a 3-day plan anyway.
-    candidates.sort((a, b) => b.priority - a.priority);
-    const capped = candidates.slice(0, 40);
+    inRegion.sort((a, b) => b.priority - a.priority);
+    const capped = inRegion.slice(0, 40);
 
     const accountsById: Record<string, any> = {};
-    for (const c of capped) {
+    for (const c of [...capped, ...outliers]) {
       accountsById[c.accountId] = {
         name: c.name,
         address: c.address,
@@ -504,6 +664,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         dwellMin: c.dwellMin,
         lastVisitDate: c.lastVisitDate,
         dealId: c.dealId,
+        region: c.region,
+        infrequentDropIn: c.infrequentDropIn,
       };
     }
 
@@ -517,6 +679,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         .toISOString()
         .slice(0, 10),
     };
+
+    const outlierIds = outliers.map((o) => o.accountId);
 
     // ─── If Anthropic not configured, run greedy fallback ─────────────────
     if (!isAnthropicConfigured(env) || capped.length === 0) {
@@ -534,10 +698,12 @@ export async function loader({request, context}: LoaderFunctionArgs) {
           accountsById,
           overallRationale: fb.overallRationale,
           unassigned: fb.unassigned,
+          droppedForOutlier: outlierIds,
           sources: {
             zoho: true,
             anthropic: false,
             candidatePoolSize: capped.length,
+            outlierCount: outliers.length,
           },
         },
         {headers: {'Cache-Control': 'no-store'}},
@@ -555,17 +721,36 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     userLines.push(`TRAVEL BUFFER: ${TRAVEL_BUFFER_MIN} min between stops (NJ realistic).`);
     userLines.push(`MAX STOPS PER DAY: ${MAX_STOPS_PER_DAY}. Overflow → unassigned.`);
     userLines.push('');
-    userLines.push(`CANDIDATE POOL (${capped.length} stops):`);
+    // Region distribution — helps Claude decide which region gets which day.
+    const regionCounts: Record<NjRegion, number> = {north: 0, central: 0, south: 0};
+    for (const c of capped) regionCounts[c.region]++;
+    userLines.push(
+      `REGION DISTRIBUTION: NORTH=${regionCounts.north} · CENTRAL=${regionCounts.central} · SOUTH=${regionCounts.south}`,
+    );
+    userLines.push('');
+    userLines.push(`CANDIDATE POOL (${capped.length} stops, outliers already excluded):`);
     for (const c of capped) {
       const tag = c.tier === 'onboarding' ? 'ONBOARDING' : c.tier === 'training' ? 'TRAINING' : 'CHECK-IN';
       const stale = c.staleDays != null ? ` · stale ${c.staleDays}d` : c.lastVisitDate ? '' : ' · never-visited';
+      const region = c.region.toUpperCase();
       userLines.push(
-        `  • ${c.accountId} — ${c.name} — ${c.city || '(no city)'} — ${tag} · ${c.dwellMin}m${stale} · priority:${c.priority}`,
+        `  • ${c.accountId} — ${c.name} — ${c.city || '(no city)'} [${region}] — ${tag} · ${c.dwellMin}m${stale} · priority:${c.priority}`,
       );
+    }
+    if (outliers.length > 0) {
+      userLines.push('');
+      userLines.push(
+        `INFREQUENT DROP-INS (EXCLUDED — do NOT assign to any day this week, ever):`,
+      );
+      for (const c of outliers) {
+        userLines.push(
+          `  • ${c.accountId} — ${c.name} — ${c.city || '(no city)'} · quarterly Shore run only`,
+        );
+      }
     }
     userLines.push('');
     userLines.push(
-      `TASK: Call build_weekly_plan once. Cluster geographically FIRST — a day of tight check-ins beats a day chasing a lone Onboarding 90 min away. Target ≥1 Onboarding/Training per day ONLY when it fits that day's cluster; otherwise push it to a different day of this week. Respect priority rules. Keep every day under ${DAY_BUDGET_MIN} min (stops + drive) AND under ${MAX_STOPS_PER_DAY} stops. When in doubt, defer to unassigned — an overbooked or out-of-way day is worse than a light one.`,
+      `TASK: Call build_weekly_plan once. LOCK each day to ONE region (NORTH / CENTRAL / SOUTH) based on REGION DISTRIBUTION — busiest region on Tuesday, lightest on Thursday. Never mix regions within a day. Within a region, pick the stops using priority rules. Target ≥1 Onboarding/Training per day ONLY when it fits that day's region; otherwise push to a day whose region matches. Keep every day under ${DAY_BUDGET_MIN} min (stops + drive) AND under ${MAX_STOPS_PER_DAY} stops. When in doubt, defer to unassigned — an overbooked or region-mixed day is worse than a light one.`,
     );
 
     try {
@@ -606,10 +791,12 @@ export async function loader({request, context}: LoaderFunctionArgs) {
           accountsById,
           overallRationale: plan?.overallRationale || '',
           unassigned: plan?.unassigned || [],
+          droppedForOutlier: outlierIds,
           sources: {
             zoho: true,
             anthropic: true,
             candidatePoolSize: capped.length,
+            outlierCount: outliers.length,
           },
           usage: result.usage,
         },
@@ -631,10 +818,12 @@ export async function loader({request, context}: LoaderFunctionArgs) {
           accountsById,
           overallRationale: fb.overallRationale,
           unassigned: fb.unassigned,
+          droppedForOutlier: outlierIds,
           sources: {
             zoho: true,
             anthropic: false,
             candidatePoolSize: capped.length,
+            outlierCount: outliers.length,
           },
           warning: err.message,
         },

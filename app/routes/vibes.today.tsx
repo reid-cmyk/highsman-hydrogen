@@ -21,6 +21,9 @@ export const meta: MetaFunction = () => [
   {name: 'robots', content: 'noindex,nofollow'},
 ];
 
+// Suppress the customer-facing Highsman.com site nav + footer on this staff page.
+export const handle = {hideHeader: true, hideFooter: true};
+
 type Env = {GOOGLE_MAPS_JS_KEY?: string};
 
 type Stop = {
