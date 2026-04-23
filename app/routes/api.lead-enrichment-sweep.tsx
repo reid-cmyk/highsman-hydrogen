@@ -70,11 +70,20 @@ async function run(request: Request, env: Record<string, string | undefined>) {
   // serial fan-out. This keeps the nightly budget focused on leads that
   // haven't been touched — dead-ends don't chew through Apollo RPS every
   // single night. See memory: reference_zoho_lead_sales_floor_fields.md.
+  //
+  // COQL GOTCHA: Zoho v7 COQL only accepts BINARY `and`/`or` operators —
+  // `a or b or c or d` 502s with SYNTAX_ERROR near 'where'. Same for
+  // `a and b and c`. So the 4-way field-null OR is expressed as a pair
+  // of paired ORs, and the top-level ANDs are nested: ((A and B) and C).
+  // Flat N-ary joins silently broke the sweep on first run. See memory
+  // reference_zoho_coql_binary_ops.md for the pattern to reuse.
   const q =
     "select id, First_Name, Last_Name, Company, Phone, Mobile, Email, LinkedIn_URL, " +
     "Website, City, State, Enrichment_Status, Created_Time from Leads " +
-    "where (Company is not null) and (" +
-    "(Phone is null) or (Mobile is null) or (Email is null) or (LinkedIn_URL is null)" +
+    "where (" +
+    "(Company is not null) and (" +
+    "((Phone is null) or (Mobile is null)) or ((Email is null) or (LinkedIn_URL is null))" +
+    ")" +
     ") and (" +
     "(Enrichment_Status is null) or (Enrichment_Status = 'Pending')" +
     ") " +
