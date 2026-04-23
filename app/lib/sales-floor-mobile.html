@@ -37,8 +37,9 @@
     };
   </script>
 
-  <!-- App styles — mobile-first, overrides desktop defaults -->
-  <link rel="stylesheet" href="/sales-floor/mobile/styles.css" />
+  <!-- App styles — mobile-first, overrides desktop defaults.
+       ?v= busts Cloudflare edge + SW precache when styles.css ships changes. -->
+  <link rel="stylesheet" href="/sales-floor/mobile/styles.css?v=6" />
 
   <style>
     /* Inline: suppress desktop-only top bar even if referenced */
