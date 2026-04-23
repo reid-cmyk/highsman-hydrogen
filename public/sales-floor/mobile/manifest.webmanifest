@@ -1,0 +1,55 @@
+{
+  "name": "Highsman Sales Floor",
+  "short_name": "Floor",
+  "description": "Highsman Sales Floor — rep command center.",
+  "start_url": "/sales-floor/mobile",
+  "scope": "/sales-floor/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#000000",
+  "background_color": "#000000",
+  "lang": "en-US",
+  "dir": "ltr",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/sales-floor/mobile/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/sales-floor/mobile/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/sales-floor/mobile/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Leads",
+      "short_name": "Leads",
+      "url": "/sales-floor/mobile?tab=leads",
+      "description": "Jump to the Leads tab"
+    },
+    {
+      "name": "Orders",
+      "short_name": "Orders",
+      "url": "/sales-floor/mobile?tab=orders",
+      "description": "Jump to the Orders tab"
+    },
+    {
+      "name": "Text",
+      "short_name": "Text",
+      "url": "/sales-floor/mobile?tab=sms",
+      "description": "Jump to SMS"
+    }
+  ],
+  "prefer_related_applications": false
+}

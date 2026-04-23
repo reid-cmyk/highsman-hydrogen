@@ -19,10 +19,22 @@ export const meta: MetaFunction = () => {
 // sales_floor_rep=<id> cookie alongside the standard auth cookie.
 // Adding/rotating a rep = one edit to sales-floor-reps.ts.
 
+// Route mobile vs desktop by User-Agent. Mobile reps get the PWA shell at
+// /sales-floor/mobile, desktop reps get the full desktop dashboard at
+// /sales-floor/app. Mobile reps who WANT the desktop view can still reach it
+// via the "Desktop View" link inside the mobile More sheet, and desktop reps
+// can bookmark /sales-floor/mobile directly if they want to preview it.
+function destinationForUA(ua: string | null): string {
+  if (!ua) return '/sales-floor/app';
+  // Phones only — iPad/tablets keep the desktop view since they have the screen.
+  const isPhone = /iPhone|Android.*Mobile|Mobile Safari|IEMobile|Opera Mini/i.test(ua);
+  return isPhone ? '/sales-floor/mobile' : '/sales-floor/app';
+}
+
 export async function loader({request}: LoaderFunctionArgs) {
   const {authed, repId} = parseSalesFloorCookies(request.headers.get('Cookie'));
   if (authed && repId) {
-    return redirect('/sales-floor/app');
+    return redirect(destinationForUA(request.headers.get('User-Agent')));
   }
   return json({authenticated: false, error: null});
 }
@@ -41,7 +53,7 @@ export async function action({request}: ActionFunctionArgs) {
   const headers = new Headers();
   for (const c of cookieHeaders) headers.append('Set-Cookie', c);
 
-  return redirect('/sales-floor/app', {headers});
+  return redirect(destinationForUA(request.headers.get('User-Agent')), {headers});
 }
 
 export default function SalesFloorLogin() {
