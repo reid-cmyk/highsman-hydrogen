@@ -65,11 +65,18 @@ async function run(request: Request, env: Record<string, string | undefined>) {
   // Convention: a Lead is "enrichable" if Company is present (no Company
   // = no useful signal for any source) AND at least one of the 4 target
   // fields is empty.
+  // Enrichment_Status filter: once a lead is flagged 'Enriched' or 'No Match'
+  // we skip it on future sweeps. Only null / 'Pending' leads re-enter the
+  // serial fan-out. This keeps the nightly budget focused on leads that
+  // haven't been touched — dead-ends don't chew through Apollo RPS every
+  // single night. See memory: reference_zoho_lead_sales_floor_fields.md.
   const q =
     "select id, First_Name, Last_Name, Company, Phone, Mobile, Email, LinkedIn_URL, " +
-    "Website, City, State, Created_Time from Leads " +
+    "Website, City, State, Enrichment_Status, Created_Time from Leads " +
     "where (Company is not null) and (" +
     "(Phone is null) or (Mobile is null) or (Email is null) or (LinkedIn_URL is null)" +
+    ") and (" +
+    "(Enrichment_Status is null) or (Enrichment_Status = 'Pending')" +
     ") " +
     "order by Created_Time desc " +
     `limit ${SWEEP_BATCH}`;
@@ -137,12 +144,38 @@ async function run(request: Request, env: Record<string, string | undefined>) {
           reason: data?.error || 'no high-confidence matches',
         });
       }
+
+      // Flag Enrichment_Status on the Lead so future sweeps skip it.
+      // 'Enriched' = wrote at least one field this run.
+      // 'No Match' = ran all 4 sources and none cleared the confidence bar.
+      // Reps can manually flip this back to 'Pending' from the Sales Floor
+      // re-enrichment chip when they want another pass (e.g. after a
+      // customer-provided LinkedIn URL lands on the record).
+      const newStatus: 'Enriched' | 'No Match' =
+        appliedList.length > 0 ? 'Enriched' : 'No Match';
+      try {
+        await fetch(`https://www.zohoapis.com/crm/v7/Leads/${row.id}`, {
+          method: 'PUT',
+          headers: {
+            Authorization: `Zoho-oauthtoken ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            data: [{Enrichment_Status: newStatus}],
+          }),
+        });
+      } catch {
+        /* non-fatal — next sweep will retry */
+      }
     } catch (e: any) {
       skipped.push({
         leadId: row.id,
         company: row.Company || '',
         reason: `fetch failed: ${e?.message || 'unknown'}`,
       });
+      // Do NOT write Enrichment_Status on a transient fetch failure — we
+      // want these leads to re-enter the sweep on the next tick rather
+      // than get stuck on 'No Match' because of a one-off worker timeout.
     }
   }
 
