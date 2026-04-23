@@ -1910,6 +1910,39 @@ a.hs-contact-meta-cell:active {
   margin-bottom: 6px;
 }
 
+/* Inline icon inside a dual-row label — Store / Mobile glyph sits flush
+ * with the Teko label, small gold tint so it reads as a label affordance,
+ * not a decorative flourish. */
+.hs-addfield-label i {
+  color: var(--hs-gold);
+  margin-right: 6px;
+  font-size: 11px;
+  opacity: 0.85;
+  vertical-align: 1px;
+}
+
+/* Sublabel used on the dual Shop/Cell rows to hint which number goes where.
+ * Barlow, not Teko — this is helper copy, not a header. */
+.hs-addfield-hint {
+  margin-left: 6px;
+  font-family: 'Barlow Semi Condensed', sans-serif;
+  font-size: 11.5px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: rgba(255, 255, 255, 0.34);
+}
+
+/* Wrapper for the two stacked rows (Shop line, then Cell). Slight gap so
+ * they read as a pair, not a dense form block. */
+.hs-addfield-dual-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.hs-addfield-dual-rows.hidden { display: none; }
+.hs-addfield-single-row.hidden { display: none; }
+
 .hs-addfield-input {
   width: 100%;
   background: #0A0A0D;

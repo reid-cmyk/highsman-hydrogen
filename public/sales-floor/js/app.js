@@ -2145,6 +2145,11 @@ function contactCardHtml(opts) {
     status,               // for leads: hot|warm|cold (renders badge)
     location,             // for accounts: "City, ST"
     phone,
+    mobile,               // Leads: decision-maker cell (Zoho Mobile).
+                          // When BOTH phone + mobile are set on a Lead card
+                          // the action row splits into Shop / Cell pills.
+                          // Accounts: unused (buyer.Mobile rolls up into
+                          // `phone` before the card is built).
     email,
     onOpen,               // optional outer click handler (e.g. open brief)
     emailHandler,
@@ -2169,8 +2174,27 @@ function contactCardHtml(opts) {
   const display = name || '—';
   const safeName = escapeHtml(display);
   const safeSub = escapeHtml(subtitle || '');
-  const phonePretty = phone ? prettyPhone(phone) : '';
-  const phoneE164 = phone ? (normalizePhoneE164(phone) || phone) : '';
+
+  // Two-phone split for Leads: Phone = shop switchboard, Mobile = buyer cell.
+  // The split only visually materializes when BOTH are populated AND this is
+  // a Lead card. Everywhere else (single phone, Account cards), `phone` is
+  // treated as the one-and-only channel and the action bar stays 4-up.
+  const isLead = kind === 'lead';
+  const shopRaw  = isLead ? (phone  || '') : (phone || '');
+  const cellRaw  = isLead ? (mobile || '') : '';
+  const hasShop  = !!shopRaw;
+  const hasCell  = !!cellRaw;
+  const hasBoth  = isLead && hasShop && hasCell;
+
+  const shopE164 = shopRaw ? (normalizePhoneE164(shopRaw) || shopRaw) : '';
+  const cellE164 = cellRaw ? (normalizePhoneE164(cellRaw) || cellRaw) : '';
+  const shopPretty = shopRaw ? prettyPhone(shopRaw) : '';
+  const cellPretty = cellRaw ? prettyPhone(cellRaw) : '';
+
+  // Legacy single-phone aliases — the rest of the function still uses these.
+  // When only one number exists, we collapse to the existing Call pill.
+  const phonePretty = cellPretty || shopPretty;
+  const phoneE164   = cellE164   || shopE164;
   const ico = kind === 'account'
     ? '<i class="fa-solid fa-building"></i>'
     : initials(display);
@@ -2184,7 +2208,21 @@ function contactCardHtml(opts) {
     : '';
 
   const metaCells = [];
-  if (phoneE164) {
+  if (hasBoth) {
+    // Two phones — label each with a one-letter tag so Sky sees at a glance
+    // which is the shop switchboard vs. Jamie's cell. Tight "S" / "C" chips
+    // in front of the digits keep it readable in the narrow meta strip.
+    metaCells.push(`
+      <a class="hs-contact-meta-cell" href="tel:${escapeAttr(shopE164)}" onclick="event.stopPropagation();" title="Shop line: ${escapeAttr(shopPretty)}">
+        <i class="fa-solid fa-store"></i>
+        <span>${escapeHtml(shopPretty)}</span>
+      </a>`);
+    metaCells.push(`
+      <a class="hs-contact-meta-cell" href="tel:${escapeAttr(cellE164)}" onclick="event.stopPropagation();" title="Cell: ${escapeAttr(cellPretty)}">
+        <i class="fa-solid fa-mobile-screen"></i>
+        <span>${escapeHtml(cellPretty)}</span>
+      </a>`);
+  } else if (phoneE164) {
     metaCells.push(`
       <a class="hs-contact-meta-cell" href="tel:${escapeAttr(phoneE164)}" onclick="event.stopPropagation();" title="Call ${escapeAttr(phonePretty)}">
         <i class="fa-solid fa-phone"></i>
@@ -2206,41 +2244,68 @@ function contactCardHtml(opts) {
       </span>`);
   }
 
-  // ── Action bar — Call · Text · Email · Brief.
-  // Layout stays 4-up across every card (no "this card has 3 buttons, that
-  // card has 2" jitter). When a channel is empty AND we have a Zoho id to
-  // write back to, the disabled button is replaced with an "+ Add phone" /
-  // "+ Add email" pill that opens the inline add-field sheet. Accounts
-  // without a buyer can't add data here — the buyer picker handles that
-  // flow first. Leads always have a Zoho id (they ARE the Zoho record).
+  // ── Action bar — Call · Text · Email · Brief (+ Shop/Cell split on Leads).
+  // Layout stays 4-up across every Account card (no jitter). Lead cards with
+  // BOTH Phone + Mobile expand to a 5-up row: Shop · Cell · Text · Email ·
+  // Brief. When a channel is empty AND we have a Zoho id to write back to,
+  // the disabled button is replaced with an "+ Add phone" / "+ Add email"
+  // pill that opens the inline add-field sheet. For Leads, the add-field
+  // sheet supports two-input mode (Shop line + Cell).
   const canAdd = !!(zohoModule && zohoId);
   const safeNameAttr = escapeAttr(display);
+  // For Leads we open the add-field sheet in 'lead-phones' mode (two inputs).
+  // For everything else, single-input 'phone' or 'email'.
+  const addPhoneKind = isLead && canAdd ? 'lead-phones' : 'phone';
   const addPhoneCall = canAdd
-    ? `openAddField(${JSON.stringify(zohoModule)}, ${JSON.stringify(zohoId)}, 'phone', ${JSON.stringify(display)}, ${idx}, ${JSON.stringify(kind)})`
+    ? `openAddField(${JSON.stringify(zohoModule)}, ${JSON.stringify(zohoId)}, ${JSON.stringify(addPhoneKind)}, ${JSON.stringify(display)}, ${idx}, ${JSON.stringify(kind)})`
     : '';
   const addEmailCall = canAdd
     ? `openAddField(${JSON.stringify(zohoModule)}, ${JSON.stringify(zohoId)}, 'email', ${JSON.stringify(display)}, ${idx}, ${JSON.stringify(kind)})`
     : '';
 
-  const callBtn = phoneE164
-    ? `<a class="hs-action-pill is-call" href="tel:${escapeAttr(phoneE164)}" onclick="event.stopPropagation(); ${kind === 'lead' ? `callLead(leads[${idx}]);` : ''}" title="Call">
-         <i class="fa-solid fa-phone"></i><span>Call</span>
+  // Shop + Cell split — only materializes for Lead cards with BOTH numbers.
+  // Otherwise we drop back to the single Call pill (phoneE164 prefers cell).
+  const shopPill = hasBoth
+    ? `<a class="hs-action-pill is-call" href="tel:${escapeAttr(shopE164)}"
+          onclick="event.stopPropagation(); ${isLead ? `callLead(leads[${idx}]);` : ''}"
+          title="Call shop line">
+         <i class="fa-solid fa-store"></i><span>Shop</span>
        </a>`
-    : (canAdd
-        ? `<button class="hs-action-pill is-call is-add" onclick="event.stopPropagation(); ${addPhoneCall}" title="Add a phone number for ${safeNameAttr}">
-             <i class="fa-solid fa-plus"></i><span>Add phone</span>
-           </button>`
-        : `<button class="hs-action-pill is-call is-disabled" disabled title="No phone on record">
-             <i class="fa-solid fa-phone"></i><span>Call</span>
-           </button>`);
+    : '';
+  const cellPill = hasBoth
+    ? `<a class="hs-action-pill is-call" href="tel:${escapeAttr(cellE164)}"
+          onclick="event.stopPropagation(); ${isLead ? `callLead(leads[${idx}]);` : ''}"
+          title="Call cell">
+         <i class="fa-solid fa-mobile-screen"></i><span>Cell</span>
+       </a>`
+    : '';
 
-  const textBtn = phoneE164
+  const callBtn = hasBoth
+    ? `${shopPill}${cellPill}`
+    : (phoneE164
+        ? `<a class="hs-action-pill is-call" href="tel:${escapeAttr(phoneE164)}" onclick="event.stopPropagation(); ${kind === 'lead' ? `callLead(leads[${idx}]);` : ''}" title="Call">
+             <i class="fa-solid fa-phone"></i><span>Call</span>
+           </a>`
+        : (canAdd
+            ? `<button class="hs-action-pill is-call is-add" onclick="event.stopPropagation(); ${addPhoneCall}" title="Add a phone number for ${safeNameAttr}">
+                 <i class="fa-solid fa-plus"></i><span>${isLead ? 'Add phones' : 'Add phone'}</span>
+               </button>`
+            : `<button class="hs-action-pill is-call is-disabled" disabled title="No phone on record">
+                 <i class="fa-solid fa-phone"></i><span>Call</span>
+               </button>`));
+
+  // Text routes to the CELL on leads (can't SMS a shop landline). For
+  // everything else it routes to whichever number we have. The add-pill
+  // for a missing text target on a Lead still opens the two-input sheet so
+  // Sky can capture both numbers at once.
+  const textTarget = isLead ? cellE164 : phoneE164;
+  const textBtn = textTarget
     ? `<button class="hs-action-pill is-text" onclick="event.stopPropagation(); ${textHandler}" title="Send text">
          <i class="fa-solid fa-comment-sms"></i><span>Text</span>
        </button>`
     : (canAdd
-        ? `<button class="hs-action-pill is-text is-add" onclick="event.stopPropagation(); ${addPhoneCall}" title="Add a phone number for ${safeNameAttr}">
-             <i class="fa-solid fa-plus"></i><span>Add phone</span>
+        ? `<button class="hs-action-pill is-text is-add" onclick="event.stopPropagation(); ${addPhoneCall}" title="Add a cell number for ${safeNameAttr}">
+             <i class="fa-solid fa-plus"></i><span>Add cell</span>
            </button>`
         : `<button class="hs-action-pill is-text is-disabled" disabled title="No mobile number on record">
              <i class="fa-solid fa-comment-sms"></i><span>Text</span>
@@ -2785,7 +2850,7 @@ function openAddField(module, recordId, kind, recordName, cardIdx, cardKind) {
   if (!module || !recordId) return;
   _addField.module = module;
   _addField.recordId = recordId;
-  _addField.kind = kind;
+  _addField.kind = kind;   // 'phone' | 'email' | 'lead-phones'
   _addField.cardKind = cardKind;
   _addField.cardIdx = cardIdx;
 
@@ -2794,32 +2859,60 @@ function openAddField(module, recordId, kind, recordName, cardIdx, cardKind) {
   const sub = document.getElementById('hs-addfield-sub');
   const label = document.getElementById('hs-addfield-label');
   const input = document.getElementById('hs-addfield-input');
+  const singleRow = document.getElementById('hs-addfield-single-row');
+  const dualRows = document.getElementById('hs-addfield-dual-rows');
+  const shopInput = document.getElementById('hs-addfield-shop-input');
+  const cellInput = document.getElementById('hs-addfield-cell-input');
   const err = document.getElementById('hs-addfield-error');
-  if (!input) return;
 
-  if (kind === 'email') {
+  // Reset both modes' inputs + errors up front so the sheet never surfaces
+  // stale values from the previous invocation.
+  if (input) input.value = '';
+  if (shopInput) shopInput.value = '';
+  if (cellInput) cellInput.value = '';
+  if (err) { err.textContent = ''; err.classList.add('hidden'); }
+
+  if (kind === 'lead-phones') {
+    // Two-input Lead mode: Shop line + Cell.
+    eyebrow.textContent = 'Add phones';
+    title.textContent = recordName || '—';
+    sub.textContent = 'Capture either or both — whichever you got on the call.';
+    singleRow?.classList.add('hidden');
+    dualRows?.classList.remove('hidden');
+  } else if (kind === 'email') {
     eyebrow.textContent = 'Add email';
     label.textContent = 'Email address';
     input.type = 'email';
     input.inputMode = 'email';
     input.placeholder = 'buyer@shop.com';
+    title.textContent = recordName || '—';
+    sub.textContent = 'Saved to Zoho the moment you tap Save.';
+    singleRow?.classList.remove('hidden');
+    dualRows?.classList.add('hidden');
   } else {
+    // Single-phone fallback — used for Contacts cards where we only track
+    // the buyer's one number.
     eyebrow.textContent = 'Add phone';
     label.textContent = 'Phone number';
     input.type = 'tel';
     input.inputMode = 'tel';
     input.placeholder = '(555) 123-4567';
+    title.textContent = recordName || '—';
+    sub.textContent = 'Saved to Zoho the moment you tap Save.';
+    singleRow?.classList.remove('hidden');
+    dualRows?.classList.add('hidden');
   }
-  title.textContent = recordName || '—';
-  sub.textContent = 'Saved to Zoho the moment you tap Save.';
-  input.value = '';
-  err.textContent = '';
-  err.classList.add('hidden');
 
   const sheet = document.getElementById('hs-addfield-sheet');
   sheet.classList.remove('hidden');
   // Let the backdrop render before focusing so iOS actually raises the keyboard.
-  setTimeout(() => input.focus(), 120);
+  setTimeout(() => {
+    if (kind === 'lead-phones') {
+      shopInput?.focus();
+    } else {
+      input?.focus();
+    }
+  }, 120);
 }
 
 function closeAddField() {
@@ -2833,44 +2926,71 @@ function closeAddField() {
 
 async function submitAddField() {
   const input = document.getElementById('hs-addfield-input');
+  const shopInput = document.getElementById('hs-addfield-shop-input');
+  const cellInput = document.getElementById('hs-addfield-cell-input');
   const err = document.getElementById('hs-addfield-error');
   const saveBtn = document.getElementById('hs-addfield-save');
-  const val = (input?.value || '').trim();
-  if (!val) {
-    err.textContent = 'Enter a value before saving.';
-    err.classList.remove('hidden');
-    return;
-  }
 
-  // Client-side sanity — the server validates again, but this keeps bad
-  // input from round-tripping when the rep's thumb hits Save too fast.
-  if (_addField.kind === 'email') {
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(val)) {
-      err.textContent = 'That doesn\u2019t look like an email address.';
+  const isDigitsOk = (s) => {
+    const d = (s || '').replace(/\D/g, '');
+    return d.length >= 7 && d.length <= 15;
+  };
+
+  // Build the patch based on which mode we're in.
+  // 'lead-phones' is two-input Shop + Cell — Phone = shop line, Mobile = cell.
+  // 'email' writes Email only. Default 'phone' writes both Phone and Mobile
+  // so both Call and Text pills light up on Contacts.
+  const patch = {};
+
+  if (_addField.kind === 'lead-phones') {
+    const shopVal = (shopInput?.value || '').trim();
+    const cellVal = (cellInput?.value || '').trim();
+    if (!shopVal && !cellVal) {
+      err.textContent = 'Add at least one phone — Shop or Cell.';
       err.classList.remove('hidden');
       return;
     }
-  } else {
-    const digits = val.replace(/\D/g, '');
-    if (digits.length < 7 || digits.length > 15) {
-      err.textContent = 'That phone number looks off. Use 10 digits for US.';
+    if (shopVal && !isDigitsOk(shopVal)) {
+      err.textContent = 'Shop number looks off. Use 10 digits for US.';
       err.classList.remove('hidden');
       return;
+    }
+    if (cellVal && !isDigitsOk(cellVal)) {
+      err.textContent = 'Cell number looks off. Use 10 digits for US.';
+      err.classList.remove('hidden');
+      return;
+    }
+    if (shopVal) patch.Phone = shopVal;
+    if (cellVal) patch.Mobile = cellVal;
+  } else {
+    const val = (input?.value || '').trim();
+    if (!val) {
+      err.textContent = 'Enter a value before saving.';
+      err.classList.remove('hidden');
+      return;
+    }
+
+    // Client-side sanity — the server validates again, but this keeps bad
+    // input from round-tripping when the rep's thumb hits Save too fast.
+    if (_addField.kind === 'email') {
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(val)) {
+        err.textContent = 'That doesn\u2019t look like an email address.';
+        err.classList.remove('hidden');
+        return;
+      }
+      patch.Email = val;
+    } else {
+      if (!isDigitsOk(val)) {
+        err.textContent = 'That phone number looks off. Use 10 digits for US.';
+        err.classList.remove('hidden');
+        return;
+      }
+      // On Contacts we write both so Call + Text both light up.
+      patch.Phone = val;
+      patch.Mobile = val;
     }
   }
   err.classList.add('hidden');
-
-  // Build the patch. Phone adds write to BOTH Phone and Mobile on Leads so
-  // the Call AND Text channels both light up on the card afterwards. On
-  // Contacts Zoho distinguishes them — we still write both to max out what
-  // the rep can do from the floor without a second trip through the sheet.
-  const patch = {};
-  if (_addField.kind === 'email') {
-    patch.Email = val;
-  } else {
-    patch.Phone = val;
-    patch.Mobile = val;
-  }
 
   saveBtn.disabled = true;
   saveBtn.classList.add('is-saving');
@@ -2902,10 +3022,17 @@ async function submitAddField() {
       if (typeof renderAccounts === 'function') renderAccounts();
     }
 
-    toast(
-      _addField.kind === 'email' ? 'Email saved to Zoho' : 'Phone saved to Zoho',
-      'check',
-    );
+    const msg =
+      _addField.kind === 'email'
+        ? 'Email saved to Zoho'
+        : _addField.kind === 'lead-phones'
+          ? (patch.Phone && patch.Mobile
+              ? 'Phones saved to Zoho'
+              : patch.Mobile
+                ? 'Cell saved to Zoho'
+                : 'Shop line saved to Zoho')
+          : 'Phone saved to Zoho';
+    toast(msg, 'check');
     closeAddField();
   } catch (e) {
     err.textContent = e.message || 'Save failed. Try again.';
