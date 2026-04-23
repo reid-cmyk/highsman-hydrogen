@@ -1,9 +1,13 @@
 import type {LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getRepFromRequest, type SalesRep} from '../lib/sales-floor-reps';
+import {
+  getGmailAccessTokenForUser,
+  isGmailSAConfigured,
+} from '../lib/gmail-sa';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sales Floor — Gmail Thread Reader (per-rep OAuth)
+// Sales Floor — Gmail Thread Reader (Workspace Service Account impersonation)
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/sales-floor-gmail-thread?email=foo@bar.com&limit=8
 //   → { ok, messages: [{id, threadId, date, direction, from, to, subject,
@@ -11,66 +15,30 @@ import {getRepFromRequest, type SalesRep} from '../lib/sales-floor-reps';
 //
 // Powers the AI Pre-Call Brief: pulls the last N messages between the logged-in
 // rep's inbox and a given counterparty email, so Claude can summarize the
-// conversation history. Uses the rep's own Gmail OAuth (same env-var triple as
-// api.sales-floor-send-email.tsx) — NOT a service account. This keeps the
-// "from/to" mailbox boundaries honest: Sky sees Sky's inbox, not the whole org.
+// conversation history.
 //
-// We deliberately do NOT fetch full bodies — snippets + metadata are enough for
-// Claude to build context, and skipping the body fetch keeps this inside the
-// 25s worker budget even on threads with dozens of messages.
+// Auth model: one Workspace service account with domain-wide delegation
+// (`highsman-brief-reader@highsman.iam.gserviceaccount.com`) impersonates the
+// rep's own mailbox per request. Replaces the per-rep refresh_token triple —
+// one SA, any @highsman.com user. Mailbox boundary is still honest because
+// we only ever impersonate the logged-in rep's own address (`repEmail` below).
+//
+// We deliberately do NOT fetch full bodies — snippets + metadata are enough
+// for Claude to build context, and skipping the body fetch keeps this inside
+// the 25s worker budget even on threads with dozens of messages.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Per-rep token cache (shared with send route pattern, isolated cache).
-// 55-min TTL matches Google's 1-hour token lifetime.
-type TokenCacheEntry = {token: string; expiresAt: number};
-const gmailTokenCache = new Map<string, TokenCacheEntry>();
-
-type RepEnv = {
-  clientId: string;
-  clientSecret: string;
-  refreshToken: string;
-  from: string;
-};
-
-function resolveRepEnv(
+// Resolve the mailbox address to impersonate for this rep. Reads the same
+// `fromVar` / `defaultFrom` from the rep config we used under OAuth, but
+// without needing client/secret/refresh tokens — SA + DWD handles auth.
+function resolveRepEmail(
   rep: SalesRep,
   env: Record<string, string | undefined>,
-): RepEnv | null {
-  const clientId = env[rep.gmail.clientIdVar];
-  const clientSecret = env[rep.gmail.clientSecretVar];
-  const refreshToken = env[rep.gmail.refreshTokenVar];
-  if (!clientId || !clientSecret || !refreshToken) return null;
-
+): string | null {
   const fromOverride = rep.gmail.fromVar ? env[rep.gmail.fromVar] : undefined;
-  const from = (fromOverride || rep.gmail.defaultFrom).trim();
-  return {clientId, clientSecret, refreshToken, from};
-}
-
-async function getGmailAccessToken(repId: string, cfg: RepEnv): Promise<string> {
-  const now = Date.now();
-  const cached = gmailTokenCache.get(repId);
-  if (cached && now < cached.expiresAt) return cached.token;
-
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: new URLSearchParams({
-      client_id: cfg.clientId,
-      client_secret: cfg.clientSecret,
-      refresh_token: cfg.refreshToken,
-      grant_type: 'refresh_token',
-    }),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Gmail token refresh failed (${res.status}): ${text.slice(0, 300)}`);
-  }
-  const data = (await res.json()) as {access_token: string; expires_in?: number};
-  gmailTokenCache.set(repId, {
-    token: data.access_token,
-    expiresAt: now + 55 * 60 * 1000,
-  });
-  return data.access_token;
+  const from = (fromOverride || rep.gmail.defaultFrom || '').trim();
+  if (!from || !from.includes('@')) return null;
+  return from;
 }
 
 // Consumer email domains — skip domain-wide expansion on these, otherwise a
@@ -311,15 +279,28 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   }
 
   const env = (context as any).env as Record<string, string | undefined>;
-  const repEnv = resolveRepEnv(rep, env);
-  if (!repEnv) {
-    // Degraded mode: let the caller render the brief without email context
-    // rather than hard-fail the whole Brief when Gmail isn't wired up.
+  const repEmail = resolveRepEmail(rep, env);
+  if (!repEmail) {
     return json(
       {
         ok: false,
         configured: false,
-        error: `Gmail not configured for ${rep.firstName}.`,
+        error: `No mailbox configured for ${rep.firstName}.`,
+        messages: [],
+        queriedEmail: null,
+      },
+      {status: 200, headers: {'Cache-Control': 'no-store'}},
+    );
+  }
+  if (!isGmailSAConfigured(env)) {
+    // Degraded mode: let the caller render the brief without email context
+    // rather than hard-fail the whole Brief when the SA isn't wired up yet.
+    return json(
+      {
+        ok: false,
+        configured: false,
+        error:
+          'Gmail service account not configured (GOOGLE_SA_CLIENT_EMAIL / GOOGLE_SA_PRIVATE_KEY).',
         messages: [],
         queriedEmail: null,
       },
@@ -366,7 +347,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const debugErrors: Array<{stage: string; message: string}> = [];
 
   try {
-    const token = await getGmailAccessToken(rep.id, repEnv);
+    const token = await getGmailAccessTokenForUser(repEmail, env);
 
     // Run exact-email and domain searches in parallel. Gmail's list API is
     // cheap (just IDs), so running both always is fine. Per-search limit is
@@ -417,7 +398,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
             ? {
                 _debug: {
                   repId: rep.id,
-                  repFrom: repEnv.from,
+                  repFrom: repEmail,
                   exactCount: exactIds.length,
                   domainCount: domainIds.length,
                   errors: debugErrors,
@@ -444,7 +425,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     const shaped: ShapedEmail[] = [];
     for (const {meta, matchType} of metas) {
       if (!meta) continue;
-      shaped.push(shape(meta, repEnv.from, counterpartyEmail, matchType));
+      shaped.push(shape(meta, repEmail, counterpartyEmail, matchType));
     }
 
     // Sort newest-first, but keep exact matches slightly ahead of domain
