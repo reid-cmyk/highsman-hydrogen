@@ -44,6 +44,63 @@ import {claudeTool, isAnthropicConfigured, type ClaudeToolSchema} from '../lib/a
 //   • Quo or Gmail individually failing → we continue with whatever IS
 //     available; Claude is told which channels were empty vs unavailable.
 // ─────────────────────────────────────────────────────────────────────────────
+// Per-lead brief cache (module scope, shared across warm workers).
+// ─────────────────────────────────────────────────────────────────────────────
+// Rationale: Sky frequently re-opens the Brief panel on the same lead multiple
+// times in a shift — once during planning, again right before dialing, again
+// post-call. Each open previously paid the full Quo + Gmail + Claude round-trip
+// (~15–25s). Caching by rep+lead+day makes re-opens instant AND removes one of
+// the two remaining Claude-abort risks (re-clicks after a lucky first run no
+// longer roll the dice on a second stream).
+//
+// TTL: 8 hours. Long enough to cover a full sales shift; short enough that the
+// next morning's briefs re-pull in case Gmail/Quo evidence changed overnight.
+// Escape hatch: caller passes `?nocache=1` (or body field `nocache: true`) to
+// force a fresh build. Fallback (Claude errored) responses are NOT cached —
+// we want the next click to try Claude again, not inherit a warning banner.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type CachedBrief = {
+  // The full JSON response body as delivered to the client last time.
+  response: any;
+  // When this entry was written.
+  storedAt: number;
+};
+
+const BRIEF_CACHE_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
+const briefCache = new Map<string, CachedBrief>();
+
+function leadCacheIdentifier(lead: any): string {
+  // Prefer a stable Zoho ID when present; fall back to email, then phone,
+  // then the rendered full name. The three-tier fallback lets us cache even
+  // for "Akshay TBD" style placeholder leads that have no Zoho ID yet.
+  if (lead?.id) return `id:${String(lead.id)}`;
+  if (lead?.Email) return `e:${String(lead.Email).toLowerCase()}`;
+  if (lead?.Phone || lead?.Mobile) {
+    return `p:${String(lead.Phone || lead.Mobile).replace(/\D+/g, '')}`;
+  }
+  const n = `${lead?.First_Name || ''} ${lead?.Last_Name || ''}`.trim();
+  return `n:${n.toLowerCase() || '(unknown)'}`;
+}
+
+function buildBriefCacheKey(repId: string, lead: any): string {
+  const day = new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
+  return `${repId}::${leadCacheIdentifier(lead)}::${day}`;
+}
+
+function getCachedBrief(key: string): any | null {
+  const entry = briefCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.storedAt > BRIEF_CACHE_TTL_MS) {
+    briefCache.delete(key);
+    return null;
+  }
+  return entry.response;
+}
+
+function setCachedBrief(key: string, response: any): void {
+  briefCache.set(key, {response, storedAt: Date.now()});
+}
 
 type LeadPayload = {
   First_Name?: string;
@@ -664,6 +721,26 @@ export async function action({request, context}: ActionFunctionArgs) {
     return json({ok: false, error: 'Missing lead in body.'}, {status: 400});
   }
 
+  // Cache short-circuit — same rep, same lead, same day. Skip via ?nocache=1
+  // on the URL or `nocache: true` in the body for when Sky wants a fresh pull
+  // (e.g., after logging a new call she wants reflected in the brief).
+  const url = new URL(request.url);
+  const skipCache =
+    url.searchParams.get('nocache') === '1' ||
+    body?.nocache === true ||
+    body?.nocache === 'true' ||
+    body?.nocache === 1;
+  const cacheKey = buildBriefCacheKey(rep.id, lead);
+  if (!skipCache) {
+    const cached = getCachedBrief(cacheKey);
+    if (cached) {
+      return json(
+        {...cached, _fromCache: true},
+        {headers: {'Cache-Control': 'no-store'}},
+      );
+    }
+  }
+
   const phoneE164 = cleanPhone(lead.Phone || lead.Mobile);
   const emailAddr = (lead.Email || '').trim();
 
@@ -777,26 +854,30 @@ export async function action({request, context}: ActionFunctionArgs) {
       tool: BUILD_BRIEF_TOOL,
       maxTokens: 1800,
       temperature: 0.35,
-      // 27s — Oxygen worker budget is 30s, Gmail+Zoho fetches finish in 2–4s,
-      // which leaves the remainder for Claude synthesis. Was 24s — too tight
-      // on slower worker cold starts.
-      timeoutMs: 27000,
+      // Streaming — claudeTool now reads the SSE stream incrementally, so
+      // a slow synthesis tail no longer looks like a dead connection. Default
+      // 45s wall clock is fine; Oxygen worker stays alive through the stream.
+      timeoutMs: 45000,
     });
 
     const brief = result.input || {};
 
     // Carry through what we know for the UI — don't trust Claude to repeat
     // our own config flags.
-    return json(
-      {
-        ok: true,
-        brief,
-        mode: brief.mode || (calls.length || sms.length || gmail.messages.length ? 'warm' : 'cold'),
-        sources,
-        usage: result.usage,
-      },
-      {headers: {'Cache-Control': 'no-store'}},
-    );
+    const responseBody = {
+      ok: true,
+      brief,
+      mode: brief.mode || (calls.length || sms.length || gmail.messages.length ? 'warm' : 'cold'),
+      sources,
+      usage: result.usage,
+    };
+
+    // Cache successful Claude-backed briefs for the rest of the shift.
+    // Fallback-branch responses below are intentionally NOT cached so a
+    // transient Claude error doesn't poison the day.
+    setCachedBrief(cacheKey, responseBody);
+
+    return json(responseBody, {headers: {'Cache-Control': 'no-store'}});
   } catch (err: any) {
     console.error('[brief] Claude call failed:', err.message);
     // Soft-fall to the deterministic brief rather than 500 — rep still needs
