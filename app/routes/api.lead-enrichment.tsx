@@ -400,10 +400,21 @@ function rankCandidates(cands: Candidate[]): Candidate[] {
 // ─── Main handler ────────────────────────────────────────────────────────────
 export async function action({request, context}: ActionFunctionArgs) {
   const env = (context as any).env || {};
-  const rep = getRepFromRequest(request);
-  if (!rep) return json({ok: false, error: 'unauthorized'}, {status: 401});
   if (request.method !== 'POST') {
     return json({ok: false, error: 'method not allowed'}, {status: 405});
+  }
+
+  // Auth — two paths:
+  //   1. Rep cookie (in-brief enrichment chip + manual reps)
+  //   2. X-HS-Scheduler token (the nightly sweep route fans out here,
+  //      so it needs a non-cookie auth that doesn't require a rep).
+  const schedulerToken = env.SALES_FLOOR_SCHEDULER_TOKEN;
+  const providedScheduler = request.headers.get('X-HS-Scheduler') || '';
+  const isScheduler =
+    !!schedulerToken && providedScheduler === schedulerToken;
+  if (!isScheduler) {
+    const rep = getRepFromRequest(request);
+    if (!rep) return json({ok: false, error: 'unauthorized'}, {status: 401});
   }
 
   let body: any = {};
