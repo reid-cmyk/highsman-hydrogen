@@ -61,7 +61,21 @@ const SERENA_ORIGIN = {
 };
 
 const DWELL_MIN = {onboarding: 60, training: 60, checkin: 30} as const;
-const DAY_BUDGET_MIN = 8 * 60;
+// Serena's day: 8.5 hours total (shift cap) minus 30 min lunch = 480 min of
+// effective "stops + drive" budget. If the plan packs more than that it's an
+// overbook and stops need to roll to the next work day.
+const DAY_SHIFT_MIN = 8.5 * 60; // 510 — total shift length, clock-in to clock-out
+const LUNCH_MIN = 30;
+const DAY_BUDGET_MIN = DAY_SHIFT_MIN - LUNCH_MIN; // 480 — effective stops+drive
+// NJ inter-city driving averages closer to 30 min between stops once you
+// cluster Union-out. 15 was unrealistic and caused the 11h+ overbook Reid
+// flagged. This is the per-stop drive cushion used by the pre-pack check; the
+// live Routes API still refines day-of.
+const TRAVEL_BUFFER_MIN = 30;
+// Hard cap per day. A Vibes day with 60-min onboardings + realistic drive
+// between stops tops out well under 6. Cap at 5 so we never surface a plan
+// that reads like 10 stops in one shift.
+const MAX_STOPS_PER_DAY = 5;
 const CHECKIN_MIN_STALE_DAYS = 20;
 
 type Tier = 'onboarding' | 'training' | 'checkin';
@@ -296,12 +310,14 @@ const SYSTEM_PROMPT = `You are the Highsman Vibes Team Weekly Strategist.
 
 Your job: build Serena's 3-day NJ plan (Tuesday/Wednesday/Thursday) from the candidate stop pool.
 
-SERENA'S CONSTRAINTS:
+SERENA'S CONSTRAINTS (HARD CAPS — never exceed):
 - Origin: Union, NJ 07083. Within ~60 min radius is ideal.
-- 8-hour working day per day.
+- 8.5-hour shift. Subtract 30 min for lunch — leaves 480 min for stops + driving.
 - Dwell: Onboarding 60 min, Training 60 min, Check-In 30 min.
-- Plan at ~15 min of travel buffer between stops.
-- Each day should be a tight geographic cluster — do not bounce across the state.
+- Plan ~30 min of realistic drive time between stops (NJ inter-city average, including traffic). Never fewer.
+- Maximum 5 stops per day. If the pool is larger, push extras to "unassigned" — do NOT overpack.
+- Each day should be a tight geographic cluster — do not bounce across the state. If a cluster forces >5 stops, split it across two days.
+- Mileage sanity check: a day with 5 stops should be roughly 80–150 miles, not 300+. If your plan implies more than ~200 miles in a day, you're bouncing too much — re-cluster.
 
 PRIORITY RULES:
 1. Tier 1 (ONBOARDING) — never push to next week. These are first-ever brand visits. Always scheduled.
@@ -342,14 +358,18 @@ function greedyFallback(candidates: Candidate[]): {
   const unassigned: string[] = [];
 
   // Round-robin by tier so each day gets a mix rather than tuesday eating all T1.
+  // Two hard caps: (1) time budget with realistic 30-min drive buffer, (2)
+  // MAX_STOPS_PER_DAY. Either cap blocks a placement and sends the stop to
+  // unassigned — Sky reviews those manually or they roll to next week.
   let di = 0;
   for (const c of sorted) {
     let placed = false;
     for (let attempts = 0; attempts < 3 && !placed; attempts++) {
       const d = dayList[(di + attempts) % 3];
-      if (days[d].used + c.dwellMin + 15 <= DAY_BUDGET_MIN) {
+      if (days[d].stops.length >= MAX_STOPS_PER_DAY) continue;
+      if (days[d].used + c.dwellMin + TRAVEL_BUFFER_MIN <= DAY_BUDGET_MIN) {
         days[d].stops.push(c.accountId);
-        days[d].used += c.dwellMin + 15;
+        days[d].used += c.dwellMin + TRAVEL_BUFFER_MIN;
         placed = true;
       }
     }
@@ -523,7 +543,11 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     userLines.push(`TODAY: ${today.toISOString()}`);
     userLines.push(`WEEK OF: ${weekOf} (Tue ${dayDates.tuesday} / Wed ${dayDates.wednesday} / Thu ${dayDates.thursday})`);
     userLines.push(`ORIGIN: ${SERENA_ORIGIN.label}`);
-    userLines.push(`DAY BUDGET: ${DAY_BUDGET_MIN} min each`);
+    userLines.push(
+      `SHIFT: ${DAY_SHIFT_MIN} min total — subtract ${LUNCH_MIN} min lunch = ${DAY_BUDGET_MIN} min for stops + driving.`,
+    );
+    userLines.push(`TRAVEL BUFFER: ${TRAVEL_BUFFER_MIN} min between stops (NJ realistic).`);
+    userLines.push(`MAX STOPS PER DAY: ${MAX_STOPS_PER_DAY}. Overflow → unassigned.`);
     userLines.push('');
     userLines.push(`CANDIDATE POOL (${capped.length} stops):`);
     for (const c of capped) {
@@ -534,7 +558,9 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       );
     }
     userLines.push('');
-    userLines.push('TASK: Call build_weekly_plan once. Cluster geographically, respect priority rules, keep day totals under budget.');
+    userLines.push(
+      `TASK: Call build_weekly_plan once. Cluster geographically, respect priority rules, keep every day under ${DAY_BUDGET_MIN} min (stops + drive) AND under ${MAX_STOPS_PER_DAY} stops. When in doubt, defer to unassigned — an overbooked day is worse than a light one.`,
+    );
 
     try {
       const result = await claudeTool<any>({

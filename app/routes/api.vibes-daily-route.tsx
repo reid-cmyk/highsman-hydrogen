@@ -54,7 +54,19 @@ const DWELL_MIN: Record<string, number> = {
   training: 60,
   checkin: 30,
 };
-const DAY_BUDGET_MIN = 8 * 60; // 480
+// Serena's shift is 8.5 hours; 30 min is reserved for lunch, leaving 480 min
+// of effective stops + driving. The pre-pack check uses DAY_BUDGET_MIN so the
+// stop list fits before Google Routes even runs; if the live route pushes the
+// day past DAY_SHIFT_MIN we surface a warning.
+const DAY_SHIFT_MIN = 8.5 * 60; // 510 — clock-in to clock-out
+const LUNCH_MIN = 30;
+const DAY_BUDGET_MIN = DAY_SHIFT_MIN - LUNCH_MIN; // 480 — stops + drive
+// Realistic NJ inter-city cushion. The pre-pack used 15 which caused
+// 10-stop overbooks — Routes would later clock the day at 11h+.
+const TRAVEL_BUFFER_MIN = 30;
+// Hard cap on stops per day. Covers the realistic shape of a Vibes day:
+// 2–3 bookings + 1–2 check-ins. Never surface a 10-stop plan.
+const MAX_STOPS_PER_DAY = 5;
 const CHECKIN_CADENCE_DAYS = 30;
 
 // Serena works Tue/Wed/Thu. Anything else → workday:false. We still return a
@@ -338,16 +350,16 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     tier3.sort((a, b) => a.priority - b.priority);
 
     // 4) Pack to time budget. Greedy by priority.
-    // We budget dwell time aggressively; drive time is added after Routes API
-    // runs (Google tells us total drive), and if the packed plan overflows,
-    // we trim tail Tier-3 stops until it fits.
+    // Two hard caps enforced here so the stop list is realistic BEFORE Routes
+    // runs: (1) dwell + TRAVEL_BUFFER_MIN per stop must fit DAY_BUDGET_MIN,
+    // (2) total stops ≤ MAX_STOPS_PER_DAY. Tier 1/2 booked deals still get
+    // priority; overflow Tier 3 cadence falls off the tail.
     const all = [...tier12.sort((a, b) => a.priority - b.priority), ...tier3];
     const packed: Stop[] = [];
     let dwellTotal = 0;
     for (const s of all) {
-      // Reserve ~15 min of buffer drive per stop (rough pre-check; Routes
-      // refines after). Cap by day budget.
-      const estimatedCost = s.dwellMin + 15;
+      if (packed.length >= MAX_STOPS_PER_DAY) break;
+      const estimatedCost = s.dwellMin + TRAVEL_BUFFER_MIN;
       if (dwellTotal + estimatedCost > DAY_BUDGET_MIN) break;
       packed.push(s);
       dwellTotal += estimatedCost;
@@ -527,8 +539,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       totalDayMinutes: totalMinutes,
       encodedPolyline: route.polyline?.encodedPolyline || '',
       note:
-        totalMinutes > DAY_BUDGET_MIN
-          ? `Plan runs ${totalMinutes} min — over 8-hour budget. Consider rolling tail Check-Ins to the next day.`
+        totalMinutes + LUNCH_MIN > DAY_SHIFT_MIN
+          ? `Plan runs ${totalMinutes} min stops+drive + ${LUNCH_MIN} min lunch — over the 8.5-hour shift. Roll tail Check-Ins to the next day.`
           : null,
     });
   } catch (err: any) {
