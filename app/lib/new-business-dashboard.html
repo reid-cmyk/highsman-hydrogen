@@ -142,6 +142,28 @@
     .btn-action.primary:hover { opacity: 0.9; }
     .btn-action.danger { background: rgba(220,38,38,0.14); color: #ff9999;
       border-color: rgba(220,38,38,0.3); }
+    .btn-action.linkedin { background: rgba(10,102,194,0.18); color: #7dbce5;
+      border-color: rgba(10,102,194,0.35); }
+    .btn-action.linkedin:hover { background: rgba(10,102,194,0.28); }
+    .btn-action.copy-intro { background: rgba(212,175,55,0.14); color: #f0d77a;
+      border-color: rgba(212,175,55,0.35); }
+    .btn-action.copy-intro:hover { background: rgba(212,175,55,0.22); }
+
+    /* CLAIM / TTL CHIP — mirrors mobile .hs-claim-chip */
+    .claim-chip { display: inline-flex; align-items: center; gap: 6px;
+      font-family: 'Barlow Semi Condensed', sans-serif; font-size: 11px;
+      letter-spacing: 0.14em; text-transform: uppercase; font-weight: 600;
+      padding: 4px 10px; border-radius: 999px; margin: 8px 0 0;
+      border: 1px solid transparent; }
+    .claim-chip i { font-size: 10px; }
+    .claim-chip.is-mine { background: rgba(34,197,94,0.14);
+      color: #22C55E; border-color: rgba(34,197,94,0.35); }
+    .claim-chip.is-others { background: rgba(250,204,21,0.12);
+      color: #facc15; border-color: rgba(250,204,21,0.3); }
+    .claim-chip.is-stale { background: rgba(220,38,38,0.14);
+      color: #ff9999; border-color: rgba(220,38,38,0.3); }
+    .claim-chip.is-warn { background: rgba(234,179,8,0.14);
+      color: #eab308; border-color: rgba(234,179,8,0.3); }
 
     /* MODAL */
     .hs-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.7);
@@ -771,6 +793,30 @@
       ? '<span class="card-badge new">New · Not Contacted</span>'
       : `<span class="card-badge">Last touch: ${escapeHtml(fmtDate(l.Last_Activity_Time))}</span>`;
 
+    // Claim / TTL chip — render only when the Lead is currently claimed.
+    // Server is source of truth; we just paint the state we have.
+    const claimChip = buildClaimChip({
+      ownerId: l.Working_Owner,
+      claimedAt: l.Working_Claimed_At,
+      lastActivityAt: l.Working_Last_Activity_At,
+    });
+
+    // LinkedIn / Copy-intro pills — only if we have a linkedin_url on file.
+    const liUrl = l.LinkedIn_URL || '';
+    const liSlug = extractLinkedInSlug(liUrl);
+    const linkedinBtn = liUrl
+      ? `<a class="btn-action linkedin" href="${escapeHtml(liUrl)}" target="_blank" rel="noopener noreferrer"
+           onclick='claimOrHeartbeat(${JSON.stringify(l.id)})'>
+           <i class="fa-brands fa-linkedin-in"></i> LinkedIn
+         </a>`
+      : '';
+    const copyIntroBtn = liUrl
+      ? `<button class="btn-action copy-intro" onclick='copyLinkedInIntro(${JSON.stringify(l.id)}, ${JSON.stringify(liUrl)})'>
+           <i class="fa-solid fa-wand-magic-sparkles"></i> Copy intro
+         </button>`
+      : '';
+
+    const zid = JSON.stringify(l.id);
     return `
       <article class="card" data-id="${escapeHtml(l.id)}">
         <div class="card-head">
@@ -780,25 +826,28 @@
               ${contact ? `<i class="fa-solid fa-user" style="margin-right:4px;"></i>${escapeHtml(contact)}${loc ? ' · ' : ''}` : ''}${escapeHtml(loc)}
               ${l.Lead_Source ? ` · Source: ${escapeHtml(l.Lead_Source)}` : ''}
             </div>
+            ${claimChip}
           </div>
           ${badge}
         </div>
         <div class="card-contact">
-          ${phone ? `<div><i class="fa-solid fa-phone"></i><a href="${telHref(phone)}">${escapeHtml(phone)}</a></div>` : ''}
-          ${email ? `<div><i class="fa-solid fa-envelope"></i><a href="${mailtoHref(email)}">${escapeHtml(email)}</a></div>` : ''}
+          ${phone ? `<div><i class="fa-solid fa-phone"></i><a href="${telHref(phone)}" onclick='claimOrHeartbeat(${zid})'>${escapeHtml(phone)}</a></div>` : ''}
+          ${email ? `<div><i class="fa-solid fa-envelope"></i><a href="${mailtoHref(email)}" onclick='claimOrHeartbeat(${zid})'>${escapeHtml(email)}</a></div>` : ''}
         </div>
         ${l.Description ? `<div class="card-notes">${escapeHtml(l.Description)}</div>` : ''}
         <div class="card-actions">
-          ${phone ? `<a class="btn-action" href="${telHref(phone)}"><i class="fa-solid fa-phone"></i> Call</a>` : `<button class="btn-action" disabled style="opacity:0.3;"><i class="fa-solid fa-phone"></i> No #</button>`}
-          ${phone ? `<a class="btn-action" href="${smsHref(phone, textScript(name))}"><i class="fa-solid fa-comment-sms"></i> Text</a>` : ''}
-          ${email ? `<a class="btn-action" href="${mailtoHref(email, menuSubject(name), menuBody(l._fullName || name))}"><i class="fa-solid fa-envelope"></i> Email</a>` : ''}
-          <button class="btn-action primary" onclick='sendMenuFromCard("Leads", ${JSON.stringify(l.id)}, ${JSON.stringify(l)})'>
+          ${phone ? `<a class="btn-action" href="${telHref(phone)}" onclick='claimOrHeartbeat(${zid})'><i class="fa-solid fa-phone"></i> Call</a>` : `<button class="btn-action" disabled style="opacity:0.3;"><i class="fa-solid fa-phone"></i> No #</button>`}
+          ${phone ? `<a class="btn-action" href="${smsHref(phone, textScript(name))}" onclick='claimOrHeartbeat(${zid})'><i class="fa-solid fa-comment-sms"></i> Text</a>` : ''}
+          ${email ? `<a class="btn-action" href="${mailtoHref(email, menuSubject(name), menuBody(l._fullName || name))}" onclick='claimOrHeartbeat(${zid})'><i class="fa-solid fa-envelope"></i> Email</a>` : ''}
+          ${linkedinBtn}
+          ${copyIntroBtn}
+          <button class="btn-action primary" onclick='claimOrHeartbeat(${zid}); sendMenuFromCard("Leads", ${zid}, ${JSON.stringify(l)})'>
             <i class="fa-solid fa-paper-plane"></i> Send Menu
           </button>
-          <button class="btn-action" onclick='openBriefForLeadById(${JSON.stringify(l.id)})' title="AI pre-call brief">
+          <button class="btn-action" onclick='claimOrHeartbeat(${zid}); openBriefForLeadById(${zid})' title="AI pre-call brief">
             <i class="fa-solid fa-brain"></i> Brief
           </button>
-          <button class="btn-action" onclick='openLogModal({module:"Leads", id:${JSON.stringify(l.id)}, name:${JSON.stringify(name)}, phone:${JSON.stringify(phone)}, email:${JSON.stringify(email)}})'>
+          <button class="btn-action" onclick='claimOrHeartbeat(${zid}); openLogModal({module:"Leads", id:${zid}, name:${JSON.stringify(name)}, phone:${JSON.stringify(phone)}, email:${JSON.stringify(email)}})'>
             <i class="fa-solid fa-pen-to-square"></i> Log
           </button>
         </div>
@@ -957,6 +1006,167 @@
     document.getElementById('brief-modal').classList.remove('open');
     currentBriefLead = null;
     window.currentBriefLead = null;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Claim / TTL client helpers — mirrors the mobile app.js logic so Pete
+  // and Sky see identical claim state across desktop + PWA. The server
+  // (/api/lead-claim) is always the source of truth; these constants are
+  // mirrors and the server response wins on any disagreement.
+  // ──────────────────────────────────────────────────────────────────────
+  const CLAIM_TTL_COLD_MS = 8 * 60 * 60 * 1000;     // 8h idle
+  const CLAIM_TTL_ROLLING_MS = 48 * 60 * 60 * 1000; // 48h absolute cap
+  const CLAIM_REP_NAMES = {s: 'Sky', p: 'Pete'};
+
+  function currentRepId() {
+    return (REP.id || '').toLowerCase();
+  }
+  function isClaimLiveClient(claimedAt, lastActivityAt) {
+    if (!claimedAt) return false;
+    const now = Date.now();
+    const claimMs = new Date(claimedAt).getTime();
+    if (!isFinite(claimMs)) return false;
+    if (now - claimMs > CLAIM_TTL_ROLLING_MS) return false;
+    const actMs = lastActivityAt ? new Date(lastActivityAt).getTime() : claimMs;
+    if (!isFinite(actMs)) return false;
+    return (now - actMs) <= CLAIM_TTL_COLD_MS;
+  }
+  function claimTtlRemainingMs(claimedAt, lastActivityAt) {
+    if (!claimedAt) return 0;
+    const now = Date.now();
+    const claimMs = new Date(claimedAt).getTime();
+    const actMs = lastActivityAt ? new Date(lastActivityAt).getTime() : claimMs;
+    const rollingLeft = (claimMs + CLAIM_TTL_ROLLING_MS) - now;
+    const coldLeft = (actMs + CLAIM_TTL_COLD_MS) - now;
+    return Math.max(0, Math.min(rollingLeft, coldLeft));
+  }
+  function formatTtlRemaining(ms) {
+    if (ms <= 0) return '0m';
+    const totalMin = Math.floor(ms / 60000);
+    if (totalMin < 60) return `${totalMin}m`;
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    return m ? `${h}h ${m}m` : `${h}h`;
+  }
+
+  function buildClaimChip({ownerId, claimedAt, lastActivityAt}) {
+    if (!ownerId) return '';
+    const live = isClaimLiveClient(claimedAt, lastActivityAt);
+    if (!live) {
+      return `<span class="claim-chip is-stale"><i class="fa-solid fa-hourglass-end"></i>Expiring — in pool</span>`;
+    }
+    const me = currentRepId();
+    const mine = ownerId && me && ownerId.toLowerCase() === me;
+    const label = CLAIM_REP_NAMES[ownerId] || ownerId;
+    const remaining = formatTtlRemaining(claimTtlRemainingMs(claimedAt, lastActivityAt));
+    if (mine) {
+      return `<span class="claim-chip is-mine"><i class="fa-solid fa-circle-check"></i>Yours · ${escapeHtml(remaining)} left</span>`;
+    }
+    return `<span class="claim-chip is-others"><i class="fa-solid fa-lock"></i>${escapeHtml(label)}'s lead · ${escapeHtml(remaining)} left</span>`;
+  }
+
+  // Fire a claim/heartbeat on any Lead action. Non-blocking — failures
+  // shouldn't block Pete from actually dialing. We patch the local lead
+  // with the server's authoritative claim state on success so the chip
+  // updates on next re-render.
+  async function claimOrHeartbeat(leadId, action) {
+    if (!leadId) return;
+    try {
+      const res = await fetch('/api/lead-claim', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'same-origin',
+        body: JSON.stringify({leadId, action: action || 'claim'}),
+      });
+      const data = await res.json().catch(() => ({ok: false}));
+      if (!data.ok) return;
+      const i = leads.findIndex((x) => x.id === leadId);
+      if (i >= 0) {
+        leads[i] = {
+          ...leads[i],
+          Working_Owner: data.workingOwner || leads[i].Working_Owner,
+          Working_Claimed_At: data.claimedAt || leads[i].Working_Claimed_At,
+          Working_Last_Activity_At: data.lastActivityAt || leads[i].Working_Last_Activity_At,
+        };
+      }
+    } catch { /* non-fatal */ }
+  }
+
+  // Pull a linkedin slug out of a URL so we can build a clean profile link
+  // in copy-intro fallbacks. Accepts any linkedin.com URL shape.
+  function extractLinkedInSlug(url) {
+    if (!url) return '';
+    try {
+      const u = new URL(url);
+      const m = u.pathname.match(/\/in\/([^/]+)/i);
+      return m ? m[1] : '';
+    } catch { return ''; }
+  }
+
+  // One-tap "Copy intro" — asks Haiku 4.5 for a 2-sentence LinkedIn note
+  // in Highsman voice, writes it to the clipboard, then opens the profile
+  // in a new tab so Pete just pastes and hits send. No auto-posting.
+  async function copyLinkedInIntro(leadId, liUrl) {
+    const l = leads.find((x) => x.id === leadId);
+    if (!l) return toast('Lead not found', 'error');
+    const name = l._fullName || [l.First_Name, l.Last_Name].filter(Boolean).join(' ') || '';
+    if (!name) return toast('No contact name on this lead — add one first', 'error');
+
+    toast('Drafting intro…');
+    let intro = '';
+    try {
+      const res = await fetch('/api/linkedin-intro', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          leadId,
+          name,
+          company: l.Company || '',
+          city: l.City || '',
+          state: l._state || '',
+          notes: l.Description || '',
+        }),
+      });
+      const data = await res.json().catch(() => ({ok: false}));
+      if (!data.ok || !data.intro) throw new Error(data.error || 'empty intro');
+      intro = data.intro;
+    } catch (err) {
+      toast('Could not draft intro — opening profile anyway', 'error');
+      if (liUrl) window.open(liUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    // Clipboard write, with a textarea fallback for older Safari/private mode.
+    let copied = false;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(intro);
+        copied = true;
+      }
+    } catch { /* fall through */ }
+    if (!copied) {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = intro;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'absolute';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        copied = true;
+      } catch { /* last-ditch below */ }
+    }
+    if (copied) {
+      toast('Intro copied — paste it on LinkedIn');
+    } else {
+      prompt('Copy this intro, then paste it on LinkedIn:', intro);
+    }
+    if (liUrl) window.open(liUrl, '_blank', 'noopener,noreferrer');
+    // Count this as rep activity — opens the first touch window.
+    claimOrHeartbeat(leadId);
   }
 
   // ──────────────────────────────────────────────────────────────────────
@@ -1192,6 +1402,15 @@
   // ──────────────────────────────────────────────────────────────────────
   (async function init() {
     await refreshAll();
+
+    // Keep TTL chips ticking — if any currently-loaded Lead is claimed
+    // and we're on the Leads tab, re-render once a minute so the
+    // "2h 14m left" countdown stays honest without hammering the server.
+    setInterval(() => {
+      if (currentTab !== 'leads') return;
+      const anyClaimed = leads.some((l) => l.Working_Owner);
+      if (anyClaimed) renderLeads();
+    }, 60 * 1000);
   })();
 
   // Close whichever modal is open on ESC. Brief drawer first so it doesn't
