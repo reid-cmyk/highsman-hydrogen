@@ -118,10 +118,9 @@ const DAY_BUDGET_MIN = DAY_SHIFT_MIN - LUNCH_MIN; // 450 — productive stops+dr
 // flagged. This is the per-stop drive cushion used by the pre-pack check; the
 // live Routes API still refines day-of.
 const TRAVEL_BUFFER_MIN = 30;
-// Hard cap per day. Mix of onboardings/trainings (60-min anchored) + drive-by
-// check-ins (30-min). 8 is the practical ceiling once bookings are in the mix;
-// pure check-in days may fit more but the dwell+buffer math catches that.
-const MAX_STOPS_PER_DAY = 8;
+// No hard stop-count cap — day length is governed purely by DAY_BUDGET_MIN
+// (dwell + travel buffer). Onboardings/trainings (60-min) self-limit via the
+// budget; a pure check-in day (30-min stops) may legitimately pack deeper.
 const CHECKIN_MIN_STALE_DAYS = 20;
 
 // ─── NJ geography: 3-region split + outlier set ──────────────────────────────
@@ -462,14 +461,14 @@ function greedyFallback(candidates: Candidate[]): {
 
   const unassigned: string[] = [];
 
-  // Pack each day from its region's queue. Hard caps: MAX_STOPS_PER_DAY and
-  // DAY_BUDGET_MIN. Stops that don't fit roll to unassigned — NOT to the next
-  // day (that would violate the one-region-per-day rule).
+  // Pack each day from its region's queue. Single gate: DAY_BUDGET_MIN
+  // (dwell + TRAVEL_BUFFER_MIN per stop). Stops that don't fit roll to
+  // unassigned — NOT to the next day (that would violate the one-region-
+  // per-day rule). No hard stop-count cap.
   for (const d of dayList) {
     const queue = byRegion[days[d].region];
     while (queue.length > 0) {
       const c = queue[0];
-      if (days[d].stops.length >= MAX_STOPS_PER_DAY) break;
       if (days[d].used + c.dwellMin + TRAVEL_BUFFER_MIN > DAY_BUDGET_MIN) break;
       days[d].stops.push(c.accountId);
       days[d].used += c.dwellMin + TRAVEL_BUFFER_MIN;
@@ -487,7 +486,6 @@ function greedyFallback(candidates: Candidate[]): {
       if (days[otherDay].region !== days[d].region) continue;
       while (queue.length > 0) {
         const c = queue[0];
-        if (days[otherDay].stops.length >= MAX_STOPS_PER_DAY) break;
         if (days[otherDay].used + c.dwellMin + TRAVEL_BUFFER_MIN > DAY_BUDGET_MIN) break;
         days[otherDay].stops.push(c.accountId);
         days[otherDay].used += c.dwellMin + TRAVEL_BUFFER_MIN;
@@ -712,7 +710,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       `SHIFT: ${DAY_SHIFT_MIN} min total — subtract ${LUNCH_MIN} min lunch = ${DAY_BUDGET_MIN} min for stops + driving.`,
     );
     userLines.push(`TRAVEL BUFFER: ${TRAVEL_BUFFER_MIN} min between stops (NJ realistic).`);
-    userLines.push(`MAX STOPS PER DAY: ${MAX_STOPS_PER_DAY}. Overflow → unassigned.`);
+    userLines.push(`NO HARD STOP-COUNT CAP: day length is governed by the ${DAY_BUDGET_MIN}-min budget only. Let check-in-heavy days pack deeper than onboarding-heavy days.`);
     userLines.push('');
     // Region distribution — helps Claude decide which region gets which day.
     const regionCounts: Record<NjRegion, number> = {north: 0, central: 0, south: 0};
@@ -744,7 +742,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     }
     userLines.push('');
     userLines.push(
-      `TASK: Call build_weekly_plan once. LOCK each day to ONE region (NORTH / CENTRAL / SOUTH) based on REGION DISTRIBUTION — busiest region on Tuesday, lightest on Thursday. Never mix regions within a day. Any stop marked "pinned" MUST be scheduled this week on a region-matched day — pinned times are Serena's commitments to the store, never defer them. Within a region, pick stops using priority rules. Target ≥1 Onboarding/Training per day ONLY when it fits that day's region; otherwise push to a day whose region matches. Keep every day under ${DAY_BUDGET_MIN} min (stops + drive) AND under ${MAX_STOPS_PER_DAY} stops. When in doubt, defer Check-Ins (never pinned trainings) to unassigned — an overbooked or region-mixed day is worse than a light one.`,
+      `TASK: Call build_weekly_plan once. LOCK each day to ONE region (NORTH / CENTRAL / SOUTH) based on REGION DISTRIBUTION — busiest region on Tuesday, lightest on Thursday. Never mix regions within a day. Any stop marked "pinned" MUST be scheduled this week on a region-matched day — pinned times are Serena's commitments to the store, never defer them. Within a region, pick stops using priority rules. Target ≥1 Onboarding/Training per day ONLY when it fits that day's region; otherwise push to a day whose region matches. Keep every day under ${DAY_BUDGET_MIN} min (stops + drive). There is no hard stop-count cap — a check-in-heavy day may pack deeper than an onboarding-heavy day. When in doubt, defer Check-Ins (never pinned trainings) to unassigned — an overbooked or region-mixed day is worse than a light one.`,
     );
 
     try {

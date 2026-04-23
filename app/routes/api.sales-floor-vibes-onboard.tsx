@@ -248,15 +248,28 @@ export async function action({request, context}: ActionFunctionArgs) {
     }
 
     // Classify by region. Outliers (Shore House Canna, Cape May, LBI) stay
-    // off the weekly route — Serena runs them quarterly. We still create
-    // the onboard deal so it's tracked, but Sky gets a "coordinate direct"
-    // message in the response.
+    // off the weekly route — Serena runs them quarterly, as direct-arrange
+    // Shore runs. Reject outliers HERE so Sky doesn't get a "booked" toast
+    // for a store that will never actually show up on the weekly plan; she
+    // has to book it manually through Serena.
     const geo = njRegion(acct.city);
     const region = geo.region;
     const isOutlier = geo.infrequentDropIn;
-    const predictedDay = isOutlier
-      ? null
-      : region === 'north'
+    if (isOutlier) {
+      return json(
+        {
+          ok: false,
+          isOutlier: true,
+          region,
+          regionLabel: regionLabel(region),
+          error:
+            `${customerName} (${acct.city || 'Shore/LBI/Cape May'}) is not available for regular onboarding. Book Manually Through Serena.`,
+        },
+        {status: 422},
+      );
+    }
+    const predictedDay =
+      region === 'north'
         ? 'Tuesday'
         : region === 'central'
           ? 'Wednesday'
@@ -293,14 +306,12 @@ export async function action({request, context}: ActionFunctionArgs) {
         region,
         regionLabel: regionLabel(region),
         predictedDay,
-        isOutlier,
-        message: isOutlier
-          ? `${customerName} is a drop-in location (${acct.city || 'outside weekly coverage'}). Serena doesn't route here weekly — reach out direct to arrange a Shore run.`
-          : `Onboarding booked. ${customerName} sits in ${regionLabel(region)} so Serena will visit on a ${predictedDay}.`,
+        isOutlier: false,
+        message: `Already booked — Serena will be there on ${predictedDay} (${regionLabel(region)} coverage).`,
       });
     }
 
-    const regionTag = isOutlier ? '[OUTLIER]' : `[REGION:${region.toUpperCase()}]`;
+    const regionTag = `[REGION:${region.toUpperCase()}]`;
     const dealName = `Onboarding: ${customerName}`;
     const dateLabel = actualShipDate
       ? `Ship date: ${actualShipDate.slice(0, 10)}`
@@ -309,9 +320,7 @@ export async function action({request, context}: ActionFunctionArgs) {
       `${SALES_FLOOR_SIGNATURE} ${TIER_MARKER_ONBOARDING} ${regionTag} New Customers tab by ${rep.displayName || rep.email || 'rep'}.`,
       firstOrderNumber ? `LeafLink order: ${firstOrderNumber}` : '',
       dateLabel,
-      isOutlier
-        ? `OUTLIER LOCATION (${acct.city || 'unknown city'}) — outside weekly route. Serena to arrange direct Shore run.`
-        : `Region: ${regionLabel(region)} · Predicted day: ${predictedDay}`,
+      `Region: ${regionLabel(region)} · Predicted day: ${predictedDay}`,
       `Stop duration: 60 min`,
       `12-day check-in due: ${checkInDueDate}`,
     ]
@@ -376,10 +385,8 @@ export async function action({request, context}: ActionFunctionArgs) {
       region,
       regionLabel: regionLabel(region),
       predictedDay,
-      isOutlier,
-      message: isOutlier
-        ? `${customerName} is a drop-in location (${acct.city || 'outside weekly coverage'}). Serena doesn't route here weekly — reach out direct to arrange a Shore run visit.`
-        : `Onboarding booked. ${customerName} sits in ${regionLabel(region)} so Serena will visit on a ${predictedDay}.`,
+      isOutlier: false,
+      message: `Booked — Serena will be there on ${predictedDay} (${regionLabel(region)} coverage).`,
     });
   } catch (err: any) {
     console.error('[sf-vibes-onboard] failed', zohoAccountId, err.message);

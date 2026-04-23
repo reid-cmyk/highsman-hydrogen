@@ -98,10 +98,22 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   let goodie: GoodieBudget | null = null;
   let mtdVisits = 0;
   let mtdTrainings = 0;
-  let route: {fresh: RouteStop[]; targets: RouteStop[]; rotation: RouteStop[]} = {
+  let route: {
+    fresh: RouteStop[];
+    targets: RouteStop[];
+    rotation: RouteStop[];
+    region: 'north' | 'central' | 'south' | null;
+    regionLabel: string | null;
+    anchorDay: string | null;
+    otherRegion: {north: number; central: number; south: number};
+  } = {
     fresh: [],
     targets: [],
     rotation: [],
+    region: null,
+    regionLabel: null,
+    anchorDay: null,
+    otherRegion: {north: 0, central: 0, south: 0},
   };
 
   if (hasSupabase) {
@@ -186,6 +198,10 @@ export async function loader({request, context}: LoaderFunctionArgs) {
                 fresh: rj.fresh || [],
                 targets: rj.targets || [],
                 rotation: rj.rotation || [],
+                region: rj.region || null,
+                regionLabel: rj.regionLabel || null,
+                anchorDay: rj.anchorDay || null,
+                otherRegion: rj.otherRegion || {north: 0, central: 0, south: 0},
               };
             }
           }
@@ -626,10 +642,29 @@ export default function VibesDashboard() {
           empty state. Full-map + brief view remains at /vibes/today via QuickTile. */}
       {selectedDayIdx === 0 ? (
         <Section title="Today's Route" index="Route">
+          {/* Region banner — shows Serena which NJ region she's anchored on
+              today. Every tier below is filtered to this region only, so she
+              isn't staring at cross-state stops that won't fit the day. */}
+          {route.regionLabel && route.region ? (
+            <TodayRegionBanner
+              region={route.region}
+              regionLabel={route.regionLabel}
+              anchorDay={route.anchorDay}
+              otherRegion={route.otherRegion}
+            />
+          ) : null}
           {stops.total === 0 ? (
             <EmptyState
-              title="No route built yet"
-              sub="Onboarding, Training, and Check-In stops will appear once Sky books them or the 30-day cadence fires."
+              title={
+                route.regionLabel
+                  ? `No ${route.regionLabel} stops yet`
+                  : 'No route built yet'
+              }
+              sub={
+                route.regionLabel
+                  ? `Onboarding, Training, and Check-In stops in ${route.regionLabel} will appear once Sky books them or the 30-day cadence fires.`
+                  : 'Onboarding, Training, and Check-In stops will appear once Sky books them or the 30-day cadence fires.'
+              }
             />
           ) : (
             <>
@@ -1055,6 +1090,110 @@ function RegionPill({label, color}: {label: string; color: string}) {
     >
       {label}
     </span>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Today's Region Banner
+// ─────────────────────────────────────────────────────────────────────────────
+// Sits above the Tier 1/2/3 stacks on the /vibes home Today's Route section.
+// One glance at this and Serena knows which slice of NJ she's on today —
+// North (Tue), Central (Wed), South (Thu) — and where the work queued for
+// the other days lives, so she's not wondering why a stop she expected to
+// see isn't on the list. Tiers below are filtered to this region server-side;
+// this banner is how we make that filter visible rather than silent.
+// ─────────────────────────────────────────────────────────────────────────────
+function TodayRegionBanner({
+  region,
+  regionLabel,
+  anchorDay,
+  otherRegion,
+}: {
+  region: 'north' | 'central' | 'south';
+  regionLabel: string;
+  anchorDay: string | null;
+  otherRegion: {north: number; central: number; south: number};
+}) {
+  const accent =
+    region === 'north'
+      ? BRAND.gold
+      : region === 'central'
+        ? BRAND.purple
+        : BRAND.green;
+
+  // Build the "elsewhere" hint. We only surface non-zero queues so the line
+  // reads cleanly — no "0 on Wednesday".
+  const elsewhere: string[] = [];
+  const dayFor = (r: 'north' | 'central' | 'south') =>
+    r === 'north' ? 'Tuesday' : r === 'central' ? 'Wednesday' : 'Thursday';
+  (['north', 'central', 'south'] as const).forEach((r) => {
+    if (r === region) return;
+    const n = otherRegion?.[r] || 0;
+    if (n > 0) elsewhere.push(`${n} on ${dayFor(r)}`);
+  });
+
+  return (
+    <div
+      style={{
+        background: 'rgba(255,255,255,0.04)',
+        border: `1px solid ${accent}`,
+        borderRadius: 6,
+        padding: '12px 14px',
+        marginBottom: 14,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          flexWrap: 'wrap',
+        }}
+      >
+        <span
+          style={{
+            fontFamily: TEKO,
+            fontSize: 13,
+            letterSpacing: '0.14em',
+            color: BRAND.gray,
+            textTransform: 'uppercase',
+          }}
+        >
+          {anchorDay || 'Today'} · Coverage Zone
+        </span>
+        <span
+          style={{
+            fontFamily: TEKO,
+            fontSize: 24,
+            letterSpacing: '0.04em',
+            color: accent,
+            textTransform: 'uppercase',
+            lineHeight: 1,
+          }}
+        >
+          {regionLabel}
+        </span>
+      </div>
+      <div
+        style={{
+          fontFamily: BODY,
+          fontSize: 12,
+          color: BRAND.gray,
+          marginTop: 6,
+          lineHeight: 1.5,
+        }}
+      >
+        Stops below are filtered to {regionLabel} so the day stays tight —
+        no cross-state zig-zag.
+        {elsewhere.length > 0 ? (
+          <>
+            {' '}
+            <span style={{color: BRAND.white}}>Elsewhere this week:</span>{' '}
+            {elsewhere.join(' · ')}.
+          </>
+        ) : null}
+      </div>
+    </div>
   );
 }
 

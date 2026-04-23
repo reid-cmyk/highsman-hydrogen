@@ -1131,6 +1131,26 @@ async function markZohoReadyToBrandTeam(zohoAccountId, customerName, firstOrderN
       }),
     });
     const data = await res.json().catch(() => ({}));
+    // Outlier rejection: server returns 422 { ok:false, isOutlier:true }
+    // BEFORE creating a deal. These Shore/LBI/Cape May dispensaries sit off
+    // the weekly route — Serena runs them as direct Shore trips, not through
+    // the normal onboarding flow. Surface the exact rejection reason to Sky
+    // and unlock the button so he can move on to the next card.
+    if (!res.ok && data?.isOutlier) {
+      for (const b of buttons) {
+        if (b.tagName === 'BUTTON') {
+          b.disabled = false;
+          b.classList.remove('is-disabled');
+        }
+      }
+      toast(
+        data.error ||
+          `${customerName} is not available for regular onboarding. Book Manually Through Serena.`,
+        'error',
+        9000,
+      );
+      return;
+    }
     if (!res.ok || !data?.ok) {
       throw new Error(data?.error || `Brand team onboarding failed (${res.status})`);
     }
@@ -1150,19 +1170,15 @@ async function markZohoReadyToBrandTeam(zohoAccountId, customerName, firstOrderN
     renderDashboard();
     updateStats();
     const when = data.checkInDueDate ? formatDate(data.checkInDueDate) : 'soon';
-    // Outlier drops don't ride the weekly route — Sky needs to know to text
-    // Serena direct. Longer toast + info tone so the message lands.
-    if (data.isOutlier) {
-      toast(data.message || 'Outlier location — arrange direct with Serena.', 'info', 8000);
-    } else {
-      toast(
-        data.message || (
-          data.alreadyBooked
-            ? `Already on Sky's board. Check in by ${when}.`
-            : `Brand team locked in. Check in by ${when}.`
-        ),
-      );
-    }
+    // Non-outlier: server already composes a day-of-week message
+    // ("Serena will be there on Wednesday") — prefer it over the fallback.
+    toast(
+      data.message || (
+        data.alreadyBooked
+          ? `Already on Sky's board. Check in by ${when}.`
+          : `Brand team locked in. Check in by ${when}.`
+      ),
+    );
   } catch (err) {
     for (const b of buttons) {
       if (b.tagName === 'BUTTON') {

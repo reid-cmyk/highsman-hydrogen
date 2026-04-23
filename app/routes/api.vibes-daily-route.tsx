@@ -141,10 +141,9 @@ const DAY_BUDGET_MIN = DAY_SHIFT_MIN - LUNCH_MIN; // 450 — productive stops + 
 // Realistic NJ inter-city cushion. The pre-pack used 15 which caused
 // 10-stop overbooks — Routes would later clock the day at 11h+.
 const TRAVEL_BUFFER_MIN = 30;
-// Hard cap on stops per day. Shape of a realistic Vibes day: mix of
-// onboardings/trainings (anchored, longer dwell) + drive-by check-ins.
-// 8 is the practical ceiling once onboardings or trainings are in the mix.
-const MAX_STOPS_PER_DAY = 8;
+// No hard stop-count cap — day length is governed purely by DAY_BUDGET_MIN
+// (dwell + travel buffer). Short 30-min check-ins can stack deep when
+// clustered; long 60-min onboardings/trainings self-limit via the budget.
 const CHECKIN_CADENCE_DAYS = 30;
 
 // Serena works Tue/Wed/Thu. Anything else → workday:false. We still return a
@@ -478,13 +477,12 @@ export async function loader({request, context}: LoaderFunctionArgs) {
 
     const regionPool = inRegion.filter((s) => s.region === anchorRegion);
 
-    // Two hard caps: (1) dwell + TRAVEL_BUFFER_MIN per stop must fit
-    // DAY_BUDGET_MIN, (2) total stops ≤ MAX_STOPS_PER_DAY. Tier 1/2 booked
-    // deals still get priority; overflow Tier 3 cadence falls off the tail.
+    // Single gate: dwell + TRAVEL_BUFFER_MIN per stop must fit DAY_BUDGET_MIN.
+    // Tier 1/2 booked deals still get priority; overflow Tier 3 cadence falls
+    // off the tail. No stop-count cap — short check-ins can cluster deep.
     const packed: Stop[] = [];
     let dwellTotal = 0;
     for (const s of regionPool) {
-      if (packed.length >= MAX_STOPS_PER_DAY) break;
       const estimatedCost = s.dwellMin + TRAVEL_BUFFER_MIN;
       if (dwellTotal + estimatedCost > DAY_BUDGET_MIN) break;
       packed.push(s);

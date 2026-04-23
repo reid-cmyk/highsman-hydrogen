@@ -1,9 +1,14 @@
 import type {LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getZohoAccessToken as getZohoToken} from '~/lib/zoho-auth';
+import {
+  njRegion,
+  regionLabel as regionLabelFor,
+  type NjRegion,
+} from '~/lib/nj-regions';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Vibes Team — Daily Route Builder (3-tier model, v2)
+// Vibes Team — Daily Route Builder (3-tier model, v2, region-aware)
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/vibes-route?repId=...&debug=1
 // Returns today's route for a brand rep, in three priority tiers:
@@ -14,12 +19,25 @@ import {getZohoAccessToken as getZohoToken} from '~/lib/zoho-auth';
 //   Tier 3 CHECK-IN    — NJ Accounts with Total_Orders_Count ≥ 1 AND
 //                        Visit_Date is null OR ≥ 30 days stale
 //
-// Response shape is kept as `{fresh, targets, rotation}` so /vibes index
-// doesn't need to re-wire — the semantic shift is server-side only. Reps
-// looking at the index see:
-//   fresh    → Tier 1 Onboarding (60 min dwell)
-//   targets  → Tier 2 Training (60 min dwell)
-//   rotation → Tier 3 Check-In (30 min dwell)
+// REGION ANCHOR: Each stop is classified N/C/S via njRegion(Billing_City).
+// Today's anchor region is chosen the same way api.vibes-daily-route does it:
+// rank regions by inverse-priority demand weight, then apply a DOW slot
+// (Tue→top, Wed→2nd, Thu→3rd). The three tier arrays returned only include
+// stops in the anchor region, so the /vibes home "Today's Route" tile no
+// longer shows cross-state zig-zag. Dropped-out-of-region stops are reported
+// in `otherRegion` so we can surface a quiet "{N} more on Wednesday" hint.
+//
+// Off-days (Fri–Mon) still pick an anchor so the UI shows what's next when
+// Serena is previewing the week.
+//
+// Response shape (consumed by /vibes index):
+//   fresh    → Tier 1 Onboarding (60 min dwell)   — anchor region only
+//   targets  → Tier 2 Training (60 min dwell)     — anchor region only
+//   rotation → Tier 3 Check-In (30 min dwell)     — anchor region only
+//   region   → 'north' | 'central' | 'south'
+//   regionLabel → 'North NJ' | 'Central NJ' | 'South NJ'
+//   anchorDay → 'Tuesday' | 'Wednesday' | 'Thursday' | 'Next work day'
+//   otherRegion → {north, central, south} counts of stops NOT in anchor
 //
 // For the richer route with Google Routes + per-stop briefs, /vibes/today
 // pulls from /api/vibes-daily-route. This endpoint stays lightweight — no
@@ -52,6 +70,8 @@ type RouteStop = {
   daysSinceClosed?: number | null;
   leadId?: string | null;
   meta?: Record<string, any>;
+  region?: NjRegion;
+  infrequentDropIn?: boolean;
 };
 
 // Normalize a raw Zoho state value to a 2-letter code. Tolerates "NJ",
@@ -274,6 +294,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
             (Date.now() - new Date(closedDate).getTime()) / (1000 * 60 * 60 * 24),
           )
         : null;
+      const geo = njRegion(acct.Billing_City);
       return {
         tier,
         accountId: acct.id,
@@ -285,6 +306,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         lastVibesVisit: acct.Visit_Date || null,
         daysSinceLast: null,
         daysSinceClosed,
+        region: geo.region,
+        infrequentDropIn: geo.infrequentDropIn,
       };
     }
 
@@ -337,6 +360,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         // biggest cadence win we've got.
         stale = null;
       }
+      const geo = njRegion(a.Billing_City);
       rotationRaw.push({
         tier: 'ROTATION',
         accountId: a.id,
@@ -347,26 +371,103 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         phone: a.Phone || null,
         lastVibesVisit: a.Visit_Date || null,
         daysSinceLast: stale,
+        region: geo.region,
+        infrequentDropIn: geo.infrequentDropIn,
       });
     }
     // Sort: oldest first (nulls = never visited, highest priority).
-    const rotation = rotationRaw.sort((a, b) => {
+    const rotationAll = rotationRaw.sort((a, b) => {
       const da = a.daysSinceLast ?? 9999;
       const db = b.daysSinceLast ?? 9999;
       return db - da;
     });
-    debug.rotationKept = rotation.length;
+
+    // ─── Region anchor (same DOW logic as api.vibes-daily-route) ─────────
+    // Exclude outliers (quarterly Shore runs) from the weight calc so they
+    // never pull the anchor toward a coast they shouldn't visit this week.
+    // Weight: Tier 1 > Tier 2 > Tier 3. We treat Fresh=0, Target=1,
+    // Rotation=2 as the priority proxy and add 1/(priority+1) per stop.
+    const regionWeight: Record<NjRegion, number> = {
+      north: 0,
+      central: 0,
+      south: 0,
+    };
+    const bumpRegion = (s: RouteStop, priority: number) => {
+      if (!s.region) return;
+      if (s.infrequentDropIn) return;
+      regionWeight[s.region] += 1 / (priority + 1);
+    };
+    for (const s of fresh) bumpRegion(s, 0);
+    for (const s of targets) bumpRegion(s, 1);
+    for (const s of rotationAll) bumpRegion(s, 2);
+
+    // Rank regions heaviest-first, then pick by today's DOW slot.
+    // Tue (2) → busiest, Wed (3) → 2nd, Thu (4) → 3rd.
+    // Off-days preview the upcoming heaviest region so /vibes home still
+    // shows Serena what's next.
+    const now = new Date();
+    const dow = now.getDay(); // 0 Sun .. 6 Sat
+    const regionRank = (['north', 'central', 'south'] as NjRegion[]).sort(
+      (a, b) => regionWeight[b] - regionWeight[a],
+    );
+    const dowSlot = dow === 2 ? 0 : dow === 3 ? 1 : dow === 4 ? 2 : 0;
+    let anchorRegion: NjRegion = regionRank[dowSlot] || regionRank[0];
+    if (regionWeight[anchorRegion] === 0) {
+      anchorRegion =
+        regionRank.find((r) => regionWeight[r] > 0) || regionRank[0] || 'central';
+    }
+    const anchorDay =
+      dow === 2
+        ? 'Tuesday'
+        : dow === 3
+          ? 'Wednesday'
+          : dow === 4
+            ? 'Thursday'
+            : 'Next work day';
+
+    // Filter each tier to the anchor region only. Track counts of stops we
+    // dropped so the UI can surface a quiet "X more on a different day" hint.
+    const inRegion = (s: RouteStop) =>
+      !s.infrequentDropIn && s.region === anchorRegion;
+    const freshInRegion = fresh.filter(inRegion);
+    const targetsInRegion = targets.filter(inRegion);
+    const rotationInRegion = rotationAll.filter(inRegion);
+    debug.rotationKept = rotationInRegion.length;
+
+    // Counts of Tier 1/2 stops that land in OTHER regions — reps see this as
+    // "3 more on Wednesday" etc., so they know work is queued, just not today.
+    const otherRegion: Record<NjRegion, number> = {
+      north: 0,
+      central: 0,
+      south: 0,
+    };
+    const countOther = (s: RouteStop) => {
+      if (!s.region) return;
+      if (s.infrequentDropIn) return;
+      if (s.region === anchorRegion) return;
+      otherRegion[s.region]++;
+    };
+    for (const s of fresh) countOther(s);
+    for (const s of targets) countOther(s);
 
     const responseBody: any = {
       ok: true,
       repId,
-      fresh,
-      targets,
-      rotation,
+      fresh: freshInRegion,
+      targets: targetsInRegion,
+      rotation: rotationInRegion,
+      region: anchorRegion,
+      regionLabel: regionLabelFor(anchorRegion),
+      anchorDay,
+      otherRegion,
       counts: {
-        fresh: fresh.length,
-        targets: targets.length,
-        rotation: rotation.length,
+        fresh: freshInRegion.length,
+        targets: targetsInRegion.length,
+        rotation: rotationInRegion.length,
+        // Raw totals across all regions, for UI sub-copy if needed.
+        allFresh: fresh.length,
+        allTargets: targets.length,
+        allRotation: rotationAll.length,
       },
     };
     if (wantDebug) responseBody.debug = debug;
