@@ -426,6 +426,9 @@ function renderLeads(filter = currentFilter) {
       emailHandler: `quickEmail(${idx})`,
       textHandler: `quickText(${idx}, 'lead')`,
       briefHandler: `openBrief(${idx})`,
+      // Inline add-field pills write back to the Leads module.
+      zohoModule: 'Leads',
+      zohoId: l.id,
     });
   }).join('');
 }
@@ -1489,6 +1492,12 @@ function renderAccounts() {
       // concatenating keeps the layout tight (one flex row) without having
       // to open a new prop on contactCardHtml just for a second pill.
       extraAction: `${trainingPill}${flagPill}`,
+      // For accounts the inline add writes to the BUYER contact, not the
+      // account itself (account-level Phone/Email are noisy switchboard
+      // lines). No buyer = no inline add — the rep uses the buyer picker
+      // to set one first, then adds the number/email.
+      zohoModule: buyer?.id ? 'Contacts' : undefined,
+      zohoId: buyer?.id || undefined,
     });
   }).join('');
 }
@@ -1819,6 +1828,16 @@ async function openBriefForLeadObj(leadObj) {
     </div>`;
   document.getElementById('brief-modal').classList.remove('hidden');
 
+  // Show the "Zoho" deep-link button whenever we know which record the brief
+  // is about. Leads come from the raw Zoho Lead object (id is the Lead id);
+  // Account- and New-Customer-shaped briefs carry an explicit _zohoModule /
+  // _zohoId pair set by leadFromAccount() / leadFromNewCust().
+  const zohoBtn = document.getElementById('brief-open-zoho-btn');
+  if (zohoBtn) {
+    const hasZoho = !!((lead._zohoModule && lead._zohoId) || lead.id);
+    zohoBtn.classList.toggle('hidden', !hasZoho);
+  }
+
   try {
     const brief = await AIBrief.generate(lead);
     document.getElementById('brief-content').innerHTML = AIBrief.renderBrief(brief);
@@ -1874,6 +1893,12 @@ function leadFromAccount(a) {
     // history even when the buyer has no email on file.
     Website: a.Website || '',
     _contactEmails: contactEmails,
+    // Deep-link target for the Brief drawer's "Zoho" button. Prefer the
+    // buyer Contact when we have one — the Account record is the PO/shop
+    // shell, but role/notes edits happen on the person. Fall back to the
+    // Account so the button still works on shops with no buyer assigned.
+    _zohoModule: buyer?.id ? 'Contacts' : 'Accounts',
+    _zohoId: buyer?.id || a.id || null,
   };
 }
 
@@ -1919,6 +1944,10 @@ function leadFromNewCust(c) {
     // briefs miss Sky's prior history with the shop.
     Website: acct?.Website || '',
     _contactEmails: contactEmails,
+    // Brief drawer's "Zoho" deep-link — prefer the buyer Contact if we have
+    // one matched, else the Account shell.
+    _zohoModule: buyer?.id ? 'Contacts' : (acct?.id ? 'Accounts' : null),
+    _zohoId: buyer?.id || acct?.id || null,
   };
 }
 
@@ -1930,6 +1959,10 @@ async function openBriefForNewCust(zohoAccountId) {
 
 function closeBrief() {
   document.getElementById('brief-modal').classList.add('hidden');
+  // Re-hide the Zoho deep-link button so it doesn't flash for a frame the
+  // next time the drawer opens on a record without a known Zoho id.
+  const zohoBtn = document.getElementById('brief-open-zoho-btn');
+  if (zohoBtn) zohoBtn.classList.add('hidden');
   currentBriefLead = null;
 }
 
@@ -2126,6 +2159,11 @@ function contactCardHtml(opts) {
                           // the "Flag for Pete" follow-up toggle so Sky can
                           // hand off an account to Pete's /new-business queue
                           // without leaving Sales Floor.
+    zohoModule,           // 'Leads' | 'Contacts' — which Zoho module backs
+                          // this card. Enables the inline "+ Add phone" /
+                          // "+ Add email" pills when the field is missing.
+    zohoId,               // Zoho record id for the module above (lead id for
+                          // Leads cards, buyer contact id for Account cards).
   } = opts;
 
   const display = name || '—';
@@ -2169,31 +2207,56 @@ function contactCardHtml(opts) {
   }
 
   // ── Action bar — Call · Text · Email · Brief.
-  // Disabled state for missing channel keeps the layout consistent across
-  // every card (no "this card has 3 buttons, that card has 2" jitter).
+  // Layout stays 4-up across every card (no "this card has 3 buttons, that
+  // card has 2" jitter). When a channel is empty AND we have a Zoho id to
+  // write back to, the disabled button is replaced with an "+ Add phone" /
+  // "+ Add email" pill that opens the inline add-field sheet. Accounts
+  // without a buyer can't add data here — the buyer picker handles that
+  // flow first. Leads always have a Zoho id (they ARE the Zoho record).
+  const canAdd = !!(zohoModule && zohoId);
+  const safeNameAttr = escapeAttr(display);
+  const addPhoneCall = canAdd
+    ? `openAddField(${JSON.stringify(zohoModule)}, ${JSON.stringify(zohoId)}, 'phone', ${JSON.stringify(display)}, ${idx}, ${JSON.stringify(kind)})`
+    : '';
+  const addEmailCall = canAdd
+    ? `openAddField(${JSON.stringify(zohoModule)}, ${JSON.stringify(zohoId)}, 'email', ${JSON.stringify(display)}, ${idx}, ${JSON.stringify(kind)})`
+    : '';
+
   const callBtn = phoneE164
     ? `<a class="hs-action-pill is-call" href="tel:${escapeAttr(phoneE164)}" onclick="event.stopPropagation(); ${kind === 'lead' ? `callLead(leads[${idx}]);` : ''}" title="Call">
          <i class="fa-solid fa-phone"></i><span>Call</span>
        </a>`
-    : `<button class="hs-action-pill is-call is-disabled" disabled title="No phone on record">
-         <i class="fa-solid fa-phone"></i><span>Call</span>
-       </button>`;
+    : (canAdd
+        ? `<button class="hs-action-pill is-call is-add" onclick="event.stopPropagation(); ${addPhoneCall}" title="Add a phone number for ${safeNameAttr}">
+             <i class="fa-solid fa-plus"></i><span>Add phone</span>
+           </button>`
+        : `<button class="hs-action-pill is-call is-disabled" disabled title="No phone on record">
+             <i class="fa-solid fa-phone"></i><span>Call</span>
+           </button>`);
 
   const textBtn = phoneE164
     ? `<button class="hs-action-pill is-text" onclick="event.stopPropagation(); ${textHandler}" title="Send text">
          <i class="fa-solid fa-comment-sms"></i><span>Text</span>
        </button>`
-    : `<button class="hs-action-pill is-text is-disabled" disabled title="No mobile number on record">
-         <i class="fa-solid fa-comment-sms"></i><span>Text</span>
-       </button>`;
+    : (canAdd
+        ? `<button class="hs-action-pill is-text is-add" onclick="event.stopPropagation(); ${addPhoneCall}" title="Add a phone number for ${safeNameAttr}">
+             <i class="fa-solid fa-plus"></i><span>Add phone</span>
+           </button>`
+        : `<button class="hs-action-pill is-text is-disabled" disabled title="No mobile number on record">
+             <i class="fa-solid fa-comment-sms"></i><span>Text</span>
+           </button>`);
 
   const emailBtn = email
     ? `<button class="hs-action-pill is-email" onclick="event.stopPropagation(); ${emailHandler}" title="Send email">
          <i class="fa-solid fa-envelope"></i><span>Email</span>
        </button>`
-    : `<button class="hs-action-pill is-email is-disabled" disabled title="No email on record">
-         <i class="fa-solid fa-envelope"></i><span>Email</span>
-       </button>`;
+    : (canAdd
+        ? `<button class="hs-action-pill is-email is-add" onclick="event.stopPropagation(); ${addEmailCall}" title="Add an email for ${safeNameAttr}">
+             <i class="fa-solid fa-plus"></i><span>Add email</span>
+           </button>`
+        : `<button class="hs-action-pill is-email is-disabled" disabled title="No email on record">
+             <i class="fa-solid fa-envelope"></i><span>Email</span>
+           </button>`);
 
   const briefBtn = briefHandler
     ? `<button class="hs-action-pill is-brief" onclick="event.stopPropagation(); ${briefHandler}" title="AI Brief">
@@ -2695,3 +2758,217 @@ if (document.readyState === 'loading') {
 } else {
   Quo.start();
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Inline Add-Field (phone / email) — mid-call quick capture
+// ─────────────────────────────────────────────────────────────────────────────
+// When a rep gets a phone number or email while talking to a shop, they tap
+// the "+ Add phone" or "+ Add email" pill on the card. A bottom sheet slides
+// up; they type → tap Save → we PUT to Zoho via /api/sales-floor-contact-update
+// and refresh the card in place. Total interaction under 5 seconds — they
+// never leave the Floor PWA.
+//
+// For everything else (role, account linkage, notes, etc.) the Brief drawer
+// carries an "Open in Zoho" button that deep-links to the full record on
+// crm.zoho.com (the mobile CRM app catches this URL if installed).
+
+const _addField = {
+  module: null,    // 'Leads' | 'Contacts'
+  recordId: null,
+  kind: null,      // 'phone' | 'email'
+  cardKind: null,  // 'lead' | 'account' — which list to refresh after save
+  cardIdx: null,   // index in that list, so we can scroll the row back into view
+};
+
+function openAddField(module, recordId, kind, recordName, cardIdx, cardKind) {
+  if (!module || !recordId) return;
+  _addField.module = module;
+  _addField.recordId = recordId;
+  _addField.kind = kind;
+  _addField.cardKind = cardKind;
+  _addField.cardIdx = cardIdx;
+
+  const eyebrow = document.getElementById('hs-addfield-eyebrow');
+  const title = document.getElementById('hs-addfield-title');
+  const sub = document.getElementById('hs-addfield-sub');
+  const label = document.getElementById('hs-addfield-label');
+  const input = document.getElementById('hs-addfield-input');
+  const err = document.getElementById('hs-addfield-error');
+  if (!input) return;
+
+  if (kind === 'email') {
+    eyebrow.textContent = 'Add email';
+    label.textContent = 'Email address';
+    input.type = 'email';
+    input.inputMode = 'email';
+    input.placeholder = 'buyer@shop.com';
+  } else {
+    eyebrow.textContent = 'Add phone';
+    label.textContent = 'Phone number';
+    input.type = 'tel';
+    input.inputMode = 'tel';
+    input.placeholder = '(555) 123-4567';
+  }
+  title.textContent = recordName || '—';
+  sub.textContent = 'Saved to Zoho the moment you tap Save.';
+  input.value = '';
+  err.textContent = '';
+  err.classList.add('hidden');
+
+  const sheet = document.getElementById('hs-addfield-sheet');
+  sheet.classList.remove('hidden');
+  // Let the backdrop render before focusing so iOS actually raises the keyboard.
+  setTimeout(() => input.focus(), 120);
+}
+
+function closeAddField() {
+  document.getElementById('hs-addfield-sheet')?.classList.add('hidden');
+  _addField.module = null;
+  _addField.recordId = null;
+  _addField.kind = null;
+  _addField.cardKind = null;
+  _addField.cardIdx = null;
+}
+
+async function submitAddField() {
+  const input = document.getElementById('hs-addfield-input');
+  const err = document.getElementById('hs-addfield-error');
+  const saveBtn = document.getElementById('hs-addfield-save');
+  const val = (input?.value || '').trim();
+  if (!val) {
+    err.textContent = 'Enter a value before saving.';
+    err.classList.remove('hidden');
+    return;
+  }
+
+  // Client-side sanity — the server validates again, but this keeps bad
+  // input from round-tripping when the rep's thumb hits Save too fast.
+  if (_addField.kind === 'email') {
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(val)) {
+      err.textContent = 'That doesn\u2019t look like an email address.';
+      err.classList.remove('hidden');
+      return;
+    }
+  } else {
+    const digits = val.replace(/\D/g, '');
+    if (digits.length < 7 || digits.length > 15) {
+      err.textContent = 'That phone number looks off. Use 10 digits for US.';
+      err.classList.remove('hidden');
+      return;
+    }
+  }
+  err.classList.add('hidden');
+
+  // Build the patch. Phone adds write to BOTH Phone and Mobile on Leads so
+  // the Call AND Text channels both light up on the card afterwards. On
+  // Contacts Zoho distinguishes them — we still write both to max out what
+  // the rep can do from the floor without a second trip through the sheet.
+  const patch = {};
+  if (_addField.kind === 'email') {
+    patch.Email = val;
+  } else {
+    patch.Phone = val;
+    patch.Mobile = val;
+  }
+
+  saveBtn.disabled = true;
+  saveBtn.classList.add('is-saving');
+  try {
+    const res = await fetch('/api/sales-floor-contact-update', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        module: _addField.module,
+        recordId: _addField.recordId,
+        patch,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || `Save failed (${res.status})`);
+    }
+
+    // Reflect the new value locally so the card flips from "Add phone" to a
+    // working Call/Text/Email pill without waiting on the next full sync.
+    const stored = data.patch || patch;
+    applyContactPatchLocally(_addField.module, _addField.recordId, stored);
+
+    // Re-render the list the card belongs to so the new state shows up.
+    if (_addField.cardKind === 'lead') {
+      if (typeof renderLeads === 'function') renderLeads();
+    } else if (_addField.cardKind === 'account') {
+      if (typeof renderAccounts === 'function') renderAccounts();
+    }
+
+    toast(
+      _addField.kind === 'email' ? 'Email saved to Zoho' : 'Phone saved to Zoho',
+      'check',
+    );
+    closeAddField();
+  } catch (e) {
+    err.textContent = e.message || 'Save failed. Try again.';
+    err.classList.remove('hidden');
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.classList.remove('is-saving');
+  }
+}
+
+// Mutate the in-memory record so the UI reflects the new value before the
+// next /api/sales-floor-sync comes around. Covers Leads and the buyer
+// contact inside an Account.
+function applyContactPatchLocally(mod, recordId, patch) {
+  if (mod === 'Leads') {
+    const l = Array.isArray(leads) ? leads.find((x) => x.id === recordId) : null;
+    if (l) {
+      if (patch.Phone) l.Phone = patch.Phone;
+      if (patch.Mobile) l.Mobile = patch.Mobile;
+      if (patch.Email) l.Email = patch.Email;
+    }
+    return;
+  }
+  if (mod === 'Contacts' && Array.isArray(accounts)) {
+    for (const a of accounts) {
+      const c = a?.buyer?.id === recordId
+        ? a.buyer
+        : (Array.isArray(a?.contacts) ? a.contacts.find((x) => x.id === recordId) : null);
+      if (c) {
+        if (patch.Phone) c.Phone = patch.Phone;
+        if (patch.Mobile) c.Mobile = patch.Mobile;
+        if (patch.Email) c.Email = patch.Email;
+      }
+    }
+  }
+}
+
+window.openAddField = openAddField;
+window.closeAddField = closeAddField;
+window.submitAddField = submitAddField;
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Brief drawer → Open in Zoho deep-link
+// ─────────────────────────────────────────────────────────────────────────────
+// Anything that isn't phone / email (role changes, linking an account,
+// long-form notes) is low-frequency and lives better in Zoho's own UI.
+// This button deep-links the currentBriefLead into crm.zoho.com — on iOS
+// and Android that URL auto-opens the Zoho CRM app if installed, otherwise
+// falls back to the mobile web CRM.
+
+function openCurrentBriefInZoho() {
+  const lead = (typeof currentBriefLead !== 'undefined' && currentBriefLead) || null;
+  if (!lead) return;
+  let url = null;
+  // Lead card → Leads module.
+  if (lead._zohoModule && lead._zohoId) {
+    url = `https://crm.zoho.com/crm/tab/${lead._zohoModule}/${lead._zohoId}`;
+  } else if (lead.id) {
+    // Fallback for historical callers that only stashed an id.
+    url = `https://crm.zoho.com/crm/tab/Leads/${lead.id}`;
+  }
+  if (!url) return;
+  window.open(url, '_blank', 'noopener');
+}
+window.openCurrentBriefInZoho = openCurrentBriefInZoho;

@@ -39,7 +39,7 @@
 
   <!-- App styles — mobile-first, overrides desktop defaults.
        ?v= busts Cloudflare edge + SW precache when styles.css ships changes. -->
-  <link rel="stylesheet" href="/sales-floor/mobile/styles.css?v=6" />
+  <link rel="stylesheet" href="/sales-floor/mobile/styles.css?v=7" />
 
   <style>
     /* Inline: suppress desktop-only top bar even if referenced */
@@ -744,8 +744,39 @@
       <button onclick="emailFromBrief()" class="hs-btn-secondary">
         <i class="fa-solid fa-envelope mr-1"></i> Email
       </button>
+      <button id="brief-open-zoho-btn" onclick="openCurrentBriefInZoho()" class="hs-btn-ghost px-3 hidden" title="Open full record in Zoho CRM">
+        <i class="fa-solid fa-arrow-up-right-from-square mr-1"></i> Zoho
+      </button>
       <button onclick="closeBrief()" class="hs-btn-ghost px-4">Close</button>
     </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     INLINE ADD-FIELD SHEET  (Add phone / Add email, mid-call)
+═════════════════════════════════════════════════════════════════ -->
+<div id="hs-addfield-sheet" class="hs-addfield-overlay hidden" role="dialog" aria-modal="true" aria-label="Add contact info">
+  <div class="hs-addfield-sheet">
+    <div class="hs-addfield-handle"></div>
+    <div class="hs-addfield-header">
+      <div class="hs-addfield-eyebrow" id="hs-addfield-eyebrow">Add phone</div>
+      <div class="hs-addfield-title" id="hs-addfield-title">—</div>
+      <div class="hs-addfield-sub" id="hs-addfield-sub">Saved to Zoho the moment you tap Save.</div>
+    </div>
+    <form id="hs-addfield-form" onsubmit="event.preventDefault(); submitAddField();" autocomplete="off">
+      <label class="hs-addfield-label" id="hs-addfield-label" for="hs-addfield-input">Phone number</label>
+      <input id="hs-addfield-input" class="hs-addfield-input" type="tel" inputmode="tel"
+             autocapitalize="off" autocorrect="off" spellcheck="false"
+             placeholder="(555) 123-4567" />
+      <div id="hs-addfield-error" class="hs-addfield-error hidden"></div>
+      <div class="hs-addfield-actions">
+        <button type="button" onclick="closeAddField()" class="hs-addfield-cancel">Cancel</button>
+        <button type="submit" id="hs-addfield-save" class="hs-addfield-save">
+          <i class="fa-solid fa-floppy-disk"></i><span>Save to Zoho</span>
+        </button>
+      </div>
+    </form>
   </div>
 </div>
 
