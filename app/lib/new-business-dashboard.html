@@ -209,6 +209,194 @@
 
     .footer-mark { padding: 40px 16px 20px; text-align: center; color: #2a2d30;
       font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase; }
+
+    /* ═══════════════════════════════════════════════════════════════
+       AI PRE-CALL BRIEF — shared styles ported from sales-floor.
+       Paired with /sales-floor/js/ai-brief.js. Every selector is
+       .brief-* scoped so it won't collide with the page's own rules.
+       Vars are declared in a :root block here because this dashboard
+       uses literal colors everywhere else; declaring them scoped-by-
+       selector would double the rule count with no benefit.
+    ═══════════════════════════════════════════════════════════════ */
+    :root {
+      --brief-panel: rgba(255,255,255,0.03);
+      --brief-chip: rgba(255,255,255,0.06);
+      --brief-chip-strong: rgba(255,255,255,0.10);
+      --brief-line: rgba(255,255,255,0.10);
+      --brief-white: #FFFFFF;
+      --brief-gray: #A9ACAF;
+      --brief-gray-dim: rgba(255,255,255,0.55);
+      --brief-gray-dimmer: rgba(255,255,255,0.38);
+      --brief-gold: #F5E400;
+      --brief-orange: #FF8A00;
+      --brief-r-sm: 8px;
+      --brief-teko: 'Teko', sans-serif;
+      --brief-barlow: 'Barlow Semi Condensed', sans-serif;
+    }
+    .brief-chip-row { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:4px; }
+    .brief-chip {
+      display:inline-flex; align-items:center; gap:6px;
+      padding:3px 9px; background:var(--brief-chip);
+      border:1px solid var(--brief-line); border-radius:999px;
+      font-family:var(--brief-barlow); font-size:11px;
+      color:var(--brief-gray-dim); letter-spacing:0.02em; text-transform:uppercase;
+    }
+    .brief-chip i { font-size:10px; color:var(--brief-gray-dimmer); }
+
+    .brief-warn {
+      display:flex; gap:10px; align-items:flex-start;
+      padding:10px 12px; background:rgba(255,138,0,0.08);
+      border:1px solid rgba(255,138,0,0.28); border-radius:var(--brief-r-sm);
+      color:var(--brief-white); font-family:var(--brief-barlow);
+    }
+    .brief-warn > i { color:var(--brief-orange); margin-top:2px; }
+    .brief-warn strong { font-size:13px; letter-spacing:0.02em; }
+    .brief-warn-sub { font-size:11px; color:var(--brief-gray-dim); margin-top:2px; }
+
+    .brief-last-contact {
+      padding:12px 14px; background:var(--brief-panel);
+      border:1px solid var(--brief-line); border-left:3px solid var(--brief-gold);
+      border-radius:var(--brief-r-sm);
+    }
+    .brief-last-contact-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+    .brief-last-icon {
+      width:28px; height:28px; border-radius:999px;
+      background:var(--brief-chip-strong);
+      display:flex; align-items:center; justify-content:center;
+      color:var(--brief-gold); font-size:12px; flex-shrink:0;
+    }
+    .brief-last-label {
+      font-family:var(--brief-teko); font-size:13px;
+      letter-spacing:0.12em; color:var(--brief-gold); line-height:1;
+    }
+    .brief-last-when {
+      font-family:var(--brief-barlow); font-size:11px;
+      color:var(--brief-gray-dim); margin-top:2px; letter-spacing:0.02em;
+    }
+    .brief-last-summary {
+      margin:0; font-family:var(--brief-barlow); font-size:13.5px;
+      color:var(--brief-white); line-height:1.55;
+    }
+
+    .brief-play {
+      padding:14px 16px;
+      background:linear-gradient(180deg, rgba(245,228,0,0.10) 0%, rgba(245,228,0,0.04) 100%);
+      border:1px solid rgba(245,228,0,0.38); border-radius:var(--brief-r-sm);
+    }
+    .brief-play-head { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+    .brief-play-star {
+      width:22px; height:22px; background:var(--brief-gold); color:#000;
+      border-radius:999px; display:flex; align-items:center; justify-content:center;
+      font-size:11px; flex-shrink:0;
+    }
+    .brief-play-label {
+      font-family:var(--brief-teko); font-size:15px;
+      letter-spacing:0.14em; color:var(--brief-gold); line-height:1;
+    }
+    .brief-play-body {
+      margin:0; font-family:var(--brief-barlow); font-size:14px;
+      color:var(--brief-white); line-height:1.55;
+    }
+
+    .brief-section { padding:2px 0; }
+    .brief-section > h4 {
+      margin:0 0 8px 0; font-family:var(--brief-teko); font-size:15px;
+      letter-spacing:0.12em; color:var(--brief-gold); text-transform:uppercase;
+    }
+    .brief-list {
+      margin:0; padding:0 0 0 18px;
+      color:var(--brief-white); font-family:var(--brief-barlow);
+      font-size:13.5px; line-height:1.55;
+    }
+    .brief-list li { margin-bottom:4px; }
+
+    .brief-objection {
+      padding:10px 12px; background:var(--brief-chip);
+      border:1px solid var(--brief-line); border-radius:var(--brief-r-sm);
+      margin-bottom:8px;
+    }
+    .brief-objection:last-child { margin-bottom:0; }
+    .brief-objection-q {
+      font-family:var(--brief-barlow); font-size:13px;
+      color:var(--brief-white); font-style:italic; margin-bottom:4px;
+    }
+    .brief-objection-a {
+      font-family:var(--brief-barlow); font-size:13px;
+      color:var(--brief-gray); line-height:1.5;
+    }
+    .brief-objection-a i { color:var(--brief-gold); margin-right:4px; }
+
+    .brief-opener {
+      margin:0; padding:12px 14px; background:rgba(255,255,255,0.03);
+      border-left:3px solid var(--brief-white); border-radius:var(--brief-r-sm);
+      font-family:var(--brief-barlow); font-size:14.5px; font-style:italic;
+      color:var(--brief-white); line-height:1.55;
+    }
+
+    .brief-history, .brief-crm-notes {
+      border:1px solid var(--brief-line); border-radius:var(--brief-r-sm);
+      background:var(--brief-chip); overflow:hidden;
+    }
+    .brief-history-summary, .brief-crm-notes-summary {
+      list-style:none; display:flex; align-items:center; gap:8px;
+      padding:10px 12px; cursor:pointer; font-family:var(--brief-teko);
+      font-size:14px; letter-spacing:0.12em; color:var(--brief-white);
+      text-transform:uppercase; user-select:none;
+    }
+    .brief-history-summary::-webkit-details-marker,
+    .brief-crm-notes-summary::-webkit-details-marker { display:none; }
+    .brief-history-summary > i:first-child,
+    .brief-crm-notes-summary > i:first-child { color:var(--brief-gold); }
+    .brief-history-count {
+      margin-left:auto; padding:2px 8px; background:var(--brief-chip-strong);
+      border-radius:999px; font-family:var(--brief-barlow); font-size:11px;
+      color:var(--brief-gray-dim); letter-spacing:0;
+    }
+    .brief-history-chev {
+      transition:transform 150ms ease; color:var(--brief-gray-dim); font-size:11px;
+    }
+    details[open] > summary .brief-history-chev { transform:rotate(180deg); }
+
+    .brief-timeline {
+      border-top:1px solid var(--brief-line);
+      padding:8px 12px 12px 12px;
+      display:flex; flex-direction:column; gap:10px;
+    }
+    .brief-timeline-row { display:flex; gap:10px; }
+    .brief-timeline-icon {
+      width:26px; height:26px; border-radius:999px;
+      background:var(--brief-chip-strong); color:var(--brief-gray);
+      display:flex; align-items:center; justify-content:center;
+      font-size:11px; flex-shrink:0;
+    }
+    .brief-timeline-meta {
+      font-family:var(--brief-barlow); font-size:11px;
+      color:var(--brief-gray-dim); letter-spacing:0.02em;
+      text-transform:uppercase; margin-bottom:2px;
+    }
+    .brief-timeline-dot { margin:0 5px; color:var(--brief-gray-dimmer); }
+    .brief-timeline-channel { color:var(--brief-white); font-weight:600; }
+    .brief-timeline-summary {
+      margin:0; font-family:var(--brief-barlow); font-size:13px;
+      color:var(--brief-white); line-height:1.5;
+    }
+    .brief-crm-notes-body {
+      margin:0; padding:10px 12px 12px 12px;
+      border-top:1px solid var(--brief-line);
+      font-family:var(--brief-barlow); font-size:13px;
+      color:var(--brief-gray); line-height:1.55; white-space:pre-wrap;
+    }
+
+    #brief-content > * + * { margin-top:12px; }
+    #brief-content .hs-loading i {
+      font-size:22px; color:#A9ACAF; animation: spin 1s linear infinite;
+    }
+
+    @media (max-width:640px) {
+      .brief-play-body, .brief-last-summary { font-size:14px; }
+      .brief-chip { font-size:10px; padding:2px 7px; }
+      .brief-timeline-meta { font-size:10px; }
+    }
   </style>
 </head>
 <body>
@@ -370,8 +558,41 @@
   </div>
 </div>
 
+<!-- ══════════════ AI PRE-CALL BRIEF MODAL ══════════════ -->
+<!-- Mirrors the sales-floor Brief drawer so Pete gets the same pre-call
+     prep Sky uses: Last Contact, Sky's Play, Talking Points, Objections,
+     Opener, History, CRM Notes. Rendering is delegated to the shared
+     AIBrief IIFE loaded below. -->
+<div class="hs-modal" id="brief-modal" role="dialog" aria-modal="true" aria-labelledby="brief-lead-name">
+  <div class="hs-modal-inner" style="max-width:640px;">
+    <div class="hs-modal-head">
+      <div>
+        <div class="hs-modal-sub">AI Pre-Call Brief</div>
+        <div class="hs-modal-title" id="brief-lead-name">—</div>
+      </div>
+      <button class="hs-modal-close" onclick="closeBrief()" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div id="brief-content" style="max-height:60vh; overflow-y:auto; margin-bottom:16px;">
+      <div class="hs-loading">
+        <i class="fa-solid fa-spinner"></i>
+        <p style="margin-top:10px; color:#A9ACAF; font-size:13px; font-family:'Barlow Semi Condensed',sans-serif;">Generating your brief...</p>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn-ghost" onclick="closeBrief()">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- AI Brief IIFE — exposes window.AIBrief.{generate, renderBrief}. Same
+     module that powers the sales-floor Brief drawer. No change needed
+     to the script itself; it reads `currentBriefLead` off window. -->
+<script src="/sales-floor/js/ai-brief.js"></script>
 
 <script>
   // ──────────────────────────────────────────────────────────────────────
@@ -386,6 +607,13 @@
   let activeParent = null;  // { id, module, name, phone, email }
   let selectedType = 'call';
   let selectedOutcome = 'Connected';
+  // Currently-open brief target. Read by ai-brief.js when the render
+  // path needs to reach back for CRM notes / domain fallbacks. Cleared
+  // on closeBrief() so stale references don't leak into the next open.
+  let currentBriefLead = null;
+  // Expose on window so the shared ai-brief.js IIFE (which references
+  // window.currentBriefLead) can read/write it without a separate hook.
+  window.currentBriefLead = null;
 
   // ──────────────────────────────────────────────────────────────────────
   // Utilities
@@ -567,6 +795,9 @@
           <button class="btn-action primary" onclick='sendMenuFromCard("Leads", ${JSON.stringify(l.id)}, ${JSON.stringify(l)})'>
             <i class="fa-solid fa-paper-plane"></i> Send Menu
           </button>
+          <button class="btn-action" onclick='openBriefForLeadById(${JSON.stringify(l.id)})' title="AI pre-call brief">
+            <i class="fa-solid fa-brain"></i> Brief
+          </button>
           <button class="btn-action" onclick='openLogModal({module:"Leads", id:${JSON.stringify(l.id)}, name:${JSON.stringify(name)}, phone:${JSON.stringify(phone)}, email:${JSON.stringify(email)}})'>
             <i class="fa-solid fa-pen-to-square"></i> Log
           </button>
@@ -606,6 +837,9 @@
           <button class="btn-action primary" onclick='sendMenuFromCard("Accounts", ${JSON.stringify(a.id)}, ${JSON.stringify({Account_Name:a.Account_Name, buyer:a.buyer, Email:a.Email})})'>
             <i class="fa-solid fa-paper-plane"></i> Send Menu
           </button>
+          <button class="btn-action" onclick='openBriefForFollowupById(${JSON.stringify(a.id)})' title="AI pre-call brief">
+            <i class="fa-solid fa-brain"></i> Brief
+          </button>
           <button class="btn-action" onclick='openLogModal({module:"Accounts", id:${JSON.stringify(a.id)}, name:${JSON.stringify(name)}, phone:${JSON.stringify(phone)}, email:${JSON.stringify(email)}})'>
             <i class="fa-solid fa-pen-to-square"></i> Log
           </button>
@@ -614,6 +848,115 @@
           </button>
         </div>
       </article>`;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // AI Pre-Call Brief — opens the shared drawer, delegates generation to
+  // /sales-floor/js/ai-brief.js (loaded above). Two entry points because
+  // Leads tab carries raw Zoho Lead objects while Follow-Ups carries
+  // Accounts with a nested buyer; both need coercion to the Lead-shape
+  // the Brief API expects.
+  // ──────────────────────────────────────────────────────────────────────
+  function leadFromLead(l) {
+    // Leads tab objects are already almost-shape — just add the deep-link
+    // hints the Brief drawer's Zoho button reads (if present).
+    if (!l) return null;
+    const fullName = l._fullName
+      || [l.First_Name, l.Last_Name].filter(Boolean).join(' ')
+      || l.Company
+      || '';
+    return {
+      ...l,
+      _fullName: fullName,
+      _zohoModule: 'Leads',
+      _zohoId: l.id,
+    };
+  }
+
+  // Build a Lead-shape payload from an Account card (Follow-Ups tab) so
+  // the Brief pipeline can run its Quo + Gmail + Claude history search
+  // the same way it does on /sales-floor. Buyer contact beats the shop
+  // switchboard — the person who signs the PO is almost never the one
+  // who picks up the store line.
+  function leadFromFollowup(a) {
+    if (!a) return null;
+    const buyer = a.buyer || null;
+    const firstName = buyer?.First_Name || '';
+    const lastName = buyer?.Last_Name || '';
+    const fullName =
+      buyer?._fullName ||
+      [firstName, lastName].filter(Boolean).join(' ') ||
+      a.Account_Name ||
+      '';
+    const phone = buyer?.Mobile || buyer?.Phone || a.Phone || '';
+    const email = buyer?.Email || a.Email || '';
+    // Pull every contact email we have on the account so the Brief
+    // route can derive a company domain for Gmail search when the
+    // buyer itself has no email on file.
+    const contactEmails = Array.isArray(a.contacts)
+      ? a.contacts.map((c) => (c?.Email || '').trim()).filter(Boolean)
+      : [];
+    return {
+      First_Name: firstName,
+      Last_Name: lastName,
+      _fullName: fullName,
+      Company: a.Account_Name || '',
+      Phone: phone,
+      Mobile: buyer?.Mobile || '',
+      Email: email,
+      _status: 'account',
+      Lead_Source: 'Existing Account',
+      Description: a.Description || buyer?.Description || '',
+      _jobRole: buyer?.Job_Role || buyer?._jobRole || '',
+      Website: a.Website || '',
+      _contactEmails: contactEmails,
+      _zohoModule: buyer?.id ? 'Contacts' : 'Accounts',
+      _zohoId: buyer?.id || a.id || null,
+    };
+  }
+
+  async function openBriefForLeadObj(leadObj) {
+    if (!leadObj) return;
+    currentBriefLead = leadObj;
+    window.currentBriefLead = leadObj;
+    const lead = currentBriefLead;
+    const companyLine = lead.Company ? ` — ${lead.Company}` : '';
+    document.getElementById('brief-lead-name').textContent =
+      `${lead._fullName || '—'}${companyLine}`;
+    document.getElementById('brief-content').innerHTML = `
+      <div class="hs-loading">
+        <i class="fa-solid fa-spinner"></i>
+        <p style="margin-top:10px; color:#A9ACAF; font-size:13px; font-family:'Barlow Semi Condensed',sans-serif;">Generating your brief...</p>
+      </div>`;
+    document.getElementById('brief-modal').classList.add('open');
+
+    try {
+      const brief = await AIBrief.generate(lead);
+      document.getElementById('brief-content').innerHTML = AIBrief.renderBrief(brief);
+    } catch (err) {
+      document.getElementById('brief-content').innerHTML =
+        `<p style="font-family:'Barlow Semi Condensed',sans-serif;color:#DC2626;padding:16px;">Could not generate brief: ${escapeHtml(err?.message || String(err))}</p>`;
+    }
+  }
+
+  // Wrapper callers invoked by the card buttons. Looking up by id
+  // (vs. index) keeps the onclick payload tiny and survives list
+  // re-renders/filter changes cleanly.
+  function openBriefForLeadById(id) {
+    const l = leads.find((x) => x.id === id);
+    if (!l) return toast('Lead not found', 'error');
+    return openBriefForLeadObj(leadFromLead(l));
+  }
+  function openBriefForFollowupById(id) {
+    const a = followups.find((x) => x.id === id);
+    if (!a) return toast('Account not found', 'error');
+    return openBriefForLeadObj(leadFromFollowup(a));
+  }
+
+  function closeBrief() {
+    document.getElementById('brief-modal').classList.remove('open');
+    currentBriefLead = null;
+    window.currentBriefLead = null;
   }
 
   // ──────────────────────────────────────────────────────────────────────
@@ -851,9 +1194,13 @@
     await refreshAll();
   })();
 
-  // Close modal on ESC
+  // Close whichever modal is open on ESC. Brief drawer first so it doesn't
+  // leave a stale currentBriefLead behind if both happen to be open.
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeLogModal();
+    if (e.key !== 'Escape') return;
+    const briefOpen = document.getElementById('brief-modal')?.classList.contains('open');
+    if (briefOpen) closeBrief();
+    closeLogModal();
   });
 </script>
 
