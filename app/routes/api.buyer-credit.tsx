@@ -1,5 +1,6 @@
 import type {LoaderFunctionArgs, ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
+import {getZohoAccessToken as getZohoToken} from '~/lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Buyer Store Credit — Server-side API Route
@@ -18,41 +19,6 @@ import {json} from '@shopify/remix-oxygen';
 
 const CREDIT_RATE = 0.005; // 0.5% of order total
 const CREDIT_FIELD = 'Store_Credit'; // Custom currency field on Zoho Contacts
-
-// ─── Zoho OAuth ──────────────────────────────────────────────────────────────
-
-let cachedAccessToken: string | null = null;
-let tokenExpiresAt = 0;
-
-async function getZohoToken(env: {
-  ZOHO_CLIENT_ID: string;
-  ZOHO_CLIENT_SECRET: string;
-  ZOHO_REFRESH_TOKEN: string;
-}): Promise<string> {
-  const now = Date.now();
-  if (cachedAccessToken && now < tokenExpiresAt) return cachedAccessToken;
-
-  const res = await fetch('https://accounts.zoho.com/oauth/v2/token', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: env.ZOHO_CLIENT_ID,
-      client_secret: env.ZOHO_CLIENT_SECRET,
-      refresh_token: env.ZOHO_REFRESH_TOKEN,
-    }),
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Zoho token refresh failed (${res.status}): ${text.slice(0, 300)}`);
-  }
-
-  const data = await res.json();
-  cachedAccessToken = data.access_token;
-  tokenExpiresAt = now + 55 * 60 * 1000;
-  return cachedAccessToken!;
-}
 
 // ─── Zoho Contact Helpers ────────────────────────────────────────────────────
 

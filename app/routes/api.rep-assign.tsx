@@ -8,44 +8,7 @@ import {
   type RepAssignment,
   type RepId,
 } from '~/lib/reps';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Zoho OAuth — minimal inline refresh flow (same pattern as /api/popups-book).
-// Cached at module scope so repeated rep-assign calls reuse the token across
-// requests within the same Oxygen worker instance.
-// ─────────────────────────────────────────────────────────────────────────────
-let zohoCachedToken: string | null = null;
-let zohoTokenExpiresAt = 0;
-
-async function getZohoAccessToken(env: {
-  ZOHO_CLIENT_ID: string;
-  ZOHO_CLIENT_SECRET: string;
-  ZOHO_REFRESH_TOKEN: string;
-}): Promise<string> {
-  const now = Date.now();
-  if (zohoCachedToken && now < zohoTokenExpiresAt) return zohoCachedToken;
-
-  const res = await fetch('https://accounts.zoho.com/oauth/v2/token', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: env.ZOHO_CLIENT_ID,
-      client_secret: env.ZOHO_CLIENT_SECRET,
-      refresh_token: env.ZOHO_REFRESH_TOKEN,
-    }),
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Zoho token refresh failed (${res.status}): ${text.slice(0, 300)}`);
-  }
-
-  const data = await res.json();
-  zohoCachedToken = data.access_token;
-  zohoTokenExpiresAt = now + 55 * 60 * 1000;
-  return zohoCachedToken!;
-}
+import {getZohoAccessToken} from '~/lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Datetime helpers — MUST match /api/popups-book conventions exactly, since

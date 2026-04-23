@@ -1,6 +1,7 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getRepFromRequest} from '../lib/sales-floor-reps';
+import {getZohoAccessToken as getZohoToken} from '~/lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // /api/new-business-flag-followup
@@ -22,35 +23,6 @@ import {getRepFromRequest} from '../lib/sales-floor-reps';
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const FOLLOWUP_TAG = 'pete-followup';
-
-let cachedToken: string | null = null;
-let tokenExpiresAt = 0;
-
-async function getZohoToken(env: Record<string, string | undefined>): Promise<string> {
-  if (!env.ZOHO_CLIENT_ID || !env.ZOHO_CLIENT_SECRET || !env.ZOHO_REFRESH_TOKEN) {
-    throw new Error('Zoho credentials missing');
-  }
-  const now = Date.now();
-  if (cachedToken && now < tokenExpiresAt) return cachedToken;
-  const res = await fetch('https://accounts.zoho.com/oauth/v2/token', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: env.ZOHO_CLIENT_ID,
-      client_secret: env.ZOHO_CLIENT_SECRET,
-      refresh_token: env.ZOHO_REFRESH_TOKEN,
-    }),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Zoho token (${res.status}): ${text.slice(0, 200)}`);
-  }
-  const data = await res.json();
-  cachedToken = data.access_token;
-  tokenExpiresAt = now + 55 * 60 * 1000;
-  return cachedToken!;
-}
 
 export async function action({request, context}: ActionFunctionArgs) {
   const rep = getRepFromRequest(request);

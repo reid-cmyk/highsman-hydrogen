@@ -1,5 +1,6 @@
 import type {LoaderFunctionArgs, ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
+import {getAccessToken} from '~/lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Zoho CRM Account Search — Server-side API Route
@@ -8,42 +9,6 @@ import {json} from '@shopify/remix-oxygen';
 // Returns matching NJ dispensary accounts from Zoho CRM.
 // Keeps Zoho OAuth credentials server-side (never exposed to browser).
 // ─────────────────────────────────────────────────────────────────────────────
-
-// In-memory token cache (per worker instance)
-let cachedAccessToken: string | null = null;
-let tokenExpiresAt = 0;
-
-/** Exchange a refresh token for a fresh Zoho access token. */
-async function getAccessToken(env: {
-  ZOHO_CLIENT_ID: string;
-  ZOHO_CLIENT_SECRET: string;
-  ZOHO_REFRESH_TOKEN: string;
-}): Promise<string> {
-  const now = Date.now();
-  if (cachedAccessToken && now < tokenExpiresAt) return cachedAccessToken;
-
-  const res = await fetch('https://accounts.zoho.com/oauth/v2/token', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: env.ZOHO_CLIENT_ID,
-      client_secret: env.ZOHO_CLIENT_SECRET,
-      refresh_token: env.ZOHO_REFRESH_TOKEN,
-    }),
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Zoho token refresh failed (${res.status}): ${text.slice(0, 300)}`);
-  }
-
-  const data = await res.json();
-  cachedAccessToken = data.access_token;
-  // Zoho tokens last 1 hour — cache for 55 minutes to be safe
-  tokenExpiresAt = now + 55 * 60 * 1000;
-  return cachedAccessToken!;
-}
 
 /** Account shape returned to the client. Pop-up custom fields are included when present. */
 type AccountResult = {

@@ -1,5 +1,6 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
+import {getZohoAccessToken} from '~/lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/lead-visit-submit
@@ -25,37 +26,6 @@ type Env = {
   ZOHO_CLIENT_SECRET?: string;
   ZOHO_REFRESH_TOKEN?: string;
 };
-
-// Module-scope Zoho token cache
-let cachedZohoToken: string | null = null;
-let zohoTokenExpiresAt = 0;
-
-async function getZohoAccessToken(env: Env): Promise<string> {
-  if (!env.ZOHO_CLIENT_ID || !env.ZOHO_CLIENT_SECRET || !env.ZOHO_REFRESH_TOKEN) {
-    throw new Error('Zoho CRM not configured');
-  }
-  const now = Date.now();
-  if (cachedZohoToken && now < zohoTokenExpiresAt) return cachedZohoToken;
-
-  const res = await fetch('https://accounts.zoho.com/oauth/v2/token', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: env.ZOHO_CLIENT_ID,
-      client_secret: env.ZOHO_CLIENT_SECRET,
-      refresh_token: env.ZOHO_REFRESH_TOKEN,
-    }),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Zoho token refresh failed (${res.status}): ${text.slice(0, 300)}`);
-  }
-  const data = await res.json();
-  cachedZohoToken = data.access_token;
-  zohoTokenExpiresAt = now + 55 * 60 * 1000;
-  return cachedZohoToken!;
-}
 
 function interestLabel(level: string): string {
   switch (level) {

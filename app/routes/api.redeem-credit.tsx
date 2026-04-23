@@ -1,5 +1,6 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
+import {getZohoAccessToken as getZohoToken} from '~/lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Buyer Store Credit — Gift Card Redemption API
@@ -17,41 +18,6 @@ const CREDIT_FIELD = 'Store_Credit';
 const MIN_REDEEM = 1.0; // Minimum redemption amount ($1.00)
 const DEFAULT_ADMIN_SHOP = 'qcpbii-fn.myshopify.com';
 const ADMIN_API_VERSION = '2024-01';
-
-// ─── Zoho OAuth (same pattern as api.buyer-credit.tsx) ───────────────────────
-
-let cachedZohoToken: string | null = null;
-let zohoTokenExpiresAt = 0;
-
-async function getZohoToken(env: {
-  ZOHO_CLIENT_ID: string;
-  ZOHO_CLIENT_SECRET: string;
-  ZOHO_REFRESH_TOKEN: string;
-}): Promise<string> {
-  const now = Date.now();
-  if (cachedZohoToken && now < zohoTokenExpiresAt) return cachedZohoToken;
-
-  const res = await fetch('https://accounts.zoho.com/oauth/v2/token', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: env.ZOHO_CLIENT_ID,
-      client_secret: env.ZOHO_CLIENT_SECRET,
-      refresh_token: env.ZOHO_REFRESH_TOKEN,
-    }),
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Zoho token refresh failed (${res.status}): ${text.slice(0, 300)}`);
-  }
-
-  const data = await res.json();
-  cachedZohoToken = data.access_token;
-  zohoTokenExpiresAt = now + 55 * 60 * 1000;
-  return cachedZohoToken!;
-}
 
 // ─── Zoho Contact fetch (by id) ──────────────────────────────────────────────
 

@@ -2,6 +2,7 @@ import {useEffect, useMemo} from 'react';
 import type {LoaderFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {Link, useLoaderData} from '@remix-run/react';
+import {getZohoAccessToken} from '~/lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // /ops — Spark Team Ops Dashboard (field-staff only)
@@ -119,39 +120,6 @@ export const meta: MetaFunction = () => [
       'Highsman Spark Team operational dashboard — daily game plan, weekly shifts, dispensary coverage, and end-of-shift reporting.',
   },
 ];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ZOHO TOKEN — mirrors /api/rep-assign (kept inline for route isolation)
-// ─────────────────────────────────────────────────────────────────────────────
-let zohoCachedToken: string | null = null;
-let zohoTokenExpiresAt = 0;
-
-async function getZohoAccessToken(env: {
-  ZOHO_CLIENT_ID: string;
-  ZOHO_CLIENT_SECRET: string;
-  ZOHO_REFRESH_TOKEN: string;
-}): Promise<string> {
-  const now = Date.now();
-  if (zohoCachedToken && now < zohoTokenExpiresAt) return zohoCachedToken;
-  const res = await fetch('https://accounts.zoho.com/oauth/v2/token', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: env.ZOHO_CLIENT_ID,
-      client_secret: env.ZOHO_CLIENT_SECRET,
-      refresh_token: env.ZOHO_REFRESH_TOKEN,
-    }),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Zoho token refresh failed (${res.status}): ${text.slice(0, 300)}`);
-  }
-  const data = await res.json();
-  zohoCachedToken = data.access_token;
-  zohoTokenExpiresAt = now + 55 * 60 * 1000;
-  return zohoCachedToken!;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EVENTS FETCH — 14-day Events window, parsed into a simpler shape

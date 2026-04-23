@@ -1,6 +1,7 @@
 import type {LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getRepFromRequest} from '../lib/sales-floor-reps';
+import {getZohoAccessToken} from '~/lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sales Floor — LeafLink Orders Backbone
@@ -98,32 +99,12 @@ const CHECKIN_AFTER_DAYS = 12;
 const POST_420_CUTOFF_ISO = '2026-04-20T00:00:00Z';
 const POST_420_CUTOFF_MS = new Date(POST_420_CUTOFF_ISO).getTime();
 
-// ─── Zoho OAuth (module-scope cache, 55-min TTL) ────────────────────────────
-let cachedZohoToken: string | null = null;
-let zohoTokenExpiresAt = 0;
-
+// ─── Zoho OAuth (shared cache; null on missing creds / refresh failure) ─────
+// Wraps the shared Zoho helper so callers below can still soft-degrade when
+// credentials are missing or the refresh fails.
 async function getZohoToken(env: any): Promise<string | null> {
-  if (!env.ZOHO_CLIENT_ID || !env.ZOHO_CLIENT_SECRET || !env.ZOHO_REFRESH_TOKEN) {
-    return null;
-  }
-  const now = Date.now();
-  if (cachedZohoToken && now < zohoTokenExpiresAt) return cachedZohoToken;
   try {
-    const res = await fetch('https://accounts.zoho.com/oauth/v2/token', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        client_id: env.ZOHO_CLIENT_ID,
-        client_secret: env.ZOHO_CLIENT_SECRET,
-        refresh_token: env.ZOHO_REFRESH_TOKEN,
-      }),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    cachedZohoToken = data.access_token;
-    zohoTokenExpiresAt = now + 55 * 60 * 1000;
-    return cachedZohoToken;
+    return await getZohoAccessToken(env);
   } catch {
     return null;
   }

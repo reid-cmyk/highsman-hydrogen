@@ -2,6 +2,7 @@ import type {LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getRepFromRequest} from '../lib/sales-floor-reps';
 import {formatPhonePretty, formatPhoneE164, isQuoConfigured, fetchRecentCalls} from '../lib/quo';
+import {getZohoAccessToken} from '~/lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sales Floor — Missed Calls ("Call Back" queue)
@@ -44,30 +45,15 @@ type MissedCall = {
   source: 'zoho-task' | 'quo-fallback';
 };
 
-// ─── Zoho token (same pattern as webhook/other routes) ──────────────────────
-let cachedToken: string | null = null;
-let tokenExpiresAt = 0;
+// ─── Zoho token (shared cache; null on missing creds / refresh failure) ────
+// Wraps the shared helper so we preserve the nullable contract used by
+// callers below for soft-degradation.
 async function getZohoToken(env: any): Promise<string | null> {
-  if (!env.ZOHO_CLIENT_ID || !env.ZOHO_CLIENT_SECRET || !env.ZOHO_REFRESH_TOKEN) {
+  try {
+    return await getZohoAccessToken(env);
+  } catch {
     return null;
   }
-  const now = Date.now();
-  if (cachedToken && now < tokenExpiresAt) return cachedToken;
-  const res = await fetch('https://accounts.zoho.com/oauth/v2/token', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: env.ZOHO_CLIENT_ID,
-      client_secret: env.ZOHO_CLIENT_SECRET,
-      refresh_token: env.ZOHO_REFRESH_TOKEN,
-    }),
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  cachedToken = data.access_token;
-  tokenExpiresAt = now + 55 * 60 * 1000;
-  return cachedToken;
 }
 
 // Pull open "Call back … [quo:…]" tasks from Zoho.

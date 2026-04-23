@@ -8,6 +8,7 @@ import {
   type QuoCall,
   type QuoMessage,
 } from '../lib/quo';
+import {getZohoAccessToken as getZohoToken} from '~/lib/zoho-auth';
 import {SALES_REPS, type SalesRep} from '../lib/sales-floor-reps';
 import {createZohoNote, smsNoteTitle, smsNoteBody} from '../lib/zoho-notes';
 
@@ -51,32 +52,6 @@ import {createZohoNote, smsNoteTitle, smsNoteBody} from '../lib/zoho-notes';
 
 // ─── Module-scope state ─────────────────────────────────────────────────────
 const quoIdToZohoCallId = new Map<string, string>(); // best-effort cache
-let cachedZohoToken: string | null = null;
-let zohoTokenExpiresAt = 0;
-
-// ─── Zoho helpers (local — webhook is a single-purpose route, no shared DI) ─
-async function getZohoToken(env: any): Promise<string> {
-  const now = Date.now();
-  if (cachedZohoToken && now < zohoTokenExpiresAt) return cachedZohoToken;
-  const res = await fetch('https://accounts.zoho.com/oauth/v2/token', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: env.ZOHO_CLIENT_ID,
-      client_secret: env.ZOHO_CLIENT_SECRET,
-      refresh_token: env.ZOHO_REFRESH_TOKEN,
-    }),
-  });
-  if (!res.ok) {
-    const t = await res.text().catch(() => '');
-    throw new Error(`Zoho token (${res.status}): ${t.slice(0, 200)}`);
-  }
-  const data = await res.json();
-  cachedZohoToken = data.access_token;
-  zohoTokenExpiresAt = now + 55 * 60 * 1000;
-  return cachedZohoToken!;
-}
 
 // Find a Zoho Contact whose Phone or Mobile matches the E.164 number.
 // We try Mobile first (more accurate for cell-only buyers) then Phone.

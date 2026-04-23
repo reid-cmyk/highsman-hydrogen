@@ -1,6 +1,7 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {AwsClient} from 'aws4fetch';
+import {getZohoAccessToken as getZohoToken} from '~/lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/vibes-visit-submit
@@ -37,11 +38,6 @@ type Env = {
 // ─── Budtender Training Camp — Klaviyo list ─────────────────────────────────
 const BUDTENDER_TRAINING_LIST_ID = 'WBSrLZ';
 const KLAVIYO_REVISION = '2024-10-15';
-
-// Module-scope Zoho token cache (per worker instance). Avoids getting blocked
-// by Zoho's "too many requests continuously" rate limit on /oauth/v2/token.
-let cachedZohoToken: string | null = null;
-let zohoTokenExpiresAt = 0;
 
 type Payload = {
   repId: string;
@@ -602,31 +598,6 @@ function pickExtension(file: File): string {
 }
 
 // ─── Zoho helpers ───────────────────────────────────────────────────────────
-async function getZohoToken(env: Env): Promise<string> {
-  const now = Date.now();
-  if (cachedZohoToken && now < zohoTokenExpiresAt) return cachedZohoToken;
-  if (!env.ZOHO_CLIENT_ID || !env.ZOHO_CLIENT_SECRET || !env.ZOHO_REFRESH_TOKEN) {
-    throw new Error('Zoho credentials not configured');
-  }
-  const res = await fetch('https://accounts.zoho.com/oauth/v2/token', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: env.ZOHO_CLIENT_ID,
-      client_secret: env.ZOHO_CLIENT_SECRET,
-      refresh_token: env.ZOHO_REFRESH_TOKEN,
-    }),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Zoho token refresh failed (${res.status}): ${text.slice(0, 300)}`);
-  }
-  const data = (await res.json()) as {access_token: string};
-  cachedZohoToken = data.access_token;
-  zohoTokenExpiresAt = now + 55 * 60 * 1000;
-  return cachedZohoToken!;
-}
 
 async function patchZohoBudtenderCount(
   env: Env,

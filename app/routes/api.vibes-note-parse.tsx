@@ -2,6 +2,7 @@ import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getRepFromRequest} from '../lib/sales-floor-reps';
 import {claudeTool, isAnthropicConfigured, type ClaudeToolSchema} from '../lib/anthropic';
+import {getZohoAccessToken as getZohoToken} from '~/lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Vibes — Post-Visit Voice Note Parser
@@ -35,32 +36,6 @@ import {claudeTool, isAnthropicConfigured, type ClaudeToolSchema} from '../lib/a
 const VIBES_NOTE_SUBJECT_PREFIX = '[VIBES-VISIT]';
 
 type Tier = 'onboarding' | 'training' | 'checkin';
-
-let cachedToken: string | null = null;
-let tokenExpiresAt = 0;
-
-async function getZohoToken(env: any): Promise<string> {
-  if (!env.ZOHO_CLIENT_ID || !env.ZOHO_CLIENT_SECRET || !env.ZOHO_REFRESH_TOKEN) {
-    throw new Error('Zoho not configured');
-  }
-  const now = Date.now();
-  if (cachedToken && now < tokenExpiresAt) return cachedToken;
-  const res = await fetch('https://accounts.zoho.com/oauth/v2/token', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: env.ZOHO_CLIENT_ID,
-      client_secret: env.ZOHO_CLIENT_SECRET,
-      refresh_token: env.ZOHO_REFRESH_TOKEN,
-    }),
-  });
-  if (!res.ok) throw new Error(`Zoho token (${res.status})`);
-  const data = await res.json();
-  cachedToken = data.access_token;
-  tokenExpiresAt = now + 55 * 60 * 1000;
-  return cachedToken!;
-}
 
 // ─── Claude tool schema ─────────────────────────────────────────────────────
 const PARSE_VISIT_TOOL: ClaudeToolSchema = {

@@ -1,5 +1,6 @@
 import type {LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
+import {getZohoAccessToken as getZohoToken} from '~/lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Vibes Team — Daily Route Builder (3-tier model, v2)
@@ -30,34 +31,6 @@ const SALES_FLOOR_SIGNATURE = 'Auto-created from /sales-floor';
 const TIER_MARKER_ONBOARDING = '[TIER:ONBOARDING]';
 const TIER_MARKER_TRAINING = '[TIER:TRAINING]';
 const CHECKIN_CADENCE_DAYS = 30;
-
-// In-memory Zoho access token cache (per worker instance). Reused across routes.
-let cachedAccessToken: string | null = null;
-let tokenExpiresAt = 0;
-
-async function getZohoToken(env: any): Promise<string> {
-  const now = Date.now();
-  if (cachedAccessToken && now < tokenExpiresAt) return cachedAccessToken;
-
-  const res = await fetch('https://accounts.zoho.com/oauth/v2/token', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: env.ZOHO_CLIENT_ID,
-      client_secret: env.ZOHO_CLIENT_SECRET,
-      refresh_token: env.ZOHO_REFRESH_TOKEN,
-    }),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Zoho token refresh failed (${res.status}): ${text.slice(0, 300)}`);
-  }
-  const data = await res.json();
-  cachedAccessToken = data.access_token;
-  tokenExpiresAt = now + 55 * 60 * 1000;
-  return cachedAccessToken!;
-}
 
 // RouteStop shape the /vibes index already consumes. Kept 1:1.
 //   tier          : legacy label used by the client for color + sort
