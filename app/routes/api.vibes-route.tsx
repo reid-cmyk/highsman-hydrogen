@@ -143,7 +143,7 @@ async function fetchAccountsByIds(
   const result = new Map<string, any>();
   if (ids.length === 0) return result;
   const fields =
-    'id,Account_Name,Billing_Street,Billing_City,Billing_State,Shipping_State,Account_State,Phone,Visit_Date,Total_Orders_Count';
+    'id,Account_Name,Billing_Street,Billing_City,Billing_Code,Billing_State,Shipping_State,Account_State,Phone,Visit_Date,Total_Orders_Count';
   const CHUNK = 10;
   for (let i = 0; i < ids.length; i += CHUNK) {
     const chunk = ids.slice(i, i + CHUNK);
@@ -177,7 +177,7 @@ async function fetchNjAccounts(token: string): Promise<any[]> {
     );
     url.searchParams.set(
       'fields',
-      'id,Account_Name,Billing_Street,Billing_City,Billing_State,Shipping_State,Account_State,Phone,Visit_Date,Total_Orders_Count',
+      'id,Account_Name,Billing_Street,Billing_City,Billing_Code,Billing_State,Shipping_State,Account_State,Phone,Visit_Date,Total_Orders_Count',
     );
     url.searchParams.set('per_page', '200');
     url.searchParams.set('page', String(page));
@@ -294,7 +294,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
             (Date.now() - new Date(closedDate).getTime()) / (1000 * 60 * 60 * 24),
           )
         : null;
-      const geo = njRegion(acct.Billing_City);
+      const geo = njRegion(acct.Billing_City, acct.Billing_Code);
       return {
         tier,
         accountId: acct.id,
@@ -360,7 +360,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         // biggest cadence win we've got.
         stale = null;
       }
-      const geo = njRegion(a.Billing_City);
+      const geo = njRegion(a.Billing_City, a.Billing_Code);
       rotationRaw.push({
         tier: 'ROTATION',
         accountId: a.id,

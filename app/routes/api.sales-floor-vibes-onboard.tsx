@@ -147,9 +147,14 @@ async function fetchPipelineReference(
 async function fetchAccountState(
   accountId: string,
   token: string,
-): Promise<{name: string; state: string | null; city: string | null} | null> {
+): Promise<{
+  name: string;
+  state: string | null;
+  city: string | null;
+  zip: string | null;
+} | null> {
   const res = await fetch(
-    `https://www.zohoapis.com/crm/v7/Accounts/${accountId}?fields=Account_Name,Billing_State,Billing_City,Account_State`,
+    `https://www.zohoapis.com/crm/v7/Accounts/${accountId}?fields=Account_Name,Billing_State,Billing_City,Billing_Code,Account_State`,
     {headers: {Authorization: `Zoho-oauthtoken ${token}`}},
   );
   if (!res.ok) return null;
@@ -160,6 +165,7 @@ async function fetchAccountState(
     name: a.Account_Name || '',
     state: a.Billing_State || a.Account_State || null,
     city: a.Billing_City || null,
+    zip: a.Billing_Code || null,
   };
 }
 
@@ -252,7 +258,7 @@ export async function action({request, context}: ActionFunctionArgs) {
     // Shore runs. Reject outliers HERE so Sky doesn't get a "booked" toast
     // for a store that will never actually show up on the weekly plan; she
     // has to book it manually through Serena.
-    const geo = njRegion(acct.city);
+    const geo = njRegion(acct.city, acct.zip);
     const region = geo.region;
     const isOutlier = geo.infrequentDropIn;
     if (isOutlier) {

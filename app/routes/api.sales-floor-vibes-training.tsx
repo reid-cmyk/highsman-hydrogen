@@ -102,9 +102,14 @@ async function fetchPipelineReference(
 async function fetchAccountState(
   accountId: string,
   token: string,
-): Promise<{name: string; state: string | null; city: string | null} | null> {
+): Promise<{
+  name: string;
+  state: string | null;
+  city: string | null;
+  zip: string | null;
+} | null> {
   const res = await fetch(
-    `https://www.zohoapis.com/crm/v7/Accounts/${accountId}?fields=Account_Name,Billing_State,Billing_City,Account_State`,
+    `https://www.zohoapis.com/crm/v7/Accounts/${accountId}?fields=Account_Name,Billing_State,Billing_City,Billing_Code,Account_State`,
     {headers: {Authorization: `Zoho-oauthtoken ${token}`}},
   );
   if (!res.ok) return null;
@@ -115,6 +120,7 @@ async function fetchAccountState(
     name: a.Account_Name || '',
     state: a.Billing_State || a.Account_State || null,
     city: a.Billing_City || null,
+    zip: a.Billing_Code || null,
   };
 }
 
@@ -165,7 +171,7 @@ export async function action({request, context}: ActionFunctionArgs) {
     // LBI, Atlantic City etc.) never make the weekly route — they get
     // quarterly drop-in runs. We still create the deal so it's on Serena's
     // radar, but we flag it and tell Sky to arrange direct.
-    const geo = njRegion(acct.city);
+    const geo = njRegion(acct.city, acct.zip);
     const region = geo.region;
     const isOutlier = geo.infrequentDropIn;
 

@@ -54,14 +54,16 @@ async function fetchPendingDeals(token: string): Promise<any[]> {
   return Array.isArray(data?.data) ? data.data : [];
 }
 
-// For each unique Account we reference, pull Billing_City to classify region.
-// Batched into one request via Zoho's id-list criteria — capped at 50 at a
-// time which is well above anything realistic for this inbox.
+// For each unique Account we reference, pull Billing_City + Billing_Code to
+// classify region. Billing_Code feeds the zip-prefix fallback when a city
+// hasn't been added to the North/Central/South allow-list yet. Batched into
+// one request via Zoho's id-list criteria — capped at 50 at a time which is
+// well above anything realistic for this inbox.
 async function fetchAccountCities(
   accountIds: string[],
   token: string,
-): Promise<Map<string, {city: string | null}>> {
-  const map = new Map<string, {city: string | null}>();
+): Promise<Map<string, {city: string | null; zip: string | null}>> {
+  const map = new Map<string, {city: string | null; zip: string | null}>();
   if (accountIds.length === 0) return map;
   // Zoho search uses criteria (id:equals:X) — for multi-id we use OR chain.
   // Chunk the chain to be safe.
@@ -76,7 +78,7 @@ async function fetchAccountCities(
         : '(' + chunk.map((id) => `(id:equals:${id})`).join('or') + ')';
     const url = new URL('https://www.zohoapis.com/crm/v7/Accounts/search');
     url.searchParams.set('criteria', criteria);
-    url.searchParams.set('fields', 'id,Billing_City');
+    url.searchParams.set('fields', 'id,Billing_City,Billing_Code');
     url.searchParams.set('per_page', '100');
     const res = await fetch(url.toString(), {
       headers: {Authorization: `Zoho-oauthtoken ${token}`},
@@ -85,7 +87,10 @@ async function fetchAccountCities(
     const data = await res.json().catch(() => ({}));
     const rows = Array.isArray(data?.data) ? data.data : [];
     for (const row of rows) {
-      map.set(row.id, {city: row.Billing_City || null});
+      map.set(row.id, {
+        city: row.Billing_City || null,
+        zip: row.Billing_Code || null,
+      });
     }
   }
   return map;
@@ -134,8 +139,10 @@ export async function loader({context}: LoaderFunctionArgs) {
       const desc = typeof d.Description === 'string' ? d.Description : '';
       const accountId = d?.Account_Name?.id || null;
       const customerName = d?.Account_Name?.name || d?.Deal_Name || '(unknown)';
-      const city = accountId ? cityMap.get(accountId)?.city || null : null;
-      const geo = njRegion(city);
+      const cityRow = accountId ? cityMap.get(accountId) : null;
+      const city = cityRow?.city || null;
+      const zip = cityRow?.zip || null;
+      const geo = njRegion(city, zip);
       const region = geo.region;
       const isOutlier = geo.infrequentDropIn;
       let predictedDay: string | null = null;

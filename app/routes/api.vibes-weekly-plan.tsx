@@ -223,6 +223,7 @@ type AccountRow = {
   city: string;
   state: string;
   street: string;
+  zip: string;
   totalOrders: number;
   visitDate: string | null;
 };
@@ -238,6 +239,7 @@ async function fetchNjAccountsForPool(token: string): Promise<AccountRow[]> {
         'Account_Name',
         'Billing_Street',
         'Billing_City',
+        'Billing_Code',
         'Billing_State',
         'Account_State',
         'Shipping_State',
@@ -267,6 +269,7 @@ async function fetchNjAccountsForPool(token: string): Promise<AccountRow[]> {
         city: a.Billing_City || '',
         state: a.Account_State || a.Billing_State || '',
         street: a.Billing_Street || '',
+        zip: a.Billing_Code || '',
         totalOrders:
           typeof a.Total_Orders_Count === 'number'
             ? a.Total_Orders_Count
@@ -571,7 +574,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     for (const [accountId, {tier, dealId, timeConstraint}] of tierByAcct.entries()) {
       const a = acctById.get(accountId);
       if (!a) continue;
-      const geo = njRegion(a.city);
+      const geo = njRegion(a.city, a.zip);
       candidates.push({
         accountId,
         name: a.name,
@@ -610,7 +613,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       // never-visited accounts with orders: low priority here — Sky's workflow
       // should catch them via New Customer onboard flow.
       const priority = stale != null ? Math.min(500, 400 + (stale - CHECKIN_MIN_STALE_DAYS)) : 300;
-      const geo = njRegion(a.city);
+      const geo = njRegion(a.city, a.zip);
       candidates.push({
         accountId: a.id,
         name: a.name,

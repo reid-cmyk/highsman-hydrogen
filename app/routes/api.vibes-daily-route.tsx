@@ -365,7 +365,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       const tier: 'onboarding' | 'training' = desc.includes(TIER_MARKER_TRAINING)
         ? 'training'
         : 'onboarding';
-      const geo = njRegion(acct.Billing_City);
+      const geo = njRegion(acct.Billing_City, acct.Billing_Code);
       const timeConstraint = parseTimeConstraint(desc);
       candidates.push({
         accountId: acctId,
@@ -417,7 +417,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       const priority = lastVisit
         ? Math.max(200, 500 - (stale || 0))
         : 500;
-      const geo = njRegion(a.Billing_City);
+      const geo = njRegion(a.Billing_City, a.Billing_Code);
       tier3.push({
         accountId: a.id,
         name: a.Account_Name || '—',
