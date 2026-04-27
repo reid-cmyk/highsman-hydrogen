@@ -217,9 +217,40 @@ export function regionLabel(r: NjRegion): string {
   return r === 'north' ? 'North NJ' : r === 'south' ? 'South NJ' : 'Central NJ';
 }
 
-// Default weekday anchor per region. Serena works Tue/Wed/Thu — Tuesday
-// anchors North (her origin is Union NJ), Wednesday handles Central,
-// Thursday runs the longer South drive.
+// ─────────────────────────────────────────────────────────────────────────────
+// Serena's launch schedule.
+// ─────────────────────────────────────────────────────────────────────────────
+// SERENA_LAUNCH_DATE — first day she's on the road. No Vibes visit can be
+// booked or predicted before this date.
+//
+// Ramp-up week: SERENA_LAUNCH_DATE (Thu 2026-05-14) through Mon 2026-05-18.
+// During the ramp she is working every weekday so Sky can use any day to
+// stage a first wave of visits. The weekly planner is free to schedule
+// outside Tue/Wed/Thu during the ramp.
+//
+// SERENA_NORMAL_SCHEDULE_START — first day of the locked Tue/Wed/Thu cadence
+// (Tue 2026-05-19). From that date forward, only Tue/Wed/Thu are valid visit
+// days, and the region anchor logic (Tue=North, Wed=Central, Thu=South) is
+// the predicted-day source of truth.
+export const SERENA_LAUNCH_ISO = '2026-05-14';
+export const SERENA_LAUNCH_DATE = new Date(SERENA_LAUNCH_ISO + 'T00:00:00-04:00');
+export const SERENA_NORMAL_SCHEDULE_ISO = '2026-05-19';
+export const SERENA_NORMAL_SCHEDULE_DATE = new Date(
+  SERENA_NORMAL_SCHEDULE_ISO + 'T00:00:00-04:00',
+);
+
+// Is `d` on or after Serena's normal Tue/Wed/Thu cadence?
+export function inNormalSchedule(d: Date): boolean {
+  return d.getTime() >= SERENA_NORMAL_SCHEDULE_DATE.getTime();
+}
+
+// Default weekday anchor per region. Serena works Tue/Wed/Thu in the normal
+// cadence — Tuesday anchors North (her origin is Union NJ), Wednesday handles
+// Central, Thursday runs the longer South drive.
+//
+// During the ramp-up week (May 14-18), Sky's button still surfaces the
+// region's normal day so reps see a predictable rhythm — but a clamped
+// nextDateForWeekday() will honor the launch floor.
 //
 // Weekly planner can override this dynamically by load (see
 // api.vibes-daily-route DOW slot logic), but Sky's button uses the default
@@ -236,14 +267,61 @@ export function defaultDayForRegion(r: NjRegion): {
 // Compute the next occurrence of the given weekday (2=Tue, 3=Wed, 4=Thu)
 // on or after `from`, clamped to at least `minDaysAhead` days out so we
 // don't book a same-day visit Sky doesn't have time to coordinate.
+//
+// Also clamps to SERENA_LAUNCH_DATE — Sky can click the button before
+// May 14 but the predicted date will never be earlier than launch. During
+// the ramp-up week (May 14-18), if the region's normal Tue/Wed/Thu lands
+// before May 14 we walk forward to the next valid day inside that ramp.
 export function nextDateForWeekday(
   from: Date,
   targetWeekday: number,
   minDaysAhead = 2,
 ): string {
-  const start = new Date(from.getTime() + minDaysAhead * 86400 * 1000);
+  let start = new Date(from.getTime() + minDaysAhead * 86400 * 1000);
+  // Floor at launch — we never predict a day before Serena starts.
+  if (start.getTime() < SERENA_LAUNCH_DATE.getTime()) {
+    start = new Date(SERENA_LAUNCH_DATE.getTime());
+  }
   const cur = start.getDay();
   const diff = (targetWeekday - cur + 7) % 7;
   const target = new Date(start.getTime() + diff * 86400 * 1000);
   return target.toISOString().slice(0, 10);
+}
+
+// Given a region + "now", produce a human-readable predicted day string for
+// the Sales Floor toast and the deal description. Honors the May 14 launch
+// floor + the ramp-up week.
+//
+// Examples (now = 2026-04-27):
+//   north  → "Thu, May 14 (launch week)"   (her first day, all-region focus)
+//   central→ "Wed, May 20"                 (first normal-schedule Wednesday)
+//   south  → "Thu, May 14 (launch week)"
+//
+// Examples (now = 2026-05-25):
+//   north  → "Tuesday"                     (normal-schedule rhythm)
+//   central→ "Wednesday"
+//   south  → "Thursday"
+export function predictedDayForRegion(
+  r: NjRegion,
+  now: Date = new Date(),
+): {label: string; iso: string} {
+  const {weekday} = defaultDayForRegion(r);
+  const iso = nextDateForWeekday(now, weekday);
+
+  // If the predicted date is in the ramp-up window (May 14 - May 18 inclusive),
+  // surface the actual date — there's no "every Tuesday" rhythm yet.
+  const target = new Date(iso + 'T00:00:00-04:00');
+  if (target.getTime() < SERENA_NORMAL_SCHEDULE_DATE.getTime()) {
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const monthNames = [
+      'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec',
+    ];
+    const dn = dayNames[target.getDay()];
+    const mn = monthNames[target.getMonth()];
+    const dd = target.getDate();
+    return {label: `${dn}, ${mn} ${dd} (launch week)`, iso};
+  }
+
+  // Normal schedule — give the rhythm name (Tuesday/Wednesday/Thursday).
+  return {label: defaultDayForRegion(r).dayName, iso};
 }

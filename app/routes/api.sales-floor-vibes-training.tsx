@@ -1,7 +1,7 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getRepFromRequest} from '../lib/sales-floor-reps';
-import {njRegion, regionLabel, defaultDayForRegion} from '../lib/nj-regions';
+import {njRegion, regionLabel, predictedDayForRegion} from '../lib/nj-regions';
 import {getZohoAccessToken as getZohoToken} from '~/lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -179,10 +179,13 @@ export async function action({request, context}: ActionFunctionArgs) {
     // get no predicted day — Sky must coordinate direct. This is ONLY a
     // suggestion now — the real Closing_Date is set by Serena when she
     // confirms the visit with the store. Sky's button is a soft request.
+    //
+    // Honors Serena's launch schedule: before May 14 (her start) the predicted
+    // day is a calendar date inside the ramp-up week (May 14-18). After May 19
+    // it switches to the rolling Tue/Wed/Thu rhythm.
     let predictedDay: string | null = null;
     if (!isOutlier) {
-      const {dayName} = defaultDayForRegion(region);
-      predictedDay = dayName;
+      predictedDay = predictedDayForRegion(region, new Date()).label;
     }
 
     // Dedup: one open Training deal per account (pending or confirmed).

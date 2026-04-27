@@ -541,6 +541,12 @@ export default function VibesDashboard() {
         </div>
       </div>
 
+      {/* Launch banner — shown until Serena is on her normal Tue/Wed/Thu
+          rhythm (May 19, 2026). Tells reps that bookings won't fire until
+          May 14 and explains the launch-week schedule so a "where is my
+          customer?" question never lands. */}
+      <LaunchScheduleBanner />
+
       {/* Quick actions */}
       <div
         style={{
@@ -1192,6 +1198,119 @@ function TodayRegionBanner({
             {elsewhere.join(' · ')}.
           </>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LaunchScheduleBanner — pre-launch heads-up
+// ─────────────────────────────────────────────────────────────────────────────
+// Serena's first day on the road is Thu May 14, 2026. The full first work
+// block (May 14 → May 18) is a flexible ramp-up — every weekday is valid.
+// From Tue May 19 onwards she's on the locked Tue/Wed/Thu rhythm.
+//
+// This banner makes that schedule loudly visible on the dashboard until she's
+// past the ramp-up. Once she's on the normal schedule, the banner hides and
+// the standard TodayRegionBanner does the talking.
+//
+// Why this matters: Sky pushes a customer through Sales Floor and the toast
+// says "Tuesday May 19" — without this banner, reps might think the push
+// failed because it didn't show up on /vibes today.
+// ─────────────────────────────────────────────────────────────────────────────
+function LaunchScheduleBanner() {
+  // Anchor dates — keep in sync with app/lib/nj-regions.ts.
+  const LAUNCH_ISO = '2026-05-14';
+  const NORMAL_ISO = '2026-05-19';
+  const launchDate = new Date(LAUNCH_ISO + 'T00:00:00-04:00');
+  const normalDate = new Date(NORMAL_ISO + 'T00:00:00-04:00');
+  const now = new Date();
+
+  // Hide the banner once Serena is on her normal schedule.
+  if (now.getTime() >= normalDate.getTime()) return null;
+
+  const beforeLaunch = now.getTime() < launchDate.getTime();
+  const inRamp =
+    !beforeLaunch &&
+    now.getTime() < normalDate.getTime();
+
+  // Days-until-launch counter. Surfaces tension during the pre-launch window.
+  const daysUntilLaunch = Math.ceil(
+    (launchDate.getTime() - now.getTime()) / 86400000,
+  );
+
+  const headline = beforeLaunch
+    ? `Vibes launches in ${daysUntilLaunch} day${daysUntilLaunch === 1 ? '' : 's'}`
+    : 'Launch week — every weekday is in play';
+  const tagline = beforeLaunch
+    ? 'Serena rolls out Thursday, May 14. Customers pushed today are queued for the ramp-up week.'
+    : 'May 14 → May 18 is flexible. Tue/Wed/Thu rhythm locks in May 19.';
+
+  return (
+    <div
+      style={{
+        margin: '12px 16px 0',
+        background: 'linear-gradient(135deg, rgba(212,175,55,0.18), rgba(212,175,55,0.04))',
+        border: `1px solid ${BRAND.gold}`,
+        borderRadius: 8,
+        padding: '14px 16px',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          flexWrap: 'wrap',
+        }}
+      >
+        <span
+          style={{
+            fontFamily: TEKO,
+            fontSize: 13,
+            letterSpacing: '0.18em',
+            color: BRAND.gold,
+            textTransform: 'uppercase',
+          }}
+        >
+          {inRamp ? 'Ramp Week' : 'Launching Soon'}
+        </span>
+        <span
+          style={{
+            fontFamily: TEKO,
+            fontSize: 22,
+            letterSpacing: '0.04em',
+            color: BRAND.white,
+            textTransform: 'uppercase',
+            lineHeight: 1,
+          }}
+        >
+          {headline}
+        </span>
+      </div>
+      <div
+        style={{
+          fontFamily: BODY,
+          fontSize: 12,
+          color: BRAND.gray,
+          marginTop: 8,
+          lineHeight: 1.55,
+        }}
+      >
+        {tagline}
+      </div>
+      <div
+        style={{
+          fontFamily: BODY,
+          fontSize: 11,
+          color: BRAND.gray,
+          marginTop: 6,
+          lineHeight: 1.6,
+        }}
+      >
+        <span style={{color: BRAND.white, fontWeight: 600}}>Schedule:</span>{' '}
+        Thu May 14 – Mon May 18 every weekday · Tue May 19 onwards
+        Tue/Wed/Thu (North · Central · South).
       </div>
     </div>
   );

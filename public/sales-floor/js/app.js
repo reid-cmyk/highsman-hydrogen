@@ -614,6 +614,13 @@ function combinedNewCustomers() {
   // didn't match the customer (e.g., name mismatch) or hasn't reported
   // that account yet. That ensures the NJ tab never disappears just
   // because LeafLink's feed is thin on a given day.
+  //
+  // Reset floor: mirrors NEW_CUSTOMERS_FLOOR_ISO on the server. Anything
+  // whose First_Order_Date is before this floor is suppressed from the
+  // tab. The legacy Zoho flow still works on those accounts — we don't
+  // change Zoho status; this is purely a UI suppression so the tab
+  // starts empty going into Vibes go-live.
+  const NEW_CUSTOMERS_FLOOR_MS = new Date('2026-04-27T00:00:00-04:00').getTime();
   const zohoOnly = [];
   for (const a of accounts) {
     if (!a || !a.id) continue;
@@ -621,6 +628,8 @@ function combinedNewCustomers() {
     if (leafByAcct.has(a.id)) continue;
     const stateCode = normalizeStateCode(a._state || a.Billing_State);
     if (!stateCode || stateCode === 'MA') continue;
+    const firstOrderMs = a.First_Order_Date ? new Date(a.First_Order_Date).getTime() : 0;
+    if (firstOrderMs && firstOrderMs < NEW_CUSTOMERS_FLOOR_MS) continue;
     zohoOnly.push({
       kind: 'zoho',
       cardState: 'zoho_new',

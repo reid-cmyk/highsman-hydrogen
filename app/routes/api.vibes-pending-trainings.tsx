@@ -1,6 +1,6 @@
 import type {LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
-import {njRegion, regionLabel, defaultDayForRegion} from '../lib/nj-regions';
+import {njRegion, regionLabel, predictedDayForRegion} from '../lib/nj-regions';
 import {getZohoAccessToken as getZohoToken} from '~/lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -145,9 +145,10 @@ export async function loader({context}: LoaderFunctionArgs) {
       const geo = njRegion(city, zip);
       const region = geo.region;
       const isOutlier = geo.infrequentDropIn;
+      // Honors Serena's launch schedule (May 14 floor + ramp-up week).
       let predictedDay: string | null = null;
       if (!isOutlier) {
-        predictedDay = defaultDayForRegion(region).dayName;
+        predictedDay = predictedDayForRegion(region, new Date()).label;
       }
       return {
         dealId: d.id,

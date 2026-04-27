@@ -99,6 +99,17 @@ const CHECKIN_AFTER_DAYS = 12;
 const POST_420_CUTOFF_ISO = '2026-04-20T00:00:00Z';
 const POST_420_CUTOFF_MS = new Date(POST_420_CUTOFF_ISO).getTime();
 
+// New Customers tab reset floor. Any first-time order placed BEFORE this
+// timestamp is suppressed from the Sales Floor New Customers tab so Sky's
+// view starts empty going into Vibes go-live. Older accounts continue to be
+// handled through the existing manual flow in Zoho — we deliberately do NOT
+// touch any Zoho status when we suppress them; this is purely a UI filter.
+//
+// Set to 2026-04-27 (the day the filter shipped) so the tab populates with
+// brand-new first-time orders going forward.
+const NEW_CUSTOMERS_FLOOR_ISO = '2026-04-27T00:00:00-04:00';
+const NEW_CUSTOMERS_FLOOR_MS = new Date(NEW_CUSTOMERS_FLOOR_ISO).getTime();
+
 // ─── Zoho OAuth (shared cache; null on missing creds / refresh failure) ─────
 // Wraps the shared Zoho helper so callers below can still soft-degrade when
 // credentials are missing or the refresh fails.
@@ -420,6 +431,11 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       const ship = newest.actual_ship_date || null;
       const firstDateIso = bestOrderDate(oldest);
       const firstDateMs = firstDateIso ? new Date(firstDateIso).getTime() : 0;
+      // Reset floor: suppress everything older than NEW_CUSTOMERS_FLOOR_ISO
+      // so the tab starts empty going into Vibes go-live. Older first-timers
+      // stay in Zoho and are worked manually through the legacy flow — we
+      // never write to Zoho here, this is purely a UI suppression.
+      if (firstDateMs && firstDateMs < NEW_CUSTOMERS_FLOOR_MS) continue;
       const is420Cohort = firstDateMs >= POST_420_CUTOFF_MS;
       newCustomers.push({
         customerId: bucket.customerId,

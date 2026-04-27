@@ -1,7 +1,7 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getRepFromRequest} from '../lib/sales-floor-reps';
-import {njRegion, regionLabel} from '../lib/nj-regions';
+import {njRegion, regionLabel, predictedDayForRegion} from '../lib/nj-regions';
 import {getZohoAccessToken as getZohoToken} from '~/lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -274,12 +274,13 @@ export async function action({request, context}: ActionFunctionArgs) {
         {status: 422},
       );
     }
-    const predictedDay =
-      region === 'north'
-        ? 'Tuesday'
-        : region === 'central'
-          ? 'Wednesday'
-          : 'Thursday';
+    // Predicted day honors Serena's launch schedule. Before May 14 (her
+    // start date) every region predicts a date inside the ramp-up week
+    // (May 14-18). After May 19 it switches to the rolling Tue/Wed/Thu
+    // rhythm.
+    const predicted = predictedDayForRegion(region, new Date());
+    const predictedDay = predicted.label;
+    const predictedDate = predicted.iso;
 
     // Compute check-in due date (12 days post base-date).
     const base = new Date(baseDate).getTime();
@@ -290,9 +291,16 @@ export async function action({request, context}: ActionFunctionArgs) {
       .toISOString()
       .slice(0, 10);
 
-    // Closing date for the deal = the day the brand team should have wrapped
-    // the visit (base + 7 days is a reasonable target).
-    const closingDate = new Date(base + 7 * 86400 * 1000).toISOString().slice(0, 10);
+    // Closing date = the day the brand team should have wrapped the visit.
+    // Default is base + 7 days (one-week onboarding target). But if the
+    // predicted date (which honors Serena's May 14 launch + ramp window)
+    // is later, use that — otherwise the deal looks overdue on /vibes
+    // before Serena has even started.
+    const baseClosing = new Date(base + 7 * 86400 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    const closingDate =
+      predictedDate > baseClosing ? predictedDate : baseClosing;
 
     // Duplicate check — if this Account already has an open Needs Onboarding
     // deal, return it rather than creating a second. Makes the NJ Zoho-card
