@@ -4,6 +4,7 @@ import {getAccessToken} from '~/lib/zoho-auth';
 import {sendEmailFromUser, isGmailSAConfigured} from '~/lib/gmail-sa';
 import {createCalendarEvent, isCalendarSAConfigured} from '~/lib/google-calendar-sa';
 import {REP_HUBS, type RepId} from '~/lib/reps';
+import {njRegion} from '~/lib/nj-regions';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Zoho CRM — Pop-Up Event Creation
@@ -271,7 +272,24 @@ export async function action({request, context}: ActionFunctionArgs) {
     // needing to click into the Event. e.g. "[NJ-N] Highsman Pop Up — ..."
     // Snr Staff override adds a "[OVR]" flag so exception bookings are visible
     // at-a-glance on the calendar (not just buried in Description).
-    const titlePrefix = `${repTag ? `${repTag} ` : ''}${coverageOverride ? '[OVR] ' : ''}`;
+    //
+    // Why this fallback: the /njpopups client only attaches `repTag` when the
+    // rep-coverage check returned `assigned`. On the Snr Staff out-of-coverage
+    // override path (and any future code path that doesn't go through
+    // /api/rep-assign cleanly), repTag would arrive empty — and an Event with
+    // no `[NJ-N]`/`[NJ-S]` prefix is invisible to BOTH territory dashboards
+    // (njterr-loader filters by `title.startsWith(tag)`). Reid hit this exact
+    // case 2026-04-27 with Test Zoho CRM #9. Derive the territory from city
+    // here so every booking lands on at least one dashboard.
+    const effectiveRepTag =
+      repTag ||
+      (() => {
+        const r = njRegion(city || null);
+        // North + Central → [NJ-N] (Newark hub covers Central practically),
+        // South → [NJ-S]. Falls through to [NJ-N] if classification unknown.
+        return r.region === 'south' ? '[NJ-S]' : '[NJ-N]';
+      })();
+    const titlePrefix = `${effectiveRepTag} ${coverageOverride ? '[OVR] ' : ''}`;
     const eventPayload: Record<string, any> = {
       Event_Title: `${titlePrefix}Highsman Pop Up — ${dispensaryName} (${shiftTitleSuffix(shiftKey)})`,
       Start_DateTime: startISO,
