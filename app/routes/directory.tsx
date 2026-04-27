@@ -96,14 +96,104 @@ const SECTIONS: Section[] = [
         audience: 'Spark Team',
         access: 'staff',
       },
+      {
+        path: '/expense',
+        name: 'Travel Expense',
+        description:
+          'Snap a receipt, type your name + amount, file it. Routes straight to Bill.com via spark@highsman.com — flights, hotels, dinners, Ubers, trade shows.',
+        audience: 'All staff',
+        access: 'staff',
+      },
     ],
   },
   {
     kicker: 'Section 02',
+    title: 'CRM · Daily Tools',
+    accent: BRAND.orange,
+    blurb:
+      'The dashboards Sky and Pete work out of every day. Account management, lead pipeline, outbound touchpoints.',
+    pages: [
+      {
+        path: '/sales-floor',
+        name: 'Sales Floor (Sky)',
+        description:
+          'Sky\'s command center. New Customers, Reorder Due, Accounts, Leads, SMS, brief generator, Vibes booking buttons (Onboarding, Training, New Product Onboard), Send Menu, Flag for Pete.',
+        audience: 'Sky',
+        access: 'staff',
+      },
+      {
+        path: '/new-business',
+        name: 'New Business (Pete)',
+        description:
+          'Pete\'s BDR dashboard. NJ leads, follow-ups, Send Menu, Reorder pings, activity logging — every touch lands in Zoho.',
+        audience: 'Pete',
+        access: 'staff',
+      },
+    ],
+  },
+  {
+    kicker: 'Section 03',
+    title: 'Vibes Team · Brand Reps',
+    accent: BRAND.gold,
+    blurb:
+      'Serena\'s Vibes Team toolkit. Today\'s route, store profiles, GPS-gated check-ins, training decks, goodie receipts.',
+    pages: [
+      {
+        path: '/vibes',
+        name: 'Vibes Dashboard',
+        description:
+          'Serena\'s home base. Region-aware Today\'s Route, Trainings to Book inbox, weekly preview, MTD stats, goodie budget tracker, launch-week schedule banner.',
+        audience: 'Vibes Team',
+        access: 'staff',
+      },
+      {
+        path: '/vibes/today',
+        name: 'Today\'s Route',
+        description:
+          'Full map + per-stop briefs for today\'s plan. Auto-routes via Google Routes, packs Tier 1 onboarding + Tier 2 training + Tier 3 check-in stops within the 8-hour day budget.',
+        audience: 'Vibes Team',
+        access: 'staff',
+      },
+      {
+        path: '/vibes/visit/new',
+        name: 'Start Check-In',
+        description:
+          'GPS-gated visit form. SKU stock + merch audit, in-store + online menu accuracy check, budtender training capture, drop log, vibes score, photos, selfie.',
+        audience: 'Vibes Team',
+        access: 'staff',
+      },
+      {
+        path: '/vibes/store',
+        name: 'Store Search',
+        description:
+          'Pull a full store profile by name — buyer + contacts, recent visits, recent orders, training history, training decks she\'s tagged, Zoho deal status.',
+        audience: 'Vibes Team',
+        access: 'staff',
+      },
+      {
+        path: '/vibes/decks',
+        name: 'Training Decks Library',
+        description:
+          'Every budtender training deck Serena uses on the floor. Embedded preview, store-tagged sign-up form, attribution back to Klaviyo for the training record.',
+        audience: 'Vibes Team',
+        access: 'staff',
+      },
+      {
+        path: '/vibes/receipts',
+        name: 'File Receipt',
+        description:
+          'File goodie-budget receipts on the road. Photo upload, store + amount, hits Bill.com via the same spark@ pipeline as /expense.',
+        audience: 'Vibes Team',
+        access: 'staff',
+      },
+    ],
+  },
+  {
+    kicker: 'Section 04',
     title: 'Dashboards · Leadership',
     accent: BRAND.orange,
     blurb:
-      'Executive and ops views. Sales by state and SKU, team ops hub, staff landing.',
+      'Executive and ops views. Sales by state and SKU, team ops hub, staff training landing.',
     pages: [
       {
         path: '/ops',
@@ -132,7 +222,7 @@ const SECTIONS: Section[] = [
     ],
   },
   {
-    kicker: 'Section 03',
+    kicker: 'Section 05',
     title: 'Wholesale · B2B',
     accent: BRAND.green,
     blurb:
@@ -165,7 +255,7 @@ const SECTIONS: Section[] = [
     ],
   },
   {
-    kicker: 'Section 04',
+    kicker: 'Section 06',
     title: 'Budtender Tools',
     accent: BRAND.gold,
     blurb:
@@ -187,12 +277,61 @@ const SECTIONS: Section[] = [
         audience: 'Budtenders',
         access: 'public',
       },
+      {
+        path: '/budtender-quiz',
+        name: 'Budtender Quizzes',
+        description:
+          'The standalone quiz portal. Each course in Training Camp is graded here — passing unlocks tier badges (Rookie · Starting Lineup · Franchise Player · Hall of Flame).',
+        audience: 'Budtenders',
+        access: 'public',
+      },
     ],
   },
   {
-    kicker: 'Section 05',
-    title: 'Rewards Store',
+    kicker: 'Section 07',
+    title: 'Brand · Product Pages',
     accent: BRAND.white,
+    blurb:
+      'The consumer-facing product story. Each format gets its own page — the lineup, how it\'s made, who it\'s for.',
+    pages: [
+      {
+        path: '/hit-sticks',
+        name: 'Hit Sticks',
+        description:
+          '0.5g on-the-go format. The everyday Highsman — pocket-sized, single-strain, ready to roll out the door.',
+        audience: 'Consumers',
+        access: 'public',
+      },
+      {
+        path: '/pre-rolls',
+        name: 'Pre-Rolls',
+        description:
+          '1.2g sharing / heavy-session format. Bigger pour for the group hang or the post-game wind-down.',
+        audience: 'Consumers',
+        access: 'public',
+      },
+      {
+        path: '/ground-game',
+        name: 'Ground Game',
+        description:
+          '7g roll-your-own format. The versatile pack — control your own pour, your own paper, your own pace.',
+        audience: 'Consumers',
+        access: 'public',
+      },
+      {
+        path: '/our-strains',
+        name: 'Our Strains',
+        description:
+          'The Highsman strain library. Lineage, terpene profile, vibe — every strain across every format, in one place.',
+        audience: 'Consumers',
+        access: 'public',
+      },
+    ],
+  },
+  {
+    kicker: 'Section 08',
+    title: 'Rewards Store',
+    accent: BRAND.gold,
     blurb:
       'Gear, prizes, and swag. Where Spark Team and partners redeem the wins.',
     pages: [
@@ -201,6 +340,47 @@ const SECTIONS: Section[] = [
         name: 'Apparel · The Collection',
         description:
           'Highsman merch — tees, hoodies, hats, accessories. The uniform of the brand and the rewards catalog for the field.',
+        access: 'public',
+      },
+    ],
+  },
+  {
+    kicker: 'Section 09',
+    title: 'Visitor · Support · Policies',
+    accent: BRAND.gray,
+    blurb:
+      'The pages a customer or partner reaches when they need to find us, talk to us, or look up the fine print.',
+    pages: [
+      {
+        path: '/contact',
+        name: 'Contact',
+        description:
+          'Public contact page — wholesale inquiries, press requests, general questions. Routes to the right inbox internally.',
+        audience: 'Public',
+        access: 'public',
+      },
+      {
+        path: '/storelocator',
+        name: 'Store Locator',
+        description:
+          'Find a dispensary near you carrying Highsman. Map + list view, address, phone, directions.',
+        audience: 'Consumers',
+        access: 'public',
+      },
+      {
+        path: '/policies/privacy-policy',
+        name: 'Privacy Policy',
+        description:
+          'How Highsman handles personal data — collection, use, third-party sharing, your rights, contact for requests.',
+        audience: 'Public',
+        access: 'public',
+      },
+      {
+        path: '/policies/terms-of-service',
+        name: 'Terms of Service',
+        description:
+          'Site terms, account rules, intellectual property, dispute resolution. The legal baseline for using highsman.com.',
+        audience: 'Public',
         access: 'public',
       },
     ],
@@ -314,8 +494,9 @@ export default function Directory() {
           }}
         >
           The Highsman site map. {totalPages} pages across{' '}
-          {SECTIONS.length} sections — field ops, dashboards, wholesale,
-          budtender tools, brand, and policies. Bookmark this. Share it.
+          {SECTIONS.length} sections — field ops, CRM tools, Vibes Team,
+          dashboards, wholesale, budtender tools, brand, rewards, and
+          policies. Bookmark this. Share it.
         </p>
 
         {/* Search */}
