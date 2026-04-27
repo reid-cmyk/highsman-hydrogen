@@ -328,6 +328,57 @@ function attachFirstOrderNumbers(accounts: any[], deals: any[]) {
   return accounts;
 }
 
+
+// ─── Auto-clear stale Pete flags on reorder ───────────────────────────────
+// Mirrors the rule in api.new-business-followups: if a flagged account has
+// a Last_Order_Date within the AUTO_CLEAR_WINDOW_DAYS = 14 day window,
+// Pete's chase is done — clear the pete-followup tag on Zoho AND flip the
+// in-memory _flaggedForPete flag to false so Sky's card re-renders the
+// 'Flag Pete' pill (unlocked) instead of 'On Pete' (locked).
+//
+// Fire-and-forget on the Zoho remove_tags call so the dashboard load isn't
+// gated on the round-trip — even if the API hiccups, the UI is correct
+// because we updated the in-memory flag.
+const PETE_FOLLOWUP_TAG = 'pete-followup';
+const AUTO_CLEAR_WINDOW_DAYS = 14;
+function autoClearStalePeteFlags(
+  accounts: any[],
+  accessToken: string,
+): void {
+  const cutoffMs = Date.now() - AUTO_CLEAR_WINDOW_DAYS * 86400 * 1000;
+  const toClear: string[] = [];
+  for (const a of accounts) {
+    if (!a._flaggedForPete) continue;
+    const lastOrder = a.Last_Order_Date;
+    if (!lastOrder) continue;
+    const t = new Date(`${lastOrder}T00:00:00Z`).getTime();
+    if (Number.isNaN(t)) continue;
+    if (t >= cutoffMs) {
+      // Account reordered recently — clear the flag.
+      a._flaggedForPete = false;
+      toClear.push(a.id);
+    }
+  }
+  if (toClear.length === 0) return;
+  // Fire-and-forget tag removal so Zoho stops returning these tagged on
+  // future Pete pulls. UI is already correct because we mutated in-memory.
+  Promise.all(
+    toClear.map((id) =>
+      fetch(
+        `https://www.zohoapis.com/crm/v7/Accounts/${encodeURIComponent(id)}/actions/remove_tags`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Zoho-oauthtoken ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({tags: [{name: PETE_FOLLOWUP_TAG}]}),
+        },
+      ).catch(() => {}),
+    ),
+  ).catch(() => {});
+}
+
 // ─── Vibes booked-state attachment (Tier 1 + Tier 2) ─────────────────────────
 // After a rep clicks Brand Team Onboarding OR Training on a card, we want the
 // card to stay visible (so the rep can still call/text/email the buyer) but
@@ -837,6 +888,10 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     // — no extra round-trip. Accounts without a matching Deal_Name that
     // carries "Order #N" stay as "First order {date}" (graceful fallback).
     attachFirstOrderNumbers(accounts, deals);
+    // Auto-clear stale pete-followup flags whose accounts have ordered
+    // within AUTO_CLEAR_WINDOW_DAYS. Last-order DOLLAR amounts come from
+    // LeafLink and are joined client-side from /api/sales-floor-leaflink-orders.
+    autoClearStalePeteFlags(accounts, accessToken);
 
     // Stamp _vibesBooked / _onboardingBooked / _trainingBooked onto any
     // account that already has a signed Sales Floor deal. The client uses

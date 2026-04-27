@@ -195,6 +195,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         Industry: a.Industry || '',
         Description: a.Description || '',
         Last_Activity_Time: a.Last_Activity_Time || null,
+        Last_Order_Date: a.Last_Order_Date || null,
         Modified_Time: a.Modified_Time || null,
         buyer: buyer
           ? {

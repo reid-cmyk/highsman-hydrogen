@@ -496,6 +496,10 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   });
 
   // 4) Cross-reference Zoho — best-effort, capped to keep latency sane.
+  // Map of LeafLink customerId → Zoho accountId so we can build the
+  // lastOrderByAccount summary at the end (used by Sky + Pete dashboards
+  // to render last-order date + dollar amount inline).
+  const customerToZohoMap = new Map<number, string>();
   const zohoToken = await getZohoToken(env);
   if (zohoToken) {
     // Cap Zoho lookups to top 50 reorder-due + ALL new customers (small set).
@@ -508,6 +512,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         row.zohoAccountId = acct.id;
         row.state = acct.state;
         row.phone = acct.phone;
+        customerToZohoMap.set(row.customerId, acct.id);
       }
     }
 
@@ -518,6 +523,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         row.state = acct.state;
         row.phone = acct.phone;
         row.vibesEligible = !!acct.state && VIBES_COVERED_STATES.has(acct.state);
+        customerToZohoMap.set(row.customerId, acct.id);
 
         // Only check Needs Onboarding deal + checkin note if there's an
         // account to check against. Cheap parallel fan-out per row.
@@ -547,6 +553,20 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         row.cardState = 'pending';
       }
     }
+    // Resolve Zoho ids for ALL remaining customers with orders so the
+    // lastOrderByAccount map is dense — not just the reorder-due tail and
+    // new-customer cohort. Capped to 100 extras to keep latency sane.
+    const REMAINING_CAP = 100;
+    let extraResolved = 0;
+    for (const bucket of byCustomer.values()) {
+      if (extraResolved >= REMAINING_CAP) break;
+      if (customerToZohoMap.has(bucket.customerId)) continue;
+      const acct = await findZohoAccountByName(bucket.customerName, zohoToken);
+      if (acct) {
+        customerToZohoMap.set(bucket.customerId, acct.id);
+        extraResolved += 1;
+      }
+    }
   } else {
     errors.push('zoho_unavailable');
   }
@@ -556,15 +576,37 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const visibleNewCustomers = newCustomers.filter((r) => r.cardState !== 'done');
   const cohort420Count = visibleNewCustomers.filter((r) => r.is420Cohort).length;
 
+  // Per-Zoho-account last-order summary. Both Sky's Sales-floor cards and
+  // Pete's new-business follow-up cards consume this to render
+  // 'Last: 2026-04-09 · $1,450' inline. Source of truth = LeafLink, since
+  // Zoho's Last_Order_Date is good but doesn't carry the dollar amount.
+  // Built from the same per-customer buckets we already sorted newest-first.
+  const lastOrderByAccount: Record<string, {date: string; total: number; orderNumber: string}> = {};
+  for (const bucket of byCustomer.values()) {
+    if (!bucket.orders.length) continue;
+    const newest = bucket.orders[0];
+    const zohoAccountId = customerToZohoMap.get(bucket.customerId) || null;
+    if (!zohoAccountId) continue;
+    const date = bestOrderDate(newest);
+    if (!date) continue;
+    lastOrderByAccount[zohoAccountId] = {
+      date,
+      total: orderTotal(newest),
+      orderNumber: newest.number || newest.short_id || '',
+    };
+  }
+
   return json({
     ok: true,
     reorderDue,
     newCustomers: visibleNewCustomers,
+    lastOrderByAccount,
     meta: {
       sellerIds: HIGHSMAN_SELLER_IDS,
       fetchedAt: new Date().toISOString(),
       ordersScanned: allOrders.length,
       uniqueCustomers: byCustomer.size,
+      lastOrderAccounts: Object.keys(lastOrderByAccount).length,
       cohort420Count,
       cohort420CutoffIso: POST_420_CUTOFF_ISO,
       errors,

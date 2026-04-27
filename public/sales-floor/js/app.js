@@ -29,6 +29,7 @@ let recentCallsRefreshTimer = null;
 // memory so the dashboard snapshot, Orders Due tab, and New Customers tab
 // stay in sync without separate fetches per tab.
 let reorderDue = [];      // shops 30d+ since last Highsman LeafLink order
+let lastOrderByAccount = {}; // {zohoAccountId: {date, total, orderNumber}} from LeafLink
 let newCustomers = [];    // first-time Highsman LeafLink orders + state machine
 let leaflinkOrdersMeta = null;
 let leaflinkOrdersFetched = 0;     // ms timestamp of last successful fetch
@@ -476,6 +477,9 @@ async function loadLeaflinkOrders({force = false} = {}) {
     if (!data?.ok) throw new Error(data?.error || 'leaflink orders failed');
     reorderDue = Array.isArray(data.reorderDue) ? data.reorderDue : [];
     newCustomers = Array.isArray(data.newCustomers) ? data.newCustomers : [];
+    lastOrderByAccount = data.lastOrderByAccount && typeof data.lastOrderByAccount === 'object'
+      ? data.lastOrderByAccount
+      : {};
     leaflinkOrdersMeta = data.meta || null;
     leaflinkOrdersFetched = Date.now();
   } catch (err) {
@@ -1676,6 +1680,28 @@ function accountToCardHtml(a, idx, opts) {
     // but the account has contacts, surface a CTA to set one. When there are
     // no contacts at all, fall back to a quiet hint.
     let extraRow = '';
+
+    // Last-order pill — pulls from /api/sales-floor-leaflink-orders into the
+    // global lastOrderByAccount map. Surfaces "Last: 2026-04-09 · $1,450"
+    // inline so reps see at a glance whether the shop is active or stalled.
+    // Falls back to Zoho Last_Order_Date (no $ amount) if LeafLink hasn't
+    // resolved this customer yet.
+    const lastOrderInfo = (lastOrderByAccount && lastOrderByAccount[a.id]) || null;
+    const fallbackDate = a.Last_Order_Date || null;
+    if (lastOrderInfo || fallbackDate) {
+      const dateStr = (lastOrderInfo?.date) || fallbackDate || '';
+      const totalNum = lastOrderInfo?.total ?? null;
+      const totalStr = (totalNum != null && totalNum > 0)
+        ? ` · ${totalNum.toLocaleString('en-US', {style: 'currency', currency: 'USD', maximumFractionDigits: 0})}`
+        : '';
+      extraRow += `
+        <div class="hs-account-lastorder">
+          <span class="hs-account-lastorder-pill" title="Most recent Highsman order on record">
+            <i class="fa-solid fa-receipt"></i> Last order: ${escapeHtml(dateStr)}${totalStr}
+          </span>
+        </div>`;
+    }
+
     if (buyer) {
       extraRow = `
         <div class="hs-account-buyer">

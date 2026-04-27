@@ -3894,3 +3894,28 @@ details[open] > summary .brief-history-chev{
   .brief-chip{ font-size:10px; padding:2px 7px; }
   .brief-timeline-meta{ font-size:10px; }
 }
+
+
+/* ─── Last Order pill (account card) ────────────────────────────────────────
+   Inline summary of the most recent Highsman order on this account. Renders
+   above the Buyer pill so it's the first thing reps see when scanning the
+   card. Source: /api/sales-floor-leaflink-orders.lastOrderByAccount, joined
+   client-side to the Zoho account id. Falls back to Zoho's Last_Order_Date
+   (no $ amount) when LeafLink hasn't resolved that customer yet.
+   ───────────────────────────────────────────────────────────────────────── */
+.hs-account-lastorder{
+  margin:6px 0 0;
+}
+.hs-account-lastorder-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:4px 10px;
+  border-radius:999px;
+  background:rgba(34,197,94,0.10);
+  border:1px solid rgba(34,197,94,0.28);
+  color:#86EFAC;
+  font-size:12px;
+  font-weight:500;
+}
+.hs-account-lastorder-pill i{ font-size:11px; color:#22C55E; }
