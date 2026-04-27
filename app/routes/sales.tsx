@@ -189,27 +189,121 @@ function resolveStateFromLocation(locationName: string): string {
 }
 
 
-// Build a warehouseId/locationId → state-code lookup. Zoho Inventory's
-// /salesorders LIST endpoint frequently omits `location_name`/`warehouse_name`
-// (it only sends the IDs), so resolving state from the order alone leaves rows
-// stateless. Pulling /warehouses once gives us a reliable id→name map we can
-// run through resolveStateFromLocation().
-async function fetchWarehouseStateMap(env: any, accessToken: string): Promise<Map<string, string>> {
+// Warehouse / location info: state code + isHeadOffice flag.
+// State is read directly off each warehouse's address record (`state` /
+// `state_code`, flat or nested under `address`). That's the authoritative
+// source. Parsing the warehouse name is a last-resort fallback for the case
+// where someone left the address blank in Zoho.
+//
+// isHeadOffice flags the corporate "Head Office" warehouse — orders attached
+// to that warehouse are internal transfers, not customer revenue, and must be
+// excluded from the dashboard entirely.
+type WarehouseInfo = {state: string; isHeadOffice: boolean; name: string};
+
+function isHeadOfficeName(name: string): boolean {
+  if (!name) return false;
+  const compact = name.toUpperCase().replace(/[^A-Z]/g, '');
+  return compact === 'HEADOFFICE' || compact.startsWith('HEADOFFICE');
+}
+
+function normalizeStateField(raw: any): string {
+  if (raw == null) return '';
+  const trimmed = String(raw).trim().toUpperCase();
+  if (!trimmed) return '';
+  if (/^[A-Z]{2}$/.test(trimmed)) return trimmed; // already 2-letter
+  return STATE_FULL_NAMES[trimmed] || ''; // full state name
+}
+
+// Build a warehouseId/locationId → {state, isHeadOffice} map. Zoho Inventory's
+// /salesorders LIST endpoint omits `location_name`/`warehouse_name` (only IDs),
+// so resolving state per-order requires this lookup. We hit /warehouses first
+// (older API) and fall back to /locations (newer multi-location API).
+async function fetchWarehouseInfoMap(env: any, accessToken: string): Promise<Map<string, WarehouseInfo>> {
   const orgId = env.ZOHO_INVENTORY_ORG_ID || DEFAULT_ZOHO_INVENTORY_ORG_ID;
+  const out = new Map<string, WarehouseInfo>();
+  const endpoints = [
+    `https://www.zohoapis.com/inventory/v1/warehouses?organization_id=${orgId}`,
+    `https://www.zohoapis.com/inventory/v1/locations?organization_id=${orgId}`,
+  ];
+  for (const url of endpoints) {
+    const res = await fetch(url, {
+      headers: {Authorization: `Zoho-oauthtoken ${accessToken}`, Accept: 'application/json'},
+    });
+    if (!res.ok) continue;
+    const data: any = await res.json().catch(() => ({}));
+    const items: any[] = data.warehouses || data.locations || [];
+    for (const w of items) {
+      const id = String(w.warehouse_id || w.location_id || w.id || '');
+      const name: string = w.warehouse_name || w.location_name || w.name || '';
+      if (!id) continue;
+      // Read state directly off the warehouse's address record.
+      const flat = normalizeStateField(w.state || w.state_code);
+      const nested = normalizeStateField(w.address?.state || w.address?.state_code);
+      let state = flat || nested;
+      // Last-resort: parse the warehouse name.
+      if (!state) state = resolveStateFromLocation(name);
+      out.set(id, {state, isHeadOffice: isHeadOfficeName(name), name});
+    }
+    if (out.size > 0) break;
+  }
+  return out;
+}
+
+// Build a customer-name → Account_State map from Zoho CRM. Used as the final
+// fallback when an order's warehouse has no state and inline location fields
+// are missing. Per Highsman convention (memory:reference_zoho_account_state_field),
+// the canonical state on a CRM Account is `Account_State` — billing/shipping
+// state fields are often blank or wrong and must NOT be used.
+//
+// Soft-fails (returns empty map) if CRM creds aren't configured or the API
+// errors. The dashboard will still render with whatever Inventory could resolve.
+async function fetchCrmAccountStateMap(env: any): Promise<Map<string, string>> {
   const out = new Map<string, string>();
-  const url = `https://www.zohoapis.com/inventory/v1/warehouses?organization_id=${orgId}`;
-  const res = await fetch(url, {
-    headers: {Authorization: `Zoho-oauthtoken ${accessToken}`, Accept: 'application/json'},
+  const clientId = env.ZOHO_CLIENT_ID;
+  const clientSecret = env.ZOHO_CLIENT_SECRET;
+  const refreshToken = env.ZOHO_REFRESH_TOKEN;
+  if (!clientId || !clientSecret || !refreshToken) return out;
+
+  const tokenRes = await fetch('https://accounts.zoho.com/oauth/v2/token', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+    }).toString(),
   });
-  if (!res.ok) return out; // soft-fail; loader will fall back to address fields
-  const data: any = await res.json().catch(() => ({}));
-  const warehouses: any[] = data.warehouses || data.locations || [];
-  for (const w of warehouses) {
-    const id = String(w.warehouse_id || w.location_id || w.id || '');
-    const name: string = w.warehouse_name || w.location_name || w.name || '';
-    if (!id) continue;
-    const state = resolveStateFromLocation(name);
-    if (state) out.set(id, state);
+  if (!tokenRes.ok) return out;
+  const tokenData: any = await tokenRes.json().catch(() => ({}));
+  const accessToken = tokenData.access_token;
+  if (!accessToken) return out;
+
+  // COQL — Account_Name + Account_State, paginated 200/page.
+  let offset = 0;
+  const pageSize = 200;
+  while (true) {
+    const select_query =
+      `select Account_Name, Account_State from Accounts where Account_State is not null limit ${offset}, ${pageSize}`;
+    const r = await fetch('https://www.zohoapis.com/crm/v7/coql', {
+      method: 'POST',
+      headers: {
+        Authorization: `Zoho-oauthtoken ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({select_query}),
+    });
+    if (!r.ok) break;
+    const d: any = await r.json().catch(() => ({}));
+    const rows: any[] = d.data || [];
+    for (const row of rows) {
+      const name = String(row.Account_Name || '').trim().toUpperCase();
+      const state = normalizeStateField(row.Account_State);
+      if (name && state) out.set(name, state);
+    }
+    if (!d.info?.more_records) break;
+    offset += pageSize;
+    if (offset > 5000) break; // safety
   }
   return out;
 }
@@ -365,12 +459,14 @@ export async function loader({request, context}: LoaderFunctionArgs) {
 
   try {
     const token = await getZohoAccessToken(env);
-    // Pull YTD once (covers current period + prior + ytd context).
-    // Pull warehouse map in parallel so we can resolve state by warehouse_id
-    // when the order list response omits the name fields.
-    const [ytdOrders, warehouseStateMap] = await Promise.all([
+    // Pull YTD orders + warehouse info + CRM Account_State map in parallel.
+    // - warehouseInfoMap: warehouse_id → {state, isHeadOffice}. Primary state source.
+    // - crmAccountStateMap: customer_name → Account_State. Last-resort fallback.
+    //   Per Highsman convention, Account_State is canonical; billing/shipping is not used.
+    const [ytdOrders, warehouseInfoMap, crmAccountStateMap] = await Promise.all([
       fetchSalesOrders(env, token, ytdStart, end),
-      fetchWarehouseStateMap(env, token),
+      fetchWarehouseInfoMap(env, token),
+      fetchCrmAccountStateMap(env),
     ]);
 
     // Index helpers
@@ -386,27 +482,26 @@ export async function loader({request, context}: LoaderFunctionArgs) {
 
     for (const so of ytdOrders) {
       const orderDate = new Date(so.date);
-      // State is derived from the Zoho Inventory warehouse the order shipped from —
-      // each warehouse represents a state market (NJ, MA, NY, RI, MO). Resolve in
-      // this order so no order goes stateless:
-      //   1. warehouse_id / location_id → warehouseStateMap (always present on list rows)
-      //   2. inline location_name / warehouse_name on the order (sometimes present)
-      //   3. shipping/billing address state (last resort, often empty in Zoho)
-      let state = '';
+      // State resolution — in priority order, never falling back to billing/shipping:
+      //   1. Skip Head Office warehouse entirely (internal transfers, not customer revenue)
+      //   2. warehouse_id → warehouseInfoMap.state (read off the warehouse's address)
+      //   3. inline so.location_name / so.warehouse_name (occasionally populated)
+      //   4. CRM Account_State, looked up by customer_name (Highsman canonical field)
+      // We intentionally do NOT fall back to so.shipping_address / so.billing_address —
+      // those fields are unreliable on Highsman's Zoho data.
       const whId = String(so.warehouse_id || so.location_id || '');
-      if (whId && warehouseStateMap.has(whId)) {
-        state = warehouseStateMap.get(whId) || '';
-      }
+      const whInfo = whId ? warehouseInfoMap.get(whId) : undefined;
+      if (whInfo?.isHeadOffice) continue; // skip Head Office orders entirely
+
+      let state = whInfo?.state || '';
       if (!state) {
         const rawLocation: string = so.location_name || so.warehouse_name || '';
         state = resolveStateFromLocation(rawLocation);
       }
       if (!state) {
-        const addrState: string =
-          so.shipping_address?.state || so.billing_address?.state || so.billing_state || '';
-        const trimmed = (addrState || '').trim().toUpperCase();
-        // Full state name in address? map it. Otherwise take 2-letter prefix.
-        state = STATE_FULL_NAMES[trimmed] || trimmed.slice(0, 2);
+        // Last resort: CRM Account_State by customer name (case-insensitive).
+        const lookup = String(so.customer_name || '').trim().toUpperCase();
+        if (lookup) state = crmAccountStateMap.get(lookup) || '';
       }
       const total = Number(so.total || 0);
       const customerId = String(so.customer_id || so.contact_id || so.customer_name);
