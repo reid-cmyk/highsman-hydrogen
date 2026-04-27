@@ -18,6 +18,7 @@ let currentOrdersState = 'all'; // Orders Due tab filter — 'all' or 2-letter c
 // most-recent activity (newest first).
 let accountSortDir = 'desc';
 let ordersSortDir = 'asc';
+let newCustSortDir = 'desc'; // First Order Date — default newest first
 // New Customers state filter. Same tab strip pattern as Leads/Accounts — 'all'
 // by default, NJ/NY/RI/MO narrows the list. MA is intentionally excluded per
 // Reid (no MA new-customer tracking). NJ cards come from LeafLink with the
@@ -642,6 +643,12 @@ function toggleOrdersSort() {
   if (lbl) lbl.textContent = ordersSortDir === 'asc' ? 'Oldest first' : 'Newest first';
   renderOrders();
 }
+function toggleNewCustSort() {
+  newCustSortDir = newCustSortDir === 'desc' ? 'asc' : 'desc';
+  const lbl = document.getElementById('newcust-sort-label');
+  if (lbl) lbl.textContent = newCustSortDir === 'desc' ? 'Newest first' : 'Oldest first';
+  renderNewCustomers();
+}
 
 // Comparator factory: sorts by Last Order Date in the requested direction.
 // `getDate` extracts a YYYY-MM-DD string (or empty) from each row. Empty /
@@ -871,9 +878,13 @@ function renderNewCustomers() {
   // Normalize c.state on the way in — LeafLink-sourced cards can come back
   // with "New Jersey" rather than "NJ" (Billing_State in Zoho isn't
   // guaranteed to be 2-letter), so compare on the canonical code.
-  const stateFiltered = currentNewCustState === 'all'
+  let stateFiltered = currentNewCustState === 'all'
     ? combined
     : combined.filter((c) => normalizeStateCode(c.state) === currentNewCustState);
+  // Sort by First Order Date — direction follows the toggle.
+  // LeafLink-sourced rows carry `firstOrderDate`; Zoho-only fallback rows
+  // carry the same key (set in combinedNewCustomers).
+  stateFiltered = [...stateFiltered].sort(lastOrderComparator(newCustSortDir, (c) => c.firstOrderDate || ''));
 
   if (meta) {
     // Count anything that's not 'done' — LeafLink pending/ready/checkin_due

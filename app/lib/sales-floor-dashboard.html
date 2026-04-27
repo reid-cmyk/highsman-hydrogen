@@ -449,7 +449,13 @@
             <!-- State filter strip — populated dynamically by renderOrdersStateTabs().
                  Always-visible 'All' chip + per-state counts. MA is intentionally
                  excluded upstream so it never appears here. -->
-            <div id="orders-state-tabs" class="hs-state-tabs" role="tablist" aria-label="Filter Orders Due by state"></div>
+            <div class="hs-orders-toolbar">
+              <div id="orders-state-tabs" class="hs-state-tabs" role="tablist" aria-label="Filter Orders Due by state"></div>
+              <button type="button" id="orders-sort-btn" class="hs-sort-btn" onclick="toggleOrdersSort()" title="Sort by Last Order Date">
+                <i class="fa-solid fa-arrow-down-wide-short"></i>
+                <span id="orders-sort-label">Oldest first</span>
+              </button>
+            </div>
             <div id="reorder-due-list" class="hs-orders-col-body">
               <div class="hs-empty-state hs-empty-state--col">
                 <div class="hs-empty-state-icon"><i class="fa-solid fa-clipboard-list"></i></div>
@@ -514,6 +520,10 @@
       <div id="tab-newcustomers" class="tab-content hidden">
         <div class="hs-toolbar">
           <div class="hs-toolbar-meta" id="newcust-count"></div>
+          <button type="button" id="newcust-sort-btn" class="hs-sort-btn" onclick="toggleNewCustSort()" title="Sort by First Order Date">
+            <i class="fa-solid fa-arrow-down-wide-short"></i>
+            <span id="newcust-sort-label">Newest first</span>
+          </button>
         </div>
         <!-- State tabs: All / NJ / NY / RI / MO (MA never appears — excluded
              in combinedNewCustomers). Mirrors the Leads + Accounts strips. -->
@@ -536,6 +546,10 @@
             <input id="account-search" type="text" placeholder="Search accounts..." oninput="searchAccounts()" class="hs-input hs-search-input" />
           </div>
           <div class="hs-toolbar-meta" id="account-count"></div>
+          <button type="button" id="account-sort-btn" class="hs-sort-btn" onclick="toggleAccountSort()" title="Sort by Last Order Date">
+            <i class="fa-solid fa-arrow-down-wide-short"></i>
+            <span id="account-sort-label">Newest first</span>
+          </button>
         </div>
 
         <!-- State tab strip — populated dynamically by renderAccountStateTabs()
@@ -1139,7 +1153,7 @@
 <script src="/sales-floor/js/sms.js"></script>
 <script src="/sales-floor/js/sms-templates.js"></script>
 <script src="/sales-floor/js/missed-calls.js"></script>
-<script src="/sales-floor/js/app.js?v=20"></script>
+<script src="/sales-floor/js/app.js?v=21"></script>
 <script>
   // ───────────────────────────────────────────────────────────
   // DRAWER (mobile sidebar)
