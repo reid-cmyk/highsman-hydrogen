@@ -288,30 +288,45 @@ export function nextDateForWeekday(
   return target.toISOString().slice(0, 10);
 }
 
+// Launch-week ramp slots. Pre-launch, every onboarding push lands inside
+// Serena's first work block (Thu May 14 → Mon May 18). We spread them by
+// region so Sky/Serena can see at a glance which day belongs to which zone:
+//   north   → Thu May 14 (her first day, anchored to her Union NJ origin)
+//   central → Fri May 15
+//   south   → Mon May 18
+// Sat/Sun (May 16-17) are kept off the schedule.
+//
+// Once `now` is May 19 or later, the rhythm flips to standard Tue/Wed/Thu
+// (defaultDayForRegion).
+const RAMP_WEEK_BY_REGION: Record<NjRegion, string> = {
+  north: '2026-05-14',
+  central: '2026-05-15',
+  south: '2026-05-18',
+};
+
 // Given a region + "now", produce a human-readable predicted day string for
 // the Sales Floor toast and the deal description. Honors the May 14 launch
 // floor + the ramp-up week.
 //
-// Examples (now = 2026-04-27):
-//   north  → "Thu, May 14 (launch week)"   (her first day, all-region focus)
-//   central→ "Wed, May 20"                 (first normal-schedule Wednesday)
-//   south  → "Thu, May 14 (launch week)"
+// Pre-launch (now < May 19) → all bookings land inside the ramp:
+//   north  → "Thu, May 14 (launch week)"
+//   central→ "Fri, May 15 (launch week)"
+//   south  → "Mon, May 18 (launch week)"
 //
-// Examples (now = 2026-05-25):
-//   north  → "Tuesday"                     (normal-schedule rhythm)
+// Normal schedule (now ≥ May 19) → rolling Tue/Wed/Thu rhythm:
+//   north  → "Tuesday"
 //   central→ "Wednesday"
 //   south  → "Thursday"
 export function predictedDayForRegion(
   r: NjRegion,
   now: Date = new Date(),
 ): {label: string; iso: string} {
-  const {weekday} = defaultDayForRegion(r);
-  const iso = nextDateForWeekday(now, weekday);
-
-  // If the predicted date is in the ramp-up window (May 14 - May 18 inclusive),
-  // surface the actual date — there's no "every Tuesday" rhythm yet.
-  const target = new Date(iso + 'T00:00:00-04:00');
-  if (target.getTime() < SERENA_NORMAL_SCHEDULE_DATE.getTime()) {
+  // Pre-launch & ramp-up — pin to the region's ramp slot. Honors Reid's
+  // direction that every onboarding pushed before launch lands inside the
+  // first work block, not on the following Tue/Wed/Thu.
+  if (now.getTime() < SERENA_NORMAL_SCHEDULE_DATE.getTime()) {
+    const iso = RAMP_WEEK_BY_REGION[r];
+    const target = new Date(iso + 'T00:00:00-04:00');
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const monthNames = [
       'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec',
@@ -323,5 +338,7 @@ export function predictedDayForRegion(
   }
 
   // Normal schedule — give the rhythm name (Tuesday/Wednesday/Thursday).
+  const {weekday} = defaultDayForRegion(r);
+  const iso = nextDateForWeekday(now, weekday);
   return {label: defaultDayForRegion(r).dayName, iso};
 }

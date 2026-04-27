@@ -85,9 +85,16 @@ const READY_STATUSES = new Set([
 // here, that's the signal the Vibes visit is booked.
 const NEEDS_ONBOARDING_PIPELINE = '6699615000010154308';
 
-// Note subject we stamp on the dispensary's Zoho Account once Sky logs the
-// 12-day post-ship check-in call. Card disappears when this note exists.
+// Note subjects we treat as the "graduate this account from New Customers"
+// signal. Either marker drops the card off the tab on the next sync:
+//   • [CHECKIN-12D] — Sky's 12-day post-ship check-in call (api.sales-floor-
+//     checkin-done writes this).
+//   • [ONBOARDED]   — Serena's completed brand-team first_visit (api.vibes-
+//     visit-submit writes this immediately on visit submit, so the card
+//     drops the same day she walks out of the store rather than waiting
+//     12 more days for the Sky check-in).
 const CHECKIN_NOTE_SUBJECT = '[CHECKIN-12D]';
+const ONBOARDED_NOTE_SUBJECT = '[ONBOARDED]';
 
 // Days from actual_ship_date to the 12-day check-in.
 const CHECKIN_AFTER_DAYS = 12;
@@ -287,7 +294,12 @@ async function findOnboardingDealForAccount(
   }
 }
 
-/** Check if the [CHECKIN-12D] note has been logged on this account. */
+/**
+ * Check whether this account has been graduated from the New Customers tab
+ * — either by Sky's 12-day check-in note ([CHECKIN-12D]) or by Serena's
+ * onboarding visit completion note ([ONBOARDED]). Either marker is enough
+ * to drop the card.
+ */
 async function findCheckinNoteForAccount(
   accountId: string,
   token: string,
@@ -302,9 +314,13 @@ async function findCheckinNoteForAccount(
     if (res.status === 204 || !res.ok) return null;
     const data = await res.json();
     const notes: any[] = data.data || [];
-    const hit = notes.find((n) =>
-      String(n.Note_Title || '').includes(CHECKIN_NOTE_SUBJECT),
-    );
+    const hit = notes.find((n) => {
+      const title = String(n.Note_Title || '');
+      return (
+        title.includes(CHECKIN_NOTE_SUBJECT) ||
+        title.includes(ONBOARDED_NOTE_SUBJECT)
+      );
+    });
     return hit?.id || null;
   } catch {
     return null;

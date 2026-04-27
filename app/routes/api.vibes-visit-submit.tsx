@@ -467,6 +467,28 @@ export async function action({request, context}: ActionFunctionArgs) {
     }
   }
 
+  // ─── Zoho: stamp [ONBOARDED] note on first_visit (non-fatal) ─────────────
+  // Serena finishing the brand-team onboarding visit is the trigger that
+  // graduates the store from the Sales Floor "New Customers" tab. The
+  // leaflink-orders endpoint detects this note prefix and flips cardState to
+  // 'done' on the next sync, which `combinedNewCustomers()` filters out.
+  //
+  // Visit type 'first_visit' is the brand-team onboarding (Tier 1). All
+  // other visit types (rotation, training, target_sample, other) are
+  // recurring/check-in visits and don't graduate the account.
+  if (payload.visitType === 'first_visit' && payload.accountId) {
+    try {
+      await writeOnboardedNoteToZoho(env, payload.accountId, {
+        accountName: payload.accountName,
+        repName: payload.repName,
+        visitDate: payload.visitDate,
+        notesToSales: payload.notesToSales || null,
+      });
+    } catch (err) {
+      console.warn('[vibes-visit] Zoho ONBOARDED note write failed (non-fatal)', err);
+    }
+  }
+
   // ─── Klaviyo: enroll captured emails into Budtender Training Camp ────────
   // Every budtender the rep captured with a valid email goes straight onto
   // list WBSrLZ. They get added with store_account_id + store_name properties
@@ -626,6 +648,63 @@ async function patchZohoBudtenderCount(
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`Zoho PATCH failed (${res.status}): ${text.slice(0, 300)}`);
+  }
+}
+
+// Stamp a `[ONBOARDED]` Zoho Note on the Account when Serena completes a
+// `first_visit`. The Sales Floor New Customers tab reads this prefix as the
+// "remove me" signal — once the note exists, the next sync flips the card's
+// cardState to 'done' and combinedNewCustomers() drops the row.
+//
+// We mirror the [CHECKIN-12D] convention from api.sales-floor-checkin-done so
+// the leaflink-orders endpoint can detect either marker with one search.
+//
+// Non-fatal: the brand_visits insert already saved the visit. If Zoho is down
+// or we get rate-limited, the card just stays visible until the next visit
+// or the 12-day check-in note lands. The whole flow stays consistent.
+async function writeOnboardedNoteToZoho(
+  env: Env,
+  accountId: string,
+  payload: {
+    accountName: string;
+    repName: string;
+    visitDate: string;
+    notesToSales: string | null;
+  },
+): Promise<void> {
+  const token = await getZohoToken(env);
+  const noteTitle = `[ONBOARDED] ${payload.visitDate} — ${payload.repName}`;
+  const noteContent = [
+    `Brand-team onboarding visit completed by ${payload.repName} on ${payload.visitDate}.`,
+    `Account: ${payload.accountName}`,
+    payload.notesToSales ? `Notes to sales: ${payload.notesToSales}` : '',
+    'This account has graduated from the New Customers tab. The 12-day check-in note ([CHECKIN-12D]) will be logged separately when due.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const notePayload = {
+    data: [
+      {
+        Note_Title: noteTitle,
+        Note_Content: noteContent,
+        Parent_Id: accountId,
+        $se_module: 'Accounts',
+      },
+    ],
+  };
+
+  const res = await fetch('https://www.zohoapis.com/crm/v7/Notes', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Zoho-oauthtoken ${token}`,
+    },
+    body: JSON.stringify(notePayload),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Zoho ONBOARDED note POST failed (${res.status}): ${text.slice(0, 300)}`);
   }
 }
 

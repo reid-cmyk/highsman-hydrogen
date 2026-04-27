@@ -171,3 +171,100 @@ export async function getGmailAccessTokenForUser(
   });
   return data.access_token;
 }
+
+// Tiny base64url helper (no padding, URL-safe alphabet) — same encoding the
+// Gmail send endpoint expects in `raw`.
+function base64UrlEncode(bytes: Uint8Array): string {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+// Plain-text → minimal HTML so the multipart body has a usable HTML side.
+// Gmail's web client will fall back to text/plain regardless, but composing
+// a sane HTML alternative keeps the message looking right in any client.
+function plainToHtml(text: string): string {
+  const escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;white-space:pre-wrap;">${escaped}</div>`;
+}
+
+// Send an email impersonating an @highsman.com mailbox via the service
+// account's domain-wide delegation. Used for system-driven notifications
+// (training requests, onboarding alerts, etc.) where we don't want to wire a
+// per-rep OAuth refresh-token flow.
+//
+// The sender (`fromUser`) must be an active @highsman.com mailbox the
+// service account is authorized to impersonate. The recipient(s) can be
+// anywhere.
+//
+// Returns the Gmail message id on success. Throws on configuration issues
+// or any non-2xx response.
+export async function sendEmailFromUser(
+  fromUser: string,
+  payload: {
+    to: string;
+    subject: string;
+    textBody: string;
+    htmlBody?: string;
+    cc?: string | null;
+    replyTo?: string | null;
+    fromName?: string | null;
+  },
+  env: Record<string, string | undefined>,
+): Promise<string> {
+  const token = await getGmailAccessTokenForUser(fromUser, env);
+
+  const boundary = `bnd_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+  const fromName = payload.fromName?.trim() || fromUser;
+  const html = payload.htmlBody || plainToHtml(payload.textBody);
+
+  const lines: string[] = [
+    `From: ${fromName} <${fromUser}>`,
+    `To: ${payload.to}`,
+  ];
+  if (payload.cc) lines.push(`Cc: ${payload.cc}`);
+  if (payload.replyTo) lines.push(`Reply-To: ${payload.replyTo}`);
+  lines.push(
+    `Subject: ${payload.subject}`,
+    `MIME-Version: 1.0`,
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
+    `Content-Type: text/plain; charset=UTF-8`,
+    `Content-Transfer-Encoding: 7bit`,
+    '',
+    payload.textBody,
+    '',
+    `--${boundary}`,
+    `Content-Type: text/html; charset=UTF-8`,
+    `Content-Transfer-Encoding: 7bit`,
+    '',
+    html,
+    '',
+    `--${boundary}--`,
+    '',
+  );
+  const mime = new TextEncoder().encode(lines.join('\r\n'));
+  const raw = base64UrlEncode(mime);
+
+  const res = await fetch(
+    'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+    {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({raw}),
+    },
+  );
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Gmail send ${res.status}: ${text.slice(0, 300)}`);
+  }
+  const data = (await res.json().catch(() => ({}))) as {id?: string};
+  return data.id || '';
+}

@@ -2,6 +2,7 @@ import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getRepFromRequest} from '../lib/sales-floor-reps';
 import {njRegion, regionLabel, predictedDayForRegion} from '../lib/nj-regions';
+import {sendEmailFromUser, isGmailSAConfigured} from '../lib/gmail-sa';
 import {getZohoAccessToken as getZohoToken} from '~/lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -261,6 +262,60 @@ export async function action({request, context}: ActionFunctionArgs) {
       dealJson?.data?.[0]?.id ||
       null;
 
+    // Notify Serena directly so she knows to call the store. Fire-and-forget
+    // — the deal already exists in Zoho, so an email hiccup must NOT block
+    // Sky's success toast. Falls through silently when the SA isn't
+    // configured (local dev without GOOGLE_SA_* env vars).
+    if (isGmailSAConfigured(env as Record<string, string | undefined>)) {
+      const senderEmail =
+        rep.email && rep.email.toLowerCase().endsWith('@highsman.com')
+          ? rep.email
+          : 'sales@highsman.com';
+      const subject = isOutlier
+        ? `Training (OUTLIER): ${customerName} — direct Shore run`
+        : `Training request: ${customerName} — call store to confirm`;
+      const focusLine = trainingFocus ? `Focus: ${trainingFocus}` : '';
+      const dayLine = isOutlier
+        ? 'OUTLIER — drop-in location only. Coordinate direct with the store.'
+        : `Suggested day: ${predictedDay} (${regionLabel(region)} coverage)`;
+      const repName = rep.displayName || rep.email || 'A rep';
+      const lines = [
+        `${repName} just logged a training request from the Sales Floor.`,
+        '',
+        `Store:    ${customerName}`,
+        `City:     ${acct.city || '—'}`,
+        `State:    ${acct.state || '—'}`,
+        dayLine,
+        focusLine,
+        '',
+        'Next step: call the store to confirm the exact day + time, then',
+        'mark it confirmed in /vibes ("Trainings to Book" inbox).',
+        '',
+        dealId
+          ? `Zoho deal id: ${dealId}`
+          : 'Zoho deal id: (not returned — check Needs Onboarding pipeline)',
+      ].filter(Boolean);
+
+      // We deliberately don't await this — fire and forget so the deal
+      // creation success path is never gated on Gmail latency.
+      sendEmailFromUser(
+        senderEmail,
+        {
+          to: 'serena@highsman.com',
+          subject,
+          textBody: lines.join('\n'),
+          fromName: 'Highsman Sales Floor',
+          replyTo: senderEmail,
+        },
+        env as Record<string, string | undefined>,
+      ).catch((err) => {
+        console.error(
+          '[sf-vibes-training] email to Serena failed',
+          err?.message || err,
+        );
+      });
+    }
+
     return json({
       ok: true,
       dealId,
@@ -273,7 +328,7 @@ export async function action({request, context}: ActionFunctionArgs) {
       isOutlier,
       message: isOutlier
         ? `Training request sent. ${customerName} is a drop-in (${acct.city || 'outside weekly coverage'}) — Serena will coordinate a Shore run direct. You don't need to follow up.`
-        : `Training request sent. Serena will call the store to confirm the exact day + time (likely ${predictedDay} in ${regionLabel(region)}).`,
+        : `Training request sent. Serena's been emailed and will call the store to confirm the exact day + time (likely ${predictedDay} in ${regionLabel(region)}).`,
     });
   } catch (err: any) {
     console.error('[sf-vibes-training] failed', zohoAccountId, err.message);
