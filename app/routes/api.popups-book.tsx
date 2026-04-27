@@ -103,10 +103,14 @@ function renderPopupConfirmHtml(args: {
   repName: string;
 }): string {
   const {pocFirstName, dispensaryName, city, friendlyDate, shiftTimeLabel, repName} = args;
+  // Highsman's actual Shopify shop is 0752/8598/7491 — the wrong shop ID
+  // that lived here (0934/4853/0945) belongs to nothing we own, so the
+  // header/footer logos rendered as broken-image icons in Reid's inbox.
+  // Canonical URLs per memory `feedback_highsman_email_logos.md`.
   const headerLogo =
-    'https://cdn.shopify.com/s/files/1/0934/4853/0945/files/Highsman_Logo_Gold.png';
+    'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Logo_White.png?v=1775594430';
   const footerLogo =
-    'https://cdn.shopify.com/s/files/1/0934/4853/0945/files/Spark_Greatness_Logo.png';
+    'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Spark_Greatness_White.png?v=1775594430';
   const storeLine = `${dispensaryName}${city ? `, ${city}, NJ` : ''}`;
   const escape = (s: string) =>
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

@@ -19,6 +19,8 @@
 //   * Zoho reads/writes reuse the proven helpers in api.accounts.tsx logic.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import {encodeHeaderValue, encodeAddressHeader} from './email-headers';
+
 const AUTH_COOKIE_NAME = 'njmenu_session';
 const SESSION_MAX_AGE = 90 * 24 * 60 * 60; // 90 days
 const MAGIC_LINK_TTL_SECONDS = 15 * 60; // 15 minutes
@@ -446,22 +448,24 @@ export async function sendMagicLinkEmail(
   ].join('\n');
 
   const boundary = `highsman_boundary_${crypto.randomUUID().replace(/-/g, '')}`;
+  // Headers via shared RFC 2047 encoders + body 8bit so future edits to the
+  // subject or body that introduce em-dashes / smart quotes don't mojibake.
   const mime = [
-    `From: Highsman <${FROM_EMAIL}>`,
+    `From: ${encodeAddressHeader(FROM_EMAIL, 'Highsman')}`,
     `To: ${params.to}`,
-    `Subject: Your Highsman sign-in link`,
+    `Subject: ${encodeHeaderValue('Your Highsman sign-in link')}`,
     'MIME-Version: 1.0',
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
     '',
     `--${boundary}`,
     'Content-Type: text/plain; charset=UTF-8',
-    'Content-Transfer-Encoding: 7bit',
+    'Content-Transfer-Encoding: 8bit',
     '',
     text,
     '',
     `--${boundary}`,
     'Content-Type: text/html; charset=UTF-8',
-    'Content-Transfer-Encoding: 7bit',
+    'Content-Transfer-Encoding: 8bit',
     '',
     html,
     '',

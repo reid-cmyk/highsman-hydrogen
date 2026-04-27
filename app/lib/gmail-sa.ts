@@ -19,6 +19,8 @@
 // an RS256 JWT with Web Crypto, then exchange it at Google's token endpoint.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import {encodeHeaderValue, encodeAddressHeader} from './email-headers';
+
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const DEFAULT_SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
@@ -221,26 +223,30 @@ export async function sendEmailFromUser(
   const fromName = payload.fromName?.trim() || fromUser;
   const html = payload.htmlBody || plainToHtml(payload.textBody);
 
+  // Headers go through the shared RFC 2047 encoders so em-dashes / smart
+  // quotes / non-ASCII chars in subjects + display names render correctly
+  // in every recipient inbox. Body parts ship 8bit so UTF-8 in the text/html
+  // bodies isn't mangled by 8BITMIME-aware transports.
   const lines: string[] = [
-    `From: ${fromName} <${fromUser}>`,
+    `From: ${encodeAddressHeader(fromUser, fromName)}`,
     `To: ${payload.to}`,
   ];
   if (payload.cc) lines.push(`Cc: ${payload.cc}`);
   if (payload.replyTo) lines.push(`Reply-To: ${payload.replyTo}`);
   lines.push(
-    `Subject: ${payload.subject}`,
+    `Subject: ${encodeHeaderValue(payload.subject)}`,
     `MIME-Version: 1.0`,
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
     '',
     `--${boundary}`,
     `Content-Type: text/plain; charset=UTF-8`,
-    `Content-Transfer-Encoding: 7bit`,
+    `Content-Transfer-Encoding: 8bit`,
     '',
     payload.textBody,
     '',
     `--${boundary}`,
     `Content-Type: text/html; charset=UTF-8`,
-    `Content-Transfer-Encoding: 7bit`,
+    `Content-Transfer-Encoding: 8bit`,
     '',
     html,
     '',

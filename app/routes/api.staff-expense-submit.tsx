@@ -1,6 +1,7 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {AwsClient} from 'aws4fetch';
+import {encodeHeaderValue, encodeAddressHeader} from '~/lib/email-headers';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/staff-expense-submit
@@ -404,11 +405,13 @@ function buildMimeMessage(m: {
   attachment: {filename: string; mime: string; bytes: ArrayBuffer};
 }): Uint8Array {
   const boundary = `hm_${Math.random().toString(36).slice(2, 14)}`;
+  // Headers via shared RFC 2047 encoders. Body 8bit so UTF-8 chars (em-dash,
+  // smart quotes) survive transport.
   const headerLines = [
-    `From: ${m.fromName} <${m.fromAddress}>`,
+    `From: ${encodeAddressHeader(m.fromAddress, m.fromName)}`,
     `To: ${m.to}`,
     ...(m.cc ? [`Cc: ${m.cc}`] : []),
-    `Subject: ${m.subject}`,
+    `Subject: ${encodeHeaderValue(m.subject)}`,
     `MIME-Version: 1.0`,
     `Content-Type: multipart/mixed; boundary="${boundary}"`,
     '',
@@ -416,7 +419,7 @@ function buildMimeMessage(m: {
   const htmlPartLines = [
     `--${boundary}`,
     `Content-Type: text/html; charset=UTF-8`,
-    `Content-Transfer-Encoding: 7bit`,
+    `Content-Transfer-Encoding: 8bit`,
     '',
     m.html,
     '',

@@ -1,5 +1,6 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
+import {encodeHeaderValue} from '~/lib/email-headers';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LeafLink Order Creation — Server-side API Route
@@ -115,24 +116,34 @@ async function sendGmailEmail(params: {
   subject: string;
   body: string;
 }): Promise<boolean> {
-  // Sanitize subject and body to pure ASCII to avoid encoding issues
-  const sanitize = (s: string) => s.replace(/[\u2014\u2013]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u2022]/g, '*').replace(/[^\x00-\x7F]/g, '');
-  const safeSubject = sanitize(params.subject);
-  const safeBody = sanitize(params.body);
+  // Headers run through RFC 2047 encoded-word so em-dashes and smart quotes
+  // in the subject render correctly in every inbox. The earlier ASCII-strip
+  // workaround that lived here turned "\u2014" into "-" everywhere \u2014 fine, but
+  // also nuked legit accents in dispensary names. Now we keep the original
+  // text and encode the header properly.
+  const subjectHeader = encodeHeaderValue(params.subject);
+  // Body keeps full UTF-8 \u2014 declare 8bit on the part below so transports
+  // that handle 8BITMIME (everything modern, including Gmail) leave it alone.
+  const safeBody = params.body;
 
-  // Build RFC 2822 MIME message (ASCII-safe)
-  const mimeMessage = [
+  // Build RFC 2822 MIME message
+  const utf8Mime = [
     `From: ${params.from}`,
     `To: ${params.to}`,
-    `Subject: ${safeSubject}`,
+    `Subject: ${subjectHeader}`,
     'MIME-Version: 1.0',
     'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: 8bit',
     '',
     safeBody,
   ].join('\r\n');
 
-  // Base64url encode (Gmail API requirement)
-  const encoded = btoa(mimeMessage)
+  // Base64url encode (Gmail API requirement). Handle UTF-8 bytes via
+  // TextEncoder so multi-byte chars in the body don't blow up btoa().
+  const utf8Bytes = new TextEncoder().encode(utf8Mime);
+  let bin = '';
+  for (let i = 0; i < utf8Bytes.length; i++) bin += String.fromCharCode(utf8Bytes[i]);
+  const encoded = btoa(bin)
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/, '');

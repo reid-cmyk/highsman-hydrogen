@@ -1,6 +1,7 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getRepFromRequest, type SalesRep} from '../lib/sales-floor-reps';
+import {encodeHeaderValue, encodeAddressHeader} from '../lib/email-headers';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sales Floor — Send Email (per-rep Gmail OAuth)
@@ -115,47 +116,9 @@ function base64UrlEncode(bytes: Uint8Array): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-// ─── RFC 2047 header encoding ────────────────────────────────────────────────
-// Email headers (Subject, From display name, etc.) are spec'd as ASCII. Any
-// non-ASCII byte that ships raw can be re-decoded by downstream relays as
-// Latin-1 and end up as mojibake — that's how an em-dash "—" arrived in
-// Reid's inbox as "Ã¢Â€Â—" (UTF-8 → cp1252 → UTF-8 double round-trip).
-// RFC 2047 fixes this with =?UTF-8?B?<base64>?= encoded-words.
-function isAscii(s: string): boolean {
-  // eslint-disable-next-line no-control-regex
-  return !/[^\x20-\x7E]/.test(s);
-}
-
-function utf8ToBase64(s: string): string {
-  const bytes = new TextEncoder().encode(s);
-  let bin = '';
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-  return btoa(bin);
-}
-
-/** RFC 2047 encoded-word for a single header value (Subject etc.). Pass-through
- *  if the value is already ASCII so plain English subjects stay readable in
- *  the raw MIME for ops debugging. */
-function encodeHeaderValue(value: string): string {
-  const v = String(value || '');
-  if (!v) return '';
-  if (isAscii(v)) return v;
-  return `=?UTF-8?B?${utf8ToBase64(v)}?=`;
-}
-
-/** Encode an address with optional display name. Quoted form for ASCII names
- *  with special chars; encoded-word for non-ASCII display names. */
-function encodeAddressHeader(addr: string, displayName?: string | null): string {
-  const a = String(addr || '').trim();
-  const dn = (displayName || '').trim();
-  if (!dn) return a;
-  if (!isAscii(dn)) return `${encodeHeaderValue(dn)} <${a}>`;
-  // ASCII name with RFC 5322 specials (parens, commas, etc.) needs quoting.
-  if (/[(),;:\\<>@[\]"]/.test(dn)) return `"${dn.replace(/"/g, '\\"')}" <${a}>`;
-  return `${dn} <${a}>`;
-}
-
-/** Multipart/alternative MIME: plain + HTML so all clients render correctly. */
+/** Multipart/alternative MIME: plain + HTML so all clients render correctly.
+ *  Headers run through encodeHeaderValue / encodeAddressHeader from the
+ *  shared lib so non-ASCII chars (em-dashes, smart quotes) survive. */
 function buildMimeMessage(m: {
   fromName: string;
   fromAddress: string;
