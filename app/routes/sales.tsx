@@ -257,12 +257,46 @@ async function fetchWarehouseInfoMap(env: any, accessToken: string): Promise<Map
 //
 // Soft-fails (returns empty map) if CRM creds aren't configured or the API
 // errors. The dashboard will still render with whatever Inventory could resolve.
-async function fetchCrmAccountStateMap(env: any): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
+// Normalize an Account name to a comparable form: uppercase, strip punctuation
+// and common business/category suffixes ("LLC", "INC", "CANNABIS", "DISPENSARY",
+// etc.) so that "Codes Cannabis - Osage Beach, LLC" and "Codes Osage Beach"
+// hash to the same key. This is what makes Inventory→CRM matching robust when
+// dispensary names are entered slightly differently in each system.
+function normalizeAccountName(raw: string): string {
+  return String(raw || '')
+    .toUpperCase()
+    .replace(/&/g, ' AND ')
+    .replace(/[\u2018\u2019'`]/g, '')
+    .replace(/[^A-Z0-9 ]/g, ' ')
+    .replace(/\b(LLC|L\.?L\.?C|INC|INC\.?|CO|CO\.?|CORP|CORP\.?|LTD|LTD\.?|LP|L\.?P|PLLC|GROUP|HOLDINGS|HOLDING|COMPANY|CANNABIS|DISPENSARY|DISPENSARIES|RECREATIONAL|MEDICAL|MED|REC|THE|A|AN|OF|AT)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Returns true if every significant word in `needle` appears somewhere in `haystack`.
+// Used as a last-ditch fuzzy match for cases where one name is a strict superset
+// of the other (e.g., "Rockland County Dispensary" vs "Rockland County NY").
+function containsAllWords(needle: string, haystack: string): boolean {
+  if (!needle || !haystack) return false;
+  const words = needle.split(' ').filter((w) => w.length >= 3);
+  if (words.length === 0) return false;
+  return words.every((w) => haystack.includes(w));
+}
+
+type CrmAccountRow = {state: string; rawNorm: string};
+
+// Pull Account_Name + Account_State from Zoho CRM and build a name → state map
+// keyed by both the raw uppercase name and a normalized form. Returns the full
+// row list too so the loader can run fuzzy matches when an exact key misses.
+async function fetchCrmAccountStateMap(
+  env: any,
+): Promise<{exact: Map<string, string>; rows: CrmAccountRow[]}> {
+  const exact = new Map<string, string>();
+  const rows: CrmAccountRow[] = [];
   const clientId = env.ZOHO_CLIENT_ID;
   const clientSecret = env.ZOHO_CLIENT_SECRET;
   const refreshToken = env.ZOHO_REFRESH_TOKEN;
-  if (!clientId || !clientSecret || !refreshToken) return out;
+  if (!clientId || !clientSecret || !refreshToken) return {exact, rows};
 
   const tokenRes = await fetch('https://accounts.zoho.com/oauth/v2/token', {
     method: 'POST',
@@ -274,10 +308,10 @@ async function fetchCrmAccountStateMap(env: any): Promise<Map<string, string>> {
       refresh_token: refreshToken,
     }).toString(),
   });
-  if (!tokenRes.ok) return out;
+  if (!tokenRes.ok) return {exact, rows};
   const tokenData: any = await tokenRes.json().catch(() => ({}));
   const accessToken = tokenData.access_token;
-  if (!accessToken) return out;
+  if (!accessToken) return {exact, rows};
 
   // COQL — Account_Name + Account_State, paginated 200/page.
   let offset = 0;
@@ -295,17 +329,45 @@ async function fetchCrmAccountStateMap(env: any): Promise<Map<string, string>> {
     });
     if (!r.ok) break;
     const d: any = await r.json().catch(() => ({}));
-    const rows: any[] = d.data || [];
-    for (const row of rows) {
-      const name = String(row.Account_Name || '').trim().toUpperCase();
+    const items: any[] = d.data || [];
+    for (const row of items) {
+      const rawUpper = String(row.Account_Name || '').trim().toUpperCase();
       const state = normalizeStateField(row.Account_State);
-      if (name && state) out.set(name, state);
+      if (!rawUpper || !state) continue;
+      const norm = normalizeAccountName(rawUpper);
+      // Index by exact uppercase, normalized, and store the row for fuzzy fallback.
+      if (!exact.has(rawUpper)) exact.set(rawUpper, state);
+      if (norm && !exact.has(norm)) exact.set(norm, state);
+      rows.push({state, rawNorm: norm});
     }
     if (!d.info?.more_records) break;
     offset += pageSize;
-    if (offset > 5000) break; // safety
+    if (offset > 5000) break;
   }
-  return out;
+  return {exact, rows};
+}
+
+// Resolve a customer name to a state via the CRM map. Tries (in order):
+//   1. exact uppercase match
+//   2. normalized match (suffixes/punct stripped)
+//   3. fuzzy contains — every significant word in either direction
+function resolveCrmStateForCustomer(
+  customerName: string,
+  crm: {exact: Map<string, string>; rows: CrmAccountRow[]},
+): string {
+  if (!customerName) return '';
+  const upper = customerName.trim().toUpperCase();
+  if (crm.exact.has(upper)) return crm.exact.get(upper) || '';
+  const norm = normalizeAccountName(customerName);
+  if (norm && crm.exact.has(norm)) return crm.exact.get(norm) || '';
+  if (!norm) return '';
+  // Fuzzy: a CRM normalized name that contains all our words, or whose words are all in ours.
+  for (const row of crm.rows) {
+    if (!row.rawNorm) continue;
+    if (containsAllWords(norm, row.rawNorm)) return row.state;
+    if (containsAllWords(row.rawNorm, norm)) return row.state;
+  }
+  return '';
 }
 
 // Highsman Zoho Inventory Org ID — env var overrides if set
@@ -499,9 +561,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         state = resolveStateFromLocation(rawLocation);
       }
       if (!state) {
-        // Last resort: CRM Account_State by customer name (case-insensitive).
-        const lookup = String(so.customer_name || '').trim().toUpperCase();
-        if (lookup) state = crmAccountStateMap.get(lookup) || '';
+        // Last resort: CRM Account_State, with normalized + fuzzy name matching.
+        state = resolveCrmStateForCustomer(so.customer_name || '', crmAccountStateMap);
       }
       const total = Number(so.total || 0);
       const customerId = String(so.customer_id || so.contact_id || so.customer_name);
