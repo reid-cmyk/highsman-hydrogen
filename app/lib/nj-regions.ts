@@ -370,3 +370,51 @@ export function predictedDayForRegion(
   const iso = nextDateForWeekday(now, weekday);
   return {label: defaultDayForRegion(r).dayName, iso};
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// nextRegionAnchorOnOrAfter — single source of truth for booking dates.
+// ─────────────────────────────────────────────────────────────────────────────
+// Given a region (north/central/south) and an "earliest acceptable" ISO date,
+// returns the next valid VISIT day for that region.
+//
+//   • Pre-launch (now or `from` < May 14): returns the region's RAMP_WEEK slot
+//     (north→May 14, central→May 15, south→May 17). Sat May 16 is overflow.
+//   • Ramp week (May 14-17): returns the region's ramp slot if `from` is on
+//     or before it; otherwise rolls forward to the next normal anchor.
+//   • Normal cadence (≥ May 19): returns the next Tue (north) / Wed (central) /
+//     Thu (south) on or after `from`.
+//
+// This is what every Sales-floor booking endpoint should use to set
+// Closing_Date so a customer NEVER ends up booked for a day Serena isn't in
+// their region.
+export function nextRegionAnchorOnOrAfter(
+  region: NjRegion,
+  fromIso?: string,
+): string {
+  const fromDate = fromIso
+    ? new Date(fromIso + 'T00:00:00-04:00')
+    : new Date();
+  // Floor at launch — never book before Serena starts.
+  let cursor =
+    fromDate.getTime() < SERENA_LAUNCH_DATE.getTime()
+      ? new Date(SERENA_LAUNCH_DATE.getTime())
+      : new Date(fromDate.getTime());
+
+  // Pre/ramp window: prefer the region's ramp slot if it's still in the future.
+  if (cursor.getTime() < SERENA_NORMAL_SCHEDULE_DATE.getTime()) {
+    const rampIso = RAMP_WEEK_BY_REGION[region];
+    const rampDate = new Date(rampIso + 'T00:00:00-04:00');
+    if (cursor.getTime() <= rampDate.getTime()) return rampIso;
+    // Past the region's ramp slot but still pre-May 19. Fall through to the
+    // normal-anchor walk below — anchor will land on the first Tue/Wed/Thu.
+  }
+
+  // Normal cadence — walk to the next region anchor day on or after cursor.
+  const targetWeekday =
+    region === 'north' ? 2 : region === 'central' ? 3 : 4; // Tue / Wed / Thu
+  const cur = cursor.getDay();
+  const diff = (targetWeekday - cur + 7) % 7;
+  const target = new Date(cursor.getTime() + diff * 86400 * 1000);
+  return target.toISOString().slice(0, 10);
+}

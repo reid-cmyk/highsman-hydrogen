@@ -1,7 +1,7 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getRepFromRequest} from '../lib/sales-floor-reps';
-import {njRegion, regionLabel, predictedDayForRegion} from '../lib/nj-regions';
+import {njRegion, regionLabel, predictedDayForRegion, nextRegionAnchorOnOrAfter} from '../lib/nj-regions';
 import {getZohoAccessToken as getZohoToken} from '~/lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -291,16 +291,20 @@ export async function action({request, context}: ActionFunctionArgs) {
       .toISOString()
       .slice(0, 10);
 
-    // Closing date = the day the brand team should have wrapped the visit.
-    // Default is base + 7 days (one-week onboarding target). But if the
-    // predicted date (which honors Serena's May 14 launch + ramp window)
-    // is later, use that — otherwise the deal looks overdue on /vibes
-    // before Serena has even started.
+    // Closing date = the day Serena will actually be in this account's
+    // region. We never want a Closing_Date that falls outside her route
+    // schedule (e.g. a Monday for a North-NJ shop) — that breaks the route
+    // planner and confuses Sky on the Sales-floor day-by-day reference tab.
+    //
+    // Algorithm: take max(today + 7d, predictedDate) as the "no earlier than"
+    // floor (the 7-day target is the operational onboarding cadence), then
+    // walk forward to the next region anchor day on or after that floor.
     const baseClosing = new Date(base + 7 * 86400 * 1000)
       .toISOString()
       .slice(0, 10);
-    const closingDate =
+    const noEarlierThan =
       predictedDate > baseClosing ? predictedDate : baseClosing;
+    const closingDate = nextRegionAnchorOnOrAfter(region, noEarlierThan);
 
     // Duplicate check — if this Account already has an open Needs Onboarding
     // deal, return it rather than creating a second. Makes the NJ Zoho-card

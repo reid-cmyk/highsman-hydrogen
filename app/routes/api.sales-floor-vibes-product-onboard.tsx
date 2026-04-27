@@ -1,7 +1,7 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getRepFromRequest} from '../lib/sales-floor-reps';
-import {njRegion, regionLabel, predictedDayForRegion} from '../lib/nj-regions';
+import {njRegion, regionLabel, predictedDayForRegion, nextRegionAnchorOnOrAfter} from '../lib/nj-regions';
 import {getZohoAccessToken as getZohoToken} from '~/lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -206,14 +206,19 @@ export async function action({request, context}: ActionFunctionArgs) {
     const predictedDay = predicted.label;
     const predictedDate = predicted.iso;
 
-    // Closing date = the day Serena should have wrapped the product visit.
-    // Default 7 days out from now; floor at the predicted date so the deal
-    // never looks overdue on /vibes before Serena has even gotten there.
+    // Closing date = the day Serena will actually be in this account's
+    // region. We never want a Closing_Date that falls outside her route
+    // schedule — that breaks the route planner and confuses Sky on the
+    // Sales-floor schedule reference tab.
+    //
+    // Floor = max(today + 7d, predictedDate); walk forward to the next
+    // region anchor on or after that floor.
     const sevenDaysOut = new Date(Date.now() + 7 * 86400 * 1000)
       .toISOString()
       .slice(0, 10);
-    const closingDate =
+    const noEarlierThan =
       predictedDate > sevenDaysOut ? predictedDate : sevenDaysOut;
+    const closingDate = nextRegionAnchorOnOrAfter(region, noEarlierThan);
 
     // Dedup — only block if a Product Onboarding is already open for this
     // account. A standard first-visit onboarding deal on the same account

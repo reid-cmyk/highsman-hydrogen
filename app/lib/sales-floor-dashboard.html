@@ -123,6 +123,12 @@
         <span>Issues</span>
         <span id="issues-nav-badge" class="ml-auto hs-hot-badge hidden" style="background:#DC2626;"></span>
       </button>
+
+      <div class="hs-nav-group-label hs-nav-group-spaced">Vibes</div>
+      <button onclick="showTab('vibesschedule')" id="nav-vibesschedule" class="hs-nav-btn">
+        <i class="fa-solid fa-route hs-nav-icon"></i>
+        <span>Vibes Schedule</span>
+      </button>
     </nav>
 
     <!-- Sync -->
@@ -853,6 +859,50 @@
 
       </div><!-- /sms -->
 
+      <!-- ═══════════════════ VIBES SCHEDULE (reference) ═══════════════════
+           Read-only reference panel. Shows which day Serena is in which NJ
+           region so reps know when bookings will land before they push from
+           Sales-floor. Single source of truth lives in app/lib/nj-regions.ts;
+           this panel mirrors the same anchors (N=Tue, C=Wed, S=Thu) and
+           launch-week ramp dates. -->
+      <div id="tab-vibesschedule" class="tab-content hidden">
+        <div class="hs-section-break" style="margin-top:0;">
+          <span class="hs-section-label">Serena's Route Schedule</span>
+          <span class="hs-section-hint">
+            Reference only. North → <strong>Tuesday</strong>. Central → <strong>Wednesday</strong>. South → <strong>Thursday</strong>. Bookings auto-pin to the right day.
+          </span>
+        </div>
+
+        <div id="vibes-schedule-panel" class="hs-card" style="padding:18px;">
+          <div id="vibes-schedule-banner" class="hs-banner" style="display:none;background:linear-gradient(135deg,rgba(245,225,0,0.18),rgba(245,225,0,0.04));border:1px solid #F5E100;border-radius:8px;padding:14px 16px;margin-bottom:18px;"></div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:24px;">
+            <div class="hs-stat" style="border-left:3px solid #2563EB;padding:14px;border-radius:6px;background:#0F1115;">
+              <div style="font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#A9ACAF;">Tuesday — North</div>
+              <div style="font-size:13px;color:#FFF;margin-top:4px;">Newark · Jersey City · Paterson · Union</div>
+            </div>
+            <div class="hs-stat" style="border-left:3px solid #16A34A;padding:14px;border-radius:6px;background:#0F1115;">
+              <div style="font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#A9ACAF;">Wednesday — Central</div>
+              <div style="font-size:13px;color:#FFF;margin-top:4px;">New Brunswick · Princeton · Edison · Asbury Park</div>
+            </div>
+            <div class="hs-stat" style="border-left:3px solid #F59E0B;padding:14px;border-radius:6px;background:#0F1115;">
+              <div style="font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#A9ACAF;">Thursday — South</div>
+              <div style="font-size:13px;color:#FFF;margin-top:4px;">Cherry Hill · Camden · Toms River · Vineland</div>
+            </div>
+          </div>
+
+          <div id="vibes-schedule-weeks" style="display:flex;flex-direction:column;gap:14px;"></div>
+
+          <div style="margin-top:22px;padding:14px;border:1px dashed #2A2D33;border-radius:6px;color:#A9ACAF;font-size:12px;line-height:1.5;">
+            <strong style="color:#FFF;">Outliers / Shore:</strong> Atlantic City, Cape May, LBI, Wildwood — quarterly drop-in only, never weekly. Sky's button flags these so Serena arranges direct.
+            <br/>
+            <strong style="color:#FFF;">Pinned-time trainings:</strong> If a buyer asks for an exact window (e.g. 2-5pm), the booking still lands on the region's anchor day — Serena confirms the exact slot with the store.
+          </div>
+        </div>
+
+      </div><!-- /vibesschedule -->
+
+
     </div><!-- /scroll area -->
   </main>
 </div><!-- /shell -->
@@ -1282,5 +1332,157 @@
     obs.observe(desk, { attributes: true });
   })();
 </script>
+
+<!-- Vibes schedule renderer — mirrors app/lib/nj-regions.ts schedule rules. -->
+<script>
+(function () {
+  // Anchors — keep in sync with app/lib/nj-regions.ts.
+  var SERENA_LAUNCH_ISO = '2026-05-14';            // Thu
+  var SERENA_NORMAL_ISO = '2026-05-19';            // Tue (first normal day)
+  var RAMP_BY_REGION = {north: '2026-05-14', central: '2026-05-15', south: '2026-05-17'};
+  var RAMP_DAYS = ['2026-05-14','2026-05-15','2026-05-16','2026-05-17']; // Thu-Sun
+  var DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var MON_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  function isoToDate(iso) { return new Date(iso + 'T00:00:00-04:00'); }
+  function fmtDate(d) { return DAY_NAMES[d.getDay()] + ', ' + MON_NAMES[d.getMonth()] + ' ' + d.getDate(); }
+  function isoOf(d) { return d.toISOString().slice(0,10); }
+  function addDays(d, n) { var c = new Date(d.getTime()); c.setDate(c.getDate() + n); return c; }
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+
+  function dayCard(label, region, dateIso, isToday) {
+    var d = isoToDate(dateIso);
+    var color = region === 'north' ? '#2563EB' : region === 'central' ? '#16A34A' : region === 'south' ? '#F59E0B' : '#A9ACAF';
+    var subtitle = region === 'north' ? 'North NJ' : region === 'central' ? 'Central NJ' : region === 'south' ? 'South NJ' : 'Off / Ramp';
+    var todayPill = isToday ? '<span style="background:#F5E100;color:#000;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-left:8px;">TODAY</span>' : '';
+    return ''
+      + '<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:#0F1115;border-left:3px solid ' + color + ';border-radius:4px;">'
+      + '  <div style="min-width:90px;font-family:Teko,sans-serif;font-size:18px;letter-spacing:0.06em;color:#FFF;">' + label + todayPill + '</div>'
+      + '  <div style="flex:1;color:#A9ACAF;font-size:13px;">' + fmtDate(d) + '</div>'
+      + '  <div style="font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:' + color + ';font-weight:600;">' + subtitle + '</div>'
+      + '</div>';
+  }
+
+  function regionForWeekday(dow) {
+    if (dow === 2) return 'north';
+    if (dow === 3) return 'central';
+    if (dow === 4) return 'south';
+    return null; // Mon/Fri/Sat/Sun = off in normal cadence
+  }
+
+  function regionForRampIso(iso) {
+    if (iso === RAMP_BY_REGION.north) return 'north';
+    if (iso === RAMP_BY_REGION.central) return 'central';
+    if (iso === RAMP_BY_REGION.south) return 'south';
+    if (iso === '2026-05-16') return null; // Sat — overflow only
+    return null;
+  }
+
+  function buildWeek(startIso) {
+    // Build a Mon-Sun week starting at startIso (always a Monday).
+    var start = isoToDate(startIso);
+    var todayIso = isoOf(new Date());
+    var days = [];
+    for (var i = 0; i < 7; i++) {
+      var d = addDays(start, i);
+      var iso = isoOf(d);
+      var label = DAY_NAMES[d.getDay()];
+      var region = null;
+      var isRamp = RAMP_DAYS.indexOf(iso) >= 0;
+      if (isRamp) {
+        region = regionForRampIso(iso);
+      } else if (iso >= SERENA_NORMAL_ISO) {
+        region = regionForWeekday(d.getDay());
+      }
+      days.push({iso: iso, label: label, region: region, isToday: iso === todayIso, isRamp: isRamp});
+    }
+    return {startIso: startIso, days: days};
+  }
+
+  function mondayOfThisWeek(d) {
+    var c = new Date(d.getTime());
+    var dow = c.getDay(); // 0=Sun .. 6=Sat
+    var diff = (dow === 0 ? -6 : 1 - dow);
+    c.setDate(c.getDate() + diff);
+    c.setHours(0,0,0,0);
+    return c;
+  }
+
+  function renderBanner() {
+    var banner = document.getElementById('vibes-schedule-banner');
+    if (!banner) return;
+    var now = new Date();
+    var launch = isoToDate(SERENA_LAUNCH_ISO);
+    var normal = isoToDate(SERENA_NORMAL_ISO);
+    var nowMs = now.getTime();
+    if (nowMs < launch.getTime()) {
+      var days = Math.ceil((launch.getTime() - nowMs) / 86400000);
+      banner.style.display = 'block';
+      banner.innerHTML = '<div style="font-family:Teko,sans-serif;font-size:22px;color:#FFF;letter-spacing:0.04em;">Vibes launches in ' + days + ' day' + (days === 1 ? '' : 's') + '</div>'
+        + '<div style="color:#A9ACAF;font-size:12px;margin-top:6px;line-height:1.5;">Serena rolls out <strong style="color:#FFF;">Thu, May 14</strong>. Pushes booked today land inside the launch week ramp (Thu-Sun).</div>';
+    } else if (nowMs < normal.getTime()) {
+      banner.style.display = 'block';
+      banner.innerHTML = '<div style="font-family:Teko,sans-serif;font-size:22px;color:#FFF;letter-spacing:0.04em;">Launch Week — every day is in play</div>'
+        + '<div style="color:#A9ACAF;font-size:12px;margin-top:6px;line-height:1.5;">May 14-17 is flexible. Tue/Wed/Thu rhythm locks in <strong style="color:#FFF;">Tue, May 19</strong>.</div>';
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+
+  function render() {
+    renderBanner();
+    var host = document.getElementById('vibes-schedule-weeks');
+    if (!host) return;
+    var monday = mondayOfThisWeek(new Date());
+    // If we're before launch, anchor the first rendered week to the launch week
+    // so the user sees the ramp clearly even if today is e.g. April 27.
+    var launch = isoToDate(SERENA_LAUNCH_ISO);
+    if (monday.getTime() < new Date(launch.getTime() - 6 * 86400000).getTime()) {
+      monday = mondayOfThisWeek(launch);
+    }
+    var weeks = [];
+    for (var w = 0; w < 4; w++) {
+      var startIso = isoOf(addDays(monday, w * 7));
+      weeks.push(buildWeek(startIso));
+    }
+    host.innerHTML = weeks.map(function (wk) {
+      var anyWork = wk.days.some(function (d) { return d.region; });
+      var weekLabel = 'Week of ' + (function () {
+        var d = isoToDate(wk.startIso);
+        return MON_NAMES[d.getMonth()] + ' ' + d.getDate();
+      })();
+      var rows = wk.days
+        .filter(function (d) { return d.region || d.isRamp; })
+        .map(function (d) { return dayCard(d.label, d.region, d.iso, d.isToday); })
+        .join('');
+      var emptyMsg = '<div style="padding:10px 12px;color:#A9ACAF;font-size:12px;font-style:italic;">No working days in this week.</div>';
+      return ''
+        + '<div>'
+        + '  <div style="font-family:Teko,sans-serif;font-size:14px;letter-spacing:0.18em;text-transform:uppercase;color:#F5E100;margin-bottom:8px;">' + weekLabel + '</div>'
+        + '  <div style="display:flex;flex-direction:column;gap:6px;">' + (anyWork ? rows : emptyMsg) + '</div>'
+        + '</div>';
+    }).join('');
+  }
+
+  // Re-render whenever the tab is shown so today's "TODAY" pill stays accurate.
+  var origShow = window.showTab;
+  if (typeof origShow === 'function') {
+    window.showTab = function (tab) {
+      var r = origShow.apply(this, arguments);
+      if (tab === 'vibesschedule') {
+        try { render(); } catch (e) { console.error('vibes schedule render failed', e); }
+      }
+      return r;
+    };
+  }
+  // Also render once on load in case the user deep-links via #vibesschedule.
+  document.addEventListener('DOMContentLoaded', function () {
+    if (location.hash === '#vibesschedule') {
+      try { render(); } catch (e) {}
+    }
+  });
+})();
+</script>
+
 </body>
 </html>
