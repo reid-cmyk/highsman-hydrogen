@@ -1635,6 +1635,11 @@ a.hs-contact-meta-cell:active {
   color: #fbbf24;
 }
 
+.hs-action-pill.is-menu {
+  border-top: 2px solid #3B82F6;
+}
+.hs-action-pill.is-menu i { color: #93c5fd; }
+
 .hs-action-pill.is-flag-pete {
   border-top: 2px solid #F59E0B;
 }

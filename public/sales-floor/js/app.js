@@ -534,39 +534,67 @@ function renderOrders() {
     (a, b) => (b.daysSinceLastOrder || 0) - (a.daysSinceLastOrder || 0),
   );
 
-  list.innerHTML = sorted.map(r => {
+  // Reid's spec (Apr 2026): Reorder Due renders as the SAME Account-card
+  // view as the Accounts tab so a store gets the full action surface
+  // (Training, Send Menu, New Product Onboard, Flag Pete) here too. Days-
+  // overdue replaces the NEW/N-orders pill in the header, and the Send
+  // Menu pill flips to "Send Reorder" mode (restock email body).
+  //
+  // Reorder rows whose Zoho account match failed render a stripped fallback
+  // card so we don't lose data — they just don't get the action surface
+  // until the rep links them up in Zoho.
+  list.innerHTML = sorted.map((r) => {
     const days = Number.isFinite(r.daysSinceLastOrder) ? r.daysSinceLastOrder : 0;
     const sev = days >= 60 ? 'is-critical' : days >= 45 ? 'is-warn' : '';
     const lastOrder = r.lastOrderDate
       ? `Last: ${formatDate(r.lastOrderDate)}${r.lastOrderNumber ? ` · #${escapeHtml(String(r.lastOrderNumber))}` : ''}`
       : 'No prior orders on file';
+
+    // Match against the live accounts list — same lookup pattern as before.
+    const idx = r.zohoAccountId
+      ? accounts.findIndex((a) => a && a.id === r.zohoAccountId)
+      : -1;
+    const acct = idx >= 0 ? accounts[idx] : null;
+
+    if (acct) {
+      // Full Account card. Days-overdue badge replaces the NEW/orders pill
+      // in the header; "last order" line lives in subtitle slot via the
+      // Industry merge below so reps see the recency context immediately.
+      const overdueBadge = `<span class="hs-orders-days ${sev}" title="${escapeHtml(lastOrder)}">${days}d</span>`;
+      // Stash the lastOrder hint into subtitle so it surfaces under the
+      // shop name without changing contactCardHtml. Snapshot then restore
+      // so the Accounts tab render isn't polluted.
+      const origIndustry = acct.Industry;
+      acct.Industry = lastOrder;
+      const cardHtml = accountToCardHtml(acct, idx, {
+        headerExtraOverride: overdueBadge,
+        menuMode: 'reorder',
+      });
+      acct.Industry = origIndustry;
+      return cardHtml;
+    }
+
+    // Fallback for reorder rows that didn't match a live Zoho account —
+    // stripped card with the contact bits we have from the LeafLink feed.
+    const phone = r.phone || '';
+    const email = '';
+    const actions = [];
+    if (phone) {
+      actions.push(
+        `<a class="hs-orders-action" href="tel:${escapeAttr(phone)}"><i class="fa-solid fa-phone"></i> Call</a>`,
+      );
+      actions.push(
+        `<button class="hs-orders-action" onclick="textBuyerByPhone('${escapeAttr(phone)}', '${escapeAttr(r.customerName || '')}')"><i class="fa-solid fa-message"></i> Text</button>`,
+      );
+    }
+    if (email) {
+      actions.push(
+        `<a class="hs-orders-action" href="mailto:${escapeAttr(email)}"><i class="fa-solid fa-envelope"></i> Email</a>`,
+      );
+    }
     const statePill = r.state
       ? `<span class="hs-orders-state">${escapeHtml(r.state)}</span>`
       : '';
-    // Cross-reference the live accounts list to surface the buyer contact —
-    // /api/sales-floor-leaflink-orders returns the account-level phone, but
-    // the buyer's mobile is on the contact attached to the matched account.
-    const acct = r.zohoAccountId
-      ? accounts.find(a => a.id === r.zohoAccountId)
-      : null;
-    // Property name: `buyer` (no underscore). The sync endpoint writes
-  // acc.buyer = pickBuyer(list), so the matched-account's buyer is at
-  // acct.buyer. Reading acct._buyer returns undefined and every New
-  // Customer card silently shows "No buyer yet" regardless of Zoho state.
-  const buyer = acct?.buyer || null;
-    const buyerLine = buyer
-      ? `<div class="hs-orders-buyer"><i class="fa-solid fa-user"></i> ${escapeHtml(buyer._fullName || '')}${buyer._jobRole ? ` · ${escapeHtml(buyer._jobRole)}` : ''}</div>`
-      : '';
-    const phone = buyer?.Mobile || buyer?.Phone || r.phone || '';
-    const email = buyer?.Email || acct?.Email || '';
-    const actions = [];
-    if (phone) {
-      actions.push(`<a class="hs-orders-action" href="tel:${escapeAttr(phone)}"><i class="fa-solid fa-phone"></i> Call</a>`);
-      actions.push(`<button class="hs-orders-action" onclick="textBuyerByPhone('${escapeAttr(phone)}', '${escapeAttr(buyer?._fullName || r.customerName || '')}')"><i class="fa-solid fa-message"></i> Text</button>`);
-    }
-    if (email) {
-      actions.push(`<a class="hs-orders-action" href="mailto:${escapeAttr(email)}"><i class="fa-solid fa-envelope"></i> Email</a>`);
-    }
     return `
       <div class="hs-orders-card ${sev}">
         <div class="hs-orders-head">
@@ -577,7 +605,9 @@ function renderOrders() {
           <div class="hs-orders-days ${sev}">${days}d</div>
         </div>
         <div class="hs-orders-meta">${escapeHtml(lastOrder)}</div>
-        ${buyerLine}
+        <div class="hs-orders-meta" style="opacity:.65;font-style:italic;margin-top:4px;">
+          (No Zoho match — link this account in Zoho to enable Send Reorder + Vibes actions)
+        </div>
         ${actions.length ? `<div class="hs-orders-actions">${actions.join('')}</div>` : ''}
       </div>`;
   }).join('');
@@ -1420,6 +1450,140 @@ function textBuyerByPhone(phone, name) {
   }, 60);
 }
 
+// ─── Send Menu / Reorder email helpers ───────────────────────────────────────
+// Shared by:
+//   • Account cards (renderAccounts) — "Send Menu" pill, mode='menu'
+//   • Reorder Due cards (renderOrders) — "Send Menu" pill, mode='reorder'
+//
+// Both buttons fire /api/sales-floor-send-email which routes through the
+// logged-in rep's Gmail (Sky → sky@highsman.com via her GMAIL_* env triple,
+// fallback `defaultFrom` from app/lib/sales-floor-reps.ts). Subject + body
+// are composed client-side based on `mode` so the same button can serve both
+// outreach contexts without forking the API.
+const NJMENU_URL = 'https://highsman.com/njmenu';
+
+function _firstNameOnly(s) {
+  return String(s || '').trim().split(/\s+/)[0] || 'there';
+}
+
+function menuSubject(business) {
+  return `Highsman NJ Wholesale Menu — ${business || 'your shop'}`;
+}
+
+function menuBody(greetingName) {
+  // Mirrors the new-business "Send Menu" copy Reid signed off on. Personal
+  // intro from the logged-in rep's first name (Sky for /sales-floor; Pete
+  // for /new-business — both share this body shape).
+  const repFirst =
+    (CONFIG && CONFIG.salesperson && CONFIG.salesperson.firstName) || 'Sky';
+  const sig =
+    (CONFIG && CONFIG.salesperson && CONFIG.salesperson.signature) ||
+    `${(CONFIG && CONFIG.salesperson && CONFIG.salesperson.name) || 'Highsman'}\nHighsman`;
+  return (
+    `Hey ${_firstNameOnly(greetingName)},\n\n` +
+    `${repFirst} from Highsman here. See link to our NJ wholesale menu below — Hit Sticks, Pre-Rolls, and Ground Game:\n\n${NJMENU_URL}\n\n` +
+    `Let me know if you need any help with anything. You also earn credits when you order through this menu to our Highsman Apparel store :)\n\n` +
+    `Thanks\n${sig}`
+  );
+}
+
+function reorderSubject(business) {
+  return `Restock? — ${business || 'Highsman'}`;
+}
+
+function reorderBody(greetingName) {
+  // Same friendly tone as the menu email but reorder-flavored. Surfaces
+  // the same Highsman Apparel credit hook so the buyer has a second
+  // reason to come back through the wholesale menu.
+  const repFirst =
+    (CONFIG && CONFIG.salesperson && CONFIG.salesperson.firstName) || 'Sky';
+  const sig =
+    (CONFIG && CONFIG.salesperson && CONFIG.salesperson.signature) ||
+    `${(CONFIG && CONFIG.salesperson && CONFIG.salesperson.name) || 'Highsman'}\nHighsman`;
+  return (
+    `Hey ${_firstNameOnly(greetingName)},\n\n` +
+    `${repFirst} from Highsman checking in — looks like you're due for a restock. Grab anything you need straight from the NJ wholesale menu:\n\n${NJMENU_URL}\n\n` +
+    `Reminder: every order earns credits toward our Highsman Apparel store :)\n\n` +
+    `Thanks\n${sig}`
+  );
+}
+
+// Send Menu / Reorder Send. Locks every matching button across the UI,
+// fires /api/sales-floor-send-email, and auto-toasts the result. Mode is
+// 'menu' (Account cards) or 'reorder' (Reorder Due cards) — controls
+// which subject/body template runs.
+async function sendMenuFromCard(zohoAccountId, customerName, idx, mode) {
+  mode = mode === 'reorder' ? 'reorder' : 'menu';
+  const acct = accounts.find((a) => a && a.id === zohoAccountId) || null;
+  const buyer = acct?.buyer || null;
+  const to = (buyer && buyer.Email) || acct?.Email || '';
+  if (!to) {
+    toast('No email on file — set a buyer first', 'error');
+    return;
+  }
+  const greeting =
+    (buyer && (buyer.First_Name || (buyer._fullName || '').split(/\s+/)[0])) ||
+    customerName ||
+    '';
+  const subject =
+    mode === 'reorder'
+      ? reorderSubject(customerName)
+      : menuSubject(customerName);
+  const body =
+    mode === 'reorder' ? reorderBody(greeting) : menuBody(greeting);
+
+  // Lock every matching menu/reorder button across the UI so a double-tap
+  // doesn't fire two sends.
+  const buttons = document.querySelectorAll(
+    `[data-menu-acct="${zohoAccountId}"]`,
+  );
+  for (const b of buttons) {
+    if (b.tagName === 'BUTTON') {
+      b.disabled = true;
+      b.classList.add('is-disabled');
+    }
+  }
+
+  try {
+    const res = await fetch('/api/sales-floor-send-email', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({to, subject, body}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.ok) {
+      throw new Error(data?.error || `Email send failed (${res.status})`);
+    }
+    const fromAddr = data.from || (CONFIG && CONFIG.salesperson && CONFIG.salesperson.email) || 'sky@highsman.com';
+    toast(
+      mode === 'reorder'
+        ? `Reorder ping sent from ${fromAddr}.`
+        : `Menu sent from ${fromAddr}.`,
+    );
+    // Re-enable the buttons — Sky may want to send again later once the
+    // buyer responds.
+    for (const b of buttons) {
+      if (b.tagName === 'BUTTON') {
+        b.disabled = false;
+        b.classList.remove('is-disabled');
+      }
+    }
+  } catch (err) {
+    for (const b of buttons) {
+      if (b.tagName === 'BUTTON') {
+        b.disabled = false;
+        b.classList.remove('is-disabled');
+      }
+    }
+    // Soft fallback: open native mail client with the draft pre-filled so
+    // the rep can still hit Send. Mirrors the new-business fallback path.
+    const mailto = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    toast(err.message || 'Gmail not wired — opening your mail app', 'info', 6000);
+    window.location.href = mailto;
+  }
+}
+
 // ─── Accounts ─────────────────────────────────────────────────────────────────
 // Accounts tab is gated to "has at least one order" — _orderCount >= 1. The
 // order count comes from the Zoho Accounts.Total_Orders_Count field, which the
@@ -1462,7 +1626,19 @@ function renderAccounts() {
   }
   el.innerHTML = list.map((a) => {
     const idx = accounts.indexOf(a);
-    const subtitle = a.Industry || '';
+    return accountToCardHtml(a, idx);
+  }).join('');
+}
+
+// Shared per-account card render — used by both Accounts tab and Reorder
+// Due tab so a store looks identical in both places. opts can carry:
+//   • headerExtraOverride — replace the "NEW / N orders" pill with reorder-
+//     specific overdue badge (e.g. "47d" for 47 days since last order).
+//   • menuMode — 'menu' (default, new outreach copy) or 'reorder' (restock
+//     copy) — drives which subject/body sendMenuFromCard fires.
+function accountToCardHtml(a, idx, opts) {
+  opts = opts || {};
+  const subtitle = a.Industry || '';
     // Display the canonical 2-letter state (from _state) instead of whatever
     // shape Billing_State happens to be in — keeps cards consistent ("Warwick,
     // RI" everywhere instead of a mix of "Warwick, Rhode Island" and
@@ -1470,17 +1646,21 @@ function renderAccounts() {
     const stateLabel = a._state || normalizeStateCode(a.Billing_State) || '';
     const location = [a.Billing_City, stateLabel].filter(Boolean).join(', ');
 
-    // Order-count badge in the card header. First-order accounts get a loud
-    // "NEW" flag so reps recognize them instantly; repeat accounts get a quiet
-    // "x orders" pill so the rep knows at a glance how engaged the shop is.
-    // Values come straight from Zoho's Total_Orders_Count (single source of
-    // truth across all markets — see server note in api.sales-floor-sync.tsx).
-    const orderCount = a._orderCount || 0;
+    // Header badge. Reorder Due tab can override (overdue-days "47d"
+    // pill); otherwise we surface the order-count NEW/N-orders badge for
+    // the Accounts tab. Values come straight from Zoho's
+    // Total_Orders_Count (single source of truth — see server note in
+    // api.sales-floor-sync.tsx).
     let headerExtra = '';
-    if (orderCount === 1) {
-      headerExtra = `<span class="hs-account-order-badge is-new" title="First order on record">NEW</span>`;
-    } else if (orderCount >= 2) {
-      headerExtra = `<span class="hs-account-order-badge" title="${orderCount} orders on record">${orderCount} orders</span>`;
+    if (opts.headerExtraOverride) {
+      headerExtra = opts.headerExtraOverride;
+    } else {
+      const orderCount = a._orderCount || 0;
+      if (orderCount === 1) {
+        headerExtra = `<span class="hs-account-order-badge is-new" title="First order on record">NEW</span>`;
+      } else if (orderCount >= 2) {
+        headerExtra = `<span class="hs-account-order-badge" title="${orderCount} orders on record">${orderCount} orders</span>`;
+      }
     }
 
     // Buyer takes precedence over the account-level Email/Phone. The buyer's
@@ -1594,6 +1774,36 @@ function renderAccounts() {
         </button>`;
     }
 
+    // Send Menu pill — fires the wholesale menu email from sky@highsman.com
+    // (logged-in rep's Gmail). NJ-only because the menu is the NJ wholesale
+    // catalogue. The same pill renders on Reorder Due cards with mode=
+    // 'reorder' so the email body switches to the restock prompt.
+    const menuMode = opts.menuMode === 'reorder' ? 'reorder' : 'menu';
+    const menuLabel = menuMode === 'reorder' ? 'Send Reorder' : 'Send Menu';
+    const menuTitle =
+      menuMode === 'reorder'
+        ? 'Email a restock prompt to the buyer on file'
+        : 'Email the NJ wholesale menu to the buyer on file';
+    let menuPill = '';
+    if (njAccount) {
+      const safeNameMenu = escapeAttr(JSON.stringify(a.Account_Name || ''));
+      menuPill = `
+        <button class="hs-action-pill is-menu"
+                data-menu-acct="${escapeAttr(a.id || '')}"
+                onclick="event.stopPropagation(); sendMenuFromCard('${escapeAttr(a.id || '')}', ${safeNameMenu}, ${idx}, '${menuMode}')"
+                title="${menuTitle}">
+          <i class="fa-solid fa-paper-plane"></i>
+          <span>${menuLabel}</span>
+        </button>`;
+    } else {
+      menuPill = `
+        <button class="hs-action-pill is-menu is-disabled" disabled
+                title="Wholesale menu is NJ-only">
+          <i class="fa-solid fa-paper-plane"></i>
+          <span>${menuLabel}</span>
+        </button>`;
+    }
+
     // New Product Onboarding (Vibes Tier 1, existing accounts). Same
     // 60-min Tier 1 routing as a first-customer onboarding, but the trigger
     // is "this shop just brought in a new SKU and Serena should go walk
@@ -1647,13 +1857,13 @@ function renderAccounts() {
       briefHandler: `openBriefForAccount(${idx})`,
       extraRow,
       headerExtra,
-      // Training + New Product Onboarding + Flag Pete all live in the
-      // single extraAction slot; concatenating keeps the layout tight
-      // (one flex row) without having to open a new prop on
-      // contactCardHtml. Order matches mental priority: training is the
-      // most-clicked action, product-onboarding is the new-SKU re-engage,
-      // flag-Pete is the rare hand-off.
-      extraAction: `${trainingPill}${productOnboardPill}${flagPill}`,
+      // Training + Send Menu + New Product Onboarding + Flag Pete all live
+      // in the single extraAction slot; concatenating keeps the layout tight
+      // (one flex row) without having to open a new prop on contactCardHtml.
+      // Order matches mental priority: training is the most-clicked action,
+      // Send Menu is the next outbound touchpoint, product-onboarding is the
+      // new-SKU re-engage, flag-Pete is the rare hand-off.
+      extraAction: `${trainingPill}${menuPill}${productOnboardPill}${flagPill}`,
       // For accounts the inline add writes to the BUYER contact, not the
       // account itself (account-level Phone/Email are noisy switchboard
       // lines). No buyer = no inline add — the rep uses the buyer picker
@@ -1664,7 +1874,6 @@ function renderAccounts() {
       // company page. Populated via Apollo enrichment; hidden when empty.
       linkedinUrl: buyer?.LinkedIn_URL || a.LinkedIn_URL || '',
     });
-  }).join('');
 }
 
 function searchAccounts() { renderAccounts(); }

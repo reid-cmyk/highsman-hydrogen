@@ -2496,6 +2496,19 @@ a.hs-contact-meta-cell:hover i{ color:var(--gold); }
 }
 .hs-action-pill.is-product-onboard.is-booked i{ color:#D4AF37; }
 
+/* ── Send Menu (wholesale menu email or reorder prompt) ──
+   Uses Highsman blue (#3B82F6) so it visually echoes the Email pill but
+   sits as its own action — Email opens the compose tab; Send Menu fires a
+   pre-built email from the rep's Gmail with one click. */
+.hs-action-pill.is-menu{
+  border-left:2px solid #3B82F6;
+}
+.hs-action-pill.is-menu i{ color:#3B82F6; }
+.hs-action-pill.is-menu:hover:not(.is-disabled){
+  background:rgba(59,130,246,0.12);
+  border-color:rgba(59,130,246,0.45);
+}
+
 /* ── Responsive: tighten pills on narrow phones ── */
 @media (max-width: 480px){
   .hs-contact-card{ padding:14px; }
