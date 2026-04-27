@@ -29,7 +29,8 @@ let recentCallsRefreshTimer = null;
 // memory so the dashboard snapshot, Orders Due tab, and New Customers tab
 // stay in sync without separate fetches per tab.
 let reorderDue = [];      // shops 30d+ since last Highsman LeafLink order
-let lastOrderByAccount = {}; // {zohoAccountId: {date, total, orderNumber}} from LeafLink
+let lastOrderByAccount = {}; // {zohoAccountId: {date, total, orderNumber}} from LeafLink (legacy, partial coverage)
+let lastOrderByName = {};    // {UPPER_ACCOUNT_NAME: {date, total, orderNumber}} from Zoho Inventory — primary source
 let newCustomers = [];    // first-time Highsman LeafLink orders + state machine
 let leaflinkOrdersMeta = null;
 let leaflinkOrdersFetched = 0;     // ms timestamp of last successful fetch
@@ -218,6 +219,43 @@ function renderAll() {
   // own loader. Kick it off after the Zoho render lands so the dashboard's
   // other panels paint first.
   loadLeaflinkOrders({force: false}).catch(() => {});
+  // Last-order $ for the account-card pill. Independent fetch so a slow
+  // Inventory call doesn't block the rest of the dashboard.
+  loadInventoryLastOrders({force: false}).catch(() => {});
+}
+
+// ─── Inventory last-orders (primary source for the account-card pill) ─────
+// Hits /api/account-last-orders which returns a map of UPPER(Account_Name)
+// → {date, total, orderNumber} from Zoho Inventory Sales Orders. CRM Deals
+// were unreliable for this; Inventory is authoritative.
+let inventoryLastOrdersFetched = 0;
+let inventoryLastOrdersLoading = false;
+async function loadInventoryLastOrders({force = false} = {}) {
+  if (inventoryLastOrdersLoading) return;
+  if (!force && inventoryLastOrdersFetched && Date.now() - inventoryLastOrdersFetched < 60_000) {
+    return;
+  }
+  inventoryLastOrdersLoading = true;
+  try {
+    const res = await fetch('/api/account-last-orders', {
+      credentials: 'include',
+      headers: {Accept: 'application/json'},
+    });
+    if (!res.ok) throw new Error(`account-last-orders ${res.status}`);
+    const data = await res.json();
+    if (!data?.ok) throw new Error(data?.error || 'inventory last-orders failed');
+    lastOrderByName = (data.byAccountName && typeof data.byAccountName === 'object')
+      ? data.byAccountName
+      : {};
+    inventoryLastOrdersFetched = Date.now();
+  } catch (err) {
+    console.warn('[loadInventoryLastOrders] failed', err);
+    inventoryLastOrdersFetched = Date.now();
+  } finally {
+    inventoryLastOrdersLoading = false;
+    // Repaint Accounts so the just-loaded map hydrates the pill.
+    if (typeof renderAccounts === 'function') renderAccounts();
+  }
 }
 
 // ─── Stats ────────────────────────────────────────────────────────────────────
@@ -1681,19 +1719,22 @@ function accountToCardHtml(a, idx, opts) {
     const cardPhone = buyer ? (buyer.Mobile || buyer.Phone || a.Phone) : a.Phone;
     const cardEmail = buyer ? (buyer.Email || a.Email || '') : (a.Email || '');
 
-    // Last-order pill — pulls from /api/sales-floor-leaflink-orders into the
-    // global lastOrderByAccount map. Surfaces "Last: 2026-04-09 · $1,450"
-    // inline so reps see at a glance whether the shop is active or stalled.
-    // Falls back to Zoho Last_Order_Date (no $ amount) if LeafLink hasn't
-    // resolved this customer yet. Built BEFORE extraRow so we can prepend
-    // it after the buyer/CTA branches assign extraRow — those branches use
-    // `=` (overwrite), so anything concatenated above them gets clobbered.
-    const lastOrderInfo = (lastOrderByAccount && lastOrderByAccount[a.id]) || null;
+    // Last-order pill — three-tier lookup, most authoritative first:
+    //   1. Zoho Inventory (lastOrderByName)        → real revenue $ + date
+    //   2. LeafLink resolved map (lastOrderByAccount) → fallback when Inventory
+    //      misses (rare; Inventory is canonical for confirmed orders)
+    //   3. Zoho Account.Last_Order_Date alone     → date only, no $
+    // Built BEFORE extraRow so we can prepend it after the buyer/CTA
+    // branches (which use `=` overwrite, not concat).
+    const nameKey = String(a.Account_Name || '').trim().toUpperCase();
+    const invInfo = nameKey ? (lastOrderByName && lastOrderByName[nameKey]) || null : null;
+    const llInfo = (lastOrderByAccount && lastOrderByAccount[a.id]) || null;
+    const sourceInfo = invInfo || llInfo;
     const fallbackDate = a.Last_Order_Date || null;
     let lastOrderHtml = '';
-    if (lastOrderInfo || fallbackDate) {
-      const dateStr = (lastOrderInfo?.date) || fallbackDate || '';
-      const totalNum = lastOrderInfo?.total ?? null;
+    if (sourceInfo || fallbackDate) {
+      const dateStr = sourceInfo?.date || fallbackDate || '';
+      const totalNum = sourceInfo?.total ?? null;
       const totalStr = (totalNum != null && totalNum > 0)
         ? ` · ${totalNum.toLocaleString('en-US', {style: 'currency', currency: 'USD', maximumFractionDigits: 0})}`
         : '';

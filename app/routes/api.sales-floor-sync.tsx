@@ -329,6 +329,7 @@ function attachFirstOrderNumbers(accounts: any[], deals: any[]) {
 }
 
 
+
 // ─── Auto-clear stale Pete flags on reorder ───────────────────────────────
 // Mirrors the rule in api.new-business-followups: if a flagged account has
 // a Last_Order_Date within the AUTO_CLEAR_WINDOW_DAYS = 14 day window,
@@ -890,7 +891,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     attachFirstOrderNumbers(accounts, deals);
     // Auto-clear stale pete-followup flags whose accounts have ordered
     // within AUTO_CLEAR_WINDOW_DAYS. Last-order DOLLAR amounts come from
-    // LeafLink and are joined client-side from /api/sales-floor-leaflink-orders.
+    // Zoho Inventory via /api/account-last-orders (joined client-side) —
+    // CRM Deals are unreliable for revenue per Reid's call.
     autoClearStalePeteFlags(accounts, accessToken);
 
     // Stamp _vibesBooked / _onboardingBooked / _trainingBooked onto any

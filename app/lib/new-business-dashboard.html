@@ -719,9 +719,15 @@
   }
 
   async function loadFollowUps() {
-    // Kick off the leaflink-orders fetch in parallel so we have last-order
-    // date + $ amount available when we render the Follow-Up cards. Failure
-    // is non-fatal — cards just won't show the inline pill.
+    // Kick off both last-order sources in parallel so we have date + $
+    // amount ready when Follow-Up cards render. Inventory is the primary
+    // source (real confirmed revenue from Zoho Inventory Sales Orders);
+    // LeafLink is a fallback for any account Inventory hasn't resolved.
+    // Failure on either is non-fatal — the pill silently drops to date-only.
+    const inventoryPromise = fetch('/api/account-last-orders', {credentials: 'same-origin'})
+      .then((r) => r.json())
+      .then((d) => (d?.ok && d.byAccountName) ? d.byAccountName : {})
+      .catch(() => ({}));
     const lastOrdersPromise = fetch('/api/sales-floor-leaflink-orders', {credentials: 'same-origin'})
       .then((r) => r.json())
       .then((d) => (d?.ok && d.lastOrderByAccount) ? d.lastOrderByAccount : {})
@@ -734,7 +740,8 @@
     }
     followups = data.accounts || [];
     // Hoist into module-level so followupCard() can read without a prop.
-    window._lastOrderByAccount = await lastOrdersPromise;
+    window._lastOrderByAccount = await lastOrdersPromise; // LeafLink (fallback)
+    window._lastOrderByName = await inventoryPromise;    // Zoho Inventory (primary)
     document.getElementById('stat-followups').textContent = followups.length;
     document.getElementById('tab-followups-count').textContent = followups.length;
   }
@@ -901,13 +908,18 @@
           ${email ? `<div><i class="fa-solid fa-envelope"></i><a href="${mailtoHref(email)}">${escapeHtml(email)}</a></div>` : ''}
         </div>
         ${(() => {
+          // Three-tier lookup matching Sales-floor: Inventory → LeafLink → date-only.
+          const invMap = window._lastOrderByName || {};
           const llMap = window._lastOrderByAccount || {};
+          const nameKey = String(a.Account_Name || '').trim().toUpperCase();
+          const inv = nameKey ? invMap[nameKey] || null : null;
           const ll = llMap[a.id] || null;
+          const source = inv || ll;
           const fallbackDate = a.Last_Order_Date || null;
-          if (!ll && !fallbackDate) return '';
-          const date = (ll && ll.date) || fallbackDate || '';
-          const total = (ll && typeof ll.total === 'number' && ll.total > 0)
-            ? ` · ${ll.total.toLocaleString('en-US', {style: 'currency', currency: 'USD', maximumFractionDigits: 0})}`
+          if (!source && !fallbackDate) return '';
+          const date = (source && source.date) || fallbackDate || '';
+          const total = (source && typeof source.total === 'number' && source.total > 0)
+            ? ` · ${source.total.toLocaleString('en-US', {style: 'currency', currency: 'USD', maximumFractionDigits: 0})}`
             : '';
           return `<div><span class="lastorder-pill" title="Most recent Highsman order on record"><i class="fa-solid fa-receipt"></i> Last order: ${escapeHtml(date)}${total}</span></div>`;
         })()}
