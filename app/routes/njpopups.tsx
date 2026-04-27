@@ -370,6 +370,7 @@ function CoveragePill({
 // COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 export default function NJPopups() {
+  const [activeTab, setActiveTab] = useState<'book' | 'bookings'>('book');
   const [dispensary, setDispensary] = useState<Dispensary | null>(null);
   const [slot, setSlot] = useState<{
     date: string;
@@ -1753,6 +1754,57 @@ export default function NJPopups() {
         </p>
       </section>
 
+      {/* Tab bar */}
+      <div
+        style={{
+          background: BRAND.black,
+          borderBottom: `1px solid ${BRAND.line}`,
+          position: 'sticky',
+          top: 49,
+          zIndex: 40,
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 1400,
+            margin: '0 auto',
+            padding: '0 28px',
+            display: 'flex',
+            gap: 0,
+            alignItems: 'flex-end',
+          }}
+        >
+          {([['book','Book a Pop-Up'],['bookings','Bookings & Calendar']] as const).map(([k, label]) => {
+            const active = activeTab === k;
+            return (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setActiveTab(k)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: active ? `3px solid ${BRAND.gold}` : '3px solid transparent',
+                  padding: '14px 22px',
+                  fontFamily: TEKO,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.14em',
+                  fontSize: 16,
+                  cursor: 'pointer',
+                  color: active ? BRAND.white : BRAND.gray,
+                  fontWeight: active ? 600 : 500,
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {activeTab === 'bookings' ? (
+        <BookingsTab />
+      ) : (
       <main style={{maxWidth: 1400, margin: '0 auto', padding: '40px 28px 80px'}}>
         {/* STEP 01 */}
         <section style={{...stepBox, overflow: 'visible', position: 'relative', zIndex: 30}}>
@@ -3593,6 +3645,7 @@ export default function NJPopups() {
           </div>
         </section>
       </main>
+      )}
 
       {/* FOOTER */}
       <footer style={{borderTop: `1px solid ${BRAND.line}`, padding: '48px 28px', textAlign: 'center'}}>
@@ -3669,5 +3722,367 @@ export default function NJPopups() {
         ● Spark Team POC Updated in Zoho
       </div>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOOKINGS TAB — list of all upcoming + recent past pop-ups with cancel UI.
+// ─────────────────────────────────────────────────────────────────────────────
+// Pulls from /api/popups-list (which queries Zoho Events filtered to
+// pop-up bookings). Soft auto-refresh every 90s. One-click cancel calls
+// /api/popups-cancel which deletes both the Zoho Event and the Calendar
+// invite and emails cancellation to all attendees.
+// ─────────────────────────────────────────────────────────────────────────────
+type BookingRow = {
+  id: string;
+  title: string;
+  date: string;
+  startIso: string;
+  endIso: string;
+  timeLabel: string;
+  territory: 'north' | 'south' | 'unassigned';
+  isOverride: boolean;
+  accountId: string | null;
+  accountName: string | null;
+  shiftLabel: string;
+};
+
+function BookingsTab() {
+  const [bookings, setBookings] = useState<BookingRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState<Set<string>>(new Set());
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [lastFetch, setLastFetch] = useState<Date | null>(null);
+
+  const refresh = useCallback(async () => {
+    setError(null);
+    try {
+      const res = await fetch('/api/popups-list?days=120');
+      const data = await res.json();
+      if (!data?.ok) throw new Error(data?.error || 'fetch failed');
+      setBookings(data.bookings || []);
+      setLastFetch(new Date());
+    } catch (err: any) {
+      setError(err?.message?.slice(0, 200) || 'fetch failed');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    const t = setInterval(refresh, 90_000); // soft auto-refresh every 90s
+    return () => clearInterval(t);
+  }, [refresh]);
+
+  const onCancel = async (id: string) => {
+    setCancelling((prev) => new Set(prev).add(id));
+    try {
+      const fd = new FormData();
+      fd.append('eventId', id);
+      const res = await fetch('/api/popups-cancel', {method: 'POST', body: fd});
+      const data = await res.json().catch(() => null);
+      if (!data?.ok) throw new Error(data?.error || 'cancel failed');
+      setBookings((prev) => prev.filter((b) => b.id !== id));
+      setConfirmId(null);
+    } catch (err: any) {
+      setError(err?.message?.slice(0, 200) || 'cancel failed');
+    } finally {
+      setCancelling((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+
+  const today = new Date();
+  const todayKey = today.toISOString().slice(0, 10);
+  const upcoming = bookings.filter((b) => b.date >= todayKey);
+  const past = bookings.filter((b) => b.date < todayKey).reverse();
+
+  const renderRow = (b: BookingRow, isPast: boolean) => {
+    const tagBg =
+      b.territory === 'north'
+        ? '#C9A867'
+        : b.territory === 'south'
+        ? '#A9ACAF'
+        : '#666';
+    const tagLabel =
+      b.territory === 'north' ? 'NJ-N' : b.territory === 'south' ? 'NJ-S' : 'UNASSIGNED';
+    const dateLabel = (() => {
+      const [y, m, d] = b.date.split('-').map((n) => parseInt(n, 10));
+      const dt = new Date(Date.UTC(y, m - 1, d));
+      return dt.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'UTC',
+      });
+    })();
+    const isCancelling = cancelling.has(b.id);
+    const isConfirming = confirmId === b.id;
+    return (
+      <div
+        key={b.id}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'auto 1fr auto',
+          alignItems: 'center',
+          gap: 16,
+          padding: '14px 18px',
+          background: isPast ? 'transparent' : 'rgba(255,255,255,0.02)',
+          border: `1px solid ${BRAND.line}`,
+          borderRadius: 6,
+          marginBottom: 10,
+          opacity: isPast ? 0.55 : 1,
+        }}
+      >
+        <div style={{minWidth: 140}}>
+          <div style={{fontFamily: TEKO, fontSize: 18, color: BRAND.white, letterSpacing: '0.04em'}}>
+            {dateLabel}
+          </div>
+          <div style={{fontSize: 12, color: BRAND.gray, marginTop: 2}}>{b.timeLabel || '—'}</div>
+        </div>
+        <div style={{minWidth: 0}}>
+          <div
+            style={{
+              fontFamily: TEKO,
+              fontSize: 19,
+              color: BRAND.white,
+              letterSpacing: '0.02em',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {b.accountName || 'Unnamed dispensary'}
+          </div>
+          <div
+            style={{
+              fontSize: 11,
+              color: BRAND.gray,
+              letterSpacing: '0.08em',
+              marginTop: 4,
+              display: 'flex',
+              gap: 8,
+              flexWrap: 'wrap',
+              alignItems: 'center',
+            }}
+          >
+            <span
+              style={{
+                background: tagBg,
+                color: BRAND.black,
+                padding: '2px 8px',
+                borderRadius: 3,
+                fontWeight: 700,
+                fontFamily: TEKO,
+                fontSize: 11,
+                letterSpacing: '0.14em',
+              }}
+            >
+              {tagLabel}
+            </span>
+            {b.shiftLabel && <span>{b.shiftLabel}</span>}
+            {b.isOverride && (
+              <span style={{color: '#ef4444', fontWeight: 700, letterSpacing: '0.16em'}}>
+                • OVERRIDE
+              </span>
+            )}
+          </div>
+        </div>
+        <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
+          {isPast ? (
+            <span style={{color: BRAND.gray, fontSize: 11, letterSpacing: '0.14em', fontFamily: TEKO}}>
+              PAST
+            </span>
+          ) : isConfirming ? (
+            <>
+              <span style={{color: '#ef4444', fontSize: 11, fontFamily: TEKO, letterSpacing: '0.14em'}}>
+                CANCEL?
+              </span>
+              <button
+                type="button"
+                onClick={() => onCancel(b.id)}
+                disabled={isCancelling}
+                style={{
+                  background: '#ef4444',
+                  color: BRAND.white,
+                  border: 'none',
+                  padding: '8px 14px',
+                  fontFamily: TEKO,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.14em',
+                  fontSize: 12,
+                  cursor: isCancelling ? 'wait' : 'pointer',
+                  opacity: isCancelling ? 0.7 : 1,
+                }}
+              >
+                {isCancelling ? 'Cancelling…' : 'Yes, Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmId(null)}
+                disabled={isCancelling}
+                style={{
+                  background: 'transparent',
+                  color: BRAND.gray,
+                  border: `1px solid ${BRAND.line}`,
+                  padding: '8px 12px',
+                  fontFamily: TEKO,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.14em',
+                  fontSize: 12,
+                  cursor: isCancelling ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Keep
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmId(b.id)}
+              style={{
+                background: 'transparent',
+                color: '#ef4444',
+                border: `1px solid #ef4444`,
+                padding: '8px 14px',
+                fontFamily: TEKO,
+                textTransform: 'uppercase',
+                letterSpacing: '0.14em',
+                fontSize: 12,
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <main style={{maxWidth: 1400, margin: '0 auto', padding: '32px 28px 80px'}}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 22,
+          gap: 16,
+          flexWrap: 'wrap',
+        }}
+      >
+        <div>
+          <h2 style={{fontFamily: TEKO, fontSize: 36, margin: 0, letterSpacing: '0.02em'}}>
+            All Pop-Up Bookings
+          </h2>
+          <div style={{color: BRAND.gray, fontSize: 13, marginTop: 4, letterSpacing: '0.04em'}}>
+            Auto-refresh every 90s · Cancelling here removes the Zoho event AND
+            the Google Calendar invite (with cancellation emails).
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={refresh}
+          style={{
+            background: 'transparent',
+            color: BRAND.gold,
+            border: `1px solid ${BRAND.gold}`,
+            padding: '8px 16px',
+            fontFamily: TEKO,
+            textTransform: 'uppercase',
+            letterSpacing: '0.16em',
+            fontSize: 13,
+            cursor: 'pointer',
+          }}
+        >
+          ↻ Refresh
+          {lastFetch && (
+            <span style={{marginLeft: 10, fontSize: 11, color: BRAND.gray, letterSpacing: '0.06em'}}>
+              {lastFetch.toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'})}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {loading && (
+        <div style={{padding: 40, textAlign: 'center', color: BRAND.gray}}>Loading bookings…</div>
+      )}
+
+      {error && (
+        <div
+          style={{
+            padding: 16,
+            background: 'rgba(239,68,68,0.08)',
+            border: `1px solid #ef4444`,
+            borderRadius: 6,
+            color: '#ef4444',
+            marginBottom: 20,
+            fontSize: 13,
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {!loading && upcoming.length === 0 && !error && (
+        <div
+          style={{
+            padding: '50px 24px',
+            textAlign: 'center',
+            border: `1px dashed ${BRAND.line}`,
+            borderRadius: 6,
+            color: BRAND.gray,
+            marginBottom: 30,
+          }}
+        >
+          No upcoming bookings. Switch to{' '}
+          <strong style={{color: BRAND.white}}>Book a Pop-Up</strong> to schedule one.
+        </div>
+      )}
+
+      {!loading && upcoming.length > 0 && (
+        <>
+          <div
+            style={{
+              fontFamily: TEKO,
+              textTransform: 'uppercase',
+              letterSpacing: '0.18em',
+              color: BRAND.gold,
+              fontSize: 13,
+              marginBottom: 12,
+            }}
+          >
+            Upcoming · {upcoming.length}
+          </div>
+          {upcoming.map((b) => renderRow(b, false))}
+        </>
+      )}
+
+      {!loading && past.length > 0 && (
+        <>
+          <div
+            style={{
+              fontFamily: TEKO,
+              textTransform: 'uppercase',
+              letterSpacing: '0.18em',
+              color: BRAND.gray,
+              fontSize: 13,
+              marginTop: 36,
+              marginBottom: 12,
+            }}
+          >
+            Recent History · {past.length}
+          </div>
+          {past.map((b) => renderRow(b, true))}
+        </>
+      )}
+    </main>
   );
 }
