@@ -380,13 +380,14 @@ export async function action({request, context}: ActionFunctionArgs) {
     //
     // Calendar:
     //   • Owner: popups@highsman.com (master pop-up calendar — staff sees all)
-    //   • Attendees: POC, sales@highsman.com, sky@highsman.com, assigned rep email
-    //   • sendUpdates=all → Google emails the canonical .ics invite to all
+    //   • Attendees: POC ONLY — internal staff sees the shift on the dashboard,
+    //     no automated calendar invite for sales@ / sky@ / reps
+    //   • sendUpdates=all → Google emails the canonical .ics invite to the POC
     //
     // Email:
     //   • From: sky@highsman.com (Highsman brand voice, "Spark Greatness")
     //   • To: POC
-    //   • Cc: assigned rep email (if known) + sales@highsman.com
+    //   • Cc: sales@highsman.com only (no rep / no Reid / no Matt)
     // ──────────────────────────────────────────────────────────────────────
     let calendarInvite: {ok: boolean; htmlLink?: string; error?: string} = {ok: false};
     let confirmationEmail: {ok: boolean; messageId?: string; error?: string} = {ok: false};
@@ -421,8 +422,11 @@ export async function action({request, context}: ActionFunctionArgs) {
     // ── Calendar event ──
     if (contactEmail && isCalendarSAConfigured(env)) {
       try {
-        const attendees = [contactEmail, 'sales@highsman.com', 'sky@highsman.com'];
-        if (repEmail) attendees.push(repEmail);
+        // Calendar invite goes ONLY to the dispensary POC. Internal Highsman
+        // staff (sales@, sky@, the rep) intentionally do NOT receive a
+        // calendar invite here — the master pop-up calendar lives on
+        // popups@highsman.com and reps see their shifts on /njnorth / /njsouth.
+        const attendees = [contactEmail];
 
         const calendarDescription = [
           `Highsman pop-up at ${dispensaryName}${city ? ` — ${city}, NJ` : ''}.`,
@@ -485,8 +489,10 @@ export async function action({request, context}: ActionFunctionArgs) {
     // ── Confirmation email from sky@highsman.com ──
     if (contactEmail && isGmailSAConfigured(env)) {
       try {
+        // CC strictly limited to sales@highsman.com per Reid's directive
+        // 2026-04-27 — Sky sends the notification, sales@ gets the heads-up,
+        // and that's it. Reid + Matt + reps are NOT auto-CCed.
         const ccList = ['sales@highsman.com'];
-        if (repEmail) ccList.push(repEmail);
 
         const subject = `Pop-up confirmed — Highsman x ${dispensaryName} — ${friendlyDate}`;
 
