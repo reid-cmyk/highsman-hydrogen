@@ -28,6 +28,12 @@ type Lead = {
   Phone: string;
   Mobile: string;
   Lead_Status: string;
+  // Normalized Hot/Warm/New/Cold bucket — same vocabulary the /sales-floor
+  // dashboard uses so Pete's All/Hot/Warm/New filter row matches Sky's. A
+  // referral-form Lead landing in Zoho with Lead_Status='Hot' (or
+  // 'Qualified' / 'Ready to Buy') becomes _status='hot' here and shows up
+  // under Pete's Hot tab without any extra plumbing.
+  _status: 'hot' | 'warm' | 'new' | 'cold';
   Lead_Source: string;
   Description: string;
   City: string;
@@ -42,6 +48,22 @@ type Lead = {
   // Phase D — LinkedIn deep-link
   LinkedIn_URL: string;
 };
+
+// ─── Zoho Lead_Status → hot / warm / new / cold ──────────────────────────────
+// Ported verbatim from app/routes/api.sales-floor-sync.tsx so /new-business
+// uses the SAME bucketing as /sales-floor. If Sky and Pete look at the same
+// Lead they see the same temperature. Update both files together if the
+// Zoho Lead_Status picklist changes — there's no shared module for this yet
+// because the two dashboards diverged historically.
+function normalizeLeadStatus(raw: string | null | undefined): 'hot' | 'warm' | 'new' | 'cold' {
+  const s = (raw || '').toLowerCase();
+  if (['qualified', 'hot', 'ready to buy'].includes(s)) return 'hot';
+  if (['working - contacted', 'contact in future', 'warm', 'nurturing'].includes(s)) return 'warm';
+  if (['unqualified', 'junk lead', 'cold', 'lost lead'].includes(s)) return 'cold';
+  // Default for "not contacted", "attempted to contact", "contacted",
+  // "pre-qualified", "sampling", anything custom, or empty.
+  return 'new';
+}
 
 // Wraps the shared Zoho helper to preserve the "return null on missing creds
 // or refresh failure" contract this loader relies on for soft-degradation.
@@ -180,6 +202,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
           Phone: l.Phone || '',
           Mobile: l.Mobile || '',
           Lead_Status: l.Lead_Status || '',
+          _status: normalizeLeadStatus(l.Lead_Status),
           Lead_Source: l.Lead_Source || '',
           Description: l.Description || '',
           City: l.City || '',

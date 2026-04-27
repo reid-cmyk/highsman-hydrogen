@@ -94,6 +94,33 @@
       cursor: pointer; outline: none; }
     .hs-filter:focus { border-color: #A9ACAF; }
 
+    /* HOT/WARM/NEW FILTER ROW — same vocabulary as /sales-floor.
+       Hot Leads coming in from the referral form (Lead_Status='Hot')
+       land under the Hot tab automatically. */
+    .hs-filter-row { width: 100%; display: flex; gap: 6px; flex-wrap: nowrap;
+      overflow-x: auto; padding: 12px 16px 0; scrollbar-width: none; }
+    .hs-filter-row::-webkit-scrollbar { display: none; }
+    .hs-filter-btn { background: #0a0a0a; color: #A9ACAF;
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 999px;
+      padding: 8px 14px; min-height: 36px;
+      font-family: 'Barlow Semi Condensed', sans-serif; font-size: 13px;
+      font-weight: 600; letter-spacing: 0.06em; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+      flex-shrink: 0; }
+    .hs-filter-btn:hover { background: rgba(255,255,255,0.06); color: #fff; }
+    .hs-filter-btn.active { background: #fff; color: #000; border-color: #fff; }
+    .hs-filter-btn .hs-dot { width: 7px; height: 7px; border-radius: 999px;
+      display: inline-block; }
+    .hs-filter-btn.active .hs-dot { box-shadow: 0 0 0 2px rgba(0,0,0,0.05); }
+    .hs-filter-btn .hs-count { background: rgba(255,255,255,0.1); color: inherit;
+      font-weight: 600; padding: 1px 7px; border-radius: 999px; font-size: 11px;
+      letter-spacing: 0.02em; min-width: 20px; text-align: center;
+      margin-left: 4px; }
+    .hs-filter-btn.active .hs-count { background: rgba(0,0,0,0.1); }
+    .bg-red-600 { background: #DC2626; }
+    .bg-amber-400 { background: #F5A623; }
+    .bg-blue-400 { background: #60A5FA; }
+
     /* LIST */
     .hs-list { padding: 12px 16px 0; display: flex; flex-direction: column; gap: 10px; }
     .hs-empty { text-align: center; padding: 40px 16px; color: #6a6d70; font-size: 14px; }
@@ -537,6 +564,24 @@
     </button>
   </div>
 
+  <!-- LEAD STATUS FILTER ROW — All / Hot / Warm / New
+       Hidden when the Follow-Ups tab is active because Follow-Ups uses
+       a different sort/filter control (Oldest first / Most recent). -->
+  <div class="hs-filter-row" id="lead-filter-row" role="tablist" aria-label="Filter leads by status">
+    <button type="button" id="filter-all"  class="hs-filter-btn active" onclick="filterLeads('all')">
+      All <span class="hs-count" id="filter-count-all">0</span>
+    </button>
+    <button type="button" id="filter-hot"  class="hs-filter-btn" onclick="filterLeads('hot')">
+      <span class="hs-dot bg-red-600"></span> Hot <span class="hs-count" id="filter-count-hot">0</span>
+    </button>
+    <button type="button" id="filter-warm" class="hs-filter-btn" onclick="filterLeads('warm')">
+      <span class="hs-dot bg-amber-400"></span> Warm <span class="hs-count" id="filter-count-warm">0</span>
+    </button>
+    <button type="button" id="filter-new"  class="hs-filter-btn" onclick="filterLeads('new')">
+      <span class="hs-dot bg-blue-400"></span> New <span class="hs-count" id="filter-count-new">0</span>
+    </button>
+  </div>
+
   <!-- SEARCH -->
   <div class="hs-toolbar">
     <div class="hs-search">
@@ -687,6 +732,10 @@
   const REP = window.__HS_REP__ || {id: 'unknown', displayName: 'Rep', email: '', signature: ''};
   const NJMENU_URL = 'https://highsman.com/njmenu';
   let currentTab = 'leads';
+  // Hot/Warm/New filter — mirrors /sales-floor's currentFilter. Stays
+  // resident across tab switches so toggling Follow-Ups → Leads brings
+  // back whatever bucket Pete was last looking at.
+  let currentLeadFilter = 'all';
   let leads = [];
   let followups = [];
   let activitiesToday = 0;
@@ -762,12 +811,34 @@
     const data = await res.json().catch(() => ({ok: false}));
     if (!data.ok) {
       leads = [];
+      updateLeadFilterCounts();
       toast(data.error || 'Could not load leads', 'error');
       return;
     }
     leads = data.leads || [];
     document.getElementById('stat-leads').textContent = leads.length;
     document.getElementById('tab-leads-count').textContent = leads.length;
+    updateLeadFilterCounts();
+  }
+
+  // Recompute the Hot/Warm/New badge counts on each filter pill. Called on
+  // every fresh load + after any in-place lead mutation (e.g. claim_release)
+  // so the pills always match what's actually in `leads`.
+  function updateLeadFilterCounts() {
+    const counts = {all: leads.length, hot: 0, warm: 0, new: 0};
+    for (const l of leads) {
+      const s = l._status === 'hot' || l._status === 'warm' || l._status === 'new'
+        ? l._status : 'new';
+      counts[s] = (counts[s] || 0) + 1;
+    }
+    const setText = (id, n) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = String(n);
+    };
+    setText('filter-count-all', counts.all);
+    setText('filter-count-hot', counts.hot);
+    setText('filter-count-warm', counts.warm);
+    setText('filter-count-new', counts.new);
   }
 
   async function loadFollowUps() {
@@ -818,7 +889,22 @@
     document.getElementById(`tab-${tab}-btn`).classList.add('active');
     document.querySelectorAll('.hs-tab').forEach(t => t.setAttribute('aria-selected', 'false'));
     document.getElementById(`tab-${tab}-btn`).setAttribute('aria-selected', 'true');
+    // Hot/Warm/New filter row only makes sense on the Leads tab.
+    const filterRow = document.getElementById('lead-filter-row');
+    if (filterRow) filterRow.style.display = tab === 'leads' ? '' : 'none';
     renderCurrent();
+  }
+
+  // Hot/Warm/New filter — same vocabulary as /sales-floor. Called from the
+  // pill onclicks. Active pill swap + re-render. Counts get refreshed on
+  // load, not here, so toggling doesn't recompute the buckets.
+  function filterLeads(status) {
+    currentLeadFilter = status;
+    document.querySelectorAll('#lead-filter-row .hs-filter-btn')
+      .forEach(b => b.classList.remove('active'));
+    const active = document.getElementById(`filter-${status}`);
+    if (active) active.classList.add('active');
+    if (currentTab === 'leads') renderLeads();
   }
 
   function renderCurrent() {
@@ -837,11 +923,22 @@
   function renderLeads() {
     const list = document.getElementById('card-list');
     const q = document.getElementById('search-input').value.trim().toLowerCase();
-    const filtered = leads.filter(l => searchFilter(l, q));
+    // Status filter runs first (cheap rejection), then the search query so
+    // we never search through leads we're going to throw away anyway.
+    const statused = currentLeadFilter === 'all'
+      ? leads
+      : leads.filter(l => (l._status || 'new') === currentLeadFilter);
+    const filtered = statused.filter(l => searchFilter(l, q));
     if (!filtered.length) {
+      const baseCount = statused.length;
+      const emptyMsg = baseCount
+        ? 'No matches for that search.'
+        : (leads.length
+            ? `No ${currentLeadFilter === 'all' ? '' : currentLeadFilter + ' '}leads right now.`
+            : 'No leads yet. Add prospects in Zoho and hit refresh.');
       list.innerHTML = `<div class="hs-empty">
         <i class="fa-solid fa-fire-flame-curved"></i>
-        ${leads.length ? 'No matches for that search.' : 'No leads yet. Add prospects in Zoho and hit refresh.'}
+        ${emptyMsg}
       </div>`;
       return;
     }
