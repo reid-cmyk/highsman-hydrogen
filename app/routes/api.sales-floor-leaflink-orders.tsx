@@ -112,9 +112,9 @@ const POST_420_CUTOFF_MS = new Date(POST_420_CUTOFF_ISO).getTime();
 // handled through the existing manual flow in Zoho — we deliberately do NOT
 // touch any Zoho status when we suppress them; this is purely a UI filter.
 //
-// Set to 2026-04-27 (the day the filter shipped) so the tab populates with
-// brand-new first-time orders going forward.
-const NEW_CUSTOMERS_FLOOR_ISO = '2026-04-27T00:00:00-04:00';
+// Bumped to 2026-04-28 so the tab is empty when Reid trains Sky tomorrow
+// morning; only first-time orders placed Tue Apr 28 onwards populate.
+const NEW_CUSTOMERS_FLOOR_ISO = '2026-04-28T00:00:00-04:00';
 const NEW_CUSTOMERS_FLOOR_MS = new Date(NEW_CUSTOMERS_FLOOR_ISO).getTime();
 
 // ─── Zoho OAuth (shared cache; null on missing creds / refresh failure) ─────

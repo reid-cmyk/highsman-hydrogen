@@ -620,7 +620,9 @@ function combinedNewCustomers() {
   // tab. The legacy Zoho flow still works on those accounts — we don't
   // change Zoho status; this is purely a UI suppression so the tab
   // starts empty going into Vibes go-live.
-  const NEW_CUSTOMERS_FLOOR_MS = new Date('2026-04-27T00:00:00-04:00').getTime();
+  // Bumped to 2026-04-28 so the tab is empty for Sky's training session
+  // tomorrow morning; first-time orders from Tue Apr 28 onwards populate.
+  const NEW_CUSTOMERS_FLOOR_MS = new Date('2026-04-28T00:00:00-04:00').getTime();
   const zohoOnly = [];
   for (const a of accounts) {
     if (!a || !a.id) continue;
