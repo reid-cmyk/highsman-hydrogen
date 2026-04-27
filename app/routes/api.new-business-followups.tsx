@@ -44,6 +44,7 @@ async function fetchTaggedAccounts(accessToken: string): Promise<any[]> {
     'Industry',
     'Description',
     'Last_Activity_Time',
+    'Last_Order_Date',
     'Modified_Time',
     'Tag',
   ].join(',');
@@ -130,7 +131,50 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   }
 
   try {
-    const raw = await fetchTaggedAccounts(token);
+    const rawAll = await fetchTaggedAccounts(token);
+
+    // Auto-clear: any account whose Last_Order_Date is within the last
+    // AUTO_CLEAR_WINDOW_DAYS = 14 days has just reordered, so Pete's chase
+    // is done — drop the pete-followup tag and exclude from his queue.
+    // Fire-and-forget the un-tag calls so Pete's dashboard load isn't
+    // gated on the network round-trip; the row is filtered out either way.
+    const AUTO_CLEAR_WINDOW_DAYS = 14;
+    const cutoffMs = Date.now() - AUTO_CLEAR_WINDOW_DAYS * 86400 * 1000;
+    const reordered: string[] = [];
+    const raw = rawAll.filter((a: any) => {
+      const lastOrder = a?.Last_Order_Date;
+      if (!lastOrder) return true;
+      // Last_Order_Date is a date-only string (YYYY-MM-DD). Compare at
+      // midnight UTC for a clean rolling window.
+      const t = new Date(`${lastOrder}T00:00:00Z`).getTime();
+      if (Number.isNaN(t)) return true;
+      if (t >= cutoffMs) {
+        reordered.push(a.id);
+        return false; // drop from Pete's queue
+      }
+      return true;
+    });
+    if (reordered.length > 0) {
+      // Fire-and-forget tag removal so Zoho stops returning these rows on
+      // future pulls. We don't block the response on this — Pete's
+      // dashboard already filtered them out client-visible.
+      Promise.all(
+        reordered.map((id) =>
+          fetch(
+            `https://www.zohoapis.com/crm/v7/Accounts/${encodeURIComponent(id)}/actions/remove_tags`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Zoho-oauthtoken ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({tags: [{name: FOLLOWUP_TAG}]}),
+            },
+          ).catch(() => {}),
+        ),
+      ).catch(() => {});
+    }
+
     const accountIds = raw.map((a: any) => a.id).filter(Boolean);
     const buyersById = accountIds.length ? await fetchBuyers(token, accountIds) : new Map();
 

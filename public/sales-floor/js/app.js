@@ -1726,18 +1726,30 @@ function accountToCardHtml(a, idx, opts) {
         </div>`;
     }
 
-    // "Flag for Pete" toggle. When the account is already flagged, render an
-    // active pill so Sky sees at a glance that Pete is already on it; clicking
-    // removes the tag. When not flagged, clicking hands the account off to
-    // Pete's /new-business Follow-Ups queue via the Zoho Tag.
+    // "Flag for Pete" — once Sky flags an account, the pill LOCKS. Only
+    // Pete can clear it from his /new-business dashboard ('Send Back to
+    // Sky' on the Follow-Up card). This prevents Sky from accidentally
+    // re-claiming work that Pete is already chasing, and gives Pete a
+    // clean inbox he owns until he hands it back. Reorders also auto-
+    // clear the flag (handled server-side in api.new-business-followups).
     const flagged = !!a._flaggedForPete;
-    const flagPill = `
-      <button class="hs-action-pill is-flag-pete${flagged ? ' is-active' : ''}"
-              onclick="event.stopPropagation(); toggleFlagForPete(${idx})"
-              title="${flagged ? 'On Pete\\u2019s follow-up queue — click to remove' : 'Hand this account to Pete for follow-up'}">
-        <i class="fa-solid fa-flag"></i>
-        <span>${flagged ? 'On Pete' : 'Flag Pete'}</span>
-      </button>`;
+    let flagPill = '';
+    if (flagged) {
+      flagPill = `
+        <button class="hs-action-pill is-flag-pete is-active is-booked" disabled
+                title="Pete owns this account now. He'll send it back when handled.">
+          <i class="fa-solid fa-flag"></i>
+          <span>On Pete</span>
+        </button>`;
+    } else {
+      flagPill = `
+        <button class="hs-action-pill is-flag-pete"
+                onclick="event.stopPropagation(); flagForPete(${idx})"
+                title="Hand this account to Pete for follow-up. Sky cannot un-flag — Pete clears it from his dashboard.">
+          <i class="fa-solid fa-flag"></i>
+          <span>Flag Pete</span>
+        </button>`;
+    }
 
     // Budtender Training (Vibes Tier 2). NJ-only because Vibes coverage is
     // NJ-only in v1 — any other state's button renders disabled with a
@@ -1883,15 +1895,14 @@ function searchAccounts() { renderAccounts(); }
 // Pete's /new-business Follow-Ups queue. Single source of truth is the Zoho
 // `pete-followup` Tag — the client toggle is optimistic so Sky doesn't wait
 // on the round trip, but the UI reverts + toasts an error on failure.
-async function toggleFlagForPete(idx) {
+async function flagForPete(idx) {
   const a = accounts[idx];
   if (!a || !a.id) return;
-  const wasFlagged = !!a._flaggedForPete;
-  const nextAction = wasFlagged ? 'unflag' : 'flag';
+  if (a._flaggedForPete) return; // Already on Pete — locked, can't unflag.
 
-  // Optimistic flip. Sky sees the pill change state the instant she clicks;
+  // Optimistic flip. Sky sees the pill lock the instant she clicks;
   // if the API fails we roll it back and surface a toast.
-  a._flaggedForPete = !wasFlagged;
+  a._flaggedForPete = true;
   renderAccounts();
 
   try {
@@ -1899,25 +1910,22 @@ async function toggleFlagForPete(idx) {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       credentials: 'same-origin',
-      body: JSON.stringify({accountId: a.id, action: nextAction}),
+      body: JSON.stringify({accountId: a.id, action: 'flag'}),
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok || !body.ok) {
       throw new Error(body?.error || `HTTP ${res.status}`);
     }
-    toast(
-      wasFlagged
-        ? `${a.Account_Name || 'Account'} removed from Pete\u2019s queue`
-        : `${a.Account_Name || 'Account'} flagged for Pete`,
-      'success',
-    );
+    toast(`${a.Account_Name || 'Account'} flagged for Pete`, 'success');
   } catch (err) {
-    // Roll back the optimistic flip and tell Sky what happened so she can retry.
-    a._flaggedForPete = wasFlagged;
+    a._flaggedForPete = false;
     renderAccounts();
     toast(`Flag failed: ${err?.message || 'unknown error'}`, 'error');
   }
 }
+// Legacy alias — older inline onclick handlers may still call toggleFlagForPete.
+// New code should call flagForPete(); both behave identically (one-way add).
+async function toggleFlagForPete(idx) { return flagForPete(idx); }
 
 // ─── State Filter Tabs (Leads + Accounts) ────────────────────────────────────
 // Reps want a one-click way to scope their list to a specific state market

@@ -900,8 +900,8 @@
           <button class="btn-action newproduct" onclick='markNewProductOnboarding(${JSON.stringify(a.id)}, ${JSON.stringify(a.Account_Name || name)})' title="Book Serena for a new-product walkthrough">
             <i class="fa-solid fa-box-open"></i> New Product
           </button>` : ''}
-          <button class="btn-action danger" onclick='handleUnflag(${JSON.stringify(a.id)}, ${JSON.stringify(name)})' title="Remove from Follow-Ups">
-            <i class="fa-solid fa-check"></i> Handled
+          <button class="btn-action danger" onclick='handleUnflag(${JSON.stringify(a.id)}, ${JSON.stringify(name)})' title="Send this account back to Sky's Sales-Floor queue">
+            <i class="fa-solid fa-arrow-rotate-left"></i> Send Back to Sky
           </button>
         </div>
       </article>`;
@@ -1333,7 +1333,7 @@
   // Follow-Up "Handled" → unflag
   // ──────────────────────────────────────────────────────────────────────
   async function handleUnflag(id, name) {
-    if (!confirm(`Mark "${name}" as handled and remove from Follow-Ups?`)) return;
+    if (!confirm(`Send "${name}" back to Sky's Sales-Floor queue?`)) return;
     const res = await fetch('/api/new-business-flag-followup', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -1342,7 +1342,7 @@
     });
     const data = await res.json().catch(() => ({ok: false}));
     if (!data.ok) return toast(data.error || 'Could not update', 'error');
-    toast('Marked as handled');
+    toast('Sent back to Sky');
     followups = followups.filter(a => a.id !== id);
     document.getElementById('stat-followups').textContent = followups.length;
     document.getElementById('tab-followups-count').textContent = followups.length;

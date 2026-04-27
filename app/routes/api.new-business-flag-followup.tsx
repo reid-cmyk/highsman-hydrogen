@@ -44,6 +44,20 @@ export async function action({request, context}: ActionFunctionArgs) {
   if (act !== 'flag' && act !== 'unflag') {
     return json({ok: false, error: "action must be 'flag' or 'unflag'"}, {status: 400});
   }
+  // Authorization: Sky can flag accounts for Pete, but only Pete (or another
+  // non-Sky rep — e.g. Reid for ops cleanup) can unflag. This enforces the
+  // 'one-way handoff' rule on the server even if a stale Sales-floor client
+  // tries to send action: 'unflag' from Sky's session.
+  if (act === 'unflag' && rep.id === 'sky') {
+    return json(
+      {
+        ok: false,
+        error:
+          "Sky cannot un-flag. Only Pete can clear an account from his Follow-Ups (or an order auto-clears it).",
+      },
+      {status: 403},
+    );
+  }
 
   let token: string;
   try {
