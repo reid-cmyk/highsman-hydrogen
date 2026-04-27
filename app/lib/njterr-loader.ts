@@ -61,21 +61,27 @@ async function fetchTerritoryEvents(
   endIso: string,
   territoryTag: '[NJ-N]' | '[NJ-S]',
 ): Promise<DashEvent[]> {
-  const criteria = `(Start_DateTime:between:${startIso},${endIso})`;
-  const url =
-    `https://www.zohoapis.com/crm/v7/Events/search?criteria=${encodeURIComponent(
-      criteria,
-    )}` +
-    `&fields=id,Event_Title,Start_DateTime,End_DateTime,What_Id` +
-    `&per_page=200&sort_by=Start_DateTime&sort_order=asc`;
+  // COQL hits the live database — no search-index delay (search API can take
+  // 1-2 minutes to index new events). Per memory:reference_zoho_coql_binary_ops,
+  // every and/or in COQL must be a 2-operand tree; the date-range AND below
+  // is exactly one binary op so we're safe.
+  const select_query =
+    `select id, Event_Title, Start_DateTime, End_DateTime, What_Id from Events ` +
+    `where (Start_DateTime >= '${startIso}' and Start_DateTime <= '${endIso}') ` +
+    `order by Start_DateTime asc limit 200`;
 
-  const res = await fetch(url, {
-    headers: {Authorization: `Zoho-oauthtoken ${accessToken}`},
+  const res = await fetch('https://www.zohoapis.com/crm/v7/coql', {
+    method: 'POST',
+    headers: {
+      Authorization: `Zoho-oauthtoken ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({select_query}),
   });
   if (res.status === 204) return [];
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    throw new Error(`Zoho Events search failed (${res.status}): ${text.slice(0, 200)}`);
+    throw new Error(`Zoho Events COQL failed (${res.status}): ${text.slice(0, 200)}`);
   }
   const data = await res.json();
   const rows: any[] = data.data || [];
