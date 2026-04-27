@@ -497,6 +497,11 @@ async function loadLeaflinkOrders({force = false} = {}) {
     renderOrders();
     renderNewCustStateTabs();
     renderNewCustomers();
+    // Repaint the Accounts tab so the just-loaded lastOrderByAccount map
+    // hydrates the 'Last order' pill on every card. Without this the
+    // pill never appears because renderAccounts() ran during renderAll()
+    // BEFORE the LeafLink fetch landed.
+    if (typeof renderAccounts === 'function') renderAccounts();
     renderDashboard();
     updateStats();
   }
