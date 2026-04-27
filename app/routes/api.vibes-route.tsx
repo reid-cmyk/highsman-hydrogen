@@ -48,6 +48,11 @@ const NEEDS_ONBOARDING_PIPELINE = '6699615000010154308';
 const SALES_FLOOR_SIGNATURE = 'Auto-created from /sales-floor';
 const TIER_MARKER_ONBOARDING = '[TIER:ONBOARDING]';
 const TIER_MARKER_TRAINING = '[TIER:TRAINING]';
+// Sub-marker on Tier 1 deals from the New Product Onboarding flow. Same
+// 60-min Tier 1 routing as a first-customer onboarding; the marker just
+// lets the UI label the stop "Product Onboarding" instead of "Onboarding"
+// so Serena knows what she's walking into.
+const KIND_MARKER_PRODUCT = '[KIND:PRODUCT]';
 const CHECKIN_CADENCE_DAYS = 30;
 
 // RouteStop shape the /vibes index already consumes. Kept 1:1.
@@ -57,6 +62,9 @@ const CHECKIN_CADENCE_DAYS = 30;
 //   leadId          : never used in the new model (was Tier 2 Sampling Leads);
 //                     left null so the client's Lead-stop branch falls through
 type StopType = 'FRESH' | 'TARGET' | 'ROTATION';
+// Distinguishes a first-customer onboarding from a New Product Onboarding
+// on an existing account — same Tier 1 routing, different label.
+type StopKind = 'first_visit' | 'product';
 type RouteStop = {
   tier: StopType;
   accountId: string;
@@ -72,6 +80,10 @@ type RouteStop = {
   meta?: Record<string, any>;
   region?: NjRegion;
   infrequentDropIn?: boolean;
+  // FRESH stops only — what triggered the onboarding visit
+  kind?: StopKind;
+  // FRESH-product only — the SKU Sky tagged on the booking, when present
+  productName?: string | null;
 };
 
 // Normalize a raw Zoho state value to a 2-letter code. Tolerates "NJ",
@@ -295,6 +307,17 @@ export async function loader({request, context}: LoaderFunctionArgs) {
           )
         : null;
       const geo = njRegion(acct.Billing_City, acct.Billing_Code);
+      // Detect the [KIND:PRODUCT] sub-marker so the UI can label this stop
+      // "Product Onboarding" — only meaningful on FRESH (Tier 1) stops.
+      const desc = typeof d?.Description === 'string' ? d.Description : '';
+      const isProductKind =
+        tier === 'FRESH' && desc.includes(KIND_MARKER_PRODUCT);
+      // Pull the tagged SKU name out of the description if Sky entered one
+      // when booking. Format the endpoint writes is "New product: <name>".
+      const productMatch = isProductKind
+        ? desc.match(/New product:\s*([^\n\r]+)/i)
+        : null;
+      const productName = productMatch ? productMatch[1].trim() : null;
       return {
         tier,
         accountId: acct.id,
@@ -308,6 +331,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         daysSinceClosed,
         region: geo.region,
         infrequentDropIn: geo.infrequentDropIn,
+        kind: tier === 'FRESH' ? (isProductKind ? 'product' : 'first_visit') : undefined,
+        productName: isProductKind ? productName : null,
       };
     }
 

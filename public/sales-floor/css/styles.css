@@ -2476,6 +2476,26 @@ a.hs-contact-meta-cell:hover i{ color:var(--gold); }
 }
 .hs-action-pill.is-training.is-booked i{ color:#8B5CF6; }
 
+/* ── New Product Onboarding (Vibes Tier 1, existing accounts) ──
+   Uses Highsman gold (#D4AF37) so it visually echoes the New Customers
+   "Brand Team Onboarding" CTA. Booked state mirrors the Training pill
+   styling — same row, same family of pills. */
+.hs-action-pill.is-product-onboard{
+  border-left:2px solid #D4AF37;
+}
+.hs-action-pill.is-product-onboard i{ color:#D4AF37; }
+.hs-action-pill.is-product-onboard:hover:not(.is-disabled):not(.is-booked){
+  background:rgba(212,175,55,0.12);
+  border-color:rgba(212,175,55,0.45);
+}
+.hs-action-pill.is-product-onboard.is-booked{
+  background:rgba(212,175,55,0.18);
+  border-color:rgba(212,175,55,0.55);
+  color:#D4AF37;
+  cursor:default;
+}
+.hs-action-pill.is-product-onboard.is-booked i{ color:#D4AF37; }
+
 /* ── Responsive: tighten pills on narrow phones ── */
 @media (max-width: 480px){
   .hs-contact-card{ padding:14px; }

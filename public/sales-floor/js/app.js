@@ -1278,6 +1278,88 @@ async function markZohoTraining(zohoAccountId, customerName, idx, opts) {
   }
 }
 
+// New Product Onboarding (Vibes Tier 1, existing accounts). Mirrors
+// markZohoTraining but hits /api/sales-floor-vibes-product-onboard. Sky
+// can optionally tag which SKU triggered the visit via a quick prompt;
+// blank is fine — Serena reads the deal description either way.
+async function markNewProductOnboarding(zohoAccountId, customerName, idx) {
+  // Optional product name. Empty string is a normal answer — we ship the
+  // deal regardless. Cancel aborts the booking entirely.
+  const productNameRaw = prompt(
+    `${customerName} — which new product is Serena walking through? (optional)`,
+    '',
+  );
+  if (productNameRaw === null) return; // user hit cancel
+  const productName = productNameRaw.trim();
+
+  // Lock all matching New Product Onboarding buttons across the UI.
+  const buttons = document.querySelectorAll(
+    `[data-product-onboard-acct="${zohoAccountId}"]`,
+  );
+  for (const b of buttons) {
+    if (b.tagName === 'BUTTON') {
+      b.disabled = true;
+      b.classList.add('is-disabled');
+    }
+  }
+
+  try {
+    const res = await fetch('/api/sales-floor-vibes-product-onboard', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({zohoAccountId, customerName, productName}),
+    });
+    const data = await res.json().catch(() => ({}));
+    // Outlier rejection — same pattern as the regular onboarding flow.
+    if (!res.ok && data?.isOutlier) {
+      for (const b of buttons) {
+        if (b.tagName === 'BUTTON') {
+          b.disabled = false;
+          b.classList.remove('is-disabled');
+        }
+      }
+      toast(
+        data.error ||
+          `${customerName} is a Shore/LBI/Cape May drop-in. Book Manually Through Serena.`,
+        'error',
+        9000,
+      );
+      return;
+    }
+    if (!res.ok || !data?.ok) {
+      throw new Error(data?.error || `New Product Onboarding failed (${res.status})`);
+    }
+
+    // Stamp _productOnboardBooked + _productOnboardDate so the pill flips
+    // to "Booked" immediately. Server will re-stamp on the next sync from
+    // the signed deal, so the state survives a refresh.
+    const acct = accounts.find((a) => a && a.id === zohoAccountId);
+    if (acct) {
+      acct._productOnboardBooked = true;
+      acct._productOnboardDealId = data.dealId || null;
+      acct._productOnboardDate = data.predictedDay || null;
+    }
+    renderAccounts();
+    renderDashboard();
+    updateStats();
+    toast(
+      data.message ||
+        (data.alreadyBooked
+          ? `Product Onboarding already on Sky's board for ${customerName}.`
+          : `New Product Onboarding booked for ${customerName}.`),
+    );
+  } catch (err) {
+    for (const b of buttons) {
+      if (b.tagName === 'BUTTON') {
+        b.disabled = false;
+        b.classList.remove('is-disabled');
+      }
+    }
+    toast(err.message || 'New Product Onboarding failed', 'error');
+  }
+}
+
 async function logCheckin(zohoAccountId, customerName, idx) {
   const card = newCustomers.find((c) => c.zohoAccountId === zohoAccountId);
   if (!card) return;
@@ -1510,6 +1592,46 @@ function renderAccounts() {
         </button>`;
     }
 
+    // New Product Onboarding (Vibes Tier 1, existing accounts). Same
+    // 60-min Tier 1 routing as a first-customer onboarding, but the trigger
+    // is "this shop just brought in a new SKU and Serena should go walk
+    // them through it." NJ-only, mirrors training's gating logic.
+    //
+    // When a product-onboarding deal already exists for this account the
+    // button flips to a "Product Onboarding Booked" pill so Sky can't
+    // double-book. A regular first-visit onboarding does NOT block this —
+    // they're different intents and a shop can have both.
+    const productOnboardBooked = !!a._productOnboardBooked;
+    const productOnboardDateLabel = a._productOnboardDate
+      ? formatDate(a._productOnboardDate)
+      : '';
+    let productOnboardPill = '';
+    if (productOnboardBooked) {
+      productOnboardPill = `
+        <button class="hs-action-pill is-product-onboard is-booked" disabled
+                title="New Product Onboarding booked${productOnboardDateLabel ? ` — target ${productOnboardDateLabel}` : ''}">
+          <i class="fa-solid fa-box-open"></i>
+          <span>New Product ${productOnboardDateLabel ? `· ${productOnboardDateLabel}` : 'Booked'}</span>
+        </button>`;
+    } else if (njAccount) {
+      const safeName = escapeAttr(JSON.stringify(a.Account_Name || ''));
+      productOnboardPill = `
+        <button class="hs-action-pill is-product-onboard"
+                data-product-onboard-acct="${escapeAttr(a.id || '')}"
+                onclick="event.stopPropagation(); markNewProductOnboarding('${escapeAttr(a.id || '')}', ${safeName}, ${idx})"
+                title="Book Serena for a new-product walkthrough">
+          <i class="fa-solid fa-box-open"></i>
+          <span>New Product Onboarding</span>
+        </button>`;
+    } else {
+      productOnboardPill = `
+        <button class="hs-action-pill is-product-onboard is-disabled" disabled
+                title="Vibes is NJ-only for v1">
+          <i class="fa-solid fa-box-open"></i>
+          <span>New Product Onboarding</span>
+        </button>`;
+    }
+
     return contactCardHtml({
       idx,
       kind: 'account',
@@ -1523,10 +1645,13 @@ function renderAccounts() {
       briefHandler: `openBriefForAccount(${idx})`,
       extraRow,
       headerExtra,
-      // Training + Flag Pete both live in the single extraAction slot;
-      // concatenating keeps the layout tight (one flex row) without having
-      // to open a new prop on contactCardHtml just for a second pill.
-      extraAction: `${trainingPill}${flagPill}`,
+      // Training + New Product Onboarding + Flag Pete all live in the
+      // single extraAction slot; concatenating keeps the layout tight
+      // (one flex row) without having to open a new prop on
+      // contactCardHtml. Order matches mental priority: training is the
+      // most-clicked action, product-onboarding is the new-SKU re-engage,
+      // flag-Pete is the rare hand-off.
+      extraAction: `${trainingPill}${productOnboardPill}${flagPill}`,
       // For accounts the inline add writes to the BUYER contact, not the
       // account itself (account-level Phone/Email are noisy switchboard
       // lines). No buyer = no inline add — the rep uses the buyer picker

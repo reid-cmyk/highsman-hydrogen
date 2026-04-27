@@ -349,12 +349,20 @@ const NEEDS_ONBOARDING_PIPELINE = '6699615000010154308';
 const SALES_FLOOR_SIGNATURE = 'Auto-created from /sales-floor';
 const TIER_MARKER_ONBOARDING = '[TIER:ONBOARDING]';
 const TIER_MARKER_TRAINING = '[TIER:TRAINING]';
+// Sub-marker on Tier 1 deals that came from the New Product Onboarding
+// button (existing accounts, new SKU walkthrough). When present, the deal
+// is bucketed separately from a first-customer onboarding so the card can
+// show a distinct "Product Onboarding Booked" pill without flipping the
+// generic Brand Team Onboarding state.
+const KIND_MARKER_PRODUCT = '[KIND:PRODUCT]';
 
 type VibesBookedEntry = {
   dealId: string;
-  tier: 'onboarding' | 'training';
-  // Onboarding → 12-day check-in date. Training → target visit date.
-  // Both surface as c._checkInDueDate / c._trainingDate on cards.
+  tier: 'onboarding' | 'training' | 'product_onboarding';
+  // Onboarding → 12-day check-in date.
+  // Training → target visit date.
+  // Product onboarding → predicted Closing_Date.
+  // All three surface as their own _*Date on cards.
   dateLabel: string | null;
 };
 
@@ -363,6 +371,7 @@ async function fetchSalesFloorVibesDeals(
 ): Promise<{
   onboarding: Map<string, VibesBookedEntry>;
   training: Map<string, VibesBookedEntry>;
+  productOnboarding: Map<string, VibesBookedEntry>;
 }> {
   // One search call, signature-filtered in memory. Deals/search supports the
   // Pipeline criteria directly; we can't filter on Description text in the
@@ -382,7 +391,8 @@ async function fetchSalesFloorVibesDeals(
   });
   const onboarding = new Map<string, VibesBookedEntry>();
   const training = new Map<string, VibesBookedEntry>();
-  if (!res.ok) return {onboarding, training};
+  const productOnboarding = new Map<string, VibesBookedEntry>();
+  if (!res.ok) return {onboarding, training, productOnboarding};
   const data: any = await res.json().catch(() => ({}));
   const rows: any[] = Array.isArray(data?.data) ? data.data : [];
   for (const row of rows) {
@@ -391,13 +401,24 @@ async function fetchSalesFloorVibesDeals(
     const acctId = row?.Account_Name?.id ? String(row.Account_Name.id) : '';
     if (!acctId) continue;
     const dealId = String(row.id || '');
-    // Onboarding deals: parse the 12-day check-in date.
-    // Training deals: parse the target visit date.
-    // Legacy deals (pre-v2) have no tier marker — bucket them as onboarding
-    // because every pre-v2 signed deal came from the original onboarding
-    // button. Falls under the "when in doubt, keep the behavior that was
-    // shipping before" rule.
-    if (desc.includes(TIER_MARKER_TRAINING)) {
+    // Bucketing order: PRODUCT first (Tier 1 + KIND:PRODUCT), then TRAINING
+    // (Tier 2), then default ONBOARDING. Product onboarding is checked
+    // first because a [KIND:PRODUCT] deal also carries [TIER:ONBOARDING],
+    // and we don't want it falling into the generic onboarding bucket and
+    // flipping the Brand Team Onboarding pill on a card that's actually
+    // booked for a new-SKU walkthrough.
+    if (desc.includes(KIND_MARKER_PRODUCT)) {
+      // Product onboarding — closing date is the predicted ramp-week date
+      // or 7 days out, whichever is later. Surface as the booked label.
+      const dateLabel = row?.Closing_Date || null;
+      if (!productOnboarding.has(acctId)) {
+        productOnboarding.set(acctId, {
+          dealId,
+          tier: 'product_onboarding',
+          dateLabel,
+        });
+      }
+    } else if (desc.includes(TIER_MARKER_TRAINING)) {
       const match = desc.match(/Target visit:\s*on or before\s*(\d{4}-\d{2}-\d{2})/i);
       const dateLabel = match ? match[1] : row?.Closing_Date || null;
       if (!training.has(acctId)) {
@@ -405,6 +426,10 @@ async function fetchSalesFloorVibesDeals(
       }
     } else {
       // Onboarding (explicit [TIER:ONBOARDING] or legacy unmarked deal).
+      // Legacy deals (pre-v2) have no tier marker — bucket them as
+      // onboarding because every pre-v2 signed deal came from the original
+      // onboarding button. Falls under the "when in doubt, keep the
+      // behavior that was shipping before" rule.
       const match = desc.match(/12-day check-in due:\s*(\d{4}-\d{2}-\d{2})/);
       const dateLabel = match ? match[1] : null;
       if (!onboarding.has(acctId)) {
@@ -412,7 +437,7 @@ async function fetchSalesFloorVibesDeals(
       }
     }
   }
-  return {onboarding, training};
+  return {onboarding, training, productOnboarding};
 }
 
 function attachVibesBookedStatus(
@@ -420,11 +445,13 @@ function attachVibesBookedStatus(
   booked: {
     onboarding: Map<string, VibesBookedEntry>;
     training: Map<string, VibesBookedEntry>;
+    productOnboarding: Map<string, VibesBookedEntry>;
   },
 ) {
   for (const a of accounts) {
     const onb = booked.onboarding.get(a.id);
     const trn = booked.training.get(a.id);
+    const prod = booked.productOnboarding.get(a.id);
     if (onb) {
       // Legacy flag the client already reads — keep for backward compat
       // (markZohoReadyToBrandTeam sets this same flag optimistically).
@@ -437,6 +464,14 @@ function attachVibesBookedStatus(
       a._trainingBooked = true;
       a._trainingDealId = trn.dealId;
       a._trainingDate = trn.dateLabel;
+    }
+    if (prod) {
+      // markNewProductOnboarding sets these flags optimistically; this
+      // attaches the authoritative state from a signed deal so the booked
+      // pill survives a refresh.
+      a._productOnboardBooked = true;
+      a._productOnboardDealId = prod.dealId;
+      a._productOnboardDate = prod.dateLabel;
     }
   }
   return accounts;

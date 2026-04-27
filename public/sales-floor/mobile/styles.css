@@ -1625,6 +1625,16 @@ a.hs-contact-meta-cell:active {
   color: #c4b5fd;
 }
 
+.hs-action-pill.is-product-onboard {
+  border-top: 2px solid #D4AF37;
+}
+.hs-action-pill.is-product-onboard i { color: #fbbf24; }
+.hs-action-pill.is-product-onboard.is-booked {
+  background: rgba(212, 175, 55, 0.16);
+  border-color: rgba(212, 175, 55, 0.45);
+  color: #fbbf24;
+}
+
 .hs-action-pill.is-flag-pete {
   border-top: 2px solid #F59E0B;
 }
