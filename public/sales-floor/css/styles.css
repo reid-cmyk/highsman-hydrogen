@@ -3919,3 +3919,30 @@ details[open] > summary .brief-history-chev{
   font-weight:500;
 }
 .hs-account-lastorder-pill i{ font-size:11px; color:#22C55E; }
+
+/* ─── Sort toggle button (Accounts + Orders Due) ──────────────────────────── */
+.hs-sort-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 10px;
+  border-radius:6px;
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.10);
+  color:#E5E7EB;
+  font-size:12px;
+  font-weight:500;
+  cursor:pointer;
+  white-space:nowrap;
+  transition:background-color 0.15s;
+}
+.hs-sort-btn:hover{ background:rgba(255,255,255,0.10); }
+.hs-sort-btn i{ font-size:11px; opacity:0.8; }
+.hs-orders-toolbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-bottom:8px;
+}

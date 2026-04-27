@@ -12,6 +12,12 @@ let currentFilter = 'all';
 let currentLeadState = 'all';
 let currentAccountState = 'all';
 let currentOrdersState = 'all'; // Orders Due tab filter — 'all' or 2-letter code
+// Sort direction by Last Order Date — 'desc' = newest first, 'asc' = oldest first.
+// Different defaults per tab match how reps actually use them: Orders Due
+// leads with the most-overdue shop (oldest first), Accounts leads with the
+// most-recent activity (newest first).
+let accountSortDir = 'desc';
+let ordersSortDir = 'asc';
 // New Customers state filter. Same tab strip pattern as Leads/Accounts — 'all'
 // by default, NJ/NY/RI/MO narrows the list. MA is intentionally excluded per
 // Reid (no MA new-customer tracking). NJ cards come from LeafLink with the
@@ -620,6 +626,38 @@ function filterOrdersByState(code) {
   renderOrders();
 }
 
+// Sort toggles. Each flips the per-tab direction and re-renders. Label on
+// the button reflects the next click's effect — "Oldest first" means
+// clicking will switch TO oldest-first; once active the label flips to
+// "Newest first" so the rep always sees the next state.
+function toggleAccountSort() {
+  accountSortDir = accountSortDir === 'desc' ? 'asc' : 'desc';
+  const lbl = document.getElementById('account-sort-label');
+  if (lbl) lbl.textContent = accountSortDir === 'desc' ? 'Newest first' : 'Oldest first';
+  renderAccounts();
+}
+function toggleOrdersSort() {
+  ordersSortDir = ordersSortDir === 'asc' ? 'desc' : 'asc';
+  const lbl = document.getElementById('orders-sort-label');
+  if (lbl) lbl.textContent = ordersSortDir === 'asc' ? 'Oldest first' : 'Newest first';
+  renderOrders();
+}
+
+// Comparator factory: sorts by Last Order Date in the requested direction.
+// `getDate` extracts a YYYY-MM-DD string (or empty) from each row. Empty /
+// missing dates always sort to the bottom regardless of direction so a
+// rep doesn't see a no-history shop pinned above active ones.
+function lastOrderComparator(dir, getDate) {
+  return (a, b) => {
+    const ad = getDate(a) || '';
+    const bd = getDate(b) || '';
+    if (!ad && !bd) return 0;
+    if (!ad) return 1;
+    if (!bd) return -1;
+    return dir === 'asc' ? ad.localeCompare(bd) : bd.localeCompare(ad);
+  };
+}
+
 function renderOrders() {
   const list = document.getElementById('reorder-due-list');
   const meta = document.getElementById('reorder-due-meta');
@@ -629,9 +667,15 @@ function renderOrders() {
   // State filter narrows the rendered list AFTER the count is computed so
   // the meta pill always shows the total count for the active scope.
   const all = deriveOrdersDue();
-  const sorted = currentOrdersState === 'all'
+  const filtered = currentOrdersState === 'all'
     ? all
     : all.filter((r) => r.stateCode === currentOrdersState);
+  const sorted = [...filtered];
+
+  // Sort direction follows the toggle. Default 'asc' = oldest first =
+  // most overdue first (the natural use case). Reps can flip to newest if
+  // they want to see the just-fell-into-due cohort.
+  sorted.sort(lastOrderComparator(ordersSortDir, (r) => r.lastOrderDate));
 
   if (meta) {
     const scope = currentOrdersState === 'all' ? '' : ` in ${currentOrdersState}`;
@@ -1722,6 +1766,14 @@ function renderAccounts() {
     (a.Account_Name || '').toLowerCase().includes(q) ||
     (a.Industry || '').toLowerCase().includes(q)
   );
+  // Sort by Last Order Date (Inventory date wins, CRM Last_Order_Date falls
+  // back). Direction follows the Sort toggle. Stable: empty dates pinned to
+  // bottom so brand-new no-history shops never push above active ones.
+  list = [...list].sort(lastOrderComparator(accountSortDir, (a) => {
+    const nameKey = String(a.Account_Name || '').trim().toUpperCase();
+    const inv = nameKey ? (lastOrderByName && lastOrderByName[nameKey]) : null;
+    return (inv && inv.date) || a.Last_Order_Date || '';
+  }));
   document.getElementById('account-count').textContent = `${list.length} account${list.length !== 1 ? 's' : ''}`;
   const el = document.getElementById('account-list');
   if (list.length === 0) {

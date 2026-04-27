@@ -154,6 +154,14 @@
     .btn-action.newproduct i { color: #D4AF37; }
     /* Last-order pill — surfaces most recent Highsman order date + dollar
        amount inline on every Follow-Up card. Matches Sales-floor styling. */
+    .hs-sort-btn-nb { display: inline-flex; align-items: center; gap: 6px;
+                       padding: 6px 10px; border-radius: 8px;
+                       background: rgba(255,255,255,0.04);
+                       border: 1px solid rgba(255,255,255,0.10);
+                       color: #E5E7EB; font-size: 12px; font-weight: 500;
+                       cursor: pointer; white-space: nowrap; }
+    .hs-sort-btn-nb:hover { background: rgba(255,255,255,0.10); }
+    .hs-sort-btn-nb i { font-size: 11px; opacity: 0.8; }
     .lastorder-pill { display: inline-flex; align-items: center; gap: 6px;
                       padding: 4px 10px; border-radius: 999px; margin: 6px 0 4px;
                       background: rgba(34,197,94,0.10);
@@ -499,6 +507,10 @@
       <option value="NJ" selected>NJ only</option>
       <option value="ALL">All states</option>
     </select>
+    <button type="button" id="followups-sort-btn" class="hs-filter hs-sort-btn-nb" onclick="toggleFollowupsSort()" title="Sort by Last Order Date">
+      <i class="fa-solid fa-arrow-down-wide-short"></i>
+      <span id="followups-sort-label">Oldest first</span>
+    </button>
   </div>
 
   <!-- LIST -->
@@ -796,10 +808,37 @@
     list.innerHTML = filtered.map(l => leadCard(l)).join('');
   }
 
+  // Sort direction by Last Order Date — 'asc' = oldest first (default for
+  // Pete: chase oldest reorders first), 'desc' = newest first.
+  let followupsSortDir = 'asc';
+  function toggleFollowupsSort() {
+    followupsSortDir = followupsSortDir === 'asc' ? 'desc' : 'asc';
+    const lbl = document.getElementById('followups-sort-label');
+    if (lbl) lbl.textContent = followupsSortDir === 'asc' ? 'Oldest first' : 'Newest first';
+    renderFollowUps();
+  }
+  window.toggleFollowupsSort = toggleFollowupsSort;
+  function followupLastDate(a) {
+    const map = window._lastOrderByName || {};
+    const nameKey = String(a.Account_Name || '').trim().toUpperCase();
+    const inv = nameKey ? map[nameKey] : null;
+    return (inv && inv.date) || a.Last_Order_Date || '';
+  }
+
   function renderFollowUps() {
     const list = document.getElementById('card-list');
     const q = document.getElementById('search-input').value.trim().toLowerCase();
     const filtered = followups.filter(a => searchFilter(a, q));
+    // Sort by Last Order Date — Inventory date wins, CRM Account.Last_Order_Date
+    // falls back. Empty dates always pin to bottom regardless of direction.
+    filtered.sort((a, b) => {
+      const ad = followupLastDate(a);
+      const bd = followupLastDate(b);
+      if (!ad && !bd) return 0;
+      if (!ad) return 1;
+      if (!bd) return -1;
+      return followupsSortDir === 'asc' ? ad.localeCompare(bd) : bd.localeCompare(ad);
+    });
     if (!filtered.length) {
       list.innerHTML = `<div class="hs-empty">
         <i class="fa-solid fa-check-double"></i>
