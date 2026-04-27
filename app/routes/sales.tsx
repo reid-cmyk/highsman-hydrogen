@@ -20,8 +20,8 @@ const STATE_LABELS: Record<string, string> = {
   MO: 'Missouri',
 };
 
-const STALE_DAYS = 30; // red
-const WATCH_DAYS = 14; // yellow
+const STALE_DAYS = 60; // red — 60+ days no order
+const WATCH_DAYS = 45; // yellow — 45–59 days (healthy = 0–44)
 
 const SKU_CATEGORIES: Record<string, 'Hit Stick' | 'Pre-Rolls' | 'Ground Game' | 'Other'> = {
   // Hit Stick (0.5g disposables)
@@ -188,6 +188,32 @@ function resolveStateFromLocation(locationName: string): string {
   return '';
 }
 
+
+// Build a warehouseId/locationId → state-code lookup. Zoho Inventory's
+// /salesorders LIST endpoint frequently omits `location_name`/`warehouse_name`
+// (it only sends the IDs), so resolving state from the order alone leaves rows
+// stateless. Pulling /warehouses once gives us a reliable id→name map we can
+// run through resolveStateFromLocation().
+async function fetchWarehouseStateMap(env: any, accessToken: string): Promise<Map<string, string>> {
+  const orgId = env.ZOHO_INVENTORY_ORG_ID || DEFAULT_ZOHO_INVENTORY_ORG_ID;
+  const out = new Map<string, string>();
+  const url = `https://www.zohoapis.com/inventory/v1/warehouses?organization_id=${orgId}`;
+  const res = await fetch(url, {
+    headers: {Authorization: `Zoho-oauthtoken ${accessToken}`, Accept: 'application/json'},
+  });
+  if (!res.ok) return out; // soft-fail; loader will fall back to address fields
+  const data: any = await res.json().catch(() => ({}));
+  const warehouses: any[] = data.warehouses || data.locations || [];
+  for (const w of warehouses) {
+    const id = String(w.warehouse_id || w.location_id || w.id || '');
+    const name: string = w.warehouse_name || w.location_name || w.name || '';
+    if (!id) continue;
+    const state = resolveStateFromLocation(name);
+    if (state) out.set(id, state);
+  }
+  return out;
+}
+
 // Highsman Zoho Inventory Org ID — env var overrides if set
 const DEFAULT_ZOHO_INVENTORY_ORG_ID = '882534504';
 
@@ -339,8 +365,13 @@ export async function loader({request, context}: LoaderFunctionArgs) {
 
   try {
     const token = await getZohoAccessToken(env);
-    // Pull YTD once (covers current period + prior + ytd context)
-    const ytdOrders = await fetchSalesOrders(env, token, ytdStart, end);
+    // Pull YTD once (covers current period + prior + ytd context).
+    // Pull warehouse map in parallel so we can resolve state by warehouse_id
+    // when the order list response omits the name fields.
+    const [ytdOrders, warehouseStateMap] = await Promise.all([
+      fetchSalesOrders(env, token, ytdStart, end),
+      fetchWarehouseStateMap(env, token),
+    ]);
 
     // Index helpers
     const inRange = (d: Date, s: Date, e: Date) => d >= s && d <= e;
@@ -355,20 +386,27 @@ export async function loader({request, context}: LoaderFunctionArgs) {
 
     for (const so of ytdOrders) {
       const orderDate = new Date(so.date);
-      // State is derived from the Zoho Inventory location/warehouse on the order —
-      // each warehouse in the Highsman org represents a state market (NJ, MA, NY, RI, MO).
-      // Fall back to shipping/billing address state only if the order has no location.
-      const rawLocation: string = so.location_name || so.warehouse_name || '';
-      let state = resolveStateFromLocation(rawLocation);
+      // State is derived from the Zoho Inventory warehouse the order shipped from —
+      // each warehouse represents a state market (NJ, MA, NY, RI, MO). Resolve in
+      // this order so no order goes stateless:
+      //   1. warehouse_id / location_id → warehouseStateMap (always present on list rows)
+      //   2. inline location_name / warehouse_name on the order (sometimes present)
+      //   3. shipping/billing address state (last resort, often empty in Zoho)
+      let state = '';
+      const whId = String(so.warehouse_id || so.location_id || '');
+      if (whId && warehouseStateMap.has(whId)) {
+        state = warehouseStateMap.get(whId) || '';
+      }
+      if (!state) {
+        const rawLocation: string = so.location_name || so.warehouse_name || '';
+        state = resolveStateFromLocation(rawLocation);
+      }
       if (!state) {
         const addrState: string =
           so.shipping_address?.state || so.billing_address?.state || so.billing_state || '';
-        state = (addrState || '').trim().toUpperCase().slice(0, 2);
-        // Normalize full state names that may appear in address fields
-        if (state.length > 2) {
-          const mapped = STATE_FULL_NAMES[(addrState || '').trim().toUpperCase()];
-          state = mapped || state.slice(0, 2);
-        }
+        const trimmed = (addrState || '').trim().toUpperCase();
+        // Full state name in address? map it. Otherwise take 2-letter prefix.
+        state = STATE_FULL_NAMES[trimmed] || trimmed.slice(0, 2);
       }
       const total = Number(so.total || 0);
       const customerId = String(so.customer_id || so.contact_id || so.customer_name);
