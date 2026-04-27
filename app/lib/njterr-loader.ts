@@ -82,9 +82,31 @@ async function fetchTerritoryEvents(
   return rows
     .map<DashEvent | null>((ev) => {
       const title = String(ev.Event_Title || '');
-      // Strict territory filter — only events tagged with this territory's tag.
-      if (!title.startsWith(territoryTag)) return null;
-      const isOverride = title.includes('[OVR]');
+      // Inclusion rules:
+      //   1. Event explicitly tagged for this territory  → include (strict)
+      //   2. Event is a Snr Staff Override `[OVR] …` with NO territory tag
+      //      → include on BOTH /njnorth and /njsouth so out-of-coverage
+      //        bookings are visible to whoever picks them up.
+      //   3. Event has no territory tag and no [OVR] tag, but starts with
+      //      "Highsman Pop Up" — usually means the coverage check errored
+      //      at booking time and `repTag` was never set. Surface these on
+      //      both dashboards so they aren't silently invisible.
+      // Anything else (other rep tags, non-pop-up events) is dropped.
+      const startsWithThisTerritory = title.startsWith(territoryTag);
+      const startsWithOtherTerritory =
+        title.startsWith('[NJ-N]') || title.startsWith('[NJ-S]');
+      const looksLikePopUp =
+        title.startsWith('[OVR]') ||
+        title.startsWith('Highsman Pop Up') ||
+        title.includes('Highsman Pop Up');
+      if (startsWithThisTerritory) {
+        // matched — fall through
+      } else if (!startsWithOtherTerritory && looksLikePopUp) {
+        // untagged or override — show on both dashboards
+      } else {
+        return null;
+      }
+      const isOverride = title.includes('[OVR]') || !startsWithThisTerritory;
       const startIso = String(ev.Start_DateTime || '');
       const date = startIso.slice(0, 10);
       const d = new Date(startIso);
