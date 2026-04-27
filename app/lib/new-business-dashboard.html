@@ -148,6 +148,10 @@
     .btn-action.copy-intro { background: rgba(212,175,55,0.14); color: #f0d77a;
       border-color: rgba(212,175,55,0.35); }
     .btn-action.copy-intro:hover { background: rgba(212,175,55,0.22); }
+    .btn-action.newproduct { background: rgba(212,175,55,0.14); color: #f0d77a;
+                             border-color: rgba(212,175,55,0.35); }
+    .btn-action.newproduct:hover { background: rgba(212,175,55,0.22); }
+    .btn-action.newproduct i { color: #D4AF37; }
 
     /* CLAIM / TTL CHIP — mirrors mobile .hs-claim-chip */
     .claim-chip { display: inline-flex; align-items: center; gap: 6px;
@@ -892,12 +896,76 @@
           <button class="btn-action" onclick='openLogModal({module:"Accounts", id:${JSON.stringify(a.id)}, name:${JSON.stringify(name)}, phone:${JSON.stringify(phone)}, email:${JSON.stringify(email)}})'>
             <i class="fa-solid fa-pen-to-square"></i> Log
           </button>
+          ${a._state === 'NJ' ? `
+          <button class="btn-action newproduct" onclick='markNewProductOnboarding(${JSON.stringify(a.id)}, ${JSON.stringify(a.Account_Name || name)})' title="Book Serena for a new-product walkthrough">
+            <i class="fa-solid fa-box-open"></i> New Product
+          </button>` : ''}
           <button class="btn-action danger" onclick='handleUnflag(${JSON.stringify(a.id)}, ${JSON.stringify(name)})' title="Remove from Follow-Ups">
             <i class="fa-solid fa-check"></i> Handled
           </button>
         </div>
       </article>`;
   }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // New Product Onboarding — books Serena (Vibes) for a new-product walk
+  // at an existing NJ account. Mirrors the function in
+  // public/sales-floor/js/app.js so the same Sales-floor endpoint logs
+  // the deal under the same NEEDS_ONBOARDING pipeline + tier markers.
+  //
+  // We don't have an in-memory roster on this page, so we just lock the
+  // clicked button (visually) and toast the result. Reload of the
+  // followups list will reflect the booked state once Serena syncs.
+  // ──────────────────────────────────────────────────────────────────────
+  async function markNewProductOnboarding(zohoAccountId, accountName) {
+    if (!zohoAccountId) return;
+    // Lock every matching button on the page so a double-click can't
+    // double-book the same account.
+    const buttons = document.querySelectorAll(
+      `button.btn-action.newproduct[data-locked-acct="${zohoAccountId}"]`,
+    );
+    document.querySelectorAll('button.btn-action.newproduct').forEach((btn) => {
+      const onclick = btn.getAttribute('onclick') || '';
+      if (onclick.includes(JSON.stringify(zohoAccountId))) {
+        btn.setAttribute('data-locked-acct', zohoAccountId);
+        btn.disabled = true;
+        btn.style.opacity = '0.6';
+        btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Booking…';
+      }
+    });
+    try {
+      const res = await fetch('/api/sales-floor-vibes-product-onboard', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'same-origin',
+        body: JSON.stringify({zohoAccountId, customerName: accountName || 'Account'}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || `New Product Onboarding failed (${res.status})`);
+      }
+      const predictedDay = data.predictedDay || 'soon';
+      toast(
+        data.alreadyBooked
+          ? `Already booked — Serena's on it ${predictedDay}.`
+          : `New Product booked — Serena will walk it ${predictedDay}.`,
+      );
+      document.querySelectorAll(`button.btn-action.newproduct[data-locked-acct="${zohoAccountId}"]`).forEach((btn) => {
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> Booked';
+        btn.disabled = true;
+        btn.style.opacity = '0.7';
+      });
+    } catch (err) {
+      console.error('markNewProductOnboarding failed', err);
+      toast(err.message || 'New Product Onboarding failed', 'error');
+      document.querySelectorAll(`button.btn-action.newproduct[data-locked-acct="${zohoAccountId}"]`).forEach((btn) => {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.innerHTML = '<i class="fa-solid fa-box-open"></i> New Product';
+      });
+    }
+  }
+  window.markNewProductOnboarding = markNewProductOnboarding;
 
   // ──────────────────────────────────────────────────────────────────────
   // AI Pre-Call Brief — opens the shared drawer, delegates generation to
