@@ -445,7 +445,11 @@
               </div>
               <div class="hs-orders-col-meta" id="reorder-due-meta">—</div>
             </div>
-            <div class="hs-orders-col-sub">Shops with no Highsman LeafLink order in 30+ days. Order resets the clock.</div>
+            <div class="hs-orders-col-sub">Any non-MA account with no order in 30+ days. Source: Zoho Inventory. Order resets the clock.</div>
+            <!-- State filter strip — populated dynamically by renderOrdersStateTabs().
+                 Always-visible 'All' chip + per-state counts. MA is intentionally
+                 excluded upstream so it never appears here. -->
+            <div id="orders-state-tabs" class="hs-state-tabs" role="tablist" aria-label="Filter Orders Due by state"></div>
             <div id="reorder-due-list" class="hs-orders-col-body">
               <div class="hs-empty-state hs-empty-state--col">
                 <div class="hs-empty-state-icon"><i class="fa-solid fa-clipboard-list"></i></div>
@@ -1135,7 +1139,7 @@
 <script src="/sales-floor/js/sms.js"></script>
 <script src="/sales-floor/js/sms-templates.js"></script>
 <script src="/sales-floor/js/missed-calls.js"></script>
-<script src="/sales-floor/js/app.js?v=16"></script>
+<script src="/sales-floor/js/app.js?v=17"></script>
 <script>
   // ───────────────────────────────────────────────────────────
   // DRAWER (mobile sidebar)

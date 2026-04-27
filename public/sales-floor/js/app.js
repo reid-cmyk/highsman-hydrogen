@@ -11,6 +11,7 @@ let currentFilter = 'all';
 // loaded data, so a rep working a single state never sees noise from others.
 let currentLeadState = 'all';
 let currentAccountState = 'all';
+let currentOrdersState = 'all'; // Orders Due tab filter — 'all' or 2-letter code
 // New Customers state filter. Same tab strip pattern as Leads/Accounts — 'all'
 // by default, NJ/NY/RI/MO narrows the list. MA is intentionally excluded per
 // Reid (no MA new-customer tracking). NJ cards come from LeafLink with the
@@ -206,6 +207,7 @@ function renderAll() {
   renderLeadStateTabs();
   renderAccountStateTabs();
   renderNewCustStateTabs();
+  renderOrdersStateTabs();
   renderLeads();
   renderAccounts();
   // Paint Zoho-only new-customer cards (NY/RI/MO) right away — they come from
@@ -253,8 +255,13 @@ async function loadInventoryLastOrders({force = false} = {}) {
     inventoryLastOrdersFetched = Date.now();
   } finally {
     inventoryLastOrdersLoading = false;
-    // Repaint Accounts so the just-loaded map hydrates the pill.
+    // Repaint Accounts (last-order pill) AND Orders Due (Inventory drives
+    // the staleness window). Also re-run the state-tab strip so chip
+    // counts reflect the just-loaded data.
     if (typeof renderAccounts === 'function') renderAccounts();
+    if (typeof renderOrdersStateTabs === 'function') renderOrdersStateTabs();
+    if (typeof renderOrders === 'function') renderOrders();
+    if (typeof updateStats === 'function') updateStats();
   }
 }
 
@@ -288,8 +295,15 @@ function updateStats() {
 
   // Orders Due nav badge (sidebar + bottom nav) — surface the reorder-due
   // count on the nav itself so reps see the number without opening the tab.
-  syncCountBadge('orders-nav-badge', reorderDue.length);
-  syncCountBadge('bn-orders-badge', reorderDue.length);
+  // Live Orders Due count for nav badges. Inventory may not have loaded
+  // yet — deriveOrdersDue() handles that gracefully (returns []). Once
+  // loadInventoryLastOrders() lands, renderAccounts() repaints and the
+  // call sites for the nav update fire again.
+  const ordersDueCount = (typeof deriveOrdersDue === 'function')
+    ? deriveOrdersDue().length
+    : (Array.isArray(reorderDue) ? reorderDue.length : 0);
+  syncCountBadge('orders-nav-badge', ordersDueCount);
+  syncCountBadge('bn-orders-badge', ordersDueCount);
 
   // New Customers nav badge — count of cards that still need rep action.
   // Includes LeafLink pending/ready/checkin_due AND Zoho-sourced zoho_new
@@ -545,41 +559,94 @@ async function loadLeaflinkOrders({force = false} = {}) {
   }
 }
 
+// ─── Orders Due — derived from CRM accounts + Inventory last-order data ───
+// Reid's spec: any account OUTSIDE MA with no order in the last 30 days
+// belongs on this tab. Source of truth for last-order date = Zoho Inventory
+// (lastOrderByName map, keyed by uppercased Account_Name); falls back to
+// Account.Last_Order_Date when Inventory hasn't seen the shop yet.
+//
+// MA exclusion is hard-coded — Highsman doesn't run reorder chase on MA
+// accounts (different distribution model). All other states show up unless
+// the rep has filtered to a specific one via the state-tab strip.
+const ORDERS_DUE_STALE_DAYS = 30;
+function deriveOrdersDue() {
+  const today = new Date();
+  const out = [];
+  for (const a of accounts) {
+    if (!a || !a.id) continue;
+    const stateCode = normalizeStateCode(a._state || a.Billing_State);
+    if (stateCode === 'MA') continue; // MA never appears
+    // Need at least one order on file — accounts that have never ordered
+    // belong on the New Customers / Leads flow, not Orders Due.
+    const orderCount = Number(a._orderCount || a.Total_Orders_Count || 0);
+    if (orderCount < 1) continue;
+    // Prefer Inventory's date when available — it's the canonical confirmed-
+    // revenue record. Fall back to the CRM Account.Last_Order_Date.
+    const nameKey = String(a.Account_Name || '').trim().toUpperCase();
+    const invInfo = nameKey ? (lastOrderByName && lastOrderByName[nameKey]) || null : null;
+    const lastOrderDate = (invInfo && invInfo.date) || a.Last_Order_Date || null;
+    if (!lastOrderDate) continue;
+    const lastMs = new Date(lastOrderDate + 'T00:00:00Z').getTime();
+    if (Number.isNaN(lastMs)) continue;
+    const daysSince = Math.floor((today.getTime() - lastMs) / 86400000);
+    if (daysSince < ORDERS_DUE_STALE_DAYS) continue;
+    out.push({
+      accountId: a.id,
+      account: a,
+      stateCode,
+      lastOrderDate,
+      lastOrderTotal: invInfo?.total ?? null,
+      lastOrderNumber: invInfo?.orderNumber || '',
+      daysSinceLastOrder: daysSince,
+    });
+  }
+  // Most overdue first.
+  out.sort((x, y) => y.daysSinceLastOrder - x.daysSinceLastOrder);
+  return out;
+}
+
+// State-tab strip on the Orders Due tab — same pattern as Leads / Accounts.
+function renderOrdersStateTabs() {
+  const host = document.getElementById('orders-state-tabs');
+  if (!host) return;
+  const all = deriveOrdersDue();
+  const buckets = tallyStates(all, (r) => r.stateCode);
+  host.innerHTML = stateTabsHtml('orders', buckets, currentOrdersState, all.length);
+}
+
+function filterOrdersByState(code) {
+  currentOrdersState = code;
+  renderOrdersStateTabs();
+  renderOrders();
+}
+
 function renderOrders() {
   const list = document.getElementById('reorder-due-list');
   const meta = document.getElementById('reorder-due-meta');
   if (!list) return;
 
-  // Header pill — updates with live count + stale-state
+  // Build the full Orders Due list off CRM accounts + Inventory dates.
+  // State filter narrows the rendered list AFTER the count is computed so
+  // the meta pill always shows the total count for the active scope.
+  const all = deriveOrdersDue();
+  const sorted = currentOrdersState === 'all'
+    ? all
+    : all.filter((r) => r.stateCode === currentOrdersState);
+
   if (meta) {
-    if (!leaflinkOrdersFetched) {
-      meta.textContent = 'Loading…';
-      meta.classList.remove('is-live', 'is-error');
-    } else if (!meta.classList.contains('is-error')) {
-      meta.textContent = `${reorderDue.length} due`;
-      meta.classList.add('is-live');
-    }
+    const scope = currentOrdersState === 'all' ? '' : ` in ${currentOrdersState}`;
+    meta.textContent = `${sorted.length} due${scope}`;
+    meta.classList.remove('is-error');
+    meta.classList.add('is-live');
   }
 
-  if (!leaflinkOrdersFetched) {
-    list.innerHTML = `<div class="hs-empty-state hs-empty-state--col">
-      <div class="hs-empty-state-icon"><i class="fa-solid fa-spinner fa-spin"></i></div>
-      Loading reorder data…
-    </div>`;
-    return;
-  }
-  if (reorderDue.length === 0) {
+  if (sorted.length === 0) {
     list.innerHTML = `<div class="hs-empty-state hs-empty-state--col">
       <div class="hs-empty-state-icon"><i class="fa-solid fa-check"></i></div>
-      No shops past 30 days. Spark Greatness.
+      No shops past 30 days${currentOrdersState === 'all' ? '' : ' in ' + currentOrdersState}. Spark Greatness.
     </div>`;
     return;
   }
-
-  // Sort: most overdue first
-  const sorted = [...reorderDue].sort(
-    (a, b) => (b.daysSinceLastOrder || 0) - (a.daysSinceLastOrder || 0),
-  );
 
   // Reid's spec (Apr 2026): Reorder Due renders as the SAME Account-card
   // view as the Accounts tab so a store gets the full action surface
@@ -591,26 +658,20 @@ function renderOrders() {
   // card so we don't lose data — they just don't get the action surface
   // until the rep links them up in Zoho.
   list.innerHTML = sorted.map((r) => {
-    const days = Number.isFinite(r.daysSinceLastOrder) ? r.daysSinceLastOrder : 0;
+    const days = r.daysSinceLastOrder;
     const sev = days >= 60 ? 'is-critical' : days >= 45 ? 'is-warn' : '';
-    const lastOrder = r.lastOrderDate
-      ? `Last: ${formatDate(r.lastOrderDate)}${r.lastOrderNumber ? ` · #${escapeHtml(String(r.lastOrderNumber))}` : ''}`
-      : 'No prior orders on file';
+    const totalStr = (r.lastOrderTotal != null && r.lastOrderTotal > 0)
+      ? ` · ${r.lastOrderTotal.toLocaleString('en-US', {style: 'currency', currency: 'USD', maximumFractionDigits: 0})}`
+      : '';
+    const lastOrder = `Last: ${formatDate(r.lastOrderDate)}${r.lastOrderNumber ? ` · #${escapeHtml(String(r.lastOrderNumber))}` : ''}${totalStr}`;
 
-    // Match against the live accounts list — same lookup pattern as before.
-    const idx = r.zohoAccountId
-      ? accounts.findIndex((a) => a && a.id === r.zohoAccountId)
-      : -1;
-    const acct = idx >= 0 ? accounts[idx] : null;
+    // Resolve the CRM account (always present — deriveOrdersDue is built
+    // off accounts directly).
+    const idx = accounts.findIndex((a) => a && a.id === r.accountId);
+    const acct = idx >= 0 ? accounts[idx] : r.account;
 
     if (acct) {
-      // Full Account card. Days-overdue badge replaces the NEW/orders pill
-      // in the header; "last order" line lives in subtitle slot via the
-      // Industry merge below so reps see the recency context immediately.
       const overdueBadge = `<span class="hs-orders-days ${sev}" title="${escapeHtml(lastOrder)}">${days}d</span>`;
-      // Stash the lastOrder hint into subtitle so it surfaces under the
-      // shop name without changing contactCardHtml. Snapshot then restore
-      // so the Accounts tab render isn't polluted.
       const origIndustry = acct.Industry;
       acct.Industry = lastOrder;
       const cardHtml = accountToCardHtml(acct, idx, {
