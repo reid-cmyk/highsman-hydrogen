@@ -1185,10 +1185,13 @@
     return `Highsman NJ Wholesale Menu — ${business}`;
   }
   function menuBody(name) {
+    // Friendlier, shorter copy — leads with a personal intro, drops the
+    // "swing by" pitch, surfaces the Highsman Apparel loyalty credit hook.
+    // Reid's spec, Apr 2026.
     return `Hey ${firstName(name)},\n\n` +
-      `${REP.firstName || 'Peter'} with Highsman, Ricky Williams' brand. ` +
-      `Here's our NJ wholesale menu — Hit Sticks, Pre-Rolls, and Ground Game:\n\n${NJMENU_URL}\n\n` +
-      `Happy to swing by and walk you through everything. When works?\n\n` +
+      `${REP.firstName || 'Pete'} from Highsman here. See link to our NJ wholesale menu below — Hit Sticks, Pre-Rolls, and Ground Game:\n\n${NJMENU_URL}\n\n` +
+      `Let me know if you need any help with anything. You also earn credits when you order through this menu to our Highsman Apparel store :)\n\n` +
+      `Thanks\n` +
       (REP.signature || `${REP.displayName}\nHighsman`);
   }
   function reorderSubject(business) {
