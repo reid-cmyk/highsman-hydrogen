@@ -1317,6 +1317,11 @@ export default function NJPopups() {
     if (opts.contactRole && opts.contactRole !== '—') fd.append('contactRole', opts.contactRole);
     if (opts.portalUrl) fd.append('portalUrl', opts.portalUrl);
     if (dispensary.city) fd.append('city', dispensary.city);
+    if (dispensary.street) fd.append('street', dispensary.street);
+    // Lat/lng are sent so the booking endpoint can auto-infer a territory tag
+    // ([NJ-N] or [NJ-S]) for override bookings via quickCoverageStatus().
+    if (typeof dispensary.lat === 'number') fd.append('lat', String(dispensary.lat));
+    if (typeof dispensary.lng === 'number') fd.append('lng', String(dispensary.lng));
     // Rep assignment — stamped onto the Zoho Event Subject prefix + Description
     // so staff can see which rep owns each booking from the CRM directly.
     if (repCheck.status === 'assigned') {

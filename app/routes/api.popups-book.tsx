@@ -3,7 +3,7 @@ import {json} from '@shopify/remix-oxygen';
 import {getAccessToken} from '~/lib/zoho-auth';
 import {sendEmailFromUser, isGmailSAConfigured} from '~/lib/gmail-sa';
 import {createCalendarEvent, isCalendarSAConfigured} from '~/lib/google-calendar-sa';
-import {REP_HUBS, type RepId} from '~/lib/reps';
+import {REP_HUBS, quickCoverageStatus, type RepId} from '~/lib/reps';
 import {njRegion} from '~/lib/nj-regions';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -186,6 +186,12 @@ export async function action({request, context}: ActionFunctionArgs) {
   const portalUrl = ((fd.get('portalUrl') as string) || '').trim();
   const city = ((fd.get('city') as string) || '').trim();
   const street = ((fd.get('street') as string) || '').trim();
+  // lat/lng are optional. When present they let us auto-pick the closer rep
+  // hub by Haversine — more accurate than the njRegion(city) fallback below.
+  const latRaw = ((fd.get('lat') as string) || '').trim();
+  const lngRaw = ((fd.get('lng') as string) || '').trim();
+  const latNum = latRaw ? Number(latRaw) : NaN;
+  const lngNum = lngRaw ? Number(lngRaw) : NaN;
   // Rep assignment (optional — only set when UI successfully resolved a rep).
   // repId is received but not persisted as its own field; Subject + Description
   // carry the identity. Later we can map it to a Zoho Host_Rep custom field.
@@ -234,6 +240,30 @@ export async function action({request, context}: ActionFunctionArgs) {
     const startISO = toZohoDateTime(date, startH, offset);
     const endISO = toZohoDateTime(date, endH, offset);
 
+    // ── Auto-derive a territory tag in priority order ──
+    //   1. repTag from the client (rep coverage check returned `assigned`)
+    //   2. Haversine closest-hub from lat/lng — works even when city is junk
+    //      like "Test" (the case that bit us on TEST FIRST ORDER 2026-04-27)
+    //   3. njRegion(city) — central/north → [NJ-N], south → [NJ-S]
+    // Why this matters: the /njpopups client only attaches `repTag` when the
+    // rep-coverage check returned `assigned`. On the Snr Staff override path
+    // (or any future code path that doesn't go through /api/rep-assign
+    // cleanly) repTag would arrive empty — and an Event with no
+    // `[NJ-N]`/`[NJ-S]` prefix is invisible to BOTH territory dashboards
+    // (njterr-loader filters by `title.startsWith(tag)`). Always derive a
+    // territory here so every booking lands on at least one dashboard.
+    let inferredTag: '[NJ-N]' | '[NJ-S]' | null = null;
+    if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+      const cov = quickCoverageStatus(latNum, lngNum);
+      if (cov.closestHub) inferredTag = REP_HUBS[cov.closestHub].subjectTag as '[NJ-N]' | '[NJ-S]';
+    }
+    if (!inferredTag) {
+      const r = njRegion(city || null);
+      inferredTag = r.region === 'south' ? '[NJ-S]' : '[NJ-N]';
+    }
+    const effectiveRepTag = repTag || inferredTag;
+    const autoInferredTerritory = !repTag;
+
     const descriptionLines: string[] = [
       `Highsman Pop Up at ${dispensaryName}${city ? ` — ${city}` : ''}.`,
       `Shift: ${shiftLabel || shiftTitleSuffix(shiftKey)}`,
@@ -266,6 +296,12 @@ export async function action({request, context}: ActionFunctionArgs) {
     if (channel === 'link' && portalUrl) {
       descriptionLines.push('', `Portal: ${portalUrl}`);
     }
+    if (autoInferredTerritory) {
+      descriptionLines.push(
+        '',
+        `Territory auto-inferred (${effectiveRepTag}) — no rep was assigned by the coverage check.`,
+      );
+    }
     descriptionLines.push('', 'Created via /njpopups staff tool.');
 
     // Subject prefix makes the rep obvious in Zoho's calendar views without
@@ -273,22 +309,6 @@ export async function action({request, context}: ActionFunctionArgs) {
     // Snr Staff override adds a "[OVR]" flag so exception bookings are visible
     // at-a-glance on the calendar (not just buried in Description).
     //
-    // Why this fallback: the /njpopups client only attaches `repTag` when the
-    // rep-coverage check returned `assigned`. On the Snr Staff out-of-coverage
-    // override path (and any future code path that doesn't go through
-    // /api/rep-assign cleanly), repTag would arrive empty — and an Event with
-    // no `[NJ-N]`/`[NJ-S]` prefix is invisible to BOTH territory dashboards
-    // (njterr-loader filters by `title.startsWith(tag)`). Reid hit this exact
-    // case 2026-04-27 with Test Zoho CRM #9. Derive the territory from city
-    // here so every booking lands on at least one dashboard.
-    const effectiveRepTag =
-      repTag ||
-      (() => {
-        const r = njRegion(city || null);
-        // North + Central → [NJ-N] (Newark hub covers Central practically),
-        // South → [NJ-S]. Falls through to [NJ-N] if classification unknown.
-        return r.region === 'south' ? '[NJ-S]' : '[NJ-N]';
-      })();
     const titlePrefix = `${effectiveRepTag} ${coverageOverride ? '[OVR] ' : ''}`;
     const eventPayload: Record<string, any> = {
       Event_Title: `${titlePrefix}Highsman Pop Up — ${dispensaryName} (${shiftTitleSuffix(shiftKey)})`,
