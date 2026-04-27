@@ -221,3 +221,37 @@ export async function createCalendarEvent(
     status: data.status,
   };
 }
+
+/**
+ * Delete a Google Calendar event from the given owner's calendar via the
+ * service account's domain-wide delegation. Sends cancellation notices to
+ * all attendees by default — the dispensary POC, the Highsman rep, and
+ * sales@ all get the standard "Event has been canceled" email automatically.
+ *
+ * Returns true on success or 410 (already gone). Throws on auth/config issues.
+ */
+export async function deleteCalendarEvent(
+  args: {calendarOwner: string; eventId: string; sendUpdates?: 'all' | 'externalOnly' | 'none'},
+  env: Record<string, string | undefined>,
+): Promise<boolean> {
+  const owner = args.calendarOwner.trim().toLowerCase();
+  const eventId = args.eventId.trim();
+  if (!owner) throw new Error('deleteCalendarEvent: calendarOwner required.');
+  if (!eventId) throw new Error('deleteCalendarEvent: eventId required.');
+
+  const token = await getCalendarAccessTokenForUser(owner, env);
+  const sendUpdates = args.sendUpdates || 'all';
+  const url =
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(owner)}/events/${encodeURIComponent(eventId)}` +
+    `?sendUpdates=${sendUpdates}`;
+
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: {authorization: `Bearer ${token}`},
+  });
+
+  if (res.status === 204 || res.status === 200 || res.status === 410) return true;
+  const text = await res.text().catch(() => '');
+  throw new Error(`Calendar event delete ${res.status}: ${text.slice(0, 400)}`);
+}
+

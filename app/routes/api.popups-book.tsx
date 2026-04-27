@@ -452,6 +452,28 @@ export async function action({request, context}: ActionFunctionArgs) {
           env,
         );
         calendarInvite = {ok: true, htmlLink: calendarRes.htmlLink};
+        // Persist the Calendar event ID onto the Zoho Event so the cancel
+        // endpoint can find and delete the matching Calendar invite later.
+        // Append a parseable tag line to the Description (custom field would be
+        // cleaner but doesn't require a schema change in the Zoho org).
+        if (calendarRes.id) {
+          try {
+            const newDescription =
+              descriptionLines.join('\n') +
+              `\n\n[CalendarEventId]${calendarRes.id}@popups@highsman.com`;
+            await fetch(
+              `https://www.zohoapis.com/crm/v7/Events/${record.details.id}`,
+              {
+                method: 'PATCH',
+                headers: {
+                  Authorization: `Zoho-oauthtoken ${accessToken}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({data: [{Description: newDescription}]}),
+              },
+            ).catch(() => null);
+          } catch {/* fire-and-forget */}
+        }
       } catch (calErr: any) {
         console.warn('[api/popups-book] Calendar invite failed:', calErr?.message);
         calendarInvite = {ok: false, error: calErr?.message?.slice(0, 200)};
