@@ -774,18 +774,10 @@ function Shell({children}: {children: React.ReactNode}) {
           zIndex: 10,
         }}
       >
-        <Link
-          to="/ops"
-          style={{
-            color: BRAND.gold,
-            fontFamily: TEKO,
-            fontSize: 18,
-            textDecoration: 'none',
-            letterSpacing: '0.08em',
-          }}
-        >
-          ← OPS
-        </Link>
+        {/* Left-side spacer — header used to host a back-to-/ops link
+            but Serena's dashboard is her workspace, not an Ops sub-page,
+            so the link was removed. Spacer keeps the logo visually centered. */}
+        <div style={{width: 40}} />
         <img
           src={LOGO_WHITE}
           alt="Highsman"
