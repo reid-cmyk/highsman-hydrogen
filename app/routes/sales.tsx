@@ -153,21 +153,37 @@ const STATE_FULL_NAMES: Record<string, string> = {
   'MISSOURI': 'MO',
 };
 const CITY_STATE_HINTS: Record<string, string> = {
+  // NJ
   NEWARK: 'NJ',
   JERSEY: 'NJ',
   COLLINGSWOOD: 'NJ',
   TRENTON: 'NJ',
+  WOODBURY: 'NJ',
+  PATERSON: 'NJ',
+  CAMDEN: 'NJ',
+  // MA
   BOSTON: 'MA',
   WORCESTER: 'MA',
-  SPRINGFIELD: 'MA',
+  CAMBRIDGE: 'MA',
+  SPRINGFIELDMA: 'MA',
+  // NY
   BROOKLYN: 'NY',
   MANHATTAN: 'NY',
+  ROCKLAND: 'NY', // Rockland County, NY (note: tiny Rockland MA exists)
+  WESTCHESTER: 'NY',
+  ALBANY: 'NY',
+  BUFFALO: 'NY',
+  // RI
   PROVIDENCE: 'RI',
   CRANSTON: 'RI',
+  WARWICK: 'RI',
+  PAWTUCKET: 'RI',
+  // MO
   STLOUIS: 'MO',
   KANSASCITY: 'MO',
   KIRKSVILLE: 'MO',
   JOPLIN: 'MO',
+  WASHINGTONMO: 'MO',
 };
 
 function resolveStateFromLocation(locationName: string): string {
@@ -559,6 +575,12 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       if (!state) {
         const rawLocation: string = so.location_name || so.warehouse_name || '';
         state = resolveStateFromLocation(rawLocation);
+      }
+      if (!state) {
+        // Free fallback before hitting CRM: parse the customer name itself.
+        // Catches accounts named "Uma Flowers NJ", "CANFECTIONS NJ, INC",
+        // "Missouri Health & Wellness", etc.
+        state = resolveStateFromLocation(so.customer_name || '');
       }
       if (!state) {
         // Last resort: CRM Account_State, with normalized + fuzzy name matching.
