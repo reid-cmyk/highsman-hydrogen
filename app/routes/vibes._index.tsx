@@ -338,9 +338,21 @@ export default function VibesDashboard() {
     document.head.appendChild(s);
   }, []);
 
-  const [selectedDayIdx, setSelectedDayIdx] = useState(0); // 0 = today
+  const [selectedDayIdx, setSelectedDayIdx] = useState(0); // 0 = first available day (could be today, could be a future launch/work day)
   const weekDays = useMemo(() => buildWeek(rep), [rep]);
   const stops = useMemo(() => buildSequence(route), [route]);
+
+  // The strip's first chip used to always be "today" — now it's Serena's
+  // first available day, which may be in the future (pre-launch) or simply
+  // not today (mid-week, off-day). Use the SELECTED day's ISO vs. today's
+  // ISO to decide whether to render the live "Today's Route" panel or a
+  // planning preview from /api/vibes-weekly-plan.
+  const todayIsoStable = useMemo(
+    () => new Date().toISOString().slice(0, 10),
+    [],
+  );
+  const selectedIsToday =
+    weekDays[selectedDayIdx]?.dateIso === todayIsoStable;
 
   // ── Weekly plan (lazy-loaded) ────────────────────────────────────────────
   // Only fetched when the rep taps a FUTURE work day in the WeekStrip. The
@@ -352,7 +364,10 @@ export default function VibesDashboard() {
   const [weeklyPlanError, setWeeklyPlanError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (selectedDayIdx === 0) return;
+    // Only fetch the weekly plan when the rep is previewing a day that
+    // isn't today (including future launch days when the strip leads with
+    // her first available day rather than "today").
+    if (selectedIsToday) return;
     if (weeklyPlan || weeklyPlanLoading) return;
     const day = weekDays[selectedDayIdx];
     if (!day || !day.isWorkDay) return;
@@ -366,21 +381,24 @@ export default function VibesDashboard() {
       })
       .catch((err) => setWeeklyPlanError(err?.message || 'Plan unavailable'))
       .finally(() => setWeeklyPlanLoading(false));
-  }, [selectedDayIdx, weekDays, weeklyPlan, weeklyPlanLoading]);
+  }, [selectedDayIdx, weekDays, weeklyPlan, weeklyPlanLoading, selectedIsToday]);
 
   // Match the selected day's ISO against the plan's Tue/Wed/Thu dates. If the
   // rep is looking two weeks out, no match — we render an "out-of-window"
   // empty state instead of pretending we have a plan.
   const previewDay = useMemo(() => {
-    if (selectedDayIdx === 0 || !weeklyPlan?.plan) return null;
+    // No preview if we're looking at today (live route renders instead) or
+    // the plan hasn't loaded yet.
     const iso = weekDays[selectedDayIdx]?.dateIso;
     if (!iso) return null;
+    if (iso === todayIsoStable) return null;
+    if (!weeklyPlan?.plan) return null;
     const p = weeklyPlan.plan;
     if (p.tuesday?.date === iso) return {label: 'TUE', data: p.tuesday};
     if (p.wednesday?.date === iso) return {label: 'WED', data: p.wednesday};
     if (p.thursday?.date === iso) return {label: 'THU', data: p.thursday};
     return null;
-  }, [selectedDayIdx, weeklyPlan, weekDays]);
+  }, [selectedDayIdx, weeklyPlan, weekDays, todayIsoStable]);
 
   if (!rep) {
     return (
@@ -641,12 +659,12 @@ export default function VibesDashboard() {
       ) : null}
 
       {/* Route section — today's live route OR preview of a future work day.
-          selectedDayIdx === 0 ⇒ live /api/vibes-route data (3 tiers).
-          selectedDayIdx > 0 + work day ⇒ lazy-fetched /api/vibes-weekly-plan
+          selectedIsToday ⇒ live /api/vibes-route data (3 tiers).
+          NOT today + work day ⇒ lazy-fetched /api/vibes-weekly-plan
           preview for the tapped Tue/Wed/Thu. Days outside the current Tue/Wed/Thu
           window (weekend, off-schedule day, or two weeks out) render a lightweight
           empty state. Full-map + brief view remains at /vibes/today via QuickTile. */}
-      {selectedDayIdx === 0 ? (
+      {selectedIsToday ? (
         <Section title="Today's Route" index="Route">
           {/* Region banner — shows Serena which NJ region she's anchored on
               today. Every tier below is filtered to this region only, so she
@@ -1665,7 +1683,7 @@ type WeekDay = {
 function buildWeek(rep: VibesRep | null): WeekDay[] {
   if (!rep) return [];
   const today = new Date();
-  const days: WeekDay[] = [];
+  today.setHours(0, 0, 0, 0);
   const todayIso = today.toISOString().slice(0, 10);
   const scheduleDays = new Set(rep.schedule_days || [2, 3, 4]);
   const startDate = new Date(rep.start_date + 'T00:00:00');
@@ -1673,9 +1691,28 @@ function buildWeek(rep: VibesRep | null): WeekDay[] {
     ? new Date(rep.onboarding_through_date + 'T00:00:00')
     : null;
 
+  // Anchor the 14-day strip on the first day Serena is actually bookable.
+  // Pre-launch, that's her start_date (May 14). Once she's started, it's
+  // today if today is a work day, otherwise her next work day.
+  // We never want the strip to lead with a day she can't take a booking on.
+  const firstWorkDay = (() => {
+    const cursor = new Date(today.getTime());
+    if (cursor < startDate) return new Date(startDate.getTime());
+    for (let i = 0; i < 21; i++) {
+      const c = new Date(cursor.getTime() + i * 86400 * 1000);
+      const dow = c.getDay();
+      const inOnb = onboardEnd ? c <= onboardEnd : false;
+      const work = inOnb ? true : scheduleDays.has(dow);
+      if (work) return c;
+    }
+    // Defensive — should never hit. Fall back to today.
+    return new Date(today.getTime());
+  })();
+  const anchor = firstWorkDay;
+
+  const days: WeekDay[] = [];
   for (let i = 0; i < 14; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
+    const d = new Date(anchor.getTime() + i * 86400 * 1000);
     const iso = d.toISOString().slice(0, 10);
     const dow = d.getDay();
     const beforeStart = d < startDate;
