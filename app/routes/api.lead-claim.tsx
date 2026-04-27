@@ -2,6 +2,7 @@ import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getRepFromRequest} from '../lib/sales-floor-reps';
 import {getZohoAccessToken} from '~/lib/zoho-auth';
+import {getZohoUserIdByEmail} from '~/lib/zoho-users';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // /api/lead-claim
@@ -146,12 +147,29 @@ export async function action({request, context}: ActionFunctionArgs) {
   const isHeartbeat =
     mode === 'heartbeat' && claimLive && currentOwner === rep.id;
 
-  const patch: Record<string, string> = {
+  const patch: Record<string, any> = {
     Working_Owner: rep.id,
     Working_Last_Activity_At: zohoDateTime(now),
   };
   if (!isHeartbeat) {
     patch.Working_Claimed_At = zohoDateTime(now);
+  }
+
+  // Mirror the Working_Owner change into Zoho's official `Owner` field — when
+  // a rep starts working a lead, the record's owner flips to that rep so the
+  // funnel + reporting attribute correctly without a second source of truth.
+  // Falls through silently when the rep's email doesn't resolve to a Zoho
+  // user id (best-effort write). A heartbeat from the SAME rep is a no-op
+  // for Owner since the owner already matches.
+  if (!isHeartbeat || currentOwner !== rep.id) {
+    try {
+      const ownerUserId = await getZohoUserIdByEmail(rep.email, token);
+      if (ownerUserId) {
+        patch.Owner = {id: ownerUserId};
+      }
+    } catch {
+      /* ignore — keep claim flowing even if user lookup blips */
+    }
   }
 
   const writeRes = await fetch(`https://www.zohoapis.com/crm/v7/Leads/${leadId}`, {
