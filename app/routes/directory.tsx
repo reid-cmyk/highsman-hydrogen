@@ -81,6 +81,22 @@ const SECTIONS: Section[] = [
         access: 'staff',
       },
       {
+        path: '/njnorth',
+        name: 'North Jersey · Rep Dashboard',
+        description:
+          'The North Jersey rep\'s home base. Today\'s shift, upcoming shifts (next 60 days), past shifts with deep links to each report, and a sales + commissions card. Login-gated.',
+        audience: 'NJ North Rep',
+        access: 'staff',
+      },
+      {
+        path: '/njsouth',
+        name: 'South Jersey · Rep Dashboard',
+        description:
+          'The South Jersey rep\'s home base. Today\'s shift, upcoming shifts (next 60 days), past shifts with deep links to each report, and a sales + commissions card. Login-gated.',
+        audience: 'NJ South Rep',
+        access: 'staff',
+      },
+      {
         path: '/shift-report',
         name: 'Shift Report',
         description:
