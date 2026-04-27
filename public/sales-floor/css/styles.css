@@ -3953,3 +3953,219 @@ details[open] > summary .brief-history-chev{
   flex-wrap:wrap;
   margin-bottom:8px;
 }
+
+/* ─── Inline Add-Field sheet ───────────────────────────────────────────────
+   Bottom-anchored modal triggered by the "+ Add cell / Add phones / Add
+   email" pills on Lead + Account cards. Shared with /sales-floor/mobile —
+   moved into the desktop sheet so Sky's web-on-laptop session can also
+   write contact info to Zoho without opening the record manually.
+   ───────────────────────────────────────────────────────────────────────── */
+:root {
+  /* These tokens already exist on /mobile via :root — alias them to the
+     dashboard's existing variables so the addfield sheet pulls correct
+     colors without forking the palette. */
+  --hs-gold: var(--gold, #F5E100);
+  --hs-gray: var(--gray, #A9ACAF);
+}
+.hs-addfield-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: hs-addfield-fade-in 0.14s ease-out;
+}
+.hs-addfield-overlay.hidden { display: none; }
+
+@keyframes hs-addfield-fade-in {
+  from { background: rgba(0, 0, 0, 0); }
+  to   { background: rgba(0, 0, 0, 0.62); }
+}
+@keyframes hs-addfield-sheet-in {
+  from { transform: translateY(24px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.hs-addfield-sheet {
+  width: 100%;
+  max-width: 520px;
+  background: #111114;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px 16px 0 0;
+  padding: 10px 18px calc(18px + env(safe-area-inset-bottom));
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.6);
+  animation: hs-addfield-sheet-in 0.18s ease-out;
+}
+
+.hs-addfield-handle {
+  width: 38px;
+  height: 4px;
+  margin: 2px auto 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.hs-addfield-header { margin-bottom: 14px; }
+.hs-addfield-eyebrow {
+  font-family: 'Teko', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--hs-gold);
+}
+.hs-addfield-title {
+  font-family: 'Teko', sans-serif;
+  font-size: 24px;
+  font-weight: 500;
+  color: #fff;
+  line-height: 1.1;
+  margin-top: 2px;
+}
+.hs-addfield-sub {
+  font-family: 'Barlow Semi Condensed', sans-serif;
+  font-size: 13px;
+  color: var(--hs-gray);
+  margin-top: 4px;
+}
+
+.hs-addfield-label {
+  display: block;
+  font-family: 'Teko', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 6px;
+}
+
+/* Inline icon inside a dual-row label — Store / Mobile glyph sits flush
+ * with the Teko label, small gold tint so it reads as a label affordance,
+ * not a decorative flourish. */
+.hs-addfield-label i {
+  color: var(--hs-gold);
+  margin-right: 6px;
+  font-size: 11px;
+  opacity: 0.85;
+  vertical-align: 1px;
+}
+
+/* Sublabel used on the dual Shop/Cell rows to hint which number goes where.
+ * Barlow, not Teko — this is helper copy, not a header. */
+.hs-addfield-hint {
+  margin-left: 6px;
+  font-family: 'Barlow Semi Condensed', sans-serif;
+  font-size: 11.5px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: rgba(255, 255, 255, 0.34);
+}
+
+/* Wrapper for the two stacked rows (Shop line, then Cell). Slight gap so
+ * they read as a pair, not a dense form block. */
+.hs-addfield-dual-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.hs-addfield-dual-rows.hidden { display: none; }
+.hs-addfield-single-row.hidden { display: none; }
+
+.hs-addfield-input {
+  width: 100%;
+  background: #0A0A0D;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  color: #fff;
+  font-family: 'Barlow Semi Condensed', sans-serif;
+  font-size: 16px;             /* keep ≥16px so iOS doesn't auto-zoom */
+  line-height: 1.2;
+  padding: 12px 14px;
+  outline: none;
+  -webkit-appearance: none;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.hs-addfield-input:focus {
+  border-color: var(--hs-gold);
+  background: #0D0D11;
+}
+.hs-addfield-input::placeholder { color: rgba(255, 255, 255, 0.28); }
+
+.hs-addfield-error {
+  margin-top: 8px;
+  font-family: 'Barlow Semi Condensed', sans-serif;
+  font-size: 12.5px;
+  color: #FF6B63;
+}
+.hs-addfield-error.hidden { display: none; }
+
+.hs-addfield-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.hs-addfield-cancel,
+.hs-addfield-save {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 1;
+  min-height: 46px;
+  border-radius: 10px;
+  font-family: 'Teko', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.08s ease, background 0.12s ease, border-color 0.12s ease, opacity 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.hs-addfield-cancel {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.72);
+}
+.hs-addfield-cancel:active {
+  transform: scale(0.97);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.hs-addfield-save {
+  background: var(--hs-gold);
+  border: 1px solid var(--hs-gold);
+  color: #000;
+  flex: 1.4;                  /* lean emphasis toward the save action */
+}
+.hs-addfield-save i { font-size: 13px; }
+.hs-addfield-save:active {
+  transform: scale(0.97);
+  background: #E0B344;
+}
+.hs-addfield-save:disabled,
+.hs-addfield-save.is-saving {
+  opacity: 0.65;
+  cursor: progress;
+}
+.hs-addfield-save.is-saving i {
+  animation: hs-addfield-spin 0.9s linear infinite;
+}
+
+@keyframes hs-addfield-spin {
+  to { transform: rotate(360deg); }
+}
+
+

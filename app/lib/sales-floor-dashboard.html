@@ -27,7 +27,7 @@
     }
   </script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
-  <link rel="stylesheet" href="/sales-floor/css/styles.css?v=15" />
+  <link rel="stylesheet" href="/sales-floor/css/styles.css?v=16" />
 </head>
 <body class="bg-brand-black text-brand-white font-barlow">
 
@@ -1153,7 +1153,7 @@
 <script src="/sales-floor/js/sms.js"></script>
 <script src="/sales-floor/js/sms-templates.js"></script>
 <script src="/sales-floor/js/missed-calls.js"></script>
-<script src="/sales-floor/js/app.js?v=21"></script>
+<script src="/sales-floor/js/app.js?v=22"></script>
 <script>
   // ───────────────────────────────────────────────────────────
   // DRAWER (mobile sidebar)
@@ -1501,6 +1501,62 @@
   });
 })();
 </script>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     INLINE ADD-FIELD SHEET — copied from sales-floor-mobile.html so
+     desktop reps can also write contact info to Zoho without
+     opening the record manually.
+═════════════════════════════════════════════════════════════════ -->
+<div id="hs-addfield-sheet" class="hs-addfield-overlay hidden" role="dialog" aria-modal="true" aria-label="Add contact info">
+  <div class="hs-addfield-sheet">
+    <div class="hs-addfield-handle"></div>
+    <div class="hs-addfield-header">
+      <div class="hs-addfield-eyebrow" id="hs-addfield-eyebrow">Add phone</div>
+      <div class="hs-addfield-title" id="hs-addfield-title">—</div>
+      <div class="hs-addfield-sub" id="hs-addfield-sub">Saved to Zoho the moment you tap Save.</div>
+    </div>
+    <form id="hs-addfield-form" onsubmit="event.preventDefault(); submitAddField();" autocomplete="off">
+      <!-- Single-input mode: "+ Add phone" / "+ Add email" on Contacts, or
+           any single-field add flow. Shown by default. -->
+      <div id="hs-addfield-single-row">
+        <label class="hs-addfield-label" id="hs-addfield-label" for="hs-addfield-input">Phone number</label>
+        <input id="hs-addfield-input" class="hs-addfield-input" type="tel" inputmode="tel"
+               autocapitalize="off" autocorrect="off" spellcheck="false"
+               placeholder="(555) 123-4567" />
+      </div>
+
+      <!-- Two-input mode: Leads only. Shop line (Zoho Phone) + Cell (Zoho
+           Mobile). Either field alone is enough to Save — the rep can just
+           capture whichever number they got on this touch. -->
+      <div id="hs-addfield-dual-rows" class="hidden">
+        <label class="hs-addfield-label" for="hs-addfield-shop-input">
+          <i class="fa-solid fa-store"></i> Shop line
+          <span class="hs-addfield-hint">Main / switchboard</span>
+        </label>
+        <input id="hs-addfield-shop-input" class="hs-addfield-input" type="tel" inputmode="tel"
+               autocapitalize="off" autocorrect="off" spellcheck="false"
+               placeholder="(555) 123-4567" />
+
+        <label class="hs-addfield-label" for="hs-addfield-cell-input" style="margin-top:10px;">
+          <i class="fa-solid fa-mobile-screen"></i> Cell
+          <span class="hs-addfield-hint">Decision-maker's direct</span>
+        </label>
+        <input id="hs-addfield-cell-input" class="hs-addfield-input" type="tel" inputmode="tel"
+               autocapitalize="off" autocorrect="off" spellcheck="false"
+               placeholder="(555) 987-6543" />
+      </div>
+
+      <div id="hs-addfield-error" class="hs-addfield-error hidden"></div>
+      <div class="hs-addfield-actions">
+        <button type="button" onclick="closeAddField()" class="hs-addfield-cancel">Cancel</button>
+        <button type="submit" id="hs-addfield-save" class="hs-addfield-save">
+          <i class="fa-solid fa-floppy-disk"></i><span>Save to Zoho</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
 
 </body>
 </html>

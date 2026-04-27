@@ -162,6 +162,46 @@
                        cursor: pointer; white-space: nowrap; }
     .hs-sort-btn-nb:hover { background: rgba(255,255,255,0.10); }
     .hs-sort-btn-nb i { font-size: 11px; opacity: 0.8; }
+    /* ─── Inline Add-Field sheet (mirrors Sales-floor) ─────────────────── */
+    .nb-addfield-overlay { position: fixed; inset: 0; z-index: 200;
+                           background: rgba(0,0,0,0.62); backdrop-filter: blur(2px);
+                           display: flex; align-items: flex-end; justify-content: center; }
+    .nb-addfield-overlay.hidden { display: none; }
+    .nb-addfield-sheet { width: 100%; max-width: 520px; background: #111114;
+                         border-top: 1px solid rgba(255,255,255,0.08);
+                         border-radius: 16px 16px 0 0; padding: 18px 18px 22px;
+                         box-shadow: 0 -12px 40px rgba(0,0,0,0.6); }
+    .nb-addfield-eyebrow { font-family: 'Teko',sans-serif; font-size: 11px;
+                           font-weight: 500; letter-spacing: 0.18em;
+                           text-transform: uppercase; color: #F5E100; }
+    .nb-addfield-title { font-family: 'Teko',sans-serif; font-size: 24px; color: #fff;
+                         line-height: 1.1; margin-top: 2px; }
+    .nb-addfield-sub { font-size: 13px; color: #A9ACAF; margin-top: 4px; }
+    .nb-addfield-label { display: block; font-family: 'Teko',sans-serif;
+                         font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+                         color: rgba(255,255,255,0.6); margin: 14px 0 6px; }
+    .nb-addfield-label i { color: #F5E100; margin-right: 6px; font-size: 11px; }
+    .nb-addfield-input { width: 100%; background: #0A0A0D;
+                         border: 1px solid rgba(255,255,255,0.14);
+                         border-radius: 10px; color: #fff; font-size: 16px;
+                         padding: 12px 14px; outline: none; }
+    .nb-addfield-input:focus { border-color: #F5E100; }
+    .nb-addfield-error { margin-top: 8px; font-size: 12.5px; color: #FF6B63; }
+    .nb-addfield-error.hidden { display: none; }
+    .nb-addfield-actions { display: flex; gap: 10px; margin-top: 16px; }
+    .nb-addfield-cancel,
+    .nb-addfield-save { appearance: none; flex: 1; min-height: 46px;
+                        border-radius: 10px; font-family: 'Teko',sans-serif;
+                        font-weight: 500; font-size: 14px; letter-spacing: 0.12em;
+                        text-transform: uppercase; cursor: pointer; }
+    .nb-addfield-cancel { background: transparent; color: rgba(255,255,255,0.72);
+                          border: 1px solid rgba(255,255,255,0.14); }
+    .nb-addfield-save { background: #F5E100; border: 1px solid #F5E100;
+                        color: #000; flex: 1.4; }
+    .nb-addfield-save:disabled { opacity: 0.65; cursor: progress; }
+    .btn-action.add { background: rgba(245,225,0,0.10); color: #F5E100;
+                      border-color: rgba(245,225,0,0.30); }
+    .btn-action.add:hover { background: rgba(245,225,0,0.18); }
     .lastorder-pill { display: inline-flex; align-items: center; gap: 6px;
                       padding: 4px 10px; border-radius: 999px; margin: 6px 0 4px;
                       background: rgba(34,197,94,0.10);
@@ -898,14 +938,23 @@
           ${badge}
         </div>
         <div class="card-contact">
-          ${phone ? `<div><i class="fa-solid fa-phone"></i><a href="${telHref(phone)}" onclick='claimOrHeartbeat(${zid})'>${escapeHtml(phone)}</a></div>` : ''}
+          ${l.Phone ? `<div><i class="fa-solid fa-phone"></i><a href="${telHref(l.Phone)}" onclick='claimOrHeartbeat(${zid})' title="Shop line">${escapeHtml(l.Phone)}</a></div>` : ''}
+          ${l.Mobile ? `<div><i class="fa-solid fa-mobile-screen"></i><a href="${telHref(l.Mobile)}" onclick='claimOrHeartbeat(${zid})' title="Cell">${escapeHtml(l.Mobile)}</a></div>` : ''}
           ${email ? `<div><i class="fa-solid fa-envelope"></i><a href="${mailtoHref(email)}" onclick='claimOrHeartbeat(${zid})'>${escapeHtml(email)}</a></div>` : ''}
         </div>
         ${l.Description ? `<div class="card-notes">${escapeHtml(l.Description)}</div>` : ''}
         <div class="card-actions">
-          ${phone ? `<a class="btn-action" href="${telHref(phone)}" onclick='claimOrHeartbeat(${zid})'><i class="fa-solid fa-phone"></i> Call</a>` : `<button class="btn-action" disabled style="opacity:0.3;"><i class="fa-solid fa-phone"></i> No #</button>`}
-          ${phone ? `<a class="btn-action" href="${smsHref(phone, textScript(name))}" onclick='claimOrHeartbeat(${zid})'><i class="fa-solid fa-comment-sms"></i> Text</a>` : ''}
-          ${email ? `<a class="btn-action" href="${mailtoHref(email, menuSubject(name), menuBody(l._fullName || name))}" onclick='claimOrHeartbeat(${zid})'><i class="fa-solid fa-envelope"></i> Email</a>` : ''}
+          ${l.Phone || l.Mobile
+            ? `<a class="btn-action" href="${telHref(l.Mobile || l.Phone)}" onclick='claimOrHeartbeat(${zid})'><i class="fa-solid fa-phone"></i> Call</a>`
+            : `<button class="btn-action add" onclick='openNbAddField("Leads", ${zid}, "lead-phones", ${JSON.stringify(name)})'><i class="fa-solid fa-plus"></i> Add phones</button>`}
+          ${l.Mobile
+            ? `<a class="btn-action" href="${smsHref(l.Mobile, textScript(name))}" onclick='claimOrHeartbeat(${zid})'><i class="fa-solid fa-comment-sms"></i> Text</a>`
+            : (l.Phone
+                ? `<button class="btn-action add" onclick='openNbAddField("Leads", ${zid}, "cell", ${JSON.stringify(name)})'><i class="fa-solid fa-plus"></i> Add cell</button>`
+                : '')}
+          ${email
+            ? `<a class="btn-action" href="${mailtoHref(email, menuSubject(name), menuBody(l._fullName || name))}" onclick='claimOrHeartbeat(${zid})'><i class="fa-solid fa-envelope"></i> Email</a>`
+            : `<button class="btn-action add" onclick='openNbAddField("Leads", ${zid}, "email", ${JSON.stringify(name)})'><i class="fa-solid fa-plus"></i> Add email</button>`}
           ${linkedinBtn}
           ${copyIntroBtn}
           <button class="btn-action primary" onclick='claimOrHeartbeat(${zid}); sendMenuFromCard("Leads", ${zid}, ${JSON.stringify(l)})'>
@@ -1045,6 +1094,142 @@
     }
   }
   window.markNewProductOnboarding = markNewProductOnboarding;
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Inline Add-Field flow — Pete can write Phone / Mobile / Email directly
+  // to a Zoho Lead from within new-business without opening the CRM.
+  // Reuses the Sales-floor /api/sales-floor-contact-update endpoint.
+  // ──────────────────────────────────────────────────────────────────────
+  let _nbAdd = {module: null, recordId: null, kind: null};
+  function openNbAddField(module, recordId, kind, recordName) {
+    if (!module || !recordId) return;
+    _nbAdd = {module, recordId, kind};
+    const eyebrow = document.getElementById('nb-addfield-eyebrow');
+    const title = document.getElementById('nb-addfield-title');
+    const label = document.getElementById('nb-addfield-label');
+    const input = document.getElementById('nb-addfield-input');
+    const single = document.getElementById('nb-addfield-single-row');
+    const dual = document.getElementById('nb-addfield-dual-rows');
+    const shopInput = document.getElementById('nb-addfield-shop-input');
+    const cellInput = document.getElementById('nb-addfield-cell-input');
+    const err = document.getElementById('nb-addfield-error');
+    if (input) input.value = '';
+    if (shopInput) shopInput.value = '';
+    if (cellInput) cellInput.value = '';
+    if (err) { err.textContent = ''; err.classList.add('hidden'); }
+    if (kind === 'lead-phones') {
+      eyebrow.textContent = 'Add phones';
+      title.textContent = recordName || '—';
+      single.classList.add('hidden');
+      dual.classList.remove('hidden');
+    } else if (kind === 'cell') {
+      eyebrow.textContent = 'Add cell';
+      label.textContent = 'Cell number';
+      input.type = 'tel';
+      input.placeholder = '(555) 123-4567';
+      title.textContent = recordName || '—';
+      single.classList.remove('hidden');
+      dual.classList.add('hidden');
+    } else if (kind === 'email') {
+      eyebrow.textContent = 'Add email';
+      label.textContent = 'Email address';
+      input.type = 'email';
+      input.placeholder = 'buyer@shop.com';
+      title.textContent = recordName || '—';
+      single.classList.remove('hidden');
+      dual.classList.add('hidden');
+    } else {
+      eyebrow.textContent = 'Add phone';
+      label.textContent = 'Phone number';
+      input.type = 'tel';
+      input.placeholder = '(555) 123-4567';
+      title.textContent = recordName || '—';
+      single.classList.remove('hidden');
+      dual.classList.add('hidden');
+    }
+    document.getElementById('nb-addfield-sheet').classList.remove('hidden');
+    setTimeout(() => {
+      if (kind === 'lead-phones') shopInput?.focus();
+      else input?.focus();
+    }, 100);
+  }
+  function closeNbAddField() {
+    document.getElementById('nb-addfield-sheet').classList.add('hidden');
+    _nbAdd = {module: null, recordId: null, kind: null};
+  }
+  async function submitNbAddField() {
+    const input = document.getElementById('nb-addfield-input');
+    const shopInput = document.getElementById('nb-addfield-shop-input');
+    const cellInput = document.getElementById('nb-addfield-cell-input');
+    const err = document.getElementById('nb-addfield-error');
+    const saveBtn = document.getElementById('nb-addfield-save');
+    const isDigitsOk = (s) => {
+      const d = (s || '').replace(/\D/g, '');
+      return d.length >= 7 && d.length <= 15;
+    };
+    const patch = {};
+    if (_nbAdd.kind === 'lead-phones') {
+      const shop = shopInput.value.trim();
+      const cell = cellInput.value.trim();
+      if (!shop && !cell) {
+        err.textContent = 'Enter at least one number.';
+        err.classList.remove('hidden');
+        return;
+      }
+      if (shop) {
+        if (!isDigitsOk(shop)) { err.textContent = 'Shop number looks off.'; err.classList.remove('hidden'); return; }
+        patch.Phone = shop;
+      }
+      if (cell) {
+        if (!isDigitsOk(cell)) { err.textContent = 'Cell number looks off.'; err.classList.remove('hidden'); return; }
+        patch.Mobile = cell;
+      }
+    } else {
+      const val = input.value.trim();
+      if (!val) { err.textContent = 'Required.'; err.classList.remove('hidden'); return; }
+      if (_nbAdd.kind === 'email') {
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(val)) {
+          err.textContent = 'That email looks off.'; err.classList.remove('hidden'); return;
+        }
+        patch.Email = val;
+      } else if (_nbAdd.kind === 'cell') {
+        if (!isDigitsOk(val)) { err.textContent = 'Cell number looks off.'; err.classList.remove('hidden'); return; }
+        patch.Mobile = val;
+      } else {
+        if (!isDigitsOk(val)) { err.textContent = 'Phone number looks off.'; err.classList.remove('hidden'); return; }
+        patch.Phone = val;
+        patch.Mobile = val;
+      }
+    }
+    err.classList.add('hidden');
+    saveBtn.disabled = true;
+    try {
+      const res = await fetch('/api/sales-floor-contact-update', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({module: _nbAdd.module, recordId: _nbAdd.recordId, patch}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error || `Save failed (${res.status})`);
+      // Reflect locally on the matching lead and re-render.
+      const lead = leads.find((x) => String(x.id) === String(_nbAdd.recordId));
+      if (lead) Object.assign(lead, data.patch || patch);
+      const fu = followups.find((x) => String(x.id) === String(_nbAdd.recordId));
+      if (fu) Object.assign(fu, data.patch || patch);
+      toast('Saved to Zoho');
+      closeNbAddField();
+      renderCurrent();
+    } catch (e) {
+      err.textContent = e.message || 'Save failed.';
+      err.classList.remove('hidden');
+    } finally {
+      saveBtn.disabled = false;
+    }
+  }
+  window.openNbAddField = openNbAddField;
+  window.closeNbAddField = closeNbAddField;
+  window.submitNbAddField = submitNbAddField;
 
   // ──────────────────────────────────────────────────────────────────────
   // AI Pre-Call Brief — opens the shared drawer, delegates generation to
