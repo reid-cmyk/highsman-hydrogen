@@ -1,6 +1,6 @@
 import type {LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
-import {njRegion, regionLabel, predictedDayForRegion} from '../lib/nj-regions';
+import {njRegion, regionLabel, predictedDayForRegion, isAfterIntakeFloor} from '../lib/nj-regions';
 import {getZohoAccessToken as getZohoToken} from '~/lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -116,8 +116,11 @@ export async function loader({context}: LoaderFunctionArgs) {
     const deals = await fetchPendingDeals(token);
 
     // Double-filter in case sentinel Closing_Date matches something unexpected.
+    // Also drop anything created before the 2026-04-27 dashboard wipe so the
+    // pending-confirm inbox only ever shows fresh Sales-floor pushes.
     const pendingDeals = deals.filter((d) => {
       const desc = typeof d?.Description === 'string' ? d.Description : '';
+      if (!isAfterIntakeFloor(d?.Created_Time)) return false;
       return (
         desc.includes(SALES_FLOOR_SIGNATURE) &&
         desc.includes(TIER_MARKER_TRAINING) &&

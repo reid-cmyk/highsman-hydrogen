@@ -1,7 +1,7 @@
 import type {LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import type {NjRegion} from '../lib/nj-regions';
-import {njRegion} from '../lib/nj-regions';
+import {njRegion, isAfterIntakeFloor, inNormalSchedule} from '../lib/nj-regions';
 import {getZohoAccessToken as getZohoToken} from '~/lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -171,7 +171,7 @@ async function fetchOpenVibesDeals(token: string): Promise<any[]> {
     url.searchParams.set('criteria', `(Pipeline:equals:${NEEDS_ONBOARDING_PIPELINE})`);
     url.searchParams.set(
       'fields',
-      'id,Deal_Name,Stage,Description,Closing_Date,Account_Name',
+      'id,Deal_Name,Stage,Description,Closing_Date,Account_Name,Created_Time',
     );
     url.searchParams.set('per_page', '200');
     url.searchParams.set('page', String(page));
@@ -193,6 +193,9 @@ async function fetchOpenVibesDeals(token: string): Promise<any[]> {
     if (!desc.includes(TIER_MARKER_ONBOARDING) && !desc.includes(TIER_MARKER_TRAINING)) {
       return false;
     }
+    // Hard floor: ignore any deal created before the 2026-04-27 dashboard
+    // wipe so legacy test pushes never resurface on Serena's daily route.
+    if (!isAfterIntakeFloor(d?.Created_Time)) return false;
     // Skip pending-confirm trainings — they haven't been locked in with the
     // store yet. Two guards: the description tag AND the sentinel Closing_Date.
     // Either alone catches it; both together covers tag drift or API weirdness.
@@ -397,9 +400,14 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     // Visit_Date is either null OR >= 30 days stale. Prioritize by recency
     // (oldest first), then by has-visited (visited accounts before new ones
     // — onboarding deal workflow should be catching truly-never-visited shops).
+    //
+    // Suppressed until Serena hits her normal Tue/Wed/Thu cadence on May 19.
+    // Pre-launch and during the ramp week we surface ONLY Sales-floor pushes.
     const tier3: Stop[] = [];
     const nowUtc = new Date();
+    const allowCheckins = inNormalSchedule(nowUtc);
     for (const a of njAccounts) {
+      if (!allowCheckins) break;
       const orderCount = Number(a.Total_Orders_Count || 0);
       if (orderCount < 1) continue;
       // Skip accounts already represented by a Tier 1/2 deal today.

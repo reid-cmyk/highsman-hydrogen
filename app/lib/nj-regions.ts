@@ -223,10 +223,11 @@ export function regionLabel(r: NjRegion): string {
 // SERENA_LAUNCH_DATE — first day she's on the road. No Vibes visit can be
 // booked or predicted before this date.
 //
-// Ramp-up week: SERENA_LAUNCH_DATE (Thu 2026-05-14) through Mon 2026-05-18.
-// During the ramp she is working every weekday so Sky can use any day to
-// stage a first wave of visits. The weekly planner is free to schedule
-// outside Tue/Wed/Thu during the ramp.
+// Ramp-up week: SERENA_LAUNCH_DATE (Thu 2026-05-14) through Sun 2026-05-17.
+// During the ramp she is working every day (Thu/Fri/Sat/Sun) so Sky can use
+// any day to stage a first wave of visits. The weekly planner is free to
+// schedule outside Tue/Wed/Thu during the ramp. Mon May 18 is OFF — she
+// resumes on Tue May 19 with the locked Tue/Wed/Thu rhythm.
 //
 // SERENA_NORMAL_SCHEDULE_START — first day of the locked Tue/Wed/Thu cadence
 // (Tue 2026-05-19). From that date forward, only Tue/Wed/Thu are valid visit
@@ -239,6 +240,32 @@ export const SERENA_NORMAL_SCHEDULE_DATE = new Date(
   SERENA_NORMAL_SCHEDULE_ISO + 'T00:00:00-04:00',
 );
 
+// Hard floor on the Vibes intake.
+//
+// Reid wiped the dashboard on 2026-04-27 to clear all pre-launch test
+// routes/bookings. From this date forward, the only way a deal lands in
+// the Vibes weekly plan or daily route is via Sky's Sales-floor button —
+// and only deals created on or after this floor are surfaced.
+//
+// Anything created before this date (legacy test deals, abandoned drafts)
+// is intentionally ignored even if it sits in the Needs Onboarding pipeline.
+// Bump this date forward (with Reid's sign-off) if we ever need a similar
+// fresh-slate cutover.
+export const VIBES_INTAKE_FLOOR_ISO = '2026-04-27';
+export const VIBES_INTAKE_FLOOR_DATE = new Date(
+  VIBES_INTAKE_FLOOR_ISO + 'T00:00:00-04:00',
+);
+
+// True when a Zoho Created_Time string is on/after the intake floor.
+// Tolerates the ISO timestamp Zoho returns (e.g. "2026-04-27T13:14:22-04:00").
+export function isAfterIntakeFloor(createdTime: string | null | undefined): boolean {
+  if (!createdTime) return false;
+  const t = new Date(createdTime).getTime();
+  if (Number.isNaN(t)) return false;
+  return t >= VIBES_INTAKE_FLOOR_DATE.getTime();
+}
+
+
 // Is `d` on or after Serena's normal Tue/Wed/Thu cadence?
 export function inNormalSchedule(d: Date): boolean {
   return d.getTime() >= SERENA_NORMAL_SCHEDULE_DATE.getTime();
@@ -248,7 +275,7 @@ export function inNormalSchedule(d: Date): boolean {
 // cadence — Tuesday anchors North (her origin is Union NJ), Wednesday handles
 // Central, Thursday runs the longer South drive.
 //
-// During the ramp-up week (May 14-18), Sky's button still surfaces the
+// During the ramp-up week (May 14-17), Sky's button still surfaces the
 // region's normal day so reps see a predictable rhythm — but a clamped
 // nextDateForWeekday() will honor the launch floor.
 //
@@ -270,7 +297,7 @@ export function defaultDayForRegion(r: NjRegion): {
 //
 // Also clamps to SERENA_LAUNCH_DATE — Sky can click the button before
 // May 14 but the predicted date will never be earlier than launch. During
-// the ramp-up week (May 14-18), if the region's normal Tue/Wed/Thu lands
+// the ramp-up week (May 14-17), if the region's normal Tue/Wed/Thu lands
 // before May 14 we walk forward to the next valid day inside that ramp.
 export function nextDateForWeekday(
   from: Date,
@@ -289,19 +316,20 @@ export function nextDateForWeekday(
 }
 
 // Launch-week ramp slots. Pre-launch, every onboarding push lands inside
-// Serena's first work block (Thu May 14 → Mon May 18). We spread them by
+// Serena's first work block (Thu May 14 → Sun May 17). We spread them by
 // region so Sky/Serena can see at a glance which day belongs to which zone:
 //   north   → Thu May 14 (her first day, anchored to her Union NJ origin)
 //   central → Fri May 15
-//   south   → Mon May 18
-// Sat/Sun (May 16-17) are kept off the schedule.
+//   south   → Sun May 17 (longest drive, gets a full ramp day)
+// Sat May 16 is open for overflow / pinned-time bookings during the ramp.
+// Mon May 18 is OFF — Serena resumes Tue May 19 on the normal cadence.
 //
 // Once `now` is May 19 or later, the rhythm flips to standard Tue/Wed/Thu
 // (defaultDayForRegion).
 const RAMP_WEEK_BY_REGION: Record<NjRegion, string> = {
   north: '2026-05-14',
   central: '2026-05-15',
-  south: '2026-05-18',
+  south: '2026-05-17',
 };
 
 // Given a region + "now", produce a human-readable predicted day string for
@@ -311,7 +339,7 @@ const RAMP_WEEK_BY_REGION: Record<NjRegion, string> = {
 // Pre-launch (now < May 19) → all bookings land inside the ramp:
 //   north  → "Thu, May 14 (launch week)"
 //   central→ "Fri, May 15 (launch week)"
-//   south  → "Mon, May 18 (launch week)"
+//   south  → "Sun, May 17 (launch week)"
 //
 // Normal schedule (now ≥ May 19) → rolling Tue/Wed/Thu rhythm:
 //   north  → "Tuesday"

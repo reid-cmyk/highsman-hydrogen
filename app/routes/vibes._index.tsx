@@ -1207,7 +1207,7 @@ function TodayRegionBanner({
 // LaunchScheduleBanner — pre-launch heads-up
 // ─────────────────────────────────────────────────────────────────────────────
 // Serena's first day on the road is Thu May 14, 2026. The full first work
-// block (May 14 → May 18) is a flexible ramp-up — every weekday is valid.
+// block (May 14 → May 17) is a flexible ramp-up — every day, including Sat/Sun, is valid.
 // From Tue May 19 onwards she's on the locked Tue/Wed/Thu rhythm.
 //
 // This banner makes that schedule loudly visible on the dashboard until she's
@@ -1244,7 +1244,7 @@ function LaunchScheduleBanner() {
     : 'Launch week — every weekday is in play';
   const tagline = beforeLaunch
     ? 'Serena rolls out Thursday, May 14. Customers pushed today are queued for the ramp-up week.'
-    : 'May 14 → May 18 is flexible. Tue/Wed/Thu rhythm locks in May 19.';
+    : 'May 14 → May 17 is flexible (Thu-Sun). Tue/Wed/Thu rhythm locks in May 19.';
 
   return (
     <div
@@ -1309,7 +1309,7 @@ function LaunchScheduleBanner() {
         }}
       >
         <span style={{color: BRAND.white, fontWeight: 600}}>Schedule:</span>{' '}
-        Thu May 14 – Mon May 18 every weekday · Tue May 19 onwards
+        Thu May 14 – Sun May 17 launch week (every day in play) · Tue May 19 onwards
         Tue/Wed/Thu (North · Central · South).
       </div>
     </div>
@@ -1699,11 +1699,12 @@ function buildWeek(rep: VibesRep | null): WeekDay[] {
     const beforeStart = d < startDate;
     const inOnboarding =
       !beforeStart && onboardEnd ? d <= onboardEnd : false;
-    // During onboarding, every weekday is a work day (1-5); otherwise use scheduleDays
+    // During onboarding (May 14-17 ramp), every day is a work day so Sat/Sun
+    // are in play for the launch week. After onboarding ends, lock to scheduleDays.
     const isWorkDay = beforeStart
       ? false
       : inOnboarding
-        ? dow >= 1 && dow <= 5
+        ? true
         : scheduleDays.has(dow);
 
     days.push({

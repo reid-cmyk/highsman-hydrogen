@@ -3,7 +3,7 @@ import {json} from '@shopify/remix-oxygen';
 import {getRepFromRequest} from '../lib/sales-floor-reps';
 import {claudeTool, isAnthropicConfigured, type ClaudeToolSchema} from '../lib/anthropic';
 import type {NjRegion} from '../lib/nj-regions';
-import {njRegion} from '../lib/nj-regions';
+import {njRegion, isAfterIntakeFloor, inNormalSchedule} from '../lib/nj-regions';
 import {getZohoAccessToken as getZohoToken} from '~/lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -174,7 +174,7 @@ async function fetchOpenVibesDeals(token: string): Promise<
 > {
   const url = new URL('https://www.zohoapis.com/crm/v7/Deals/search');
   url.searchParams.set('criteria', `(Pipeline:equals:${NEEDS_ONBOARDING_PIPELINE})`);
-  url.searchParams.set('fields', 'id,Stage,Account_Name,Description,Closing_Date');
+  url.searchParams.set('fields', 'id,Stage,Account_Name,Description,Closing_Date,Created_Time');
   url.searchParams.set('per_page', '200');
   const res = await fetch(url.toString(), {
     headers: {Authorization: `Zoho-oauthtoken ${token}`},
@@ -195,6 +195,9 @@ async function fetchOpenVibesDeals(token: string): Promise<
     // skip closed deals — only open pipeline stages
     if (/closed.*won|closed.*lost|done|complete/.test(stage)) continue;
     if (!desc.includes(SALES_FLOOR_SIGNATURE)) continue;
+    // Hard floor: drop any deal created before the 2026-04-27 dashboard wipe
+    // so legacy test pushes never resurface in the weekly plan.
+    if (!isAfterIntakeFloor(r?.Created_Time)) continue;
     // Skip pending-confirm trainings — awaiting Serena's call to the store.
     // Two-guard: description tag + sentinel Closing_Date. Either alone suffices;
     // belt-and-suspenders protects against tag drift on Zoho edits.
@@ -602,8 +605,13 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       });
     }
 
-    // Tier 3 Check-Ins — NJ accounts with orders, stale visits
+    // Tier 3 Check-Ins — NJ accounts with orders, stale visits.
+    // Suppressed until Serena hits her normal Tue/Wed/Thu cadence on May 19.
+    // Pre-launch and during the ramp week we want ONLY Sales-floor pushes
+    // visible on the dashboard — no auto-generated stale-visit candidates.
+    const allowCheckins = inNormalSchedule(today);
     for (const a of njAccounts) {
+      if (!allowCheckins) break;
       if (tierByAcct.has(a.id)) continue; // already in pool as T1/T2
       if ((a.totalOrders || 0) <= 0) continue; // no orders yet = not check-in territory
       const stale = a.visitDate
