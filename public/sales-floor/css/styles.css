@@ -2361,12 +2361,19 @@ a.hs-contact-meta-cell:hover i{ color:var(--gold); }
 
 /* ── Action bar — Call · Text · Email · Brief ── */
 .hs-contact-actions{
-  display:grid;
-  grid-auto-columns:1fr;
-  grid-auto-flow:column;
-  gap:8px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
   padding-top:12px;
   border-top:1px solid var(--line);
+}
+.hs-contact-actions .hs-action-pill{
+  /* Two-up grid by default — fits Call/Text/Email/Brief plus the optional
+     Training/Send Menu/New Product/Flag Pete row underneath without
+     overflowing the card on a 380px mobile column or the desktop list. */
+  flex:1 1 calc(50% - 3px);
+  min-width:0;
+  white-space:nowrap;
 }
 .hs-action-pill{
   appearance:none;

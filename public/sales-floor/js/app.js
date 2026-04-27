@@ -715,15 +715,17 @@ function renderOrders() {
     const acct = idx >= 0 ? accounts[idx] : r.account;
 
     if (acct) {
+      // Days-overdue badge in the header replaces the order-count pill;
+      // hover tooltip carries the full "Last: ... · #... · $..." string.
+      // The green Last-order pill below the buyer row already surfaces
+      // the same info inline, so we don't override the Industry subtitle
+      // (which used to duplicate the line and pollute the Accounts tab
+      // when the snapshot/restore raced with re-renders).
       const overdueBadge = `<span class="hs-orders-days ${sev}" title="${escapeHtml(lastOrder)}">${days}d</span>`;
-      const origIndustry = acct.Industry;
-      acct.Industry = lastOrder;
-      const cardHtml = accountToCardHtml(acct, idx, {
+      return accountToCardHtml(acct, idx, {
         headerExtraOverride: overdueBadge,
         menuMode: 'reorder',
       });
-      acct.Industry = origIndustry;
-      return cardHtml;
     }
 
     // Fallback for reorder rows that didn't match a live Zoho account —
