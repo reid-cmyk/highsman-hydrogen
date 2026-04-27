@@ -657,6 +657,115 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       }
     }
 
+    // ── Post-pass: resolve state for customers we couldn't classify above ──
+    // The Zoho Inventory /salesorders LIST response often omits warehouse_id
+    // for orders, so any customer whose orders all came back with no warehouse
+    // info ends up stateless even though their warehouse address is set.
+    // Hit the /salesorders/{id} DETAIL endpoint for the customer's most-recent
+    // order — detail responses always include the full warehouse fields.
+    // Capped at 50 customers per load and run with concurrency 8 so we add at
+    // most ~2s to a cold-load on a wide miss.
+    {
+      const stateless = Array.from(storeMap.values())
+        .filter((r) => !r.state && r.ytdRevenue > 0);
+      if (stateless.length > 0) {
+        // Latest order id per stateless customer
+        const latestSO = new Map<string, any>();
+        for (const so of ytdOrders) {
+          const cid = String(so.customer_id || so.contact_id || so.customer_name);
+          if (!stateless.find((r) => r.customerId === cid)) continue;
+          const cur = latestSO.get(cid);
+          if (!cur || new Date(so.date) > new Date(cur.date)) latestSO.set(cid, so);
+        }
+        // Sort by YTD revenue (desc) and take the top 50
+        const targets = stateless
+          .sort((a, b) => b.ytdRevenue - a.ytdRevenue)
+          .slice(0, 50);
+
+        // Concurrency-limited detail fetch
+        const concurrency = 8;
+        let cursor = 0;
+        async function worker() {
+          while (cursor < targets.length) {
+            const i = cursor++;
+            const r = targets[i];
+            const so = latestSO.get(r.customerId);
+            if (!so) continue;
+            const orderId = so.salesorder_id || so.id;
+            if (!orderId) continue;
+            const detail = await fetchSalesOrderDetail(env, token, orderId).catch(() => null);
+            if (!detail) continue;
+            // Try warehouse_id / location_id from the detail (always populated)
+            const whId = String(detail.warehouse_id || detail.location_id || '');
+            const info = whId ? warehouseInfoMap.get(whId) : undefined;
+            if (info?.isHeadOffice) continue; // skip Head Office orders
+            if (info?.state) {
+              r.state = info.state;
+              continue;
+            }
+            // Try the inline name on the detail response
+            const fromName = resolveStateFromLocation(detail.location_name || detail.warehouse_name || '');
+            if (fromName) {
+              r.state = fromName;
+              continue;
+            }
+            // Try the customer's own billing/shipping address state from the detail
+            // (Inventory contact-level address — this is the dispensary's actual
+            // address, not a CRM billing/shipping field, so it's safe to use here)
+            const addrState = normalizeStateField(
+              detail.shipping_address?.state ||
+                detail.billing_address?.state ||
+                detail.shipping_address?.state_code ||
+                detail.billing_address?.state_code ||
+                '',
+            );
+            if (addrState) r.state = addrState;
+          }
+        }
+        await Promise.all(Array.from({length: Math.min(concurrency, targets.length)}, worker));
+
+        // Reattribute period revenue to the newly-resolved state on stateAgg.
+        // We re-walk only orders belonging to customers whose state changed.
+        const resolvedCustomers = new Set(targets.filter((r) => r.state).map((r) => r.customerId));
+        if (resolvedCustomers.size > 0) {
+          for (const so of ytdOrders) {
+            const cid = String(so.customer_id || so.contact_id || so.customer_name);
+            if (!resolvedCustomers.has(cid)) continue;
+            const orderDate = new Date(so.date);
+            if (!inRange(orderDate, start, end)) continue;
+            const row = storeMap.get(cid);
+            if (!row || !row.state) continue;
+            const total = Number(so.total || 0);
+            if (!stateAgg.has(row.state)) {
+              stateAgg.set(row.state, {
+                state: row.state,
+                revenue: 0,
+                orders: 0,
+                stores: 0,
+                avgPerStore: 0,
+                mixHitStick: 0,
+                mixPreRolls: 0,
+                mixGroundGame: 0,
+                mixOther: 0,
+              });
+            }
+            const sa = stateAgg.get(row.state)!;
+            sa.revenue += total;
+            sa.orders += 1;
+            const lineItems = so.line_items || [];
+            for (const li of lineItems) {
+              const cat = categorizeSku(li.name || '', li.sku || '');
+              const amt = Number(li.item_total || li.total || 0);
+              if (cat === 'Hit Stick') sa.mixHitStick += amt;
+              else if (cat === 'Pre-Rolls') sa.mixPreRolls += amt;
+              else if (cat === 'Ground Game') sa.mixGroundGame += amt;
+              else sa.mixOther += amt;
+            }
+          }
+        }
+      }
+    }
+
     // Count distinct stores per state (in period)
     const storesPerState = new Map<string, Set<string>>();
     for (const r of storeMap.values()) {
