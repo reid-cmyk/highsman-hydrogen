@@ -1678,9 +1678,6 @@ export default function NJPopups() {
             color: BRAND.gray,
           }}
         >
-          <Link to="/wholesale" style={{textDecoration: 'none', color: 'inherit'}}>
-            ← Wholesale Portal
-          </Link>
           <span
             style={{
               display: 'inline-flex',
