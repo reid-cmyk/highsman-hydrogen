@@ -388,7 +388,7 @@ Candidates marked infrequent_dropin=true (e.g. Atlantic City, Cape May, Ocean Ci
 PRIORITY RULES:
 1. Tier 1 (ONBOARDING) — never push out of the week. These are first-ever brand visits. Always scheduled SOMEWHERE in the 3 days.
 2. Tier 2 (TRAINING) — follow-ups to onboarded accounts. Schedule this week. Pair geographically with Tier 1 where possible.
-3. Tier 3 (CHECK-IN) — 30-day cadence. Oldest stale visits first. Fill open budget after Tier 1+2 are slotted.
+3. Tier 3 (CHECK-IN) — Within Tier 3, NEVER-VISITED accounts come FIRST (priority ≈850; visit every store before revisiting). Then stale visits in oldest-first order. Fill open budget after Tier 1+2 are slotted.
 
 PINNED TIMES (HARD CONSTRAINT — HIGHEST PRIORITY):
 Some Training stops are tagged with a time commitment Serena made to the store:
@@ -618,9 +618,21 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         ? daysBetween(today, new Date(a.visitDate))
         : null;
       if (stale != null && stale < CHECKIN_MIN_STALE_DAYS) continue;
-      // never-visited accounts with orders: low priority here — Sky's workflow
-      // should catch them via New Customer onboard flow.
-      const priority = stale != null ? Math.min(500, 400 + (stale - CHECKIN_MIN_STALE_DAYS)) : 300;
+      // Priority within Tier 3 (higher = higher rank in this file's
+      // sort-desc convention):
+      //   • Never-visited → 850 (FIRST — visit every store before
+      //     revisiting anyone). Just below Training (900) so booked
+      //     work still leads the day, but above every stale-by-cadence
+      //     visited account.
+      //   • Visited-and-stale → 400 + (stale - MIN_STALE), capped 500.
+      // Enforces Reid's rule: every store gets a visit at least once
+      // before we cycle back. New Customer Sales-floor flow still
+      // promotes orders-with-an-active-onboarding to Tier 1; this only
+      // catches accounts that have orders but no onboarding deal AND
+      // no visit yet (i.e. fell through the cracks).
+      const priority = stale != null
+        ? Math.min(500, 400 + (stale - CHECKIN_MIN_STALE_DAYS))
+        : 850;
       const geo = njRegion(a.city, a.zip);
       candidates.push({
         accountId: a.id,

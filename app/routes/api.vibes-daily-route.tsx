@@ -420,11 +420,16 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         stale = daysBetween(lastVisit, nowUtc);
         if (stale < CHECKIN_CADENCE_DAYS) continue; // Not due yet.
       }
-      // Priority: lower = higher. Visited-and-stale accounts go first
-      // (300 - stale days, capped). Never-visited last (priority 500).
+      // Priority within Tier 3 (lower = higher rank):
+      //   • Never-visited accounts → priority 150 (FIRST — every store
+      //     in the area gets a visit before we start cycling repeats)
+      //   • Visited-and-stale → priority 500 - stale, floor 200
+      // This order enforces Reid's rule: visit every store at least once
+      // before going back to anyone for a check-in. Onboardings (0) and
+      // Trainings (100) still beat both Tier 3 buckets.
       const priority = lastVisit
         ? Math.max(200, 500 - (stale || 0))
-        : 500;
+        : 150;
       const geo = njRegion(a.Billing_City, a.Billing_Code);
       tier3.push({
         accountId: a.id,
