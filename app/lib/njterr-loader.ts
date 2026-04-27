@@ -192,6 +192,7 @@ export function buildNjTerrLoader(territory: RepId) {
       }
     }
 
+    let eventsError: string | null = null;
     const events: DashEvent[] | null = accessToken
       ? await fetchTerritoryEvents(
           accessToken,
@@ -201,6 +202,7 @@ export function buildNjTerrLoader(territory: RepId) {
         ).catch((err) => {
           // eslint-disable-next-line no-console
           console.warn(`[/nj${territory}] events fetch failed`, err);
+          eventsError = err?.message?.slice(0, 500) || String(err).slice(0, 500);
           return null;
         })
       : null;
@@ -221,6 +223,8 @@ export function buildNjTerrLoader(territory: RepId) {
       upcoming: {ok: events !== null, events: upcomingEvents},
       past: {ok: events !== null, events: pastEvents},
       hasZoho,
+      // @ts-ignore — debug field, not on the public type
+      _eventsError: eventsError,
     };
     return json(data);
   };
