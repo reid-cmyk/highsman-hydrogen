@@ -86,19 +86,26 @@ export const SOUTH_CITIES = new Set<string>([
   'southampton','tabernacle','pemberton','new lisbon','fort dix',
   // Atlantic (inland, non-shore) gaps:
   'absecon','galloway','northfield','linwood','somers point','buena','hamilton township',
+  // Atlantic City peninsula — promoted from OUTLIER to regular South coverage:
+  // ~55 min from Cherry Hill and only adds ~30-45 min vs. ending the day in
+  // the Cherry Hill cluster. Worth the round trip on a Thursday.
+  'atlantic city','ventnor','ventnor city','margate','margate city','longport','brigantine',
   // Ocean County gaps (inland):
   'barnegat','tuckerton','little egg harbor','stafford','waretown','bayville',
   // Cumberland / Salem:
   'woodstown',
 ]);
 
-// Deep shore / LBI / Cape May — ≥2hr drive from Union NJ. Dispensaries here
-// (Shore House Canna et al.) get quarterly drop-in runs, not weekly visits.
-// Every weekly planner filters these out; Sky's button flags them for direct
-// arrangement with Serena.
+// Deep shore: Cape May / LBI / Ocean County beach strip. ≥2hr drive from
+// Union NJ with no real cluster of dispensaries to make a weekly visit
+// efficient. These get quarterly drop-in runs only; Sky's button flags them
+// for direct arrangement with Serena.
+//
+// NOTE — Atlantic City + immediate neighbors (Ventnor / Margate / Longport /
+// Brigantine) used to live here but were promoted to regular SOUTH coverage
+// on Reid's call: they sit ~55 min from Cherry Hill and have real
+// dispensaries that should ride along on Thursday's South route.
 export const OUTLIER_CITIES = new Set<string>([
-  'atlantic city','ventnor','ventnor city','margate','margate city','longport',
-  'brigantine',
   'ocean city','sea isle city','avalon','stone harbor','wildwood','wildwood crest',
   'north wildwood','cape may','cape may court house','cape may point','rio grande',
   'west cape may','villas','del haven','dennis','dennisville','ocean view',
@@ -149,18 +156,24 @@ function regionFromZip(
   if (p2 === '08') {
     // Cape May county
     if (p3 === '084') return {region: 'south', infrequentDropIn: true};
-    // Atlantic City / LBI coastal
+    // Coastal SOUTH zips. AC peninsula (08203 Brigantine + 08401-08406 AC /
+    // Margate / Longport / Ventnor) is now regular South coverage — NOT
+    // outlier — because Serena can roll AC into a Thursday after Cherry Hill.
+    // True outliers below: Cape May / Ocean City / LBI / Wildwood.
     // 08201 Absecon is inland (SOUTH, not outlier).
-    // 08202 Avalon, 08203 Brigantine, 08204 Cape May, 08205 Absecon/Galloway,
+    // 08202 Avalon, 08203 Brigantine (regular), 08204 Cape May (outlier),
     // 08210 CMCH, 08225 Northfield, 08226 Ocean City, 08230 Ocean View,
     // 08232 Pleasantville, 08234 Northfield, 08240 Mays Landing, 08243 Sea Isle,
     // 08244 Somers Point, 08246 Tuckahoe, 08247 Stone Harbor, 08248 Strathmere,
-    // 08251 Villas, 08260 Wildwood, 08401-08406 Atlantic City.
+    // 08251 Villas, 08260 Wildwood, 08401-08406 Atlantic City peninsula (regular).
     const n = Number(zip);
-    if (n === 8202 || n === 8203 || n === 8204) return {region: 'south', infrequentDropIn: true};
+    // AC peninsula — regular SOUTH (no infrequentDropIn flag).
+    if (n === 8203) return {region: 'south', infrequentDropIn: false};
+    if (n >= 8401 && n <= 8406) return {region: 'south', infrequentDropIn: false};
+    // Cape May proper + Avalon — true outliers (≥2 hr from Union).
+    if (n === 8202 || n === 8204) return {region: 'south', infrequentDropIn: true};
     if (n === 8226 || n === 8230 || n === 8243 || n === 8247 || n === 8248) return {region: 'south', infrequentDropIn: true};
     if (n === 8251 || n === 8260) return {region: 'south', infrequentDropIn: true};
-    if (n >= 8401 && n <= 8406) return {region: 'south', infrequentDropIn: true};
     // LBI (Beach Haven / Barnegat Light / Ship Bottom / Surf City)
     if (n >= 8006 && n <= 8008) return {region: 'south', infrequentDropIn: true};
     if (n === 8092) return {region: 'south', infrequentDropIn: true};
