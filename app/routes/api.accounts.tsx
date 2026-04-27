@@ -437,7 +437,27 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       ZOHO_REFRESH_TOKEN: refreshToken,
     });
 
-    const accounts = await searchAccounts(query, accessToken, scope);
+    let accounts = await searchAccounts(query, accessToken, scope);
+
+    // Fallback: if NJ-scoped prefix search returned nothing, do a global
+    // word search and filter to NJ on our side. This catches:
+    //   • Mid-name fragments — "bellmawr" finds "Curaleaf - Bellmawr"
+    //   • Records missing Account_State / Billing_State but with the city
+    //     in Billing_City (we treat any non-NJ-named city as still NJ if
+    //     the global word search returns it AND state is blank — staff
+    //     intent on /njpopups is to find an NJ store).
+    //   • Names with leading articles like "The Apothecarium" where users
+    //     type "apothecarium" without the prefix.
+    if (scope === 'nj' && accounts.length === 0 && query.trim().length >= 2) {
+      const allMatches = await searchAccounts(query, accessToken, 'all');
+      accounts = allMatches.filter((a) => {
+        const st = (a.state || '').trim().toUpperCase();
+        // Accept exact NJ codes / full name, or blank state (we'll trust
+        // the user's intent on this NJ-scoped page).
+        return st === 'NJ' || st === 'NEW JERSEY' || st === '' || st === 'N.J.';
+      });
+    }
+
     return json({accounts}, {
       headers: {
         'Cache-Control': 'public, max-age=300', // cache 5 min
