@@ -2445,6 +2445,18 @@ a.hs-contact-meta-cell:hover i{ color:var(--gold); }
   border-color:rgba(184,132,255,0.45);
 }
 
+/* Convert pill — green so it reads as a "this is the conversion event" win
+   action, distinct from the utility pills (call/text/email). Only shows on
+   Lead cards. */
+.hs-action-pill.is-convert{
+  border-left:2px solid var(--green);
+}
+.hs-action-pill.is-convert i{ color:var(--green); }
+.hs-action-pill.is-convert:hover{
+  background:rgba(34,197,94,0.12);
+  border-color:rgba(34,197,94,0.45);
+}
+
 /* Flag-for-Pete pill — orange accent so the hand-off button reads as a
    distinct action, not "just another utility button". When the account is
    already on Pete's queue (.is-active), flip to a filled orange state so
@@ -4169,3 +4181,87 @@ details[open] > summary .brief-history-chev{
 }
 
 
+
+/* ─── Conversion Funnel tab ─────────────────────────────────────────────────
+   Renders /api/conversion-stats. Top row = company-wide totals, second row =
+   per-rep cards. Same metric layout in both rows so reps can scan their own
+   column without re-orienting. */
+.hs-funnel-company{
+  margin: 12px 16px 0;
+  background: linear-gradient(180deg, #0a0a0a 0%, #0f0f0f 100%);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 18px 20px;
+}
+.hs-funnel-company-head{
+  display:flex; justify-content:space-between; align-items:baseline;
+  margin-bottom:14px;
+}
+.hs-funnel-eyebrow{
+  font-size:10px; letter-spacing:0.22em; text-transform:uppercase;
+  color: var(--gold);
+}
+.hs-funnel-company-month{
+  color:#A9ACAF; font-size:12px; letter-spacing:0.08em; text-transform:uppercase;
+}
+.hs-funnel-grid{
+  display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:10px;
+}
+@media (max-width: 720px){
+  .hs-funnel-grid{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+.hs-funnel-cell{
+  background: rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:10px; padding:12px 14px;
+}
+.hs-funnel-cell-label{
+  font-size:10px; letter-spacing:0.18em; text-transform:uppercase; color:#A9ACAF;
+}
+.hs-funnel-cell-value{
+  font-family: 'Teko', sans-serif; font-weight:600;
+  font-size:32px; line-height:1.0; margin-top:4px; color:#fff;
+}
+.hs-funnel-cell-value.is-revenue{ color: var(--gold); }
+.hs-funnel-stage-row{
+  display:flex; gap:12px; flex-wrap:wrap; font-family: 'Barlow Semi Condensed', sans-serif;
+  font-size:13px; margin-top:6px; color:#E5E7EB;
+}
+.hs-funnel-stage-row .hs-funnel-stage-pill{
+  display:inline-flex; align-items:center; gap:6px; padding:3px 10px;
+  border-radius:999px; background: rgba(255,255,255,0.06);
+}
+.hs-funnel-stage-pill .hs-dot{
+  width:6px; height:6px; border-radius:999px; display:inline-block;
+}
+
+.hs-funnel-reps{
+  display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px;
+  margin: 12px 16px 0;
+}
+@media (max-width: 720px){
+  .hs-funnel-reps{ grid-template-columns: 1fr; }
+}
+.hs-funnel-rep{
+  background:#0a0a0a; border:1px solid rgba(255,255,255,0.1);
+  border-radius:12px; padding:16px;
+}
+.hs-funnel-rep-head{
+  display:flex; align-items:baseline; justify-content:space-between;
+  margin-bottom:12px;
+}
+.hs-funnel-rep-name{
+  font-family: 'Teko', sans-serif; font-size: 22px; letter-spacing:0.04em;
+  text-transform: uppercase; color:#fff;
+}
+.hs-funnel-rep-tag{
+  font-size:10px; letter-spacing:0.2em; text-transform:uppercase;
+  color: var(--gold);
+}
+.hs-funnel-rep .hs-funnel-grid{
+  grid-template-columns: repeat(2, minmax(0,1fr));
+}
+.hs-funnel-loading{
+  display:flex; align-items:center; gap:10px; color:#A9ACAF;
+  font-family: 'Barlow Semi Condensed', sans-serif;
+}

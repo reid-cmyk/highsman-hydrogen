@@ -107,6 +107,10 @@
         <span>Accounts</span>
         <span id="alert-sidebar-dot" class="ml-auto hidden alert-sidebar-dot"></span>
       </button>
+      <button onclick="showTab('funnel')" id="nav-funnel" class="hs-nav-btn">
+        <i class="fa-solid fa-chart-line hs-nav-icon"></i>
+        <span>Funnel</span>
+      </button>
 
       <div class="hs-nav-group-label hs-nav-group-spaced">Tools</div>
       <button onclick="showTab('compose')" id="nav-compose" class="hs-nav-btn">
@@ -567,6 +571,37 @@
       </div><!-- /accounts -->
 
 
+      <!-- ═══════════════════ FUNNEL ═══════════════════ -->
+      <!-- Conversion-tracking dashboard. Pulls from /api/conversion-stats:
+           leads contacted, leads in each stage, leads converted, $ revenue
+           — broken out company-wide and per-rep so Sky and Pete can see
+           the same numbers and a little friendly competition. -->
+      <div id="tab-funnel" class="tab-content hidden">
+        <div class="hs-toolbar">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <label for="funnel-month" class="text-brand-gray font-barlow text-xs uppercase tracking-wider">Month</label>
+            <input type="month" id="funnel-month" class="hs-input" style="max-width:180px;" />
+          </div>
+          <button onclick="loadFunnel({force:true})" class="hs-btn-ghost" style="margin-left:auto;">
+            <i class="fa-solid fa-rotate"></i> Refresh
+          </button>
+        </div>
+
+        <!-- Company-wide row — single dark card with the four headline metrics. -->
+        <div id="funnel-company" class="hs-funnel-company">
+          <div class="hs-funnel-loading">
+            <i class="fa-solid fa-circle-notch fa-spin"></i>
+            <span>Loading funnel…</span>
+          </div>
+        </div>
+
+        <!-- Per-rep cards. Sky on the left, Pete on the right.
+             Same shape so a rep can scan their own column without
+             re-orienting. Order is alphabetical-by-firstname for fairness. -->
+        <div id="funnel-reps" class="hs-funnel-reps"></div>
+      </div><!-- /funnel -->
+
+
       <!-- ═══════════════════ EMAIL TEMPLATES ═══════════════════ -->
       <div id="tab-compose" class="tab-content hidden">
 
@@ -1021,6 +1056,52 @@
       <button onclick="closeBrief()" class="hs-btn-ghost px-4">
         Close
       </button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════
+     CONVERT TO ACCOUNT MODAL — Lead → Account/Contact/Deal
+══════════════════════════════════════════════════ -->
+<!-- Promotes a Lead to an Account via Zoho's built-in convertLead flow.
+     Always creates a Deal (per Reid 2026-04-27) so the converted record
+     lands on the New Customers funnel the same way a first LeafLink order
+     does. Reps only see this modal from a Lead card's Convert pill. -->
+<div id="convert-modal" class="hs-overlay hidden" role="dialog" aria-modal="true" aria-label="Convert lead to account">
+  <div class="hs-modal max-w-md">
+    <div class="hs-modal-header">
+      <div>
+        <div class="hs-modal-eyebrow">Convert Lead</div>
+        <div class="hs-modal-title" id="convert-lead-name">—</div>
+      </div>
+      <button onclick="closeConvertModal()" class="hs-close-btn" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="p-6 space-y-4">
+      <p class="text-brand-gray text-sm font-barlow leading-relaxed">
+        This creates an Account, a Contact, and a Deal in Zoho. The Lead disappears from the Leads tab and the new Account shows up under Accounts. If you put a $ amount in, it lands on the funnel as won revenue.
+      </p>
+      <div>
+        <label class="hs-label" for="convert-amount">First-order amount (optional, $)</label>
+        <input id="convert-amount" type="number" min="0" step="0.01" placeholder="0.00"
+               class="hs-input w-full" />
+      </div>
+      <div>
+        <label class="hs-label" for="convert-stage">Deal stage</label>
+        <select id="convert-stage" class="hs-input w-full">
+          <option value="Closed Won" selected>Closed Won</option>
+          <option value="Negotiation">Negotiation</option>
+          <option value="Qualification">Qualification</option>
+        </select>
+      </div>
+    </div>
+    <div class="hs-modal-actions">
+      <button id="convert-submit-btn" onclick="submitConvert()" class="hs-btn-primary">
+        <i class="fa-solid fa-right-left mr-1"></i> Convert
+      </button>
+      <button onclick="closeConvertModal()" class="hs-btn-ghost px-4">Cancel</button>
     </div>
   </div>
 </div>

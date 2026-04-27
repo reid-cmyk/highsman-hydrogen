@@ -175,6 +175,49 @@
     .btn-action.copy-intro { background: rgba(212,175,55,0.14); color: #f0d77a;
       border-color: rgba(212,175,55,0.35); }
     .btn-action.copy-intro:hover { background: rgba(212,175,55,0.22); }
+    /* Convert pill — green so the win-action reads distinct from utility pills. */
+    .btn-action.convert { background: rgba(34,197,94,0.14); color: #22C55E;
+      border-color: rgba(34,197,94,0.35); }
+    .btn-action.convert:hover { background: rgba(34,197,94,0.22); }
+
+    /* Funnel tab — company-wide row + per-rep cards. Same layout as
+       /sales-floor so Pete and Sky see identical UIs. */
+    .nb-funnel-company { background: linear-gradient(180deg, #0a0a0a 0%, #0f0f0f 100%);
+      border:1px solid rgba(255,255,255,0.1); border-radius:12px;
+      padding:18px 20px; margin-bottom:12px; }
+    .nb-funnel-company-head { display:flex; justify-content:space-between;
+      align-items:baseline; margin-bottom:14px; }
+    .nb-funnel-eyebrow { font-size:10px; letter-spacing:0.22em;
+      text-transform:uppercase; color:#D4AF37; }
+    .nb-funnel-grid { display:grid; grid-template-columns: repeat(4, minmax(0,1fr));
+      gap:10px; }
+    @media (max-width: 720px) { .nb-funnel-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+    .nb-funnel-cell { background: rgba(255,255,255,0.03);
+      border:1px solid rgba(255,255,255,0.08); border-radius:10px;
+      padding:12px 14px; }
+    .nb-funnel-cell-label { font-size:10px; letter-spacing:0.18em;
+      text-transform:uppercase; color:#A9ACAF; }
+    .nb-funnel-cell-value { font-family: 'Teko', sans-serif; font-weight:600;
+      font-size:32px; line-height:1.0; margin-top:4px; color:#fff; }
+    .nb-funnel-cell-value.is-revenue { color:#D4AF37; }
+    .nb-funnel-stage-row { display:flex; gap:8px; flex-wrap:wrap;
+      font-size:13px; margin-top:6px; color:#E5E7EB;
+      font-family: 'Barlow Semi Condensed', sans-serif; }
+    .nb-funnel-stage-pill { display:inline-flex; align-items:center; gap:6px;
+      padding:3px 10px; border-radius:999px; background: rgba(255,255,255,0.06); }
+    .nb-funnel-stage-pill .nb-dot { width:6px; height:6px; border-radius:999px; }
+    .nb-funnel-reps { display:grid; grid-template-columns: repeat(2, minmax(0,1fr));
+      gap:10px; }
+    @media (max-width: 720px) { .nb-funnel-reps { grid-template-columns: 1fr; } }
+    .nb-funnel-rep { background:#0a0a0a; border:1px solid rgba(255,255,255,0.1);
+      border-radius:12px; padding:16px; }
+    .nb-funnel-rep-head { display:flex; align-items:baseline;
+      justify-content:space-between; margin-bottom:12px; }
+    .nb-funnel-rep-name { font-family: 'Teko', sans-serif; font-size: 22px;
+      letter-spacing:0.04em; text-transform:uppercase; color:#fff; }
+    .nb-funnel-rep-tag { font-size:10px; letter-spacing:0.2em;
+      text-transform:uppercase; color:#D4AF37; }
+    .nb-funnel-rep .nb-funnel-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
     .btn-action.newproduct { background: rgba(212,175,55,0.14); color: #f0d77a;
                              border-color: rgba(212,175,55,0.35); }
     .btn-action.newproduct:hover { background: rgba(212,175,55,0.22); }
@@ -562,6 +605,9 @@
     <button class="hs-tab" id="tab-followups-btn" onclick="showTab('followups')" role="tab" aria-selected="false">
       <i class="fa-solid fa-arrows-rotate"></i> Follow-Ups <span class="count" id="tab-followups-count">0</span>
     </button>
+    <button class="hs-tab" id="tab-funnel-btn" onclick="showTab('funnel')" role="tab" aria-selected="false">
+      <i class="fa-solid fa-chart-line"></i> Funnel
+    </button>
   </div>
 
   <!-- LEAD STATUS FILTER ROW — All / Hot / Warm / New
@@ -604,6 +650,27 @@
       <i class="fa-solid fa-circle-notch"></i>
       <div style="margin-top:10px;">Loading leads…</div>
     </div>
+  </div>
+
+  <!-- FUNNEL — hidden until showTab('funnel'). Mirrors the sales-floor tab so
+       Pete sees the same numbers Sky sees, side-by-side per rep + a
+       company-wide row up top. Conversion-tracking pulls from
+       /api/conversion-stats. -->
+  <div id="funnel-panel" style="display:none; padding: 12px 16px 0;">
+    <div style="display:flex; gap:10px; align-items:center; margin-bottom:12px;">
+      <label for="funnel-month" style="font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color:#A9ACAF;">Month</label>
+      <input type="month" id="funnel-month" class="hs-filter" style="max-width:180px;" />
+      <button type="button" onclick="loadFunnel(true)" class="hs-filter" style="margin-left:auto;">
+        <i class="fa-solid fa-rotate"></i> Refresh
+      </button>
+    </div>
+
+    <div id="funnel-company" class="nb-funnel-company">
+      <div style="color:#A9ACAF; font-family:'Barlow Semi Condensed',sans-serif; font-size:13px;">
+        <i class="fa-solid fa-circle-notch fa-spin" style="margin-right:8px;"></i> Loading funnel…
+      </div>
+    </div>
+    <div id="funnel-reps" class="nb-funnel-reps"></div>
   </div>
 
   <div class="footer-mark">Spark Greatness™</div>
@@ -713,6 +780,46 @@
     </div>
     <div class="form-actions">
       <button type="button" class="btn-ghost" onclick="closeBrief()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ CONVERT LEAD MODAL ════════════════
+     Promotes a Lead to an Account + Contact + Deal via Zoho's built-in
+     convertLead flow. Always creates a Deal so the converted record lands
+     on the New Customers funnel the same way a first LeafLink order does
+     (per Reid 2026-04-27). -->
+<div class="hs-modal" id="convert-modal" role="dialog" aria-modal="true" aria-labelledby="convert-modal-title">
+  <div class="hs-modal-inner" style="max-width:480px;">
+    <div class="hs-modal-head">
+      <div>
+        <div class="hs-modal-sub">Convert Lead</div>
+        <div class="hs-modal-title" id="convert-modal-title">—</div>
+      </div>
+      <button class="hs-modal-close" onclick="closeConvertModal()" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <p style="color:#A9ACAF;font-size:13px;line-height:1.55;margin:0 0 16px 0;font-family:'Barlow Semi Condensed',sans-serif;">
+      Creates an Account, Contact, and Deal in Zoho. The Lead disappears from this list and the new Account shows up under Sky's Accounts. If you put a $ amount in, it lands on the funnel as won revenue.
+    </p>
+    <div class="form-row">
+      <label class="form-label" for="convert-amount">First-order amount (optional, $)</label>
+      <input type="number" min="0" step="0.01" placeholder="0.00" id="convert-amount" class="form-input" />
+    </div>
+    <div class="form-row">
+      <label class="form-label" for="convert-stage">Deal stage</label>
+      <select id="convert-stage" class="form-select">
+        <option value="Closed Won" selected>Closed Won</option>
+        <option value="Negotiation">Negotiation</option>
+        <option value="Qualification">Qualification</option>
+      </select>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn-ghost" onclick="closeConvertModal()">Cancel</button>
+      <button type="button" id="convert-submit-btn" class="btn-primary" onclick="submitConvert()">
+        <i class="fa-solid fa-right-left"></i> Convert
+      </button>
     </div>
   </div>
 </div>
@@ -900,6 +1007,217 @@
   }
 
   // ──────────────────────────────────────────────────────────────────────
+  // Convert Lead → Account modal
+  // ──────────────────────────────────────────────────────────────────────
+  // POSTs /api/lead-convert which calls Zoho's built-in convertLead action.
+  // Always creates a Deal (per Reid 2026-04-27) so the converted Lead lands
+  // on Sky's New Customers funnel just like a first LeafLink order would.
+  // After success the Lead drops out of Pete's list immediately — no full
+  // refresh needed.
+  let convertingLeadId = '';
+  let convertingLeadName = '';
+
+  function openConvertModal(leadId, leadName) {
+    convertingLeadId = String(leadId || '');
+    convertingLeadName = String(leadName || 'Lead');
+    document.getElementById('convert-modal-title').textContent = convertingLeadName;
+    document.getElementById('convert-amount').value = '';
+    document.getElementById('convert-stage').value = 'Closed Won';
+    document.getElementById('convert-modal').classList.add('open');
+  }
+
+  function closeConvertModal() {
+    convertingLeadId = '';
+    convertingLeadName = '';
+    document.getElementById('convert-modal').classList.remove('open');
+  }
+
+  async function submitConvert() {
+    if (!convertingLeadId) {
+      closeConvertModal();
+      return;
+    }
+    const btn = document.getElementById('convert-submit-btn');
+    const amountRaw = document.getElementById('convert-amount').value.trim();
+    const amount = amountRaw ? Number(amountRaw) : 0;
+    const stage = document.getElementById('convert-stage').value || 'Closed Won';
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Converting…';
+    try {
+      const res = await fetch('/api/lead-convert', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          leadId: convertingLeadId,
+          dealAmount: Number.isFinite(amount) ? amount : 0,
+          dealStage: stage,
+          source: 'manual',
+        }),
+      });
+      const data = await res.json().catch(() => ({ok: false}));
+      if (!data.ok) throw new Error(data.error || 'convert failed');
+      // Drop from local state so the list updates without a full reload.
+      const droppedId = convertingLeadId;
+      const droppedName = convertingLeadName;
+      leads = leads.filter((l) => String(l.id) !== droppedId);
+      document.getElementById('stat-leads').textContent = leads.length;
+      document.getElementById('tab-leads-count').textContent = leads.length;
+      if (typeof updateLeadFilterCounts === 'function') updateLeadFilterCounts();
+      renderCurrent();
+      closeConvertModal();
+      toast(`Converted "${droppedName}" to Account ✓`);
+    } catch (err) {
+      toast(err.message || 'Convert failed', 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-right-left"></i> Convert';
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Conversion Funnel (Pete + Sky head-to-head)
+  // ──────────────────────────────────────────────────────────────────────
+  let funnelLoading = false;
+  let funnelLastFetched = 0;
+  let funnelLastMonth = '';
+
+  function defaultFunnelMonth() {
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: '2-digit',
+    });
+    const parts = fmt.formatToParts(new Date());
+    const y = parts.find((p) => p.type === 'year')?.value;
+    const m = parts.find((p) => p.type === 'month')?.value;
+    return `${y}-${m}`;
+  }
+
+  async function loadFunnel(force) {
+    if (funnelLoading) return;
+    const monthInput = document.getElementById('funnel-month');
+    if (monthInput && !monthInput.value) monthInput.value = defaultFunnelMonth();
+    const month = (monthInput?.value || defaultFunnelMonth()).trim();
+    if (!force && funnelLastFetched && funnelLastMonth === month && Date.now() - funnelLastFetched < 60_000) return;
+    funnelLoading = true;
+    try {
+      const res = await fetch(`/api/conversion-stats?month=${encodeURIComponent(month)}`, {
+        credentials: 'same-origin',
+      });
+      const data = await res.json().catch(() => ({ok: false}));
+      if (!data?.company) {
+        renderFunnelEmpty(data?.warning || 'Funnel unavailable.');
+        return;
+      }
+      renderFunnel(data);
+      funnelLastFetched = Date.now();
+      funnelLastMonth = month;
+    } finally {
+      funnelLoading = false;
+    }
+  }
+
+  function fmtMoney(n) {
+    const v = Number(n) || 0;
+    return v >= 1000
+      ? `$${(v / 1000).toFixed(v >= 10_000 ? 0 : 1)}K`
+      : `$${v.toFixed(0)}`;
+  }
+  function fmtMonthLabel(yyyymm) {
+    const [y, m] = String(yyyymm || '').split('-').map(Number);
+    if (!y || !m) return '';
+    const d = new Date(Date.UTC(y, m - 1, 1));
+    return d.toLocaleString('en-US', {month: 'long', year: 'numeric', timeZone: 'UTC'});
+  }
+  function stagePillsHtml(byStage) {
+    const order = ['hot', 'warm', 'new', 'cold'];
+    const colors = {hot: '#DC2626', warm: '#F5A623', new: '#60A5FA', cold: '#6B7280'};
+    return `<div class="nb-funnel-stage-row">
+      ${order
+        .map(
+          (s) => `<span class="nb-funnel-stage-pill">
+            <span class="nb-dot" style="background:${colors[s]};"></span>
+            <strong style="color:#fff;">${byStage?.[s] || 0}</strong>
+            <span style="text-transform:uppercase;font-size:11px;letter-spacing:0.1em;color:#A9ACAF;">${s}</span>
+          </span>`,
+        )
+        .join('')}
+    </div>`;
+  }
+  function metricsCellsHtml(m) {
+    return `
+      <div class="nb-funnel-cell">
+        <div class="nb-funnel-cell-label">Contacted</div>
+        <div class="nb-funnel-cell-value">${m.contacted || 0}</div>
+      </div>
+      <div class="nb-funnel-cell">
+        <div class="nb-funnel-cell-label">Open Pipeline</div>
+        <div class="nb-funnel-cell-value">${(m.byStage?.hot || 0) + (m.byStage?.warm || 0) + (m.byStage?.new || 0)}</div>
+        ${stagePillsHtml(m.byStage)}
+      </div>
+      <div class="nb-funnel-cell">
+        <div class="nb-funnel-cell-label">Converted</div>
+        <div class="nb-funnel-cell-value">${m.converted || 0}</div>
+      </div>
+      <div class="nb-funnel-cell">
+        <div class="nb-funnel-cell-label">Revenue (Closed Won)</div>
+        <div class="nb-funnel-cell-value is-revenue">${fmtMoney(m.revenue || 0)}</div>
+      </div>`;
+  }
+  function renderFunnel(data) {
+    const company = data?.company || {};
+    const reps = data?.reps || {};
+    const monthLabel = fmtMonthLabel(data?.month);
+    const companyEl = document.getElementById('funnel-company');
+    if (companyEl) {
+      companyEl.innerHTML = `
+        <div class="nb-funnel-company-head">
+          <div>
+            <div class="nb-funnel-eyebrow">Company-Wide</div>
+            <div class="nb-funnel-rep-name">All Reps</div>
+          </div>
+          <div style="color:#A9ACAF;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">${escapeHtml(monthLabel)}</div>
+        </div>
+        <div class="nb-funnel-grid">${metricsCellsHtml(company)}</div>`;
+    }
+    const repsEl = document.getElementById('funnel-reps');
+    if (repsEl) {
+      const order = [
+        {id: 'pete', name: 'Peter Casey', tag: 'New Business'},
+        {id: 'sky', name: 'Sky Lima', tag: 'Sales Floor'},
+      ];
+      repsEl.innerHTML = order.map((r) => {
+        const m = reps[r.id] || {byStage: {}};
+        return `<div class="nb-funnel-rep">
+          <div class="nb-funnel-rep-head">
+            <div class="nb-funnel-rep-name">${escapeHtml(r.name)}</div>
+            <div class="nb-funnel-rep-tag">${escapeHtml(r.tag)}</div>
+          </div>
+          <div class="nb-funnel-grid">${metricsCellsHtml(m)}</div>
+        </div>`;
+      }).join('');
+    }
+  }
+  function renderFunnelEmpty(msg) {
+    const el = document.getElementById('funnel-company');
+    if (el) {
+      el.innerHTML = `<div style="text-align:center;padding:40px 16px;color:#6a6d70;font-size:14px;">
+        <i class="fa-solid fa-chart-line" style="font-size:32px;color:#2a2d30;margin-bottom:10px;display:block;"></i>
+        ${escapeHtml(msg || 'Funnel unavailable.')}
+      </div>`;
+    }
+    const reps = document.getElementById('funnel-reps');
+    if (reps) reps.innerHTML = '';
+  }
+  // Hook the month picker — change refetches /api/conversion-stats.
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('funnel-month')?.addEventListener('change', () => {
+      loadFunnel(true).catch(() => {});
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
   // Rendering
   // ──────────────────────────────────────────────────────────────────────
   function showTab(tab) {
@@ -908,10 +1226,22 @@
     document.getElementById(`tab-${tab}-btn`).classList.add('active');
     document.querySelectorAll('.hs-tab').forEach(t => t.setAttribute('aria-selected', 'false'));
     document.getElementById(`tab-${tab}-btn`).setAttribute('aria-selected', 'true');
+
+    const isFunnel = tab === 'funnel';
     // Hot/Warm/New filter row only makes sense on the Leads tab.
     const filterRow = document.getElementById('lead-filter-row');
     if (filterRow) filterRow.style.display = tab === 'leads' ? '' : 'none';
-    renderCurrent();
+    // Toolbar (search + state filter) is only relevant on Leads/Follow-Ups.
+    const toolbar = document.querySelector('.hs-toolbar');
+    if (toolbar) toolbar.style.display = isFunnel ? 'none' : '';
+    // Card list hides on Funnel; the Funnel panel takes over.
+    const list = document.getElementById('card-list');
+    if (list) list.style.display = isFunnel ? 'none' : '';
+    const funnelPanel = document.getElementById('funnel-panel');
+    if (funnelPanel) funnelPanel.style.display = isFunnel ? '' : 'none';
+
+    if (isFunnel) loadFunnel(false).catch(() => {});
+    else renderCurrent();
   }
 
   // Hot/Warm/New filter — same vocabulary as /sales-floor. Called from the
@@ -1081,6 +1411,9 @@
           </button>
           <button class="btn-action" onclick='claimOrHeartbeat(${zid}); openLogModal({module:"Leads", id:${zid}, name:${JSON.stringify(name)}, phone:${JSON.stringify(phone)}, email:${JSON.stringify(email)}})'>
             <i class="fa-solid fa-pen-to-square"></i> Log
+          </button>
+          <button class="btn-action convert" onclick='claimOrHeartbeat(${zid}); openConvertModal(${JSON.stringify(l.id)}, ${JSON.stringify(name)})' title="Convert to Account + Deal">
+            <i class="fa-solid fa-right-left"></i> Convert
           </button>
         </div>
       </article>`;

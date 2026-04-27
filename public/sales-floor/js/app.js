@@ -62,6 +62,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Auto-sync from Zoho on page load. If the CRM isn't configured or returns
   // empty, fall back to demo data so the dashboard is never blank.
   bootstrapCRM();
+
+  // Funnel month picker — change refetches /api/conversion-stats. Default
+  // is set inside loadFunnel() the first time the tab opens.
+  document.getElementById('funnel-month')?.addEventListener('change', () => {
+    loadFunnel({force: true}).catch(() => {});
+  });
 });
 
 function hydrateRepFromServer() {
@@ -146,6 +152,7 @@ function showTab(tab) {
     orders: ['Orders Due', 'Reorders, low inventory, off-menu shops'],
     newcustomers: ['New Customers', 'First-time Highsman shops'],
     accounts: ['Accounts', 'Account management'],
+    funnel: ['Funnel', 'Conversion tracking — Sky vs Pete'],
     compose: ['Email Templates', 'One-click personalized emails'],
     sms: ['Text', 'Two-way SMS via Quo'],
     issues: ['Issue Reporting', 'Customer issue tracking'],
@@ -167,6 +174,177 @@ function showTab(tab) {
   if (tab === 'orders' || tab === 'newcustomers') {
     loadLeaflinkOrders({force: false}).catch(() => {});
   }
+  if (tab === 'funnel') {
+    loadFunnel({force: false}).catch(() => {});
+  }
+}
+
+// ─── Conversion Funnel ────────────────────────────────────────────────────
+// Pulls /api/conversion-stats and renders the company-wide row + per-rep
+// cards. Default to the current NJ-local month; users can pick a different
+// month via the <input type="month">. 60s cache mirrors LeafLink so opening
+// the tab repeatedly doesn't hammer the endpoint.
+let funnelLoading = false;
+let funnelLastFetched = 0;
+let funnelLastMonth = '';
+
+function defaultFunnelMonth() {
+  // YYYY-MM in America/New_York. Avoids the late-night UTC roll where the
+  // browser would say next month before NJ tipped over.
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+  });
+  const parts = fmt.formatToParts(new Date());
+  const y = parts.find((p) => p.type === 'year')?.value;
+  const m = parts.find((p) => p.type === 'month')?.value;
+  return `${y}-${m}`;
+}
+
+async function loadFunnel({force = false} = {}) {
+  if (funnelLoading) return;
+  const monthInput = document.getElementById('funnel-month');
+  if (monthInput && !monthInput.value) monthInput.value = defaultFunnelMonth();
+  const month = (monthInput?.value || defaultFunnelMonth()).trim();
+
+  if (
+    !force &&
+    funnelLastFetched &&
+    funnelLastMonth === month &&
+    Date.now() - funnelLastFetched < 60_000
+  ) {
+    return;
+  }
+
+  funnelLoading = true;
+  try {
+    const res = await fetch(`/api/conversion-stats?month=${encodeURIComponent(month)}`, {
+      credentials: 'same-origin',
+    });
+    const data = await res.json().catch(() => ({ok: false}));
+    if (!data?.ok && !data?.company) {
+      renderFunnelEmpty(data?.warning || 'Funnel unavailable.');
+      return;
+    }
+    renderFunnel(data);
+    funnelLastFetched = Date.now();
+    funnelLastMonth = month;
+  } finally {
+    funnelLoading = false;
+  }
+}
+
+function fmtMoney(n) {
+  const v = Number(n) || 0;
+  return v >= 1000
+    ? `$${(v / 1000).toFixed(v >= 10_000 ? 0 : 1)}K`
+    : `$${v.toFixed(0)}`;
+}
+
+function fmtMonthLabel(yyyymm) {
+  const [y, m] = String(yyyymm || '').split('-').map(Number);
+  if (!y || !m) return '';
+  const d = new Date(Date.UTC(y, m - 1, 1));
+  return d.toLocaleString('en-US', {month: 'long', year: 'numeric', timeZone: 'UTC'});
+}
+
+function stagePillsHtml(byStage) {
+  const order = ['hot', 'warm', 'new', 'cold'];
+  const colors = {hot: '#DC2626', warm: '#F5A623', new: '#60A5FA', cold: '#6B7280'};
+  return `<div class="hs-funnel-stage-row">
+    ${order
+      .map(
+        (s) => `<span class="hs-funnel-stage-pill">
+          <span class="hs-dot" style="background:${colors[s]};"></span>
+          <strong style="color:#fff;">${byStage?.[s] || 0}</strong>
+          <span style="text-transform:uppercase;font-size:11px;letter-spacing:0.1em;color:#A9ACAF;">${s}</span>
+        </span>`,
+      )
+      .join('')}
+  </div>`;
+}
+
+function metricsCellsHtml(m) {
+  return `
+    <div class="hs-funnel-cell">
+      <div class="hs-funnel-cell-label">Contacted</div>
+      <div class="hs-funnel-cell-value">${m.contacted || 0}</div>
+    </div>
+    <div class="hs-funnel-cell">
+      <div class="hs-funnel-cell-label">Open Pipeline</div>
+      <div class="hs-funnel-cell-value">${
+        (m.byStage?.hot || 0) +
+        (m.byStage?.warm || 0) +
+        (m.byStage?.new || 0)
+      }</div>
+      ${stagePillsHtml(m.byStage)}
+    </div>
+    <div class="hs-funnel-cell">
+      <div class="hs-funnel-cell-label">Converted</div>
+      <div class="hs-funnel-cell-value">${m.converted || 0}</div>
+    </div>
+    <div class="hs-funnel-cell">
+      <div class="hs-funnel-cell-label">Revenue (Closed Won)</div>
+      <div class="hs-funnel-cell-value is-revenue">${fmtMoney(m.revenue || 0)}</div>
+    </div>`;
+}
+
+function renderFunnel(data) {
+  const company = data?.company || {};
+  const reps = data?.reps || {};
+  const monthLabel = fmtMonthLabel(data?.month);
+
+  const companyEl = document.getElementById('funnel-company');
+  if (companyEl) {
+    companyEl.innerHTML = `
+      <div class="hs-funnel-company-head">
+        <div>
+          <div class="hs-funnel-eyebrow">Company-Wide</div>
+          <div class="hs-funnel-rep-name">All Reps</div>
+        </div>
+        <div class="hs-funnel-company-month">${escapeHtml(monthLabel)}</div>
+      </div>
+      <div class="hs-funnel-grid">
+        ${metricsCellsHtml(company)}
+      </div>`;
+  }
+
+  const repsEl = document.getElementById('funnel-reps');
+  if (repsEl) {
+    // Show Sky + Pete side-by-side for friendly competition. Order
+    // alphabetical by first name (Peter, Sky) so it's stable.
+    const order = [
+      {id: 'pete', name: 'Peter Casey', tag: 'New Business'},
+      {id: 'sky', name: 'Sky Lima', tag: 'Sales Floor'},
+    ];
+    repsEl.innerHTML = order
+      .map((r) => {
+        const m = reps[r.id] || {byStage: {}};
+        return `<div class="hs-funnel-rep">
+          <div class="hs-funnel-rep-head">
+            <div class="hs-funnel-rep-name">${escapeHtml(r.name)}</div>
+            <div class="hs-funnel-rep-tag">${escapeHtml(r.tag)}</div>
+          </div>
+          <div class="hs-funnel-grid">
+            ${metricsCellsHtml(m)}
+          </div>
+        </div>`;
+      })
+      .join('');
+  }
+}
+
+function renderFunnelEmpty(msg) {
+  const el = document.getElementById('funnel-company');
+  if (el) {
+    el.innerHTML = `<div class="hs-empty-state py-8">
+      <div class="hs-empty-state-icon"><i class="fa-solid fa-chart-line"></i></div>
+      ${escapeHtml(msg || 'Funnel unavailable.')}
+    </div>`;
+  }
+  const reps = document.getElementById('funnel-reps');
+  if (reps) reps.innerHTML = '';
 }
 
 // ─── CRM Sync ─────────────────────────────────────────────────────────────────
@@ -491,6 +669,11 @@ function renderLeads(filter = currentFilter) {
       emailHandler: `claimOrHeartbeat(${JSON.stringify(l.id)}, 'claim'); quickEmail(${idx})`,
       textHandler: `claimOrHeartbeat(${JSON.stringify(l.id)}, 'claim'); quickText(${idx}, 'lead')`,
       briefHandler: `claimOrHeartbeat(${JSON.stringify(l.id)}, 'claim'); openBrief(${idx})`,
+      // "Convert to Account" — manual lead conversion. Opens the modal that
+      // collects an estimated first-order $ amount, then POSTs /api/lead-convert
+      // which calls Zoho's built-in convertLead action. After convert, the Lead
+      // disappears from the Leads list and the new Account shows on Accounts.
+      convertHandler: `claimOrHeartbeat(${JSON.stringify(l.id)}, 'claim'); openConvertModal(${idx})`,
       // Inline add-field pills write back to the Leads module.
       zohoModule: 'Leads',
       zohoId: l.id,
@@ -2659,6 +2842,70 @@ function quickEmail(idx) {
   showTab('compose');
 }
 
+// ─── Convert Lead → Account modal ─────────────────────────────────────────────
+// Opens the convert modal with the chosen Lead resolved by index. Submits to
+// /api/lead-convert which calls Zoho's built-in convertLead action. After a
+// successful POST we drop the Lead from local state and re-render so the rep
+// sees the change immediately — no full sync needed.
+let convertingLeadIdx = -1;
+
+function openConvertModal(idx) {
+  const lead = leads[idx];
+  if (!lead) return;
+  convertingLeadIdx = idx;
+  document.getElementById('convert-lead-name').textContent =
+    `${lead.Company || lead._fullName || 'Lead'}`;
+  document.getElementById('convert-amount').value = '';
+  document.getElementById('convert-stage').value = 'Closed Won';
+  document.getElementById('convert-modal').classList.remove('hidden');
+}
+
+function closeConvertModal() {
+  convertingLeadIdx = -1;
+  document.getElementById('convert-modal').classList.add('hidden');
+}
+
+async function submitConvert() {
+  const idx = convertingLeadIdx;
+  const lead = leads[idx];
+  if (!lead) {
+    closeConvertModal();
+    return;
+  }
+  const btn = document.getElementById('convert-submit-btn');
+  const amountRaw = document.getElementById('convert-amount').value.trim();
+  const amount = amountRaw ? Number(amountRaw) : 0;
+  const stage = document.getElementById('convert-stage').value || 'Closed Won';
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Converting…';
+  try {
+    const res = await fetch('/api/lead-convert', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        leadId: lead.id,
+        dealAmount: Number.isFinite(amount) ? amount : 0,
+        dealStage: stage,
+        source: 'manual',
+      }),
+    });
+    const data = await res.json().catch(() => ({ok: false}));
+    if (!data.ok) throw new Error(data.error || 'convert failed');
+    // Drop from local state so the list updates without a full /sync round-trip.
+    leads = leads.filter((l) => l.id !== lead.id);
+    if (typeof renderLeads === 'function') renderLeads();
+    if (typeof renderLeadStateTabs === 'function') renderLeadStateTabs();
+    closeConvertModal();
+    toast(`Converted "${lead.Company || lead._fullName}" to Account ✓`, 'success');
+  } catch (err) {
+    toast(err.message || 'Convert failed', 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-right-left mr-1"></i> Convert';
+  }
+}
+
 // ─── Account-side email shortcut ──────────────────────────────────────────────
 // When an Account has an assigned buyer (Job Role = Purchasing & Inventory
 // Management), we prefer the buyer's email + first name so the email is
@@ -2771,6 +3018,9 @@ function contactCardHtml(opts) {
     emailHandler,
     textHandler,
     briefHandler,
+    convertHandler,       // Lead-only — opens the Convert to Account modal
+                          // (renderLeads wires this to openConvertModal). Falls
+                          // through silently for Account cards.
     extraRow,             // optional HTML to render between meta + actions
                           // (used by Account cards to show the Buyer pill)
     headerExtra,          // optional HTML rendered to the right of the
@@ -2964,6 +3214,15 @@ function contactCardHtml(opts) {
        </button>`
     : '';
 
+  // Convert pill — Lead-only. Opens a modal that collects optional first-order
+  // amount and stage, then calls /api/lead-convert. After success, the Lead
+  // disappears from the list and the new Account shows on the Accounts tab.
+  const convertBtn = isLead && convertHandler
+    ? `<button class="hs-action-pill is-convert" onclick="${escapeAttr(`event.stopPropagation(); ${convertHandler}`)}" title="Convert to Account">
+         <i class="fa-solid fa-right-left"></i><span>Convert</span>
+       </button>`
+    : '';
+
   // ── LinkedIn pill — only renders when we have a URL on file (populated by
   // the Apollo enrichment sweep). Click tries the native app via linkedin://
   // first and falls back to the web profile. Never auto-sends messages —
@@ -3023,6 +3282,7 @@ function contactCardHtml(opts) {
         ${textBtn}
         ${emailBtn}
         ${briefBtn}
+        ${convertBtn}
         ${linkedinBtn}
         ${copyIntroBtn}
         ${extraAction || ''}
