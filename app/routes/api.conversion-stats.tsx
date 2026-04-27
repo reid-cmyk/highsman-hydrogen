@@ -113,15 +113,37 @@ function inRange(iso: string | null | undefined, start: string, end: string): bo
   return t >= Date.parse(start) && t < Date.parse(end);
 }
 
-// Map Owner.email → rep id. Returns null when the lead isn't owned by either
-// rep (so it counts company-wide but nobody's column).
-function ownerToRep(ownerEmail: string | null | undefined): SalesRepId | null {
+// Map Owner.email → rep id. Used only as a fallback now — Working_Owner
+// (the custom rep-id field set by /api/lead-claim) is the primary signal.
+function ownerEmailToRep(ownerEmail: string | null | undefined): SalesRepId | null {
   const e = String(ownerEmail || '').toLowerCase();
   if (!e) return null;
   for (const rep of Object.values(SALES_REPS)) {
     if (rep.email.toLowerCase() === e) return rep.id;
   }
   return null;
+}
+
+// Map Working_Owner (the custom field /api/lead-claim writes) → rep id.
+// This is a string like "sky" / "pete" so we just validate it's a known rep.
+// Reading this first (vs Owner.email) lets us correctly attribute Pete's
+// work even when Pete isn't a Zoho CRM user — only Sky is.
+function workingOwnerToRep(workingOwner: string | null | undefined): SalesRepId | null {
+  const id = String(workingOwner || '').trim().toLowerCase() as SalesRepId;
+  if (id && (SALES_REPS as Record<string, unknown>)[id]) return id;
+  return null;
+}
+
+// Resolve the rep that should get credit for a Lead. Working_Owner wins —
+// it's the rep who actually claimed/heartbeat-ed the lead via the dashboard.
+// Owner.email is the fallback for legacy leads that pre-date the claim flow
+// (or any future flow where a Zoho user is owner but no working-rep claim
+// has happened yet).
+function attributeLead(lead: any): SalesRepId | null {
+  return (
+    workingOwnerToRep(lead?.Working_Owner) ||
+    ownerEmailToRep(lead?.Owner?.email)
+  );
 }
 
 // Paginated read of every Lead the API token can see. Returns minimal fields
@@ -137,6 +159,10 @@ async function fetchAllLeads(token: string): Promise<any[]> {
     'Converted',
     'Owner',
     'Company',
+    // Working_Owner is set by /api/lead-claim every time a rep claims or
+    // heartbeats a lead. We read it first when attributing per-rep numbers
+    // so non-Zoho-user reps (Pete today) still get correct credit.
+    'Working_Owner',
   ].join(',');
   const out: any[] = [];
   for (let page = 1; page <= 10; page++) {
@@ -231,7 +257,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     for (const l of leads) leadById.set(String(l.id), l);
 
     for (const l of leads) {
-      const rep = ownerToRep(l?.Owner?.email);
+      const rep = attributeLead(l);
       const status = normalizeLeadStatus(l.Lead_Status);
       const isConverted = Boolean(l.Converted);
 
@@ -269,9 +295,11 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       let rep: SalesRepId | null = null;
       const leadId = d?.Lead_Id?.id ? String(d.Lead_Id.id) : '';
       if (leadId && leadById.has(leadId)) {
-        rep = ownerToRep(leadById.get(leadId)?.Owner?.email);
+        // Same priority: Working_Owner first (works for non-Zoho-user reps),
+        // then the originating Lead's Owner.email as a fallback.
+        rep = attributeLead(leadById.get(leadId));
       }
-      if (!rep) rep = ownerToRep(d?.Owner?.email);
+      if (!rep) rep = ownerEmailToRep(d?.Owner?.email);
       if (rep) byRep[rep].revenue += amount;
     }
 
