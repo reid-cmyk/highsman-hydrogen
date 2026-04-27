@@ -1623,14 +1623,14 @@ function renderAccounts() {
                 onclick="event.stopPropagation(); markNewProductOnboarding('${escapeAttr(a.id || '')}', ${safeName}, ${idx})"
                 title="Book Serena for a new-product walkthrough">
           <i class="fa-solid fa-box-open"></i>
-          <span>New Product Onboarding</span>
+          <span>New Product Onboard</span>
         </button>`;
     } else {
       productOnboardPill = `
         <button class="hs-action-pill is-product-onboard is-disabled" disabled
                 title="Vibes is NJ-only for v1">
           <i class="fa-solid fa-box-open"></i>
-          <span>New Product Onboarding</span>
+          <span>New Product Onboard</span>
         </button>`;
     }
 
