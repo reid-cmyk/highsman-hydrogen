@@ -730,20 +730,10 @@ export default function VibesDashboard() {
         </Section>
       )}
 
-      {/* Footer link back to /ops */}
-      <div
-        style={{
-          padding: '24px 16px 40px',
-          textAlign: 'center',
-          color: BRAND.gray,
-          fontSize: 12,
-          fontFamily: BODY,
-        }}
-      >
-        <Link to="/ops" style={{color: BRAND.gold, textDecoration: 'none'}}>
-          ← Spark Team Ops
-        </Link>
-      </div>
+      {/* Bottom spacer — footer Ops link removed because Serena doesn't
+          need /ops access; this just gives the page comfortable
+          breathing room below the last section. */}
+      <div style={{padding: '24px 16px 40px'}} />
     </Shell>
   );
 }
