@@ -1,6 +1,9 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getAccessToken} from '~/lib/zoho-auth';
+import {sendEmailFromUser, isGmailSAConfigured} from '~/lib/gmail-sa';
+import {createCalendarEvent, isCalendarSAConfigured} from '~/lib/google-calendar-sa';
+import {REP_HUBS, type RepId} from '~/lib/reps';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Zoho CRM — Pop-Up Event Creation
@@ -81,6 +84,83 @@ function shiftTitleSuffix(shiftKey: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Highsman-brand-voice HTML email — pop-up confirmation
+// ─────────────────────────────────────────────────────────────────────────────
+// Floor-register voice (concise, confident, assumptive — no permission-seeking).
+// Black/gold palette per brand guidelines. Shopify CDN logo per memory
+// `feedback_highsman_email_logos.md`. Inline styles only — most enterprise
+// dispensary inboxes (Outlook on Windows, GoDaddy, Zoho) strip <style> tags.
+// ─────────────────────────────────────────────────────────────────────────────
+function renderPopupConfirmHtml(args: {
+  pocFirstName: string;
+  dispensaryName: string;
+  city: string;
+  friendlyDate: string;
+  shiftTimeLabel: string;
+  repName: string;
+}): string {
+  const {pocFirstName, dispensaryName, city, friendlyDate, shiftTimeLabel, repName} = args;
+  const headerLogo =
+    'https://cdn.shopify.com/s/files/1/0934/4853/0945/files/Highsman_Logo_Gold.png';
+  const footerLogo =
+    'https://cdn.shopify.com/s/files/1/0934/4853/0945/files/Spark_Greatness_Logo.png';
+  const storeLine = `${dispensaryName}${city ? `, ${city}, NJ` : ''}`;
+  const escape = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  return `<!DOCTYPE html>
+<html><body style="margin:0;padding:0;background:#000000;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#000000;">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:#000000;border:1px solid #1a1a1a;">
+        <tr><td align="center" style="padding:40px 32px 24px 32px;border-bottom:1px solid #1a1a1a;">
+          <img src="${headerLogo}" alt="Highsman" width="180" style="display:block;border:0;outline:none;text-decoration:none;height:auto;" />
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <p style="margin:0 0 8px 0;color:#C9A867;font-family:Arial,Helvetica,sans-serif;font-size:13px;letter-spacing:2px;text-transform:uppercase;">Pop-Up Confirmed</p>
+          <h1 style="margin:0 0 24px 0;color:#FFFFFF;font-family:Arial,Helvetica,sans-serif;font-size:28px;line-height:1.2;font-weight:700;">Highsman x ${escape(dispensaryName)}</h1>
+          <p style="margin:0 0 20px 0;color:#FFFFFF;font-size:16px;line-height:1.5;">Hi ${escape(pocFirstName)},</p>
+          <p style="margin:0 0 20px 0;color:#FFFFFF;font-size:16px;line-height:1.5;">Locked in. We're rolling into <strong style="color:#C9A867;">${escape(dispensaryName)}</strong> for a pop-up on <strong style="color:#C9A867;">${escape(friendlyDate)}</strong> from <strong style="color:#C9A867;">${escape(shiftTimeLabel)}</strong>.</p>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;background:#0a0a0a;border:1px solid #C9A867;">
+            <tr><td style="padding:20px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="padding:6px 0;color:#A9ACAF;font-size:13px;letter-spacing:1px;text-transform:uppercase;width:140px;">Date / Time</td>
+                  <td style="padding:6px 0;color:#FFFFFF;font-size:15px;">${escape(friendlyDate)} · ${escape(shiftTimeLabel)}</td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 0;color:#A9ACAF;font-size:13px;letter-spacing:1px;text-transform:uppercase;">Store</td>
+                  <td style="padding:6px 0;color:#FFFFFF;font-size:15px;">${escape(storeLine)}</td>
+                </tr>
+                ${
+                  repName
+                    ? `<tr><td style="padding:6px 0;color:#A9ACAF;font-size:13px;letter-spacing:1px;text-transform:uppercase;">Rep on Duty</td><td style="padding:6px 0;color:#FFFFFF;font-size:15px;">${escape(repName)}</td></tr>`
+                    : ''
+                }
+                <tr>
+                  <td style="padding:6px 0;color:#A9ACAF;font-size:13px;letter-spacing:1px;text-transform:uppercase;">Bringing</td>
+                  <td style="padding:6px 0;color:#FFFFFF;font-size:15px;">Hit Stick · Pre-Rolls · Ground Game</td>
+                </tr>
+              </table>
+            </td></tr>
+          </table>
+          <p style="margin:0 0 20px 0;color:#FFFFFF;font-size:15px;line-height:1.5;">A calendar invite from <span style="color:#C9A867;">popups@highsman.com</span> is in your inbox — accept it and you're locked in.</p>
+          <p style="margin:0 0 20px 0;color:#FFFFFF;font-size:15px;line-height:1.5;">Day-of questions or last-minute changes, hit me directly:<br/><a href="mailto:sky@highsman.com" style="color:#C9A867;text-decoration:none;">sky@highsman.com</a> &nbsp;·&nbsp; <a href="tel:+19297253511" style="color:#C9A867;text-decoration:none;">929-725-3511</a></p>
+          <p style="margin:32px 0 0 0;color:#FFFFFF;font-size:16px;line-height:1.5;">Let's spark greatness.</p>
+          <p style="margin:8px 0 0 0;color:#FFFFFF;font-size:16px;line-height:1.5;">— Sky</p>
+        </td></tr>
+        <tr><td align="center" style="padding:24px 32px 32px 32px;border-top:1px solid #1a1a1a;">
+          <img src="${footerLogo}" alt="Spark Greatness" width="160" style="display:block;border:0;outline:none;text-decoration:none;height:auto;margin:0 auto 12px auto;" />
+          <p style="margin:0;color:#A9ACAF;font-size:11px;letter-spacing:2px;text-transform:uppercase;">Highsman &nbsp;|&nbsp; highsman.com</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+}
 
 export async function action({request, context}: ActionFunctionArgs) {
   if (request.method !== 'POST') {
@@ -248,12 +328,169 @@ export async function action({request, context}: ActionFunctionArgs) {
       console.warn('[api/popups-book] Account PATCH (Visit_Date) error:', patchErr?.message);
     }
 
+    // ──────────────────────────────────────────────────────────────────────
+    // SIDE-EFFECTS: Google Calendar invite + Sky confirmation email
+    // ──────────────────────────────────────────────────────────────────────
+    // Booking is already persisted in Zoho at this point — both side-effects
+    // run fire-and-forget with their own try/catch so a Gmail/Calendar outage
+    // never breaks the booking. Results are returned in the response so the
+    // UI can flag partial successes (e.g. "booked, invite failed").
+    //
+    // Calendar:
+    //   • Owner: popups@highsman.com (master pop-up calendar — staff sees all)
+    //   • Attendees: POC, sales@highsman.com, sky@highsman.com, assigned rep email
+    //   • sendUpdates=all → Google emails the canonical .ics invite to all
+    //
+    // Email:
+    //   • From: sky@highsman.com (Highsman brand voice, "Spark Greatness")
+    //   • To: POC
+    //   • Cc: assigned rep email (if known) + sales@highsman.com
+    // ──────────────────────────────────────────────────────────────────────
+    let calendarInvite: {ok: boolean; htmlLink?: string; error?: string} = {ok: false};
+    let confirmationEmail: {ok: boolean; messageId?: string; error?: string} = {ok: false};
+
+    // Resolve rep email from the rep registry (currently null until reps are seated).
+    const repEmail = (() => {
+      if (!repTag) return null;
+      const id: RepId | null =
+        repTag === '[NJ-N]' ? 'north' : repTag === '[NJ-S]' ? 'south' : null;
+      return id ? REP_HUBS[id].email || null : null;
+    })();
+
+    const friendlyDate = new Date(`${date}T12:00:00${offset}`).toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'America/New_York',
+    });
+    const shiftTimeLabel =
+      shiftLabel ||
+      (shiftKey.endsWith('-main')
+        ? '3:00 PM – 7:00 PM'
+        : shiftKey.endsWith('-mat')
+          ? '1:00 PM – 4:00 PM'
+          : shiftKey.endsWith('-late')
+            ? '5:00 PM – 8:00 PM'
+            : 'Shift TBD');
+    const venueLine = [street, city ? `${city}, NJ` : null].filter(Boolean).join(', ');
+    const pocFirstName = (contactName.split(' ')[0] || 'Team').trim();
+
+    // ── Calendar event ──
+    if (contactEmail && isCalendarSAConfigured(env)) {
+      try {
+        const attendees = [contactEmail, 'sales@highsman.com', 'sky@highsman.com'];
+        if (repEmail) attendees.push(repEmail);
+
+        const calendarDescription = [
+          `Highsman pop-up at ${dispensaryName}${city ? ` — ${city}, NJ` : ''}.`,
+          ``,
+          `Shift: ${shiftTimeLabel}`,
+          repName ? `Highsman Rep on Duty: ${repName}` : null,
+          contactName ? `Dispensary POC: ${contactName}${contactRole ? ` (${contactRole})` : ''}` : null,
+          ``,
+          `Bringing: Hit Stick, Pre-Rolls, Ground Game.`,
+          `Day-of contact: sky@highsman.com / 929-725-3511`,
+        ]
+          .filter(Boolean)
+          .join('\n');
+
+        const calendarRes = await createCalendarEvent(
+          {
+            calendarOwner: 'popups@highsman.com',
+            summary: `Highsman Pop-Up — ${dispensaryName}${city ? ` (${city})` : ''}`,
+            description: calendarDescription,
+            location: venueLine || `${dispensaryName}, NJ`,
+            startDateTime: startISO,
+            endDateTime: endISO,
+            timeZone: 'America/New_York',
+            attendees,
+            sendUpdates: 'all',
+          },
+          env,
+        );
+        calendarInvite = {ok: true, htmlLink: calendarRes.htmlLink};
+      } catch (calErr: any) {
+        console.warn('[api/popups-book] Calendar invite failed:', calErr?.message);
+        calendarInvite = {ok: false, error: calErr?.message?.slice(0, 200)};
+      }
+    } else if (contactEmail) {
+      console.warn('[api/popups-book] Calendar SA not configured — skipping invite.');
+    }
+
+    // ── Confirmation email from sky@highsman.com ──
+    if (contactEmail && isGmailSAConfigured(env)) {
+      try {
+        const ccList = ['sales@highsman.com'];
+        if (repEmail) ccList.push(repEmail);
+
+        const subject = `Pop-up confirmed — Highsman x ${dispensaryName} — ${friendlyDate}`;
+
+        const textLines = [
+          `Hi ${pocFirstName},`,
+          ``,
+          `Locked in. Highsman is rolling into ${dispensaryName} for a pop-up on ${friendlyDate} from ${shiftTimeLabel}.`,
+          ``,
+          `Here's the play:`,
+          `  • Date / Time: ${friendlyDate} · ${shiftTimeLabel}`,
+          `  • Store: ${dispensaryName}${city ? `, ${city}, NJ` : ''}`,
+          repName ? `  • Highsman Rep on Duty: ${repName}` : null,
+          `  • Bringing: Hit Stick, Pre-Rolls, Ground Game — full lineup, on-site activation`,
+          ``,
+          `A calendar invite from popups@highsman.com is in your inbox — accept it and you're locked in.`,
+          ``,
+          `Day-of questions or last-minute changes, hit me directly: sky@highsman.com / 929-725-3511.`,
+          ``,
+          `Let's spark greatness.`,
+          ``,
+          `— Sky`,
+          `Sky Lima`,
+          `Highsman`,
+          `sky@highsman.com`,
+          `highsman.com`,
+        ]
+          .filter(Boolean)
+          .join('\n');
+
+        const htmlBody = renderPopupConfirmHtml({
+          pocFirstName,
+          dispensaryName,
+          city,
+          friendlyDate,
+          shiftTimeLabel,
+          repName,
+        });
+
+        const messageId = await sendEmailFromUser(
+          'sky@highsman.com',
+          {
+            to: contactEmail,
+            cc: ccList.join(', '),
+            subject,
+            textBody: textLines,
+            htmlBody,
+            fromName: 'Sky Lima — Highsman',
+            replyTo: 'sky@highsman.com',
+          },
+          env,
+        );
+        confirmationEmail = {ok: true, messageId};
+      } catch (emailErr: any) {
+        console.warn('[api/popups-book] Confirmation email failed:', emailErr?.message);
+        confirmationEmail = {ok: false, error: emailErr?.message?.slice(0, 200)};
+      }
+    } else if (contactEmail) {
+      console.warn('[api/popups-book] Gmail SA not configured — skipping confirmation email.');
+    }
+
     return json({
       ok: true,
       eventId: record.details.id,
       startDateTime: startISO,
       endDateTime: endISO,
       lastPopUpDate,
+      calendarInvite,
+      confirmationEmail,
     });
   } catch (err: any) {
     console.error('[api/popups-book] Error:', err.message);

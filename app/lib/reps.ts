@@ -30,6 +30,10 @@ export type RepHub = {
   subjectTag: string;
   // UI color accent for the rep badge.
   color: string;
+  // Optional rep email — CC'd on pop-up confirmation emails.
+  // Leave null until a real human is in the seat; the email flow falls back
+  // to just sales@highsman.com when null.
+  email?: string | null;
 };
 
 export const REP_HUBS: Record<RepId, RepHub> = {
@@ -42,6 +46,7 @@ export const REP_HUBS: Record<RepId, RepHub> = {
     hubLng: -74.1724,
     subjectTag: '[NJ-N]',
     color: '#C9A867', // Highsman gold
+    email: null, // TODO: set once North Jersey rep is named
   },
   south: {
     id: 'south',
@@ -52,6 +57,7 @@ export const REP_HUBS: Record<RepId, RepHub> = {
     hubLng: -75.0718,
     subjectTag: '[NJ-S]',
     color: '#A9ACAF', // Highsman quarter gray
+    email: null, // TODO: set once South Jersey rep is named
   },
 };
 

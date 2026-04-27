@@ -43,7 +43,10 @@ export async function loader({context}: LoaderFunctionArgs) {
 
   const now = new Date();
   const todayIso = dateKeyNJ(now);
-  const windowEnd = addDays(todayIso, 14);
+  // Window extended Apr 2026 from 14 → 60 days so the new "Upcoming Pop-Ups"
+  // card can show shifts more than two weeks out (especially around launch).
+  const windowEnd = addDays(todayIso, 60);
+  const weekHorizonIso = addDays(todayIso, 14);
   const startDateTime = `${todayIso}T00:00:00${njOffset(todayIso)}`;
   const endDateTime = `${windowEnd}T23:59:59${njOffset(windowEnd)}`;
 
@@ -94,12 +97,17 @@ export async function loader({context}: LoaderFunctionArgs) {
     accountCity: e.accountId ? cityById.get(e.accountId) ?? null : null,
   }));
   const todayEvents = allEvents.filter((e) => e.date === todayIso);
-  const weekEvents = allEvents.filter((e) => e.date !== todayIso);
+  // Week glance = days 1..14. Upcoming = days 15..60. Today is its own bucket.
+  const weekEvents = allEvents.filter(
+    (e) => e.date !== todayIso && e.date <= weekHorizonIso,
+  );
+  const upcomingEvents = allEvents.filter((e) => e.date > weekHorizonIso);
 
   return json({
     nowIso: now.toISOString(),
     today: {ok: events !== null, events: todayEvents},
     week: {ok: events !== null, events: weekEvents},
+    upcoming: {ok: events !== null, events: upcomingEvents},
     coverage: {
       ok: njAccounts !== null,
       accounts: rankCoverage(njAccounts || [], todayIso),
@@ -513,7 +521,7 @@ function Stat({label, value, caption}: {label: string; value: string; caption?: 
 // PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 export default function OpsDashboard() {
-  const {nowIso, today, week, coverage, scoreboard, hasZoho, hasSupabase} =
+  const {nowIso, today, week, upcoming, coverage, scoreboard, hasZoho, hasSupabase} =
     useLoaderData<typeof loader>();
 
   useEffect(() => {
@@ -564,6 +572,39 @@ export default function OpsDashboard() {
   // Scoreboard aggregate (top-line stats) derived from rep rows.
   const agg = useMemo(() => aggregateScoreboard(scoreboard.reps), [scoreboard.reps]);
   const todayIso = nowIso.slice(0, 10);
+
+  // Spark Team officially launches Fri May 15, 2026. Countdown banner stays
+  // visible until then, then disappears automatically. Mirrors LAUNCH_DATE
+  // in /njpopups so staff sees the same date everywhere.
+  const LAUNCH_DATE = '2026-05-15';
+  const daysUntilLaunch = (() => {
+    if (todayIso >= LAUNCH_DATE) return 0;
+    const [y1, m1, d1] = todayIso.split('-').map((n) => parseInt(n, 10));
+    const [y2, m2, d2] = LAUNCH_DATE.split('-').map((n) => parseInt(n, 10));
+    const t1 = Date.UTC(y1, m1 - 1, d1);
+    const t2 = Date.UTC(y2, m2 - 1, d2);
+    return Math.round((t2 - t1) / (24 * 60 * 60 * 1000));
+  })();
+  const showLaunchBanner = daysUntilLaunch > 0;
+
+  // Upcoming events grouped by ISO week (Thu/Fri/Sat anchored, mirroring
+  // /njpopups picker structure). Key = first Thu of that week.
+  const upcomingWeekGroups = useMemo(() => {
+    const map = new Map<string, EventSummary[]>();
+    for (const ev of upcoming.events) {
+      // Find Thursday of the event's week (or the event date itself if Thu)
+      const [y, m, d] = ev.date.split('-').map((n) => parseInt(n, 10));
+      const dt = new Date(Date.UTC(y, m - 1, d));
+      const dow = dt.getUTCDay(); // 0=Sun..4=Thu..6=Sat
+      const thuOffset = (dow + 7 - 4) % 7; // days back to Thursday
+      const thu = new Date(dt.getTime() - thuOffset * 24 * 60 * 60 * 1000);
+      const key = thu.toISOString().slice(0, 10);
+      const arr = map.get(key) || [];
+      arr.push(ev);
+      map.set(key, arr);
+    }
+    return Array.from(map.entries()).sort(([a], [b]) => (a < b ? -1 : 1));
+  }, [upcoming.events]);
 
   return (
     <div
@@ -626,6 +667,92 @@ export default function OpsDashboard() {
       </div>
 
       <main style={{maxWidth: 760, margin: '0 auto', padding: '20px 16px'}}>
+        {showLaunchBanner && (
+          <section
+            style={{
+              border: `1px solid ${BRAND.gold}`,
+              background: `linear-gradient(135deg, ${BRAND.black} 0%, #1a1408 100%)`,
+              padding: '20px 22px',
+              marginBottom: 20,
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                fontFamily: TEKO,
+                fontSize: 12,
+                letterSpacing: '0.24em',
+                textTransform: 'uppercase',
+                color: BRAND.gold,
+                marginBottom: 6,
+              }}
+            >
+              Pre-Launch · Spark Team
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'baseline',
+                gap: 14,
+                flexWrap: 'wrap',
+              }}
+            >
+              <h2
+                style={{
+                  fontFamily: TEKO,
+                  fontSize: 30,
+                  lineHeight: 1.05,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.02em',
+                  margin: 0,
+                  color: BRAND.white,
+                }}
+              >
+                Launches Fri May 15
+              </h2>
+              <div
+                style={{
+                  fontFamily: TEKO,
+                  fontSize: 22,
+                  color: BRAND.gold,
+                  letterSpacing: '0.04em',
+                }}
+              >
+                {daysUntilLaunch} {daysUntilLaunch === 1 ? 'day' : 'days'} out
+              </div>
+            </div>
+            <p
+              style={{
+                margin: '10px 0 14px 0',
+                fontSize: 13,
+                lineHeight: 1.5,
+                color: BRAND.gray,
+              }}
+            >
+              Spark Team officially kicks off Fri May 15, 2026. Bookings made
+              now go live on/after the launch date — they'll start showing in
+              "This Week at a Glance" 14 days out.
+            </p>
+            <Link
+              to="/njpopups"
+              style={{
+                display: 'inline-block',
+                background: BRAND.gold,
+                color: BRAND.black,
+                fontFamily: TEKO,
+                fontSize: 13,
+                letterSpacing: '0.16em',
+                textTransform: 'uppercase',
+                padding: '8px 14px',
+                textDecoration: 'none',
+                border: `1px solid ${BRAND.gold}`,
+              }}
+            >
+              Book Pop-Ups →
+            </Link>
+          </section>
+        )}
         {!hasZoho && (
           <ErrorState message="Zoho env vars missing — Today / This Week / Coverage cards can't hydrate until ZOHO_* vars land in Oxygen." />
         )}
@@ -699,6 +826,90 @@ export default function OpsDashboard() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </Card>
+
+        {/* ── Upcoming Pop-Ups (15+ days out) ────────────────────────── */}
+        <Card
+          kicker="2 Weeks Out & Beyond"
+          title="Upcoming Pop-Ups"
+          accent={BRAND.gold}
+          action={
+            <Link
+              to="/njpopups"
+              style={{
+                color: BRAND.gold,
+                fontFamily: TEKO,
+                fontSize: 13,
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                textDecoration: 'none',
+                border: `1px solid ${BRAND.gold}`,
+                padding: '6px 10px',
+              }}
+            >
+              Add Booking →
+            </Link>
+          }
+        >
+          {!upcoming.ok ? (
+            <ErrorState message="Couldn't reach Zoho Events." />
+          ) : upcomingWeekGroups.length === 0 ? (
+            <EmptyState message="No bookings scheduled past the next 14 days yet. Plan ahead in /njpopups — picker shows 9 weeks out." />
+          ) : (
+            <div style={{display: 'flex', flexDirection: 'column', gap: 18}}>
+              {upcomingWeekGroups.map(([weekStart, events]) => {
+                const [yy, mm, dd] = weekStart.split('-').map((n) => parseInt(n, 10));
+                const thu = new Date(Date.UTC(yy, mm - 1, dd));
+                const sun = new Date(thu.getTime() + 3 * 24 * 60 * 60 * 1000);
+                const fmt = (d: Date) =>
+                  d.toLocaleDateString('en-US', {month: 'short', day: 'numeric', timeZone: 'UTC'});
+                const weekLabel = `${fmt(thu)} – ${fmt(sun)}`;
+                return (
+                  <div key={weekStart}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'baseline',
+                        justifyContent: 'space-between',
+                        gap: 10,
+                        marginBottom: 8,
+                        paddingBottom: 4,
+                        borderBottom: `1px dashed ${BRAND.line}`,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontFamily: TEKO,
+                          fontSize: 15,
+                          letterSpacing: '0.16em',
+                          textTransform: 'uppercase',
+                          color: BRAND.white,
+                        }}
+                      >
+                        Week of {weekLabel}
+                      </div>
+                      <div
+                        style={{
+                          fontFamily: TEKO,
+                          fontSize: 12,
+                          letterSpacing: '0.16em',
+                          textTransform: 'uppercase',
+                          color: BRAND.gold,
+                        }}
+                      >
+                        {events.length} {events.length === 1 ? 'shift' : 'shifts'}
+                      </div>
+                    </div>
+                    <div style={{display: 'flex', flexDirection: 'column', gap: 6}}>
+                      {events.map((ev) => (
+                        <EventRow key={ev.id} ev={ev} todayIso={todayIso} />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </Card>
