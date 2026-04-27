@@ -255,3 +255,51 @@ export async function deleteCalendarEvent(
   throw new Error(`Calendar event delete ${res.status}: ${text.slice(0, 400)}`);
 }
 
+/**
+ * Find Google Calendar event IDs on the given owner's calendar that match a
+ * date + a substring in the summary. Used by /api/popups-cancel as a fuzzy
+ * fallback when the explicit Calendar Event ID isn't stamped on the Zoho
+ * Event Description (legacy bookings, or cases where the PATCH failed).
+ *
+ * Returns an array of matching event IDs (could be 0, 1, or many — caller
+ * decides whether to delete all matches).
+ */
+export async function findCalendarEventsByTitle(
+  args: {
+    calendarOwner: string;
+    date: string; // YYYY-MM-DD in the calendar's local timezone
+    titleContains: string;
+  },
+  env: Record<string, string | undefined>,
+): Promise<string[]> {
+  const owner = args.calendarOwner.trim().toLowerCase();
+  const needle = args.titleContains.trim().toLowerCase();
+  if (!owner || !needle || !/^\d{4}-\d{2}-\d{2}$/.test(args.date)) return [];
+
+  const token = await getCalendarAccessTokenForUser(owner, env);
+  // 24-hour window in UTC — Calendar API accepts any ISO offset and converts.
+  const timeMin = `${args.date}T00:00:00-12:00`;
+  const timeMax = `${args.date}T23:59:59+14:00`;
+
+  const url =
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(owner)}/events` +
+    `?timeMin=${encodeURIComponent(timeMin)}` +
+    `&timeMax=${encodeURIComponent(timeMax)}` +
+    `&singleEvents=true&maxResults=100&showDeleted=false`;
+
+  const res = await fetch(url, {
+    headers: {authorization: `Bearer ${token}`},
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Calendar list ${res.status}: ${text.slice(0, 300)}`);
+  }
+  const data = (await res.json().catch(() => ({}))) as {items?: Array<{id?: string; summary?: string; status?: string}>};
+  const items = data.items || [];
+  return items
+    .filter((it) => it.status !== 'cancelled')
+    .filter((it) => (it.summary || '').toLowerCase().includes(needle))
+    .map((it) => it.id || '')
+    .filter(Boolean);
+}
+

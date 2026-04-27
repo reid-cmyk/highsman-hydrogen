@@ -1,7 +1,7 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getAccessToken} from '~/lib/zoho-auth';
-import {deleteCalendarEvent, isCalendarSAConfigured} from '~/lib/google-calendar-sa';
+import {deleteCalendarEvent, findCalendarEventsByTitle, isCalendarSAConfigured} from '~/lib/google-calendar-sa';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // /api/popups-cancel — One-click cancel for a pop-up booking.
@@ -49,40 +49,86 @@ export async function action({request, context}: ActionFunctionArgs) {
       ZOHO_REFRESH_TOKEN: refreshToken,
     });
 
-    // ── 1. Fetch the Zoho Event to recover the Calendar event ID ──
+    // ── 1. Fetch the Zoho Event to recover the Calendar event ID + metadata
     let calendarEventId: string | null = null;
+    let zohoTitle = '';
+    let zohoStartIso = '';
+    let zohoEndIso = '';
     try {
       const r = await fetch(
-        `https://www.zohoapis.com/crm/v7/Events/${eventId}?fields=Description,Event_Title`,
+        `https://www.zohoapis.com/crm/v7/Events/${eventId}?fields=Description,Event_Title,Start_DateTime,End_DateTime`,
         {headers: {Authorization: `Zoho-oauthtoken ${accessToken}`}},
       );
       if (r.ok) {
         const d: any = await r.json().catch(() => ({}));
-        const desc: string = d?.data?.[0]?.Description || '';
-        // Match `[CalendarEventId]<id>@popups@highsman.com`
+        const rec = d?.data?.[0] || {};
+        const desc: string = rec.Description || '';
+        zohoTitle = String(rec.Event_Title || '');
+        zohoStartIso = String(rec.Start_DateTime || '');
+        zohoEndIso = String(rec.End_DateTime || '');
         const m = desc.match(/\[CalendarEventId\]([A-Za-z0-9_-]+)@/);
         if (m) calendarEventId = m[1];
       }
     } catch {/* fall through */}
 
     // ── 2. Delete the Google Calendar event (best-effort) ──
-    let calendarDelete: {ok: boolean; error?: string} = {ok: false};
-    if (calendarEventId && isCalendarSAConfigured(env)) {
-      try {
-        await deleteCalendarEvent(
-          {calendarOwner: CALENDAR_OWNER, eventId: calendarEventId, sendUpdates: 'all'},
-          env,
-        );
-        calendarDelete = {ok: true};
-      } catch (calErr: any) {
-        // Log but don't fail the whole request — the Zoho delete is the
-        // source of truth for the dashboard. Calendar can be cleaned up
-        // manually if this fails.
-        console.warn('[api/popups-cancel] Calendar delete failed:', calErr?.message);
-        calendarDelete = {ok: false, error: calErr?.message?.slice(0, 200)};
+    // Two-tier resolution: (a) explicit ID stamped on the Zoho Description by
+    // /api/popups-book — fast, accurate. (b) Fuzzy fallback — list calendar
+    // events on the same day and match by dispensary name in the summary.
+    // Fuzzy is necessary for legacy bookings made before the stamp shipped,
+    // and for cases where the PATCH to add the stamp silently failed.
+    let calendarDelete: {ok: boolean; error?: string; matched?: string[]} = {ok: false};
+    if (isCalendarSAConfigured(env)) {
+      const idsToDelete: string[] = [];
+      if (calendarEventId) idsToDelete.push(calendarEventId);
+
+      // Fuzzy fallback: look up by date + dispensary name in title
+      if (!calendarEventId && zohoTitle && zohoStartIso) {
+        try {
+          // Parse dispensary name out of "[NJ-N] Highsman Pop Up — DispName (Shift)"
+          const dashSplit = zohoTitle.split('—');
+          const dispNameRaw = dashSplit.length > 1 ? dashSplit[1] : zohoTitle;
+          const dispName = dispNameRaw.replace(/\s*\([^)]+\)\s*$/, '').trim();
+          // Pull a date string like 2026-05-15 from the Start_DateTime
+          const date = zohoStartIso.slice(0, 10);
+          if (dispName && date) {
+            const fuzzy = await findCalendarEventsByTitle(
+              {
+                calendarOwner: CALENDAR_OWNER,
+                date,
+                titleContains: dispName,
+              },
+              env,
+            );
+            for (const id of fuzzy) idsToDelete.push(id);
+          }
+        } catch (fuzzyErr: any) {
+          console.warn('[api/popups-cancel] Fuzzy lookup failed:', fuzzyErr?.message);
+        }
       }
-    } else if (!calendarEventId) {
-      calendarDelete = {ok: false, error: 'no_calendar_id_on_zoho_event'};
+
+      const matched: string[] = [];
+      const errors: string[] = [];
+      for (const calId of idsToDelete) {
+        try {
+          await deleteCalendarEvent(
+            {calendarOwner: CALENDAR_OWNER, eventId: calId, sendUpdates: 'all'},
+            env,
+          );
+          matched.push(calId);
+        } catch (calErr: any) {
+          console.warn('[api/popups-cancel] Calendar delete failed:', calErr?.message);
+          errors.push(calErr?.message?.slice(0, 100) || 'delete failed');
+        }
+      }
+
+      if (matched.length > 0) {
+        calendarDelete = {ok: true, matched};
+      } else if (errors.length > 0) {
+        calendarDelete = {ok: false, error: errors.join('; ')};
+      } else {
+        calendarDelete = {ok: false, error: 'no_calendar_event_found'};
+      }
     } else {
       calendarDelete = {ok: false, error: 'calendar_sa_not_configured'};
     }

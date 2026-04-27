@@ -102,12 +102,16 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     const bookings: PopupBooking[] = rows
       .map((ev: any): PopupBooking | null => {
         const title = String(ev.Event_Title || '');
+        // STRICT filter: only events explicitly tagged by /api/popups-book.
+        // We deliberately exclude 'Highsman Pop Up' / 'Highsman Pop-Up'
+        // substring matches — those are the duplicate events created by
+        // Google Calendar → Zoho CRM sync, which mirrors the calendar event
+        // we already created back into Zoho with no territory tag. Skipping
+        // them here means the Bookings tab shows each pop-up exactly once.
         const isPopUp =
           title.startsWith('[NJ-N]') ||
           title.startsWith('[NJ-S]') ||
-          title.startsWith('[OVR]') ||
-          title.includes('Highsman Pop Up') ||
-          title.includes('Highsman Pop-Up');
+          title.startsWith('[OVR]');
         if (!isPopUp) return null;
         const sIso = String(ev.Start_DateTime || '');
         const eIso = String(ev.End_DateTime || '');
