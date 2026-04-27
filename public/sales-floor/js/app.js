@@ -2224,11 +2224,11 @@ function renderAccountStateTabs() {
 function stateTabsHtml(kind, buckets, active, totalCount) {
   // No data? Hide the strip entirely — an empty tab row is just clutter.
   if (!buckets.length) return '';
-  const handler = kind === 'lead'
-    ? 'filterLeadsByState'
-    : kind === 'newcust'
-      ? 'filterNewCustomersByState'
-      : 'filterAccountsByState';
+  const handler =
+    kind === 'lead' ? 'filterLeadsByState'
+    : kind === 'newcust' ? 'filterNewCustomersByState'
+    : kind === 'orders' ? 'filterOrdersByState'
+    : 'filterAccountsByState';
   const allBtn = `
     <button onclick="${handler}('all')"
             class="hs-state-tab ${active === 'all' ? 'active' : ''}"
