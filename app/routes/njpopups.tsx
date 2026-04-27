@@ -203,7 +203,7 @@ function fmtDate(iso: string) {
 // safety net. `tooEarly` (before LAUNCH_DATE) and `tooSoon` (inside lead time)
 // are separate flags so staff see the right reason in each card.
 // ─────────────────────────────────────────────────────────────────────────────
-const LAUNCH_DATE = '2026-05-08';
+const LAUNCH_DATE = '2026-05-15';
 const MIN_LEAD_DAYS = 5;
 const WINDOW_WEEKS = 9;
 
@@ -1989,7 +1989,7 @@ export default function NJPopups() {
                 Each shift caps at 2 bookings statewide — <strong>one per rep area</strong>{' '}
                 (North Jersey + South Jersey). Saturday splits into matinee (1–4 PM) and late
                 (5–8 PM), each with its own 1-per-area cap. D2C Spark Team officially launches{' '}
-                <strong>Fri May 8</strong>; bookings require a {MIN_LEAD_DAYS}-day minimum lead time. Window
+                <strong>Fri May 15</strong>; bookings require a {MIN_LEAD_DAYS}-day minimum lead time. Window
                 rolls forward weekly so you can always plan ~2 months out. Dispensaries must sit within{' '}
                 {MAX_SOLO_DRIVE_MIN} min of Newark (North Jersey Rep) or Collingswood (South Jersey Rep) — auto-assigned
                 on pick. Saturday doubleheaders allow up to {MAX_DOUBLEHEADER_HOP_MIN} min between stops.
@@ -2187,7 +2187,7 @@ export default function NJPopups() {
                                   {full
                                     ? 'Slot Full · Statewide Cap Hit'
                                     : tooEarly
-                                      ? 'Pre-Launch · Opens May 8'
+                                      ? 'Pre-Launch · Opens May 15'
                                       : tooSoon
                                         ? `Too Soon · ${MIN_LEAD_DAYS}-Day Lead Time`
                                         : `${remaining} of ${s.capacity} open`}
