@@ -72,7 +72,8 @@ async function fetchTerritoryEvents(
       criteria,
     )}` +
     `&fields=id,Event_Title,Start_DateTime,End_DateTime,What_Id` +
-    `&per_page=200&sort_by=Start_DateTime&sort_order=asc`;
+    // Zoho v7 search only sorts by id|Created_Time|Modified_Time. Re-sort client-side.
+    `&per_page=200`;
 
   const res = await fetch(url, {
     headers: {Authorization: `Zoho-oauthtoken ${accessToken}`},
