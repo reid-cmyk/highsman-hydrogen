@@ -82,8 +82,13 @@ export async function action({request, context}: ActionFunctionArgs) {
       const idsToDelete: string[] = [];
       if (calendarEventId) idsToDelete.push(calendarEventId);
 
-      // Fuzzy fallback: look up by date + dispensary name in title
-      if (!calendarEventId && zohoTitle && zohoStartIso) {
+      // ALWAYS run fuzzy in addition to the explicit ID. The Zoho-Google
+      // Calendar sync creates a SECOND Calendar event on popups@highsman.com
+      // when we POST a Zoho Event — that synced one doesn't carry our
+      // [CalendarEventId] tag, so the explicit-ID delete misses it. The
+      // fuzzy pass catches the duplicate (and is a no-op if the explicit ID
+      // was the only one there, since we de-dupe the IDs below).
+      if (zohoTitle && zohoStartIso) {
         try {
           // Parse dispensary name out of "[NJ-N] Highsman Pop Up — DispName (Shift)"
           const dashSplit = zohoTitle.split('—');
@@ -109,7 +114,9 @@ export async function action({request, context}: ActionFunctionArgs) {
 
       const matched: string[] = [];
       const errors: string[] = [];
-      for (const calId of idsToDelete) {
+      // Dedup: explicit ID + fuzzy can hit the same event, no need to try twice.
+      const uniqueIds = Array.from(new Set(idsToDelete.filter(Boolean)));
+      for (const calId of uniqueIds) {
         try {
           await deleteCalendarEvent(
             {calendarOwner: CALENDAR_OWNER, eventId: calId, sendUpdates: 'all'},
@@ -123,6 +130,8 @@ export async function action({request, context}: ActionFunctionArgs) {
       }
 
       if (matched.length > 0) {
+        // Even if some IDs failed (e.g. already-deleted), we count this as
+        // success because at least one Calendar event was successfully removed.
         calendarDelete = {ok: true, matched};
       } else if (errors.length > 0) {
         calendarDelete = {ok: false, error: errors.join('; ')};
