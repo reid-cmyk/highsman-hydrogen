@@ -218,7 +218,19 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         };
       });
 
-    const filtered = stateFilter === 'ALL' ? leads : leads.filter((l) => l._state === stateFilter);
+    // State filter is permissive: if a lead has no _state on file (e.g. a
+    // brand-new Hot lead that came through the referral form before the
+    // state field was saved, or a manual import that skipped the state
+    // picklist), we still show it. Hot leads with no address > Hot leads
+    // hidden because of a missing field. Use ?state=ONLY to enforce a
+    // strict match if you need it.
+    const strict = url.searchParams.get('strict') === '1';
+    const filtered =
+      stateFilter === 'ALL'
+        ? leads
+        : leads.filter((l) =>
+            strict ? l._state === stateFilter : (!l._state || l._state === stateFilter),
+          );
 
     // Untouched-first sort: leads with no Last_Activity_Time rank ahead of
     // any that have been touched, because those are the ones Pete hasn't
@@ -243,8 +255,11 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       },
       {
         headers: {
-          // 2-min private cache — Pete can click Sync to force refresh.
-          'Cache-Control': 'private, max-age=120',
+          // No browser cache. A 2-min cache used to live here, but it hid
+          // freshly-submitted referral leads from Pete for two minutes
+          // even when he hit Refresh. Sales-floor's sync doesn't cache
+          // either — keep behavior parallel.
+          'Cache-Control': 'no-store',
         },
       },
     );

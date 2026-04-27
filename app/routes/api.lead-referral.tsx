@@ -134,6 +134,11 @@ export async function action({request, context}: ActionFunctionArgs) {
     // Zoho Leads requires Company. Dispensary name is the right map.
     Company: dispensary,
     State: dispensaryState || undefined,
+    // Also write the Market_State picklist (api_name `States`) — that's
+    // the canonical state field the Sales Floor + New Business dashboards
+    // filter on. Without this, referral-form leads slip through any
+    // state-scoped view because their address State is the only fallback.
+    States: dispensaryState || undefined,
     Lead_Source: 'Referral Page',
     Lead_Status: 'Hot',
     Rating: 'Hot',
