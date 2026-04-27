@@ -1681,25 +1681,23 @@ function accountToCardHtml(a, idx, opts) {
     const cardPhone = buyer ? (buyer.Mobile || buyer.Phone || a.Phone) : a.Phone;
     const cardEmail = buyer ? (buyer.Email || a.Email || '') : (a.Email || '');
 
-    // Buyer pill: name + role, with a "Change" link. When there's no buyer
-    // but the account has contacts, surface a CTA to set one. When there are
-    // no contacts at all, fall back to a quiet hint.
-    let extraRow = '';
-
     // Last-order pill — pulls from /api/sales-floor-leaflink-orders into the
     // global lastOrderByAccount map. Surfaces "Last: 2026-04-09 · $1,450"
     // inline so reps see at a glance whether the shop is active or stalled.
     // Falls back to Zoho Last_Order_Date (no $ amount) if LeafLink hasn't
-    // resolved this customer yet.
+    // resolved this customer yet. Built BEFORE extraRow so we can prepend
+    // it after the buyer/CTA branches assign extraRow — those branches use
+    // `=` (overwrite), so anything concatenated above them gets clobbered.
     const lastOrderInfo = (lastOrderByAccount && lastOrderByAccount[a.id]) || null;
     const fallbackDate = a.Last_Order_Date || null;
+    let lastOrderHtml = '';
     if (lastOrderInfo || fallbackDate) {
       const dateStr = (lastOrderInfo?.date) || fallbackDate || '';
       const totalNum = lastOrderInfo?.total ?? null;
       const totalStr = (totalNum != null && totalNum > 0)
         ? ` · ${totalNum.toLocaleString('en-US', {style: 'currency', currency: 'USD', maximumFractionDigits: 0})}`
         : '';
-      extraRow += `
+      lastOrderHtml = `
         <div class="hs-account-lastorder">
           <span class="hs-account-lastorder-pill" title="Most recent Highsman order on record">
             <i class="fa-solid fa-receipt"></i> Last order: ${escapeHtml(dateStr)}${totalStr}
@@ -1707,6 +1705,10 @@ function accountToCardHtml(a, idx, opts) {
         </div>`;
     }
 
+    // Buyer pill: name + role, with a "Change" link. When there's no buyer
+    // but the account has contacts, surface a CTA to set one. When there are
+    // no contacts at all, fall back to a quiet hint.
+    let extraRow = '';
     if (buyer) {
       extraRow = `
         <div class="hs-account-buyer">
@@ -1887,6 +1889,11 @@ function accountToCardHtml(a, idx, opts) {
         </button>`;
     }
 
+    // Prepend last-order pill so it sits above the Buyer pill on every
+    // account card — it's the most-scanned data point ("is this shop
+    // active?") so it earns the top slot.
+    const finalExtraRow = lastOrderHtml + extraRow;
+
     return contactCardHtml({
       idx,
       kind: 'account',
@@ -1898,7 +1905,7 @@ function accountToCardHtml(a, idx, opts) {
       emailHandler: `quickEmailAccount(${idx})`,
       textHandler: `quickText(${idx}, 'account')`,
       briefHandler: `openBriefForAccount(${idx})`,
-      extraRow,
+      extraRow: finalExtraRow,
       headerExtra,
       // Training + Send Menu + New Product Onboarding + Flag Pete all live
       // in the single extraAction slot; concatenating keeps the layout tight
