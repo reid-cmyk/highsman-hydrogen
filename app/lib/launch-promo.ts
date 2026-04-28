@@ -176,3 +176,67 @@ export const LAUNCH_BANNER_COPY = {
   codeText: 'LAUNCH',
   cta: 'at checkout.',
 } as const;
+
+/**
+ * Version string of the LAUNCH terms the buyer agrees to. Bump this any time
+ * a substantive obligation in LAUNCH_TERMS changes — every redemption is
+ * stamped with the version on the Zoho Account so we have a clean audit
+ * trail of "which terms did this store actually agree to."
+ */
+export const LAUNCH_TERMS_VERSION = '1.0';
+
+/**
+ * Plain-English commitments the buyer must accept BEFORE the LAUNCH discount
+ * is applied to their order. Phrased in the buyer's voice ("our store will...")
+ * so the agreement reads as a deliberate commitment, not legalese.
+ *
+ * This is the ground truth — both the /njmenu UI and the /api/leaflink-order
+ * action import it. Keep it in lockstep with the internal Promo Support Terms
+ * doc (Apr 28, 2026) — bump LAUNCH_TERMS_VERSION on substantive change.
+ */
+export const LAUNCH_TERMS = {
+  intro: 'By using LAUNCH, our store commits to the following:',
+  sections: [
+    {
+      heading: 'Run the consumer promo on Highsman.com aligned dates',
+      bullets: [
+        '20% off any single Ground Game 7G or Triple Threat 1.2G Pre Roll',
+        'Live May 14 - June 13, 2026 (30 days)',
+        'Configured for those two SKUs only - no cross-category bundles, no stacking',
+        'Menu name: "NEW: Ground Game + Triple Threat - Launch Deal"',
+      ],
+    },
+    {
+      heading: 'Make the deal live and visible by May 14',
+      bullets: [
+        'Active on our online menu (Deals / Specials tab) on the May 14 launch date',
+        'Auto-apply at checkout preferred. If manual, we will confirm execution method with our Highsman rep.',
+      ],
+    },
+    {
+      heading: 'Submit menu proof within 48 hours of launch',
+      bullets: [
+        'Screenshot of the live deal on our online menu',
+        'Sent to our Highsman rep no later than May 16, 2026',
+      ],
+    },
+    {
+      heading: 'Understand the support structure',
+      bullets: [
+        'Ground Game 7G: Highsman absorbs 10%, our store absorbs the other 10% from margin (split promo)',
+        'Triple Threat 1.2G: Highsman absorbs the full 20% (full promo)',
+        'Discount is front-loaded into our wholesale price on this first launch order. No credit memo.',
+        'Reorders during or after the consumer promo are at full wholesale - no front-load support',
+      ],
+    },
+    {
+      heading: 'Non-execution policy',
+      bullets: [
+        'If the consumer promo is not live, visible, or configured correctly by May 14, our store will be excluded from future Highsman promotional support.',
+      ],
+    },
+  ],
+  agreementLabel:
+    'I confirm our store agrees to the LAUNCH Promo Terms above and will execute the consumer promo as described.',
+} as const;
+
