@@ -351,6 +351,93 @@ async function findCustomer(
 }
 
 /** Create an order in LeafLink via the orders-received endpoint. */
+/**
+ * Turn a Highsman SKU into a buyer-readable name. The SKU format is
+ * `C-NJ-{LINE}-{STRAIN}` (or `C-S-NJ-...` for samples). Used to translate
+ * LeafLink line-item errors into something a buyer can actually act on.
+ */
+function friendlyNameForSku(sku: string): string {
+  const STRAIN_NAMES: Record<string, string> = {
+    BB: 'Blueberry Blitz',
+    CQ: 'Cake Quake',
+    GG: 'Gridiron Grape',
+    TM: 'Touchdown Tango Mango',
+    WW: 'Wavey Watermelon',
+  };
+  const LINE_NAMES: Record<string, string> = {
+    HSINF: 'Hit Sticks Single',
+    HSTIN: 'Hit Sticks Power Pack',
+    HSTINFH: 'Fly High Tin',
+    HSTT: 'Triple Threat Pre-Roll',
+    HSGG: 'Ground Game',
+  };
+  // Strip optional sample prefix
+  const clean = sku.replace(/^C-S-NJ-/, 'C-NJ-');
+  const m = clean.match(/^C-NJ-(HSINF|HSTIN|HSTINFH|HSTT|HSGG)-(BB|CQ|GG|TM|WW)$/);
+  if (!m) return sku;
+  const lineName = LINE_NAMES[m[1]] || m[1];
+  const strainName = STRAIN_NAMES[m[2]] || m[2];
+  const isSample = sku.startsWith('C-S-');
+  return `${strainName} ${lineName}${isSample ? ' (Sample)' : ''}`;
+}
+
+/**
+ * Parse LeafLink's 400 response into a buyer-friendly message. LeafLink
+ * sends per-line-item validation errors in the same order as the request,
+ * so we can map errors back to our original line items by index.
+ *
+ * Common error shape LeafLink returns when inventory is insufficient:
+ *   { line_items: [{}, {}, {product_id: ["..."], available_inventory: ["24.0000"],
+ *                    quantity: ["Total combined quantity for all inherited products
+ *                                exceeds available inventory"]}] }
+ *
+ * Returns null if the body doesn't look like a recognizable inventory error,
+ * so the caller falls back to the raw message.
+ */
+function parseLeafLinkInventoryError(
+  rawBody: string,
+  lineItems: Array<{sku: string; quantity: number; isSample?: boolean}>,
+): string | null {
+  let parsed: any;
+  try {
+    parsed = JSON.parse(rawBody);
+  } catch {
+    return null;
+  }
+  const itemErrors: any[] = Array.isArray(parsed?.line_items) ? parsed.line_items : [];
+  if (itemErrors.length === 0) return null;
+
+  const shortages: string[] = [];
+  for (let i = 0; i < itemErrors.length; i++) {
+    const err = itemErrors[i];
+    if (!err || typeof err !== 'object' || Object.keys(err).length === 0) continue;
+    // We only know how to surface inventory shortages right now
+    const available = Array.isArray(err.available_inventory) ? err.available_inventory[0] : null;
+    const quantityMsg = Array.isArray(err.quantity) ? err.quantity[0] : null;
+    if (available == null && !quantityMsg) continue;
+
+    const orig = lineItems[i];
+    const sku = orig?.sku || '(unknown SKU)';
+    const requested = orig?.quantity ?? null;
+    const friendly = friendlyNameForSku(sku);
+    const availNum = available != null ? Math.floor(parseFloat(available)) : null;
+
+    if (availNum != null && requested != null) {
+      shortages.push(`${friendly}: ordered ${requested}, only ${availNum} available`);
+    } else if (availNum != null) {
+      shortages.push(`${friendly}: only ${availNum} available`);
+    } else {
+      shortages.push(`${friendly}: ${quantityMsg || 'inventory issue'}`);
+    }
+  }
+
+  if (shortages.length === 0) return null;
+  if (shortages.length === 1) {
+    return `Insufficient inventory — ${shortages[0]}. Reduce the quantity and resubmit.`;
+  }
+  return `Insufficient inventory on ${shortages.length} items:\n• ${shortages.join('\n• ')}\n\nReduce the quantities and resubmit.`;
+}
+
 async function createLeafLinkOrder(
   params: {
     customerId: number | null;
@@ -437,6 +524,17 @@ async function createLeafLinkOrder(
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     console.error(`[api/leaflink-order] LeafLink order creation failed (${res.status}):`, text.slice(0, 500));
+
+    // Try to translate LeafLink's per-line-item validation errors into
+    // something a dispensary buyer can act on (most common: inventory
+    // shortage on a specific strain). Fall back to the truncated raw
+    // body if we don't recognize the shape.
+    if (res.status === 400) {
+      const friendly = parseLeafLinkInventoryError(text, params.lineItems);
+      if (friendly) {
+        return {success: false, error: friendly};
+      }
+    }
     return {
       success: false,
       error: `LeafLink API error (${res.status}): ${text.slice(0, 200)}`,
