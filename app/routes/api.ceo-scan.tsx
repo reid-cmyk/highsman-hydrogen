@@ -60,6 +60,7 @@ async function runScan(
   const url = new URL(request.url);
   const onlyMailbox = url.searchParams.get('mailbox');
   const dryRun = url.searchParams.get('dry') === '1';
+  const mode = (url.searchParams.get('mode') === 'complaints' ? 'complaints' : 'default') as 'default' | 'complaints';
   const days = Number(url.searchParams.get('days') || env.CEO_SCAN_DAYS || DEFAULT_LOOKBACK_DAYS);
   const maxThreads = Number(url.searchParams.get("max") || env.CEO_SCAN_MAX_THREADS || DEFAULT_MAX_THREADS);
 
@@ -98,7 +99,7 @@ async function runScan(
 
       for (const thread of slice) {
         try {
-          const {verdict, usage, model} = await analyzeThread(env, thread);
+          const {verdict, usage, model} = await analyzeThread(env, thread, mode);
           threadsAnalyzed += 1;
           inputTokens += usage.input;
           outputTokens += usage.output;

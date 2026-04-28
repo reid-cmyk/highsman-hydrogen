@@ -284,6 +284,34 @@ const ANALYSIS_TOOL = {
   },
 } as const;
 
+const COMPLAINTS_PROMPT = `You are scanning Highsman email threads for SOFT signals of internal complaining, venting, or friction. The CEO specifically wants to know what's being said about coworkers, leadership, or company decisions — both inside and outside the company.
+
+FLAG these patterns even when mild:
+1. Staff complaining about a coworker by name or implication ("I had to redo what X did", "X dropped the ball", "they always…")
+2. Staff venting about leadership, pay, hours, decisions, or workload
+3. Passive-aggressive or sarcastic remarks about teammates or company
+4. Staff badmouthing the company, products, or colleagues to anyone OUTSIDE Highsman
+5. "Between us…", "don't tell X", or other gossip/secrecy framing
+6. Frustration with company processes, tools, or chain of command
+7. Tone of resignation, "I'm tired of…", "this is ridiculous", "I can't believe…"
+
+Be LIBERAL — flag if it could be useful CEO context. Better to over-flag here than miss something.
+
+Categorization:
+- internal_tension: complaints about coworkers, internal processes, friction, gossip
+- staff_burnout: exhaustion, "I'm done", overwork, pay frustration, despair
+- customer_frustration: ONLY use if the thread is genuinely about an external party complaining to us. NOT for staff complaining to external parties about Highsman — that's internal_tension.
+
+Severity (relaxed):
+- 1 (watch): mild complaint or one-line vent
+- 2 (warning): clear pointed complaint, named criticism, or sustained venting
+- 3 (critical): serious bad-mouthing, undermining a colleague, external complaints to clients/vendors about our team, or anything that would embarrass the company if it leaked
+
+Skip threads that are purely logistical/operational with no human friction.
+Skip pure customer-service threads where the customer is the complainer.
+
+Respond ONLY by calling the record_sentiment_finding tool. NEVER fabricate quotes — evidence_quote must be verbatim.`;
+
 const SYSTEM_PROMPT = `You are a Highsman internal-comms analyst grading email threads for the CEO dashboard. You ONLY flag threads that show meaningful negative sentiment in one of three buckets:
 
 1. customer_frustration — an external customer (anyone NOT @highsman.com) is unhappy, frustrated, escalating, or hinting at churn. Mere logistics questions or normal complaints already resolved do not qualify.
@@ -303,7 +331,7 @@ NEVER fabricate quotes — evidence_quote must be verbatim from the thread.
 
 Respond ONLY by calling the record_sentiment_finding tool.`;
 
-export async function analyzeThread(env: Env, thread: ThreadSummary): Promise<{verdict: SentimentVerdict; usage: {input: number; output: number}; model: string}> {
+export async function analyzeThread(env: Env, thread: ThreadSummary, mode: 'default' | 'complaints' = 'default'): Promise<{verdict: SentimentVerdict; usage: {input: number; output: number}; model: string}> {
   if (!env.ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY missing — cannot run /ceo scan.');
   }
@@ -320,10 +348,11 @@ export async function analyzeThread(env: Env, thread: ThreadSummary): Promise<{v
     thread.body_for_analysis,
   ].join('\n');
 
+  const systemPrompt = mode === 'complaints' ? COMPLAINTS_PROMPT : SYSTEM_PROMPT;
   const body = {
     model,
     max_tokens: 600,
-    system: SYSTEM_PROMPT,
+    system: systemPrompt,
     tools: [ANALYSIS_TOOL],
     tool_choice: {type: 'tool', name: 'record_sentiment_finding'},
     stream: true,
