@@ -278,10 +278,12 @@ export default function VibesVisitNew() {
   const [selfiePhoto, setSelfiePhoto] = useState<File | null>(null);
   const [ugcPostUrl, setUgcPostUrl] = useState('');
 
-  // Account search fetcher
+  // Account search fetcher. Gate at 2 chars (matches the server-side
+  // minimum) so users see results sooner — the previous 3-char gate
+  // suppressed legitimate two-letter abbreviations like "RW" or "GG".
   const accountFetcher = useFetcher<{accounts: any[]}>();
   useEffect(() => {
-    if (!accountQuery || accountQuery.length < 3) return;
+    if (!accountQuery || accountQuery.length < 2) return;
     const t = setTimeout(() => {
       accountFetcher.load(`/api/accounts?q=${encodeURIComponent(accountQuery)}`);
     }, 250);
@@ -555,6 +557,8 @@ export default function VibesVisitNew() {
                 accountQuery={accountQuery}
                 setAccountQuery={setAccountQuery}
                 accountResults={accountFetcher.data?.accounts || []}
+                accountSearching={accountFetcher.state !== 'idle'}
+                accountSearched={Boolean(accountFetcher.data)}
                 onPickAccount={(a) => {
                   setAccountId(a.id);
                   setAccountName(a.name);
@@ -769,6 +773,13 @@ function StepArrive(props: {
   accountQuery: string;
   setAccountQuery: (v: string) => void;
   accountResults: any[];
+  // Picker UX state from the parent's useFetcher. `searching=true` while a
+  // request is in flight; `searched=true` once at least one search has
+  // returned. We use both to distinguish "still typing / waiting" from
+  // "done and zero matches" so the dropdown can surface either a spinner
+  // or a clear "no results" message instead of staying silent.
+  accountSearching: boolean;
+  accountSearched: boolean;
   onPickAccount: (a: any) => void;
   visitType:
     | 'first_visit'
@@ -844,45 +855,85 @@ function StepArrive(props: {
               type="search"
               value={props.accountQuery}
               onChange={(e) => props.setAccountQuery(e.target.value)}
-              placeholder="Search NJ dispensary…"
+              placeholder="Search NJ dispensary — type 2+ chars (name or city)"
               style={inputStyle()}
             />
-            {props.accountResults.length > 0 && props.accountQuery.length >= 3 ? (
-              <div
-                style={{
-                  marginTop: 6,
-                  maxHeight: 220,
-                  overflowY: 'auto',
-                  border: `1px solid ${BRAND.line}`,
-                  borderRadius: 6,
-                  background: BRAND.chip,
-                }}
-              >
-                {props.accountResults.slice(0, 10).map((a: any) => (
-                  <button
-                    type="button"
-                    key={a.id}
-                    onClick={() => props.onPickAccount(a)}
-                    style={{
-                      display: 'block',
-                      width: '100%',
-                      textAlign: 'left',
-                      padding: '8px 10px',
-                      background: 'transparent',
-                      color: BRAND.white,
-                      border: 'none',
-                      borderBottom: `1px solid ${BRAND.line}`,
-                      cursor: 'pointer',
-                      fontFamily: BODY,
-                    }}
-                  >
-                    <div style={{fontFamily: TEKO, fontSize: 16}}>{a.name}</div>
-                    <div style={{fontSize: 11, color: BRAND.gray}}>
-                      {[a.city, a.state].filter(Boolean).join(', ')}
-                    </div>
-                  </button>
-                ))}
-              </div>
+            {/* Picker dropdown — surfaces results, in-flight state, AND a
+                "no matches" message so the user always knows what's happening.
+                Previously the dropdown only rendered on success → silent on
+                empty results, which looked like a broken search. */}
+            {props.accountQuery.length >= 2 ? (
+              props.accountResults.length > 0 ? (
+                <div
+                  style={{
+                    marginTop: 6,
+                    maxHeight: 240,
+                    overflowY: 'auto',
+                    border: `1px solid ${BRAND.line}`,
+                    borderRadius: 6,
+                    background: BRAND.chip,
+                  }}
+                >
+                  {props.accountResults.slice(0, 12).map((a: any) => (
+                    <button
+                      type="button"
+                      key={a.id}
+                      onClick={() => props.onPickAccount(a)}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '8px 10px',
+                        background: 'transparent',
+                        color: BRAND.white,
+                        border: 'none',
+                        borderBottom: `1px solid ${BRAND.line}`,
+                        cursor: 'pointer',
+                        fontFamily: BODY,
+                      }}
+                    >
+                      <div style={{fontFamily: TEKO, fontSize: 16}}>{a.name}</div>
+                      <div style={{fontSize: 11, color: BRAND.gray}}>
+                        {[a.city, a.state].filter(Boolean).join(', ')}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : props.accountSearching ? (
+                <div
+                  style={{
+                    marginTop: 6,
+                    padding: '10px 12px',
+                    border: `1px solid ${BRAND.line}`,
+                    borderRadius: 6,
+                    background: BRAND.chip,
+                    color: BRAND.gray,
+                    fontFamily: BODY,
+                    fontSize: 13,
+                  }}
+                >
+                  Searching Zoho…
+                </div>
+              ) : props.accountSearched ? (
+                <div
+                  style={{
+                    marginTop: 6,
+                    padding: '10px 12px',
+                    border: `1px solid ${BRAND.line}`,
+                    borderRadius: 6,
+                    background: BRAND.chip,
+                    color: BRAND.gray,
+                    fontFamily: BODY,
+                    fontSize: 13,
+                    lineHeight: 1.45,
+                  }}
+                >
+                  No NJ dispensary matches “
+                  <span style={{color: BRAND.white}}>{props.accountQuery}</span>
+                  ”. Try a different fragment of the name or the city
+                  (e.g. “Garfield” for “RISE Garfield”).
+                </div>
+              ) : null
             ) : null}
           </>
         )}

@@ -437,25 +437,59 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       ZOHO_REFRESH_TOKEN: refreshToken,
     });
 
-    let accounts = await searchAccounts(query, accessToken, scope);
+    let accounts: AccountResult[] = [];
 
-    // Fallback: if NJ-scoped prefix search returned nothing, do a global
-    // word search and filter to NJ on our side. This catches:
-    //   • Mid-name fragments — "bellmawr" finds "Curaleaf - Bellmawr"
-    //   • Records missing Account_State / Billing_State but with the city
-    //     in Billing_City (we treat any non-NJ-named city as still NJ if
-    //     the global word search returns it AND state is blank — staff
-    //     intent on /njpopups is to find an NJ store).
-    //   • Names with leading articles like "The Apothecarium" where users
-    //     type "apothecarium" without the prefix.
-    if (scope === 'nj' && accounts.length === 0 && query.trim().length >= 2) {
-      const allMatches = await searchAccounts(query, accessToken, 'all');
-      accounts = allMatches.filter((a) => {
+    if (scope === 'nj') {
+      // NJ scope: ALWAYS run both searches in parallel and merge.
+      //
+      // Why both, every time:
+      //   • Prefix search (Account_State:NJ + Account_Name:starts_with) finds
+      //     accounts whose name begins with the typed string ("rise", "ayr",
+      //     "curaleaf", etc.) — fast, exact, NJ-scoped at the source.
+      //   • Word search (word=...) finds mid-name fragments ("bellmawr"
+      //     inside "Curaleaf - Bellmawr", "garfield" inside "RISE
+      //     Garfield"), which the prefix path can't catch — Zoho's
+      //     `starts_with` is whole-string-from-position-0.
+      //
+      // The previous "only fall back when prefix returns 0" guard meant a
+      // prefix hit on ANY name would silently swallow the mid-fragment
+      // match the user actually wanted. Reid hit this 2026-04-28 trying to
+      // find a store by city name on /vibes/visit/new.
+      const [prefixHits, wordHits] = await Promise.all([
+        searchAccounts(query, accessToken, 'nj'),
+        searchAccounts(query, accessToken, 'all').catch((err) => {
+          // Word search is the lower-confidence path (returns top-50 global
+          // ranked hits) — never let a failure here block the prefix
+          // results. Just log + degrade gracefully.
+          console.warn('[api/accounts] word fallback failed:', err.message);
+          return [] as AccountResult[];
+        }),
+      ]);
+
+      // NJ filter for the word path. Treat blank state as NJ — common after
+      // migrations where Billing_State / Account_State drifted apart and
+      // the user is on an NJ-scoped page anyway.
+      const isNj = (a: AccountResult) => {
         const st = (a.state || '').trim().toUpperCase();
-        // Accept exact NJ codes / full name, or blank state (we'll trust
-        // the user's intent on this NJ-scoped page).
-        return st === 'NJ' || st === 'NEW JERSEY' || st === '' || st === 'N.J.';
-      });
+        return (
+          st === 'NJ' || st === 'NEW JERSEY' || st === '' || st === 'N.J.'
+        );
+      };
+      const njWordHits = wordHits.filter(isNj);
+
+      // Merge + dedup by id, prefix hits first (higher relevance — they
+      // matched the user's first-character intent).
+      const seen = new Set<string>();
+      const merged: AccountResult[] = [];
+      for (const a of [...prefixHits, ...njWordHits]) {
+        if (!a.id || seen.has(a.id)) continue;
+        seen.add(a.id);
+        merged.push(a);
+      }
+      accounts = merged.slice(0, 15);
+    } else {
+      // scope === 'all' — single global word search, no merge.
+      accounts = await searchAccounts(query, accessToken, 'all');
     }
 
     return json({accounts}, {
