@@ -1583,8 +1583,25 @@ export default function NJMenu() {
                         Your total credit balance is now{' '}
                         <strong style={{color: BRAND.gold}}>${confirmedOrder.newCreditBalance.toFixed(2)}</strong>.
                       </p>
+                      <div
+                        className="mb-3"
+                        style={{
+                          background: 'rgba(0,0,0,0.25)',
+                          border: '1px dashed rgba(245,228,0,0.35)',
+                          borderRadius: 6,
+                          padding: '12px 14px',
+                        }}
+                      >
+                        <p className="font-headline text-sm font-600 uppercase tracking-[0.18em] mb-1" style={{color: BRAND.gold}}>
+                          Your stash. Your call.
+                        </p>
+                        <p className="font-body text-xs" style={{color: 'rgba(255,255,255,0.75)', lineHeight: '1.55'}}>
+                          Your balance sits in the vault until you&rsquo;re ready. Cash it out any time as a Highsman gift card &mdash;
+                          or let it stack. The bigger the stack, the bigger the haul. Pros pull one big drop, not pocket change every order.
+                        </p>
+                      </div>
                       <p className="font-body text-xs mb-3" style={{color: 'rgba(255,255,255,0.5)', lineHeight: '1.5'}}>
-                        Redeem your credit as a Highsman gift card &mdash; we&rsquo;ll email the code to{' '}
+                        When you&rsquo;re ready, redeem as a Highsman gift card &mdash; we&rsquo;ll email the code to{' '}
                         <strong style={{color: 'rgba(255,255,255,0.8)'}}>{confirmedOrder.buyerEmail}</strong>.
                         Use it at checkout on{' '}
                         <a
@@ -1598,22 +1615,33 @@ export default function NJMenu() {
                         .
                       </p>
                       {buyerContactId && buyerCredit > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRedeemStatus('confirming');
-                            setRedeemError(null);
-                            setRedeemResult(null);
-                            // Scroll to the redemption panel (lives in the buyer identity section)
-                            setTimeout(() => {
-                              window.scrollTo({top: 0, behavior: 'smooth'});
-                            }, 50);
-                          }}
-                          className="font-headline text-sm font-600 uppercase tracking-[0.12em] cursor-pointer transition-opacity hover:opacity-90"
-                          style={{background: BRAND.gold, color: '#000', border: 'none', borderRadius: 4, padding: '10px 18px'}}
-                        >
-                          Redeem ${buyerCredit.toFixed(2)} as Gift Card
-                        </button>
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRedeemStatus('confirming');
+                              setRedeemError(null);
+                              setRedeemResult(null);
+                              // Scroll to the redemption panel (lives in the buyer identity section)
+                              setTimeout(() => {
+                                window.scrollTo({top: 0, behavior: 'smooth'});
+                              }, 50);
+                            }}
+                            className="font-headline text-sm font-600 uppercase tracking-[0.12em] cursor-pointer transition-opacity hover:opacity-90"
+                            style={{
+                              background: 'transparent',
+                              color: BRAND.gold,
+                              border: `1px solid ${BRAND.gold}`,
+                              borderRadius: 4,
+                              padding: '10px 18px',
+                            }}
+                          >
+                            Cash out ${buyerCredit.toFixed(2)}
+                          </button>
+                          <span className="font-body text-xs" style={{color: 'rgba(255,255,255,0.5)'}}>
+                            or keep stacking &mdash; it&rsquo;ll be here next time.
+                          </span>
+                        </div>
                       )}
                     </div>
                   </div>
