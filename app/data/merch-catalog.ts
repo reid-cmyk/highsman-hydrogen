@@ -19,6 +19,12 @@ export interface MerchItem {
   // Order increment (defaults to 1). Use for items sold in packs (e.g., stickers in 10s).
   step?: number;
   tag?: string;
+  // Extensiv 3PL Warehouse Manager SKU. When present, /retail will:
+  //   (a) gate add-to-cart on Extensiv qty available, and
+  //   (b) push the order line to Extensiv on submit.
+  // Items WITHOUT extensivSku are display-only / made-to-order — they still
+  // render on /retail but aren't stock-checked or shipped via the 3PL.
+  extensivSku?: string;
 }
 
 export const CATEGORIES = [

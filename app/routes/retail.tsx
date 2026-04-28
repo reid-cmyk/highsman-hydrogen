@@ -1,12 +1,19 @@
 import {useState, useRef, useEffect, useMemo} from 'react';
-import type {MetaFunction} from '@shopify/remix-oxygen';
-import {useFetcher} from '@remix-run/react';
+import type {LoaderFunctionArgs, ActionFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
+import {json} from '@shopify/remix-oxygen';
+import {useFetcher, useLoaderData, useActionData, useNavigation, Form} from '@remix-run/react';
 import {
   MERCH_ITEMS,
   CATEGORIES,
   CATEGORY_COPY,
   type MerchItem,
 } from '~/data/merch-catalog';
+import {
+  createExtensivOrder,
+  getExtensivInventory,
+  isExtensivConfigured,
+  type ExtensivOrderLine,
+} from '~/lib/extensiv';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -38,10 +45,200 @@ export const meta: MetaFunction = () => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Loader — pull live Extensiv inventory for in-stock gating
+// ─────────────────────────────────────────────────────────────────────────────
+// Runs once per page render. Cached at /api/extensiv-inventory for 60s, but we
+// call the lib directly here to share the worker-instance token cache.
+// Failure is silent: empty {inventory} just means everything renders ungated.
+export async function loader({context}: LoaderFunctionArgs) {
+  const env = context.env as any;
+  let inventory: Record<string, number> = {};
+  let inventoryError: string | null = null;
+  if (isExtensivConfigured(env)) {
+    try {
+      const rows = await getExtensivInventory(env);
+      for (const sku of Object.keys(rows)) inventory[sku] = rows[sku].qty;
+    } catch (err: any) {
+      inventoryError = err?.message || String(err);
+      console.error('[retail loader] Extensiv inventory failed:', inventoryError);
+    }
+  }
+  return json({inventory, inventoryConfigured: isExtensivConfigured(env), inventoryError});
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Action — push order to Extensiv + email paper trail (fail-soft)
+// ─────────────────────────────────────────────────────────────────────────────
+// Body shape (form-encoded):
+//   accountId, accountName, accountCity, accountState
+//   contactName, contactEmail, notes
+//   shipStreet, shipCity, shipState, shipZip
+//   cart           — JSON-encoded {itemId: qty}
+export async function action({context, request}: ActionFunctionArgs) {
+  const env = context.env as any;
+  const form = await request.formData();
+  const accountId = String(form.get('accountId') || '');
+  const accountName = String(form.get('accountName') || 'Unknown');
+  const accountCity = String(form.get('accountCity') || '');
+  const accountState = String(form.get('accountState') || '');
+  const contactName = String(form.get('contactName') || '');
+  const contactEmail = String(form.get('contactEmail') || '');
+  const notes = String(form.get('notes') || '');
+  const shipStreet = String(form.get('shipStreet') || '');
+  const shipCity = String(form.get('shipCity') || accountCity);
+  const shipState = String(form.get('shipState') || accountState);
+  const shipZip = String(form.get('shipZip') || '');
+  const cartRaw = String(form.get('cart') || '{}');
+
+  let cart: Record<string, number> = {};
+  try { cart = JSON.parse(cartRaw); } catch { /* keep empty */ }
+
+  // Build Extensiv order lines from cart, skipping items without an extensivSku
+  // (display-only / made-to-order items still appear on the email paper trail).
+  const extensivLines: ExtensivOrderLine[] = [];
+  const allLines: Array<{name: string; qty: number; sku: string | null}> = [];
+  for (const [id, qty] of Object.entries(cart)) {
+    const item = MERCH_ITEMS.find((i) => i.id === id);
+    if (!item || !qty || qty <= 0) continue;
+    allLines.push({name: item.name, qty, sku: item.extensivSku ?? null});
+    if (item.extensivSku) {
+      extensivLines.push({sku: item.extensivSku, qty});
+    }
+  }
+
+  if (allLines.length === 0) {
+    return json(
+      {ok: false, error: 'Cart is empty', extensivOk: false, referenceNum: '', extensivError: null, lineCount: 0},
+      {status: 400},
+    );
+  }
+
+  // Build a stable reference number — surfaces on Extensiv packing slip and
+  // matches what we put in the email paper trail.
+  const ts = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
+  const referenceNum = `HM-RETAIL-${(accountId || 'NOACCT').slice(-6)}-${ts}`;
+
+  // Push to Extensiv (fail-soft).
+  let extensivResult: {ok: boolean; orderId?: string | number; error?: string} = {ok: false};
+  if (isExtensivConfigured(env) && extensivLines.length > 0) {
+    try {
+      const r = await createExtensivOrder(env, {
+        referenceNum,
+        poNum: referenceNum,
+        notes: notes || `Highsman merch order — ${accountName}`,
+        shipTo: {
+          name: accountName,
+          contact: contactName || null,
+          address1: shipStreet,
+          city: shipCity,
+          state: shipState,
+          zip: shipZip,
+          phone: null,
+          email: contactEmail || null,
+        },
+        lines: extensivLines,
+      });
+      if (r.ok) {
+        extensivResult = {ok: true, orderId: r.orderId};
+      } else {
+        extensivResult = {ok: false, error: `Extensiv ${r.rawStatus}: ${r.errorBody?.slice(0, 200) || 'unknown'}`};
+        console.error('[retail action] Extensiv order push failed:', extensivResult.error);
+      }
+    } catch (err: any) {
+      extensivResult = {ok: false, error: err?.message || String(err)};
+      console.error('[retail action] Extensiv order push threw:', extensivResult.error);
+    }
+  } else if (extensivLines.length === 0) {
+    extensivResult = {ok: false, error: 'No extensivSku items in cart — order is display-only / made-to-order'};
+  } else {
+    extensivResult = {ok: false, error: 'Extensiv not configured'};
+  }
+
+  // Build the paper-trail email body — sent server-side regardless of Extensiv
+  // outcome so njsales@ always has a record of the request.
+  const lineList = allLines
+    .map((l) => `  • ${l.name} — qty ${l.qty}${l.sku ? ` (SKU: ${l.sku})` : ' (made-to-order)'}`)
+    .join('\n');
+  const emailSubject = `Highsman Merch Order — ${accountName}`;
+  const emailBody = [
+    `Reference: ${referenceNum}`,
+    `Store: ${accountName}${accountCity || accountState ? ` (${[accountCity, accountState].filter(Boolean).join(', ')})` : ''}`,
+    `Zoho Account ID: ${accountId || 'N/A'}`,
+    `Contact: ${contactName} <${contactEmail}>`,
+    '',
+    `Ship-to: ${shipStreet}, ${shipCity}, ${shipState} ${shipZip}`,
+    '',
+    'Order:',
+    lineList,
+    '',
+    `Notes: ${notes || 'None'}`,
+    '',
+    extensivResult.ok
+      ? `Extensiv: order created (id: ${extensivResult.orderId})`
+      : `Extensiv: NOT PUSHED — ${extensivResult.error || 'unknown'}  ⚠ ops must create manually`,
+  ].join('\n');
+
+  // Best-effort Gmail send via existing service-account helper. We don't fail
+  // the request if email fails — the Extensiv side is the system of record.
+  try {
+    const {sendEmailFromUser, isGmailSAConfigured} = await import('~/lib/gmail-sa');
+    if (isGmailSAConfigured(env)) {
+      await sendEmailFromUser(
+        'njsales@highsman.com',
+        {
+          to: 'njsales@highsman.com',
+          subject: emailSubject,
+          textBody: emailBody,
+        },
+        env,
+      );
+    }
+  } catch (err) {
+    console.warn('[retail action] paper-trail email failed (non-fatal):', err);
+  }
+
+  return json({
+    ok: true,
+    error: null as string | null,
+    referenceNum,
+    extensivOk: extensivResult.ok,
+    extensivError: extensivResult.ok ? null : extensivResult.error,
+    lineCount: allLines.length,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Page Component
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function RetailMerchStore() {
+  // ── Loader / action data ────────────────────────────────────────────────────
+  const {inventory, inventoryConfigured} = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
+  const navigation = useNavigation();
+  const isSubmittingOrder =
+    navigation.state === 'submitting' &&
+    navigation.formMethod === 'POST' &&
+    navigation.formAction?.endsWith('/retail');
+
+  /**
+   * For an item, compute how many additional units we can still add to the
+   * cart without exceeding either (a) maxQty configured on the merch item or
+   * (b) live Extensiv stock for that SKU. Items without extensivSku are not
+   * stock-gated — they fall back to maxQty only.
+   */
+  const stockAvailableFor = (item: MerchItem, currentInCart: number): number => {
+    const cap = item.maxQty - currentInCart;
+    if (!item.extensivSku || !inventoryConfigured) return cap;
+    const onHand = inventory[item.extensivSku] ?? 0;
+    return Math.max(0, Math.min(cap, onHand - currentInCart));
+  };
+
+  const isOutOfStock = (item: MerchItem): boolean => {
+    if (!item.extensivSku || !inventoryConfigured) return false;
+    return (inventory[item.extensivSku] ?? 0) <= 0;
+  };
+
   // ── Suppress Klaviyo popup (B2B page) ──────────────────────────────────────
   useEffect(() => {
     const style = document.createElement('style');
@@ -187,7 +384,12 @@ export default function RetailMerchStore() {
     setCart((prev) => {
       const current = prev[id] || 0;
       // delta is the direction (+1 / -1); multiply by item's step so pack-based items move in increments
-      const next = Math.max(0, Math.min(item.maxQty, current + delta * step));
+      let next = Math.max(0, Math.min(item.maxQty, current + delta * step));
+      // Stock gate: never let cart qty exceed live Extensiv availability.
+      if (item.extensivSku && inventoryConfigured) {
+        const onHand = inventory[item.extensivSku] ?? 0;
+        next = Math.min(next, onHand);
+      }
       if (next === 0) {
         const {[id]: _, ...rest} = prev;
         return rest;
@@ -196,24 +398,12 @@ export default function RetailMerchStore() {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const orderLines = Object.entries(cart)
-      .map(([id, qty]) => {
-        const item = MERCH_ITEMS.find((i) => i.id === id);
-        return item ? `${item.name}: ${qty}` : null;
-      })
-      .filter(Boolean);
-
-    const shopName = selectedAccount?.name || 'Unknown';
-    const location = [selectedAccount?.city, selectedAccount?.state].filter(Boolean).join(', ');
-    const subject = encodeURIComponent(`Highsman Merch Order — ${shopName}`);
-    const body = encodeURIComponent(
-      `Store: ${shopName}${location ? ` (${location})` : ''}\nZoho ID: ${selectedAccount?.id || 'N/A'}\nContact: ${contactName}\nEmail: ${contactEmail}\n\nOrder:\n${orderLines.join('\n')}\n\nNotes: ${notes || 'None'}`,
-    );
-    window.location.href = `mailto:njsales@highsman.com?subject=${subject}&body=${body}`;
-    setSubmitted(true);
-  };
+  // Order submission flips to a real Remix Form posting to /retail's action.
+  // The action pushes to Extensiv and emails the paper trail. We just watch
+  // navigation + actionData to decide what UI to show.
+  useEffect(() => {
+    if (actionData?.ok) setSubmitted(true);
+  }, [actionData]);
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -761,8 +951,12 @@ export default function RetailMerchStore() {
                     {items.map((item) => {
                       const qty = cart[item.id] || 0;
                       const isInCart = qty > 0;
-                      const atMax = qty + (item.step ?? 1) > item.maxQty;
-                      const addLabel = item.step && item.step > 1 ? `Add ${item.step}-pack` : 'Add to Order';
+                      const oos = isOutOfStock(item);
+                      const stockLeft = stockAvailableFor(item, qty);
+                      const atMax = qty + (item.step ?? 1) > item.maxQty || stockLeft < (item.step ?? 1);
+                      const addLabel = oos
+                        ? 'Out of Stock'
+                        : item.step && item.step > 1 ? `Add ${item.step}-pack` : 'Add to Order';
                       return (
                         <article
                           key={item.id}
@@ -779,10 +973,16 @@ export default function RetailMerchStore() {
                             </span>
                           )}
 
-                          {/* FREE pill — top right */}
-                          <span className="absolute top-3 right-3 z-10 bg-[#F5E400] text-black font-headline text-[10px] font-bold tracking-widest uppercase px-2.5 py-1">
-                            Free
-                          </span>
+                          {/* FREE / OUT-OF-STOCK pill — top right */}
+                          {oos ? (
+                            <span className="absolute top-3 right-3 z-10 bg-red-600 text-white font-headline text-[10px] font-bold tracking-widest uppercase px-2.5 py-1">
+                              Out of Stock
+                            </span>
+                          ) : (
+                            <span className="absolute top-3 right-3 z-10 bg-[#F5E400] text-black font-headline text-[10px] font-bold tracking-widest uppercase px-2.5 py-1">
+                              Free
+                            </span>
+                          )}
 
                           {/* In-cart badge — appears below tag/free when added */}
                           {isInCart && (
@@ -822,9 +1022,14 @@ export default function RetailMerchStore() {
                               {qty === 0 ? (
                                 <button
                                   onClick={() => updateQty(item.id, 1)}
-                                  className="w-full flex items-center justify-center gap-2 bg-transparent border border-[#F5E400] text-[#F5E400] font-headline text-xs font-bold uppercase tracking-wide py-3 hover:bg-[#F5E400] hover:text-black transition-colors"
+                                  disabled={oos}
+                                  className={`w-full flex items-center justify-center gap-2 font-headline text-xs font-bold uppercase tracking-wide py-3 transition-colors ${
+                                    oos
+                                      ? 'bg-transparent border border-[#A9ACAF]/30 text-[#A9ACAF]/50 cursor-not-allowed'
+                                      : 'bg-transparent border border-[#F5E400] text-[#F5E400] hover:bg-[#F5E400] hover:text-black'
+                                  }`}
                                 >
-                                  <span className="material-symbols-outlined text-sm">add_shopping_cart</span>
+                                  <span className="material-symbols-outlined text-sm">{oos ? 'block' : 'add_shopping_cart'}</span>
                                   {addLabel}
                                 </button>
                               ) : (
@@ -939,7 +1144,18 @@ export default function RetailMerchStore() {
                     </p>
                   </div>
                 ) : (
-                  <form onSubmit={handleSubmit}>
+                  <Form method="post" action="/retail">
+                    {/* Hidden fields — server action reads these */}
+                    <input type="hidden" name="accountId" value={selectedAccount?.id ?? ''} />
+                    <input type="hidden" name="accountName" value={selectedAccount?.name ?? ''} />
+                    <input type="hidden" name="accountCity" value={selectedAccount?.city ?? ''} />
+                    <input type="hidden" name="accountState" value={selectedAccount?.state ?? ''} />
+                    <input type="hidden" name="shipStreet" value={selectedAddress?.street ?? ''} />
+                    <input type="hidden" name="shipCity" value={selectedAddress?.city ?? selectedAccount?.city ?? ''} />
+                    <input type="hidden" name="shipState" value={selectedAddress?.state ?? selectedAccount?.state ?? ''} />
+                    <input type="hidden" name="shipZip" value={selectedAddress?.zip ?? ''} />
+                    <input type="hidden" name="cart" value={JSON.stringify(cart)} />
+
                     {/* Order summary */}
                     <div className="border border-[#A9ACAF]/20 mb-8">
                       <div className="px-5 py-3 bg-[#111] border-b border-[#A9ACAF]/20">
@@ -1027,11 +1243,17 @@ export default function RetailMerchStore() {
 
                     <button
                       type="submit"
-                      className="w-full flex items-center justify-center gap-2 bg-[#F5E400] text-black font-headline text-base md:text-lg font-bold uppercase tracking-wide py-4 md:py-5 hover:bg-[#F5E400]/90 transition-colors"
+                      disabled={isSubmittingOrder}
+                      className="w-full flex items-center justify-center gap-2 bg-[#F5E400] text-black font-headline text-base md:text-lg font-bold uppercase tracking-wide py-4 md:py-5 hover:bg-[#F5E400]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <span className="material-symbols-outlined text-xl">send</span>
-                      Submit Order Request
+                      <span className="material-symbols-outlined text-xl">{isSubmittingOrder ? 'progress_activity' : 'send'}</span>
+                      {isSubmittingOrder ? 'Submitting…' : 'Submit Order Request'}
                     </button>
+                    {actionData && !actionData.ok && (
+                      <p className="mt-3 text-sm text-red-400">
+                        {actionData.error || 'Order failed — please try again or email njsales@highsman.com.'}
+                      </p>
+                    )}
 
                     {/* Trust signals below CTA */}
                     <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
@@ -1048,7 +1270,7 @@ export default function RetailMerchStore() {
                         <span>Shipped direct to your store</span>
                       </div>
                     </div>
-                  </form>
+                  </Form>
                 )}
               </div>
             </section>
