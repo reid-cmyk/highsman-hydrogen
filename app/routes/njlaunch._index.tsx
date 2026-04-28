@@ -1,4 +1,4 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import type {MetaFunction, LinksFunction} from '@shopify/remix-oxygen';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -222,31 +222,86 @@ const PAGE_CSS = `
     pointer-events: none; user-select: none;
   }
 
-  /* Reveal (GIF banner) */
+  /* Reveal (portrait video banner) */
   .nj-launch .reveal {
     background: var(--space-black);
     padding: 0 24px 80px; position: relative;
   }
   .nj-launch .reveal .frame {
-    max-width: 1100px; margin: 0 auto;
+    width: 100%;
+    max-width: 460px;
+    margin: 0 auto;
     position: relative;
+    aspect-ratio: 9 / 16;
     border: 1px solid var(--shadow-line);
+    border-radius: 10px;
     background: #0a0a0a;
     overflow: hidden;
     box-shadow:
       0 0 0 1px rgba(245,229,0,0.15),
-      0 30px 80px rgba(0,0,0,0.6),
-      0 0 80px rgba(245,229,0,0.10);
+      0 30px 80px rgba(0,0,0,0.7),
+      0 0 100px rgba(245,229,0,0.12);
   }
-  .nj-launch .reveal .frame img { width: 100%; height: auto; display: block; }
+  .nj-launch .reveal .frame video {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+    background: #000;
+  }
   .nj-launch .reveal .corner-tag {
-    position: absolute; top: 16px; left: 16px;
+    position: absolute; top: 14px; left: 14px;
     background: var(--field-yellow); color: var(--space-black);
     font-family: 'Teko', sans-serif;
     font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.1em; padding: 6px 12px;
-    font-size: 16px; z-index: 2;
+    letter-spacing: 0.1em; padding: 5px 11px;
+    font-size: 14px; z-index: 3;
+    border-radius: 2px;
   }
+  .nj-launch .reveal .sound-toggle {
+    position: absolute; top: 14px; right: 14px;
+    z-index: 3;
+    background: rgba(0,0,0,0.78);
+    color: var(--field-yellow);
+    border: 1px solid var(--field-yellow);
+    font-family: 'Teko', sans-serif;
+    font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; font-size: 14px;
+    padding: 7px 12px; border-radius: 2px;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: background .15s ease, color .15s ease, transform .15s ease;
+  }
+  .nj-launch .reveal .sound-toggle:hover {
+    background: var(--field-yellow); color: var(--space-black);
+    transform: translateY(-1px);
+  }
+  .nj-launch .reveal .sound-toggle .ico {
+    font-size: 16px; line-height: 1;
+  }
+  .nj-launch .reveal .pulse-hint {
+    position: absolute;
+    bottom: 14px; left: 50%; transform: translateX(-50%);
+    z-index: 3;
+    font-family: 'Teko', sans-serif;
+    font-size: 13px; font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.16em;
+    color: rgba(255,255,255,0.85);
+    text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+    background: rgba(0,0,0,0.5);
+    padding: 6px 12px;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border-radius: 999px;
+    pointer-events: none;
+    animation: pulseHint 2.4s ease-in-out infinite;
+  }
+  @keyframes pulseHint {
+    0%, 100% { opacity: 0.55; transform: translateX(-50%) translateY(0); }
+    50%      { opacity: 1.0;  transform: translateX(-50%) translateY(-3px); }
+  }
+  .nj-launch .reveal.is-unmuted .pulse-hint { display: none; }
 
   /* Countdown */
   .nj-launch .countdown-wrap {
@@ -563,6 +618,23 @@ export default function NjLaunch() {
     secs: 0,
   });
 
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [muted, setMuted] = useState(true);
+
+  function toggleMute() {
+    const v = videoRef.current;
+    if (!v) return;
+    const next = !muted;
+    v.muted = next;
+    setMuted(next);
+    // browsers may have paused the video; resume if needed
+    if (v.paused) {
+      v.play().catch(() => {
+        /* autoplay-with-sound blocked; tap will retry next time */
+      });
+    }
+  }
+
   useEffect(() => {
     function tick() {
       const now = Date.now();
@@ -643,15 +715,31 @@ export default function NjLaunch() {
         </div>
       </section>
 
-      {/* REVEAL — launch GIF */}
-      <section className="reveal">
+      {/* REVEAL — launch video (portrait, autoplay muted, tap-to-unmute) */}
+      <section className={`reveal${muted ? '' : ' is-unmuted'}`}>
         <div className="frame">
           <span className="corner-tag">The Drop</span>
-          <img
-            src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Promo_Site_Launch.gif?v=1777390146"
-            alt="Highsman Launch — Ground Game and Triple Threat in motion"
-            loading="lazy"
+          <button
+            type="button"
+            className="sound-toggle"
+            onClick={toggleMute}
+            aria-label={muted ? 'Unmute video' : 'Mute video'}
+            aria-pressed={!muted}
+          >
+            <span className="ico" aria-hidden="true">{muted ? '🔇' : '🔊'}</span>
+            <span>{muted ? 'Tap For Sound' : 'Mute'}</span>
+          </button>
+          <video
+            ref={videoRef}
+            src="https://cdn.shopify.com/videos/c/o/v/827cc1250e644c4f92a4809595e75c17.mp4"
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            aria-label="Highsman Launch — aerial drone shot of New Jersey at golden hour"
           />
+          {muted && <div className="pulse-hint" aria-hidden="true">🔊 Tap For Sound</div>}
         </div>
       </section>
 
@@ -873,75 +961,4 @@ export default function NjLaunch() {
               <summary>What's the difference between Ground Game and Triple Threat?</summary>
               <p>
                 Same Highsman standard, different formats. Ground Game is 7G of pre-ground premium
-                flower — your call how to roll it. Triple Threat is a 1.2G Triple Infused pre-roll
-                built for heavy sessions and sharing. Pick what fits your session.
-              </p>
-            </details>
-            <details>
-              <summary>What does "Triple Infused" actually mean?</summary>
-              <p>
-                Diamonds (THCA Isolate), Live Resin, and interior kief spun into the flower's
-                microstructure at high speed. The concentrates aren't coated on the outside —
-                they're inside the flower. That's why the burn is smoother and the flavor lasts the
-                full smoke.
-              </p>
-            </details>
-            <details>
-              <summary>Is this available outside of NJ?</summary>
-              <p>
-                This launch deal is New Jersey only. We'll announce future state launches on
-                @highsman.
-              </p>
-            </details>
-          </div>
-        </div>
-      </section>
-
-      {/* FINAL CTA */}
-      <section className="final-cta" id="find">
-        <div className="inner">
-          <h2>
-            Don't Miss <span className="yellow">The Drop.</span>
-          </h2>
-          <p>
-            Limited run. Ground Game 7G and Triple Threat 1.2G — 20% off at participating NJ
-            dispensaries. Live May 14. Gone June 13.
-          </p>
-          <a className="btn btn-primary" href="https://highsman.com/njmenu">
-            Find a Dispensary →
-          </a>
-        </div>
-      </section>
-
-      {/* FOOTER */}
-      <footer className="local">
-        <a href="https://highsman.com" aria-label="Highsman home">
-          <img
-            className="spark"
-            src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Spark_Greatness_White.png?v=1775594430"
-            alt="Spark Greatness"
-          />
-        </a>
-        <div className="signature">HIGHSMAN by Ricky Williams · #34 · The Highsman</div>
-        <div className="links">
-          <a href="https://highsman.com">Home</a>
-          <a href="https://highsman.com/njmenu">NJ Menu</a>
-          <a href="https://instagram.com/highsman">@HIGHSMAN</a>
-        </div>
-        <p className="legal">
-          For use only by adults 21 years of age or older. Keep out of reach of children and pets.
-          Cannabis can impair concentration, coordination, and judgment. Do not operate a vehicle or
-          machinery under the influence. Available only at licensed New Jersey adult-use
-          dispensaries. Promo: 20% off single-unit purchase of Ground Game 7G or Triple Threat 1.2G
-          Pre-Roll, May 14 – June 13, 2026, while supplies last. No stacking. Cross-category bundles
-          excluded. Deal availability subject to participating retailers.
-        </p>
-      </footer>
-
-      {/* Sticky mobile CTA */}
-      <div className="sticky-cta">
-        <a href="https://highsman.com/njmenu">Find a Dispensary →</a>
-      </div>
-    </div>
-  );
-}
+                flower — your call how to roll it. Triple Threat is
