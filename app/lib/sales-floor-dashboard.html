@@ -27,7 +27,7 @@
     }
   </script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
-  <link rel="stylesheet" href="/sales-floor/css/styles.css?v=16" />
+  <link rel="stylesheet" href="/sales-floor/css/styles.css?v=17" />
 </head>
 <body class="bg-brand-black text-brand-white font-barlow">
 
@@ -233,10 +233,58 @@
             <div class="hs-stat-number text-white" id="stat-calls">0</div>
             <div class="hs-stat-sub">Keep the meter running</div>
           </div>
-          <div class="stat-card">
-            <div class="hs-stat-label">Active Alerts</div>
-            <div class="hs-stat-number text-white" id="stat-issues">—</div>
-            <div class="hs-stat-sub">Inventory &amp; accounts</div>
+          <!-- Active Alerts stat removed — already shown in the Alerts panel
+               below. The hidden #stat-issues sink is preserved for alerts.js
+               so its counter write keeps working without a guard change. -->
+          <div class="stat-card hidden" aria-hidden="true">
+            <div class="hs-stat-number" id="stat-issues">—</div>
+          </div>
+        </div>
+
+        <!-- STATE PULSE — month-to-date booked revenue per focus state.
+             Source: /api/sales-floor-state-pulse (Zoho Inventory, 5 min
+             edge cache). Mirrors the state-tile logic /sales uses, so the
+             dashboard strip and the full /sales report can never disagree.
+             Head Office warehouse drops out via resolveStateFromLocation. -->
+        <div class="hs-state-pulse" id="state-pulse">
+          <div class="hs-state-pulse-head">
+            <span class="hs-state-pulse-eyebrow">State Pulse</span>
+            <span class="hs-state-pulse-month" id="state-pulse-month">—</span>
+            <button onclick="window.refreshStatePulse && window.refreshStatePulse()"
+                    class="hs-state-pulse-refresh" title="Refresh state pulse"
+                    aria-label="Refresh state pulse">
+              <i class="fa-solid fa-rotate-right"></i>
+            </button>
+          </div>
+          <div class="hs-state-pulse-grid" id="state-pulse-grid">
+            <div class="hs-state-tile" data-state="NJ">
+              <div class="hs-state-tile-code">NJ</div>
+              <div class="hs-state-tile-amount" data-amount-for="NJ">—</div>
+              <div class="hs-state-tile-sub" data-orders-for="NJ">— orders</div>
+            </div>
+            <div class="hs-state-tile" data-state="MA">
+              <div class="hs-state-tile-code">MA</div>
+              <div class="hs-state-tile-amount" data-amount-for="MA">—</div>
+              <div class="hs-state-tile-sub" data-orders-for="MA">— orders</div>
+            </div>
+            <div class="hs-state-tile" data-state="NY">
+              <div class="hs-state-tile-code">NY</div>
+              <div class="hs-state-tile-amount" data-amount-for="NY">—</div>
+              <div class="hs-state-tile-sub" data-orders-for="NY">— orders</div>
+            </div>
+            <div class="hs-state-tile" data-state="RI">
+              <div class="hs-state-tile-code">RI</div>
+              <div class="hs-state-tile-amount" data-amount-for="RI">—</div>
+              <div class="hs-state-tile-sub" data-orders-for="RI">— orders</div>
+            </div>
+            <div class="hs-state-tile" data-state="MO">
+              <div class="hs-state-tile-code">MO</div>
+              <div class="hs-state-tile-amount" data-amount-for="MO">—</div>
+              <div class="hs-state-tile-sub" data-orders-for="MO">— orders</div>
+            </div>
+          </div>
+          <div class="hs-state-pulse-foot" id="state-pulse-foot">
+            Booked revenue MTD · Confirmed + Closed sales orders
           </div>
         </div>
 
@@ -259,7 +307,9 @@
           </div>
         </div>
 
-        <!-- Secondary row: Orders Due snapshot + Alerts + Quick Email -->
+        <!-- Secondary row: Orders Due snapshot + Alerts + Onboarding Visits.
+             Quick Email moved out — it duplicates the Email tab and ate prime
+             dashboard real estate that tells reps nothing about today's plan. -->
         <div class="hs-section-break">
           <span class="hs-section-label">At a Glance</span>
         </div>
@@ -288,55 +338,56 @@
             </div>
           </div>
 
-          <!-- Quick Email -->
-          <div class="hs-panel">
+          <!-- Upcoming Onboarding Visits — Vibes Tier 1/2 visits scheduled
+               this week. Source: /api/vibes-weekly-plan (Zoho Needs Onboarding
+               pipeline + Tier-3 stale check-ins). Read-only summary; full
+               edit lives on /vibes/today. -->
+          <div class="hs-panel hs-panel--onboarding">
             <div class="hs-card-header">
-              <span class="hs-card-title">Quick Email</span>
-            </div>
-            <div class="p-5 space-y-3">
-              <!-- Zoho-backed contact / dispensary lookup. Auto-fills To + Name. -->
-              <div class="hs-contact-search">
-                <label class="hs-label" for="quick-contact-search-input">Search contact or dispensary</label>
-                <div class="hs-contact-search-wrap">
-                  <i class="fa-solid fa-magnifying-glass hs-contact-search-icon"></i>
-                  <input
-                    id="quick-contact-search-input"
-                    type="text"
-                    class="hs-input hs-contact-search-input"
-                    placeholder='e.g. "Jane Smith" or "RISE Paterson"'
-                    autocomplete="off"
-                    oninput="ContactSearch.onInput(event)"
-                    onfocus="ContactSearch.onFocus(event)"
-                    onblur="ContactSearch.onBlur(event)"
-                    onkeydown="ContactSearch.onKeydown(event)"
-                  />
-                  <span id="quick-contact-search-spinner" class="hs-contact-search-spinner hidden">
-                    <i class="fa-solid fa-circle-notch fa-spin"></i>
-                  </span>
-                </div>
-                <div id="quick-contact-search-results" class="hs-contact-search-results hidden" role="listbox"></div>
-                <div id="quick-contact-search-hint" class="hs-helper-note">
-                  Pick a contact to auto-fill To + Name from Zoho.
-                </div>
-              </div>
-
-              <select id="quick-template" class="hs-input">
-                <option value="">— Pick a template —</option>
-                <option value="intro">Intro / First Touch</option>
-                <option value="followup">Follow-Up</option>
-                <option value="proposal">Proposal Send</option>
-                <option value="checkin">Account Check-In</option>
-                <option value="reorder">Reorder Reminder</option>
-              </select>
-              <input id="quick-to" type="email" placeholder="To: email@example.com" class="hs-input" />
-              <input id="quick-name" type="text" placeholder="Contact name" class="hs-input" />
-              <button onclick="sendQuickEmail()" class="hs-btn-primary w-full">
-                <i class="fa-solid fa-paper-plane mr-1"></i> Send Email
+              <span class="hs-card-title">Onboarding Visits</span>
+              <button onclick="window.refreshOnboardingVisits && window.refreshOnboardingVisits()"
+                      class="hs-link" title="Refresh onboarding visits">
+                <i class="fa-solid fa-rotate-right"></i> Refresh
               </button>
-              <div class="hs-helper-note">Opens in Gmail — review before you hit send.</div>
+            </div>
+            <div id="onboarding-visits-list" class="hs-onboarding-list">
+              <div class="hs-empty-state py-6">
+                <div class="hs-empty-state-icon"><i class="fa-solid fa-store"></i></div>
+                Loading this week's visits…
+              </div>
             </div>
           </div>
 
+        </div>
+
+        <!-- Upcoming Trainings — full-width below At a Glance.
+             Two sources merged into one timeline:
+               • /api/vibes-pending-trainings  → Sky-flagged trainings
+                 awaiting Serena's confirmation (PENDING_CONFIRM).
+               • /api/vibes-weekly-plan        → confirmed training stops
+                 already routed into Serena's Tue/Wed/Thu plan
+                 (Description tagged [TIER:TRAINING]).
+             Read-only summary; full booking flow stays on /vibes. -->
+        <div class="hs-panel hs-trainings-panel">
+          <div class="hs-card-header">
+            <div class="hs-card-header-left">
+              <span class="hs-card-title">Upcoming Trainings</span>
+              <span id="trainings-count-pill" class="hs-panel-pill hidden">
+                <span class="hs-panel-pill-dot"></span>
+                <span class="hs-panel-pill-label">0 booked</span>
+              </span>
+            </div>
+            <button onclick="window.refreshUpcomingTrainings && window.refreshUpcomingTrainings()"
+                    class="hs-link" title="Refresh trainings">
+              <i class="fa-solid fa-rotate-right"></i> Refresh
+            </button>
+          </div>
+          <div id="upcoming-trainings-list" class="hs-trainings-list">
+            <div class="hs-empty-state py-6">
+              <div class="hs-empty-state-icon"><i class="fa-solid fa-graduation-cap"></i></div>
+              Loading trainings…
+            </div>
+          </div>
         </div>
 
         <!-- Missed Calls — surfaced ABOVE Recent Calls because they're the
@@ -1234,7 +1285,7 @@
 <script src="/sales-floor/js/sms.js"></script>
 <script src="/sales-floor/js/sms-templates.js"></script>
 <script src="/sales-floor/js/missed-calls.js"></script>
-<script src="/sales-floor/js/app.js?v=22"></script>
+<script src="/sales-floor/js/app.js?v=23"></script>
 <script>
   // ───────────────────────────────────────────────────────────
   // DRAWER (mobile sidebar)
