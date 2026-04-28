@@ -68,6 +68,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('funnel-month')?.addEventListener('change', () => {
     loadFunnel({force: true}).catch(() => {});
   });
+
+  // Dashboard ambient panels — State Pulse / Onboarding / Trainings.
+  // Each is best-effort and fully self-contained. Failures stay logged
+  // and never block the primary CRM sync above.
+  if (typeof loadStatePulse === 'function')        loadStatePulse().catch(() => {});
+  if (typeof loadOnboardingVisits === 'function')  loadOnboardingVisits().catch(() => {});
+  if (typeof loadUpcomingTrainings === 'function') loadUpcomingTrainings().catch(() => {});
 });
 
 function hydrateRepFromServer() {
@@ -470,7 +477,7 @@ function updateStats() {
   // still feel responsive.
   const callsDisplay = quoTodayCalls != null ? quoTodayCalls : callsToday;
   document.getElementById('stat-calls').textContent = callsDisplay;
-  document.getElementById('stat-issues').textContent = Alerts.counts().total || '0';
+  const _statIssues = document.getElementById('stat-issues'); if (_statIssues) _statIssues.textContent = Alerts.counts().total || '0';
 
   if (hot > 0) {
     const badge = document.getElementById('hot-badge');
@@ -4597,3 +4604,232 @@ function openCurrentBriefInZoho() {
   window.open(url, '_blank', 'noopener');
 }
 window.openCurrentBriefInZoho = openCurrentBriefInZoho;
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dashboard ambient panels — State Pulse + Onboarding Visits + Upcoming Trainings
+// ─────────────────────────────────────────────────────────────────────────────
+// Self-contained, best-effort loaders that paint three new dashboard panels
+// without touching the existing bootstrap path. Each has:
+//   • Its own fetch (no shared retry / abort logic — short, single-shot).
+//   • Its own render path keyed off DOM IDs declared in dashboard.html.
+//   • A `window.refresh*` shim wired to the panel's Refresh button.
+// If any backing endpoint is unavailable (env not configured, Zoho 502, etc.)
+// the panels degrade silently to a friendly empty state — they MUST never
+// throw a render error that breaks the rest of the dashboard.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── State Pulse ─────────────────────────────────────────────────────────────
+function fmtMoneyShort(n) {
+  const v = Number(n) || 0;
+  if (v >= 1000000) return '$' + (v / 1000000).toFixed(v >= 10000000 ? 0 : 1) + 'M';
+  if (v >= 10000)   return '$' + (v / 1000).toFixed(0) + 'K';
+  if (v >= 1000)    return '$' + (v / 1000).toFixed(1) + 'K';
+  return '$' + v.toFixed(0);
+}
+
+async function loadStatePulse() {
+  const grid = document.getElementById('state-pulse-grid');
+  const monthEl = document.getElementById('state-pulse-month');
+  const footEl = document.getElementById('state-pulse-foot');
+  if (!grid) return;
+  try {
+    const res = await fetch('/api/sales-floor-state-pulse', {credentials: 'include'});
+    const data = await res.json().catch(() => ({}));
+    if (monthEl) monthEl.textContent = data.monthLabel || '—';
+    const byState = data.byState || {};
+    const orderCounts = data.orderCounts || {};
+    ['NJ', 'MA', 'NY', 'RI', 'MO'].forEach((code) => {
+      const amt = grid.querySelector(`[data-amount-for="${code}"]`);
+      const ord = grid.querySelector(`[data-orders-for="${code}"]`);
+      if (amt) amt.textContent = fmtMoneyShort(byState[code] || 0);
+      if (ord) {
+        const n = orderCounts[code] || 0;
+        ord.textContent = n === 1 ? '1 order' : `${n} orders`;
+      }
+    });
+    if (footEl) {
+      if (data.ok) {
+        footEl.textContent = 'Booked revenue MTD · Confirmed + Closed sales orders';
+      } else if (data.reason === 'not-configured') {
+        footEl.textContent = 'Zoho Inventory not configured — connect to see live numbers';
+      } else {
+        footEl.textContent = 'Live data unavailable — showing last known';
+      }
+    }
+  } catch (err) {
+    console.warn('[state-pulse] load failed', err);
+    if (footEl) footEl.textContent = 'Could not load state pulse';
+  }
+}
+window.refreshStatePulse = () => loadStatePulse().catch(() => {});
+
+// ── Onboarding Visits ───────────────────────────────────────────────────────
+// Reuses /api/vibes-weekly-plan — same source Serena uses on /vibes/today.
+// We only show the next ~5 stops across Tue/Wed/Thu so the dashboard panel
+// stays scannable; full week is a tap away on /vibes.
+function _onboardingDayChip(dateIso) {
+  if (!dateIso) return '—';
+  try {
+    const d = new Date(dateIso + 'T12:00:00');
+    return d.toLocaleDateString('en-US', {weekday: 'short', month: 'short', day: 'numeric'});
+  } catch { return dateIso; }
+}
+
+async function loadOnboardingVisits() {
+  const list = document.getElementById('onboarding-visits-list');
+  if (!list) return;
+  try {
+    const res = await fetch('/api/vibes-weekly-plan', {credentials: 'include'});
+    const data = await res.json().catch(() => ({}));
+    const accountsById = data.accountsById || {};
+    const plan = data.plan || {};
+    const days = ['tuesday', 'wednesday', 'thursday'];
+    const rows = [];
+    for (const day of days) {
+      const block = plan[day];
+      if (!block || !Array.isArray(block.stops)) continue;
+      for (const accountId of block.stops) {
+        const acct = accountsById[accountId] || {};
+        rows.push({
+          accountId,
+          name: acct.name || 'Unknown',
+          city: acct.city || '',
+          tier: acct.tier || '',
+          dateIso: block.date || '',
+          dayLabel: _onboardingDayChip(block.date || ''),
+        });
+      }
+      if (rows.length >= 6) break;
+    }
+    if (rows.length === 0) {
+      list.innerHTML = '<div class="hs-empty-state py-6">' +
+        '<div class="hs-empty-state-icon"><i class="fa-solid fa-store"></i></div>' +
+        'No onboarding visits scheduled this week.' +
+      '</div>';
+      return;
+    }
+    const html = rows.slice(0, 5).map((r) => `
+      <div class="hs-onboarding-row">
+        <div class="hs-onboarding-row-main">
+          <div class="hs-onboarding-name">${_esc(r.name)}</div>
+          <div class="hs-onboarding-meta">
+            ${r.city ? _esc(r.city) + ' · ' : ''}${r.tier ? 'Tier ' + _esc(r.tier) : 'Visit'}
+          </div>
+        </div>
+        <div class="hs-onboarding-day">${_esc(r.dayLabel)}</div>
+      </div>
+    `).join('');
+    const overflow = rows.length > 5 ? `<div class="hs-onboarding-foot">+${rows.length - 5} more · view full plan on /vibes</div>` : '';
+    list.innerHTML = html + overflow;
+  } catch (err) {
+    console.warn('[onboarding-visits] load failed', err);
+    list.innerHTML = '<div class="hs-empty-state py-6">' +
+      '<div class="hs-empty-state-icon"><i class="fa-solid fa-store"></i></div>' +
+      'Could not load this week\'s visits.' +
+    '</div>';
+  }
+}
+window.refreshOnboardingVisits = () => loadOnboardingVisits().catch(() => {});
+
+// ── Upcoming Trainings ──────────────────────────────────────────────────────
+// Two sources merged into one timeline:
+//   • /api/vibes-pending-trainings  → Sky-flagged, Serena hasn't booked yet.
+//   • /api/vibes-weekly-plan         → confirmed training stops (Description
+//     tagged [TIER:TRAINING]) already routed into the week.
+// Pending rows render with a soft yellow pill; confirmed with a green pill.
+async function loadUpcomingTrainings() {
+  const list = document.getElementById('upcoming-trainings-list');
+  const countPill = document.getElementById('trainings-count-pill');
+  if (!list) return;
+  try {
+    const [pendingRes, planRes] = await Promise.all([
+      fetch('/api/vibes-pending-trainings', {credentials: 'include'}).then(r => r.json()).catch(() => ({})),
+      fetch('/api/vibes-weekly-plan',        {credentials: 'include'}).then(r => r.json()).catch(() => ({})),
+    ]);
+
+    const rows = [];
+
+    // Pending trainings — awaiting Serena confirmation.
+    const pending = Array.isArray(pendingRes.pending) ? pendingRes.pending : [];
+    for (const p of pending) {
+      rows.push({
+        kind: 'pending',
+        name: p.customerName || 'Unknown',
+        meta: [p.regionLabel || '', p.predictedDay ? 'target ' + p.predictedDay : ''].filter(Boolean).join(' · '),
+        focus: p.trainingFocus || '',
+        when: p.predictedDay || 'TBD',
+      });
+    }
+
+    // Confirmed trainings — already in the week's plan and tier-tagged TRAINING.
+    const accountsById = planRes.accountsById || {};
+    const plan = planRes.plan || {};
+    for (const day of ['tuesday', 'wednesday', 'thursday']) {
+      const block = plan[day];
+      if (!block || !Array.isArray(block.stops)) continue;
+      for (const accountId of block.stops) {
+        const acct = accountsById[accountId] || {};
+        // Heuristic: Tier 'TRAINING' or 'training' marker on the account.
+        // The weekly-plan endpoint preserves tier on accountsById, so this
+        // is a safe filter without re-parsing description tags.
+        const tier = String(acct.tier || '').toUpperCase();
+        if (tier !== 'TRAINING') continue;
+        rows.push({
+          kind: 'confirmed',
+          name: acct.name || 'Unknown',
+          meta: [acct.city || '', _onboardingDayChip(block.date || '')].filter(Boolean).join(' · '),
+          focus: '',
+          when: _onboardingDayChip(block.date || ''),
+        });
+      }
+    }
+
+    if (countPill) {
+      const total = rows.length;
+      countPill.classList.toggle('hidden', total === 0);
+      const lbl = countPill.querySelector('.hs-panel-pill-label');
+      if (lbl) lbl.textContent = total === 1 ? '1 training' : `${total} trainings`;
+    }
+
+    if (rows.length === 0) {
+      list.innerHTML = '<div class="hs-empty-state py-6">' +
+        '<div class="hs-empty-state-icon"><i class="fa-solid fa-graduation-cap"></i></div>' +
+        'No upcoming trainings — flag one from any account card.' +
+      '</div>';
+      return;
+    }
+
+    list.innerHTML = rows.map((r) => `
+      <div class="hs-training-row hs-training-row--${r.kind}">
+        <div class="hs-training-status">
+          <i class="fa-solid ${r.kind === 'pending' ? 'fa-clock' : 'fa-circle-check'}"></i>
+          ${r.kind === 'pending' ? 'Pending' : 'Booked'}
+        </div>
+        <div class="hs-training-main">
+          <div class="hs-training-name">${_esc(r.name)}</div>
+          <div class="hs-training-meta">${_esc(r.meta || '—')}${r.focus ? ' · ' + _esc(r.focus) : ''}</div>
+        </div>
+        <div class="hs-training-when">${_esc(r.when)}</div>
+      </div>
+    `).join('');
+  } catch (err) {
+    console.warn('[upcoming-trainings] load failed', err);
+    list.innerHTML = '<div class="hs-empty-state py-6">' +
+      '<div class="hs-empty-state-icon"><i class="fa-solid fa-graduation-cap"></i></div>' +
+      'Could not load upcoming trainings.' +
+    '</div>';
+  }
+}
+window.refreshUpcomingTrainings = () => loadUpcomingTrainings().catch(() => {});
+
+// Tiny HTML escape — used by the new panels above. Defined locally to stay
+// independent of any escape helper that may or may not exist elsewhere.
+function _esc(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
