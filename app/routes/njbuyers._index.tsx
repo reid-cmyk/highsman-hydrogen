@@ -46,6 +46,7 @@ const LOGO_WHITE_URL =
   'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Logo_Block_White.png';
 
 const PAGE_CSS = `
+  html { scroll-behavior: smooth; }
   .nj-buyers {
     --space-black: #000000;
     --quarter-gray: #A9ACAF;
@@ -178,6 +179,7 @@ const PAGE_CSS = `
   .nj-buyers section.band {
     padding: 80px 24px;
     border-bottom: 1px solid var(--shadow-line);
+    scroll-margin-top: 76px;
   }
   .nj-buyers section.band .inner {
     max-width: var(--max-w); margin: 0 auto;
@@ -296,6 +298,50 @@ const PAGE_CSS = `
     font-size: 15px; line-height: 1.55;
   }
 
+  /* Banking-toward / apparel section */
+  .nj-buyers .banking-toward {
+    background:
+      linear-gradient(180deg, #050505 0%, #000 100%);
+    text-align: center;
+  }
+  .nj-buyers .banking-toward h2 { margin-bottom: 14px; }
+  .nj-buyers .banking-toward .lede {
+    margin: 0 auto 36px;
+    max-width: 660px;
+    text-align: center;
+  }
+  .nj-buyers .banking-toward .gear-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    max-width: 880px;
+    margin: 0 auto 32px;
+  }
+  .nj-buyers .gear-tile {
+    border: 1px solid var(--shadow-line);
+    border-radius: 6px;
+    padding: 28px 18px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0));
+    transition: border-color .15s ease, transform .15s ease;
+  }
+  .nj-buyers .gear-tile:hover {
+    border-color: rgba(245,229,0,0.4);
+    transform: translateY(-2px);
+  }
+  .nj-buyers .gear-tile .icon {
+    font-size: 32px;
+    margin-bottom: 10px;
+    color: var(--field-yellow);
+    line-height: 1;
+  }
+  .nj-buyers .gear-tile .name {
+    font-family: 'Teko', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 18px; font-weight: 600;
+    color: var(--yardline-white);
+  }
+
   /* Smart play band */
   .nj-buyers .smart-play {
     background:
@@ -399,6 +445,18 @@ const PAGE_CSS = `
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function NjBuyers() {
+  // Smooth-scroll handler that overrides the default anchor jump so the
+  // sticky header doesn't swallow the destination on the first click.
+  const smoothScroll = (id: string) => (e: React.MouseEvent<HTMLAnchorElement>) => {
+    const el = document.getElementById(id);
+    if (el) {
+      e.preventDefault();
+      el.scrollIntoView({behavior: 'smooth', block: 'start'});
+      // Update URL hash without jumping
+      history.replaceState(null, '', `#${id}`);
+    }
+  };
+
   return (
     <div className="nj-buyers">
       <style dangerouslySetInnerHTML={{__html: PAGE_CSS}} />
@@ -410,9 +468,10 @@ export default function NjBuyers() {
             <img className="logo" src={LOGO_WHITE_URL} alt="Highsman" />
           </a>
           <nav>
-            <a href="#how-it-works">How it works</a>
-            <a href="#math">The math</a>
-            <a href="#faq">FAQ</a>
+            <a href="#how-it-works" onClick={smoothScroll('how-it-works')}>How it works</a>
+            <a href="#math" onClick={smoothScroll('math')}>The math</a>
+            <a href="https://highsman.com/apparel" target="_blank" rel="noopener noreferrer">Apparel</a>
+            <a href="#faq" onClick={smoothScroll('faq')}>FAQ</a>
             <a className="cta" href="/njmenu">Order on NJ Menu</a>
           </nav>
         </div>
@@ -432,7 +491,13 @@ export default function NjBuyers() {
           </p>
           <div className="cta-row">
             <a className="btn btn-primary" href="/njmenu">Order on NJ Menu</a>
-            <a className="btn btn-ghost" href="#how-it-works">See How It Works</a>
+            <a
+              className="btn btn-ghost"
+              href="#how-it-works"
+              onClick={smoothScroll('how-it-works')}
+            >
+              See How It Works
+            </a>
           </div>
         </div>
       </section>
@@ -516,6 +581,44 @@ export default function NjBuyers() {
         </div>
       </section>
 
+      {/* BANKING TOWARD — apparel preview */}
+      <section className="band banking-toward" id="apparel">
+        <div className="inner">
+          <span className="section-eyebrow">What You&rsquo;re Banking Toward</span>
+          <h2>Real Gear. <span className="yellow">Your Stack, Your Drop.</span></h2>
+          <p className="lede">
+            Cash your credit out as a Highsman gift card and spend it on anything in the apparel store.
+            Hoodies, tees, headwear, accessories &mdash; new drops every season.
+          </p>
+          <div className="gear-grid">
+            <div className="gear-tile">
+              <div className="icon">&#127913;</div>
+              <div className="name">Hoodies</div>
+            </div>
+            <div className="gear-tile">
+              <div className="icon">&#128085;</div>
+              <div className="name">Tees</div>
+            </div>
+            <div className="gear-tile">
+              <div className="icon">&#127913;</div>
+              <div className="name">Headwear</div>
+            </div>
+            <div className="gear-tile">
+              <div className="icon">&#9889;</div>
+              <div className="name">Drops</div>
+            </div>
+          </div>
+          <a
+            className="btn btn-primary"
+            href="https://highsman.com/apparel"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Browse Highsman Apparel
+          </a>
+        </div>
+      </section>
+
       {/* SMART PLAY */}
       <section className="band smart-play">
         <div className="inner">
@@ -593,7 +696,17 @@ export default function NjBuyers() {
       <section className="final-cta">
         <h2>Stack Greatness. <span className="yellow">Spark Greatness.</span></h2>
         <p>Place your next NJ order. Watch the bank build.</p>
-        <a className="btn btn-primary" href="/njmenu">Order on NJ Menu</a>
+        <div className="cta-row" style={{justifyContent: 'center'}}>
+          <a className="btn btn-primary" href="/njmenu">Order on NJ Menu</a>
+          <a
+            className="btn btn-ghost"
+            href="https://highsman.com/apparel"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            See What You&rsquo;ll Pull
+          </a>
+        </div>
       </section>
 
       {/* Footer */}
