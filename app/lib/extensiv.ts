@@ -72,8 +72,10 @@ export async function getExtensivAccessToken(env: ExtensivEnv): Promise<string> 
       method: 'POST',
       headers: {
         Authorization: `Basic ${basic}`,
-        'Content-Type': 'application/hal+json',
-        Accept: 'application/hal+json',
+        // The /AuthServer/api/Token endpoint rejects hal+json with HTTP 415;
+        // only the data endpoints (/inventory, /orders) want hal+json.
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
       },
       body: JSON.stringify({
         grant_type: 'client_credentials',
