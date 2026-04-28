@@ -12,6 +12,9 @@ export const handle = {hideHeader: true, hideFooter: true};
 
 export const meta: MetaFunction = () => [
   {title: 'HIGHSMAN — NJ Buyer Store Credit: 0.5% Back On Every Order'},
+  // Internal sales-rep-shareable page — keep out of search engines.
+  {name: 'robots', content: 'noindex, nofollow, noarchive'},
+  {name: 'googlebot', content: 'noindex, nofollow'},
   {
     name: 'description',
     content:

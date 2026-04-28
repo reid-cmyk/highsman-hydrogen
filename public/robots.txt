@@ -24,6 +24,7 @@ Disallow: /new-business/
 # --- B2B wholesale & rep tooling ---
 Disallow: /njmenu
 Disallow: /njmenu/
+Disallow: /njbuyers
 Disallow: /njpopups
 Disallow: /njnorth
 Disallow: /njsouth

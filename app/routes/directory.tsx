@@ -277,6 +277,14 @@ const SECTIONS: Section[] = [
         access: 'b2b',
       },
       {
+        path: '/njbuyers',
+        name: 'Buyer Store Credit · Sales Pitch Page',
+        description:
+          'Sales-rep-shareable landing that explains the 0.5% buyer credit system to prospects and current buyers. The math, how it works, FAQ, and a direct CTA into apparel. Send this when a buyer asks "what is the credit thing?"',
+        audience: 'NJ Dispensary Buyers · Reps share externally',
+        access: 'b2b',
+      },
+      {
         path: '/retail',
         name: 'Retail Merchandising',
         description:
