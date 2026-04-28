@@ -989,13 +989,43 @@ export default function NJMenu() {
     setTimeout(() => setToast(null), 2800);
   }, []);
 
-  // Cart operations
+  // Cart operations — caps at available LeafLink inventory so buyers can't
+  // build a cart bigger than what we can actually ship. Adding past the cap
+  // pins to the cap and shows a toast naming the strain + available units.
   const updateCart = useCallback(
     (productId: string, strainName: string, delta: number) => {
+      // Look up SKU + caseSize so we can translate cases <-> units
+      const product = PRODUCT_LINES.find((p) => p.id === productId);
+      const strain = product?.strains.find((s) => s.name === strainName);
+      const sku = strain?.sku;
+      const caseSize = product?.caseSize ?? 1;
+      // If LeafLink reports inventory for this SKU, cap on units. If it
+      // doesn't (untracked product), let it through — same fallback the
+      // existing isInStock helper uses.
+      const availableUnits = sku && sku in inventory ? inventory[sku] : null;
+      const maxCases = availableUnits != null ? Math.floor(availableUnits / caseSize) : null;
+
       setCart((prev) => {
         const key = cartKey(productId, strainName);
         const existing = prev[key];
-        const newCases = Math.max(0, (existing?.cases ?? 0) + delta);
+        const requestedCases = Math.max(0, (existing?.cases ?? 0) + delta);
+
+        let newCases = requestedCases;
+        if (maxCases != null && requestedCases > maxCases) {
+          newCases = maxCases;
+          // Only show the toast if the buyer actually hit a wall — i.e. they
+          // tried to ADD beyond the cap, not just landed there. Avoids
+          // double-firing when delta=0 calls happen.
+          if (delta > 0 && (existing?.cases ?? 0) >= maxCases) {
+            const friendlyName = strainName + (product ? ` ${product.name}${product.subtitle ? ' (' + product.subtitle + ')' : ''}` : '');
+            showToast(
+              maxCases === 0
+                ? `${friendlyName} is out of stock.`
+                : `Only ${availableUnits} units of ${friendlyName} available — that's ${maxCases} case${maxCases === 1 ? '' : 's'}. Capped at the limit.`,
+            );
+          }
+        }
+
         if (newCases === 0) {
           const next = {...prev};
           delete next[key];
@@ -1007,7 +1037,7 @@ export default function NJMenu() {
         };
       });
     },
-    [],
+    [inventory, showToast],
   );
 
   const setCases = useCallback(
@@ -2892,7 +2922,10 @@ export default function NJMenu() {
                                     Out of Stock
                                   </span>
                                 </div>
-                              ) : (
+                              ) : (() => {
+                                const availMax = getAvailableCases(strain.sku, product.caseSize);
+                                const atCap = availMax != null && cases >= availMax;
+                                return (
                               <div className="flex items-center justify-end gap-0">
                                 <button
                                   onClick={() => updateCart(product.id, strain.name, -1)}
@@ -2919,16 +2952,24 @@ export default function NJMenu() {
                                 </span>
                                 <button
                                   onClick={() => updateCart(product.id, strain.name, 1)}
+                                  disabled={atCap}
                                   className="stepper-btn"
+                                  title={atCap ? 'At available inventory cap' : undefined}
                                   style={{
-                                    background: cases > 0 ? BRAND.gold : 'rgba(255,255,255,0.08)',
-                                    color: cases > 0 ? '#000' : '#fff',
+                                    background: atCap
+                                      ? 'rgba(255,255,255,0.04)'
+                                      : cases > 0 ? BRAND.gold : 'rgba(255,255,255,0.08)',
+                                    color: atCap
+                                      ? 'rgba(255,255,255,0.35)'
+                                      : cases > 0 ? '#000' : '#fff',
+                                    cursor: atCap ? 'not-allowed' : 'pointer',
                                   }}
                                 >
                                   +
                                 </button>
                               </div>
-                              )}
+                                );
+                              })()}
                             </div>
 
                             {/* Mobile layout */}
