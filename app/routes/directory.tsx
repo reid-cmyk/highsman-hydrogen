@@ -127,7 +127,7 @@ const SECTIONS: Section[] = [
     title: 'CRM · Daily Tools',
     accent: BRAND.orange,
     blurb:
-      'The dashboards Sky and Pete work out of every day. Account management, lead pipeline, outbound touchpoints.',
+      'The dashboards Sky and Pete work out of every day. Account management, lead pipeline, outbound touchpoints, and inbound referrals.',
     pages: [
       {
         path: '/sales-floor',
@@ -144,6 +144,14 @@ const SECTIONS: Section[] = [
           'Pete\'s BDR dashboard. NJ leads, follow-ups, Send Menu, Reorder pings, activity logging — every touch lands in Zoho.',
         audience: 'Pete',
         access: 'staff',
+      },
+      {
+        path: '/leads',
+        name: 'Refer a Dispensary',
+        description:
+          'Public referral form anyone can use. Drops a Hot Lead straight into Zoho — surfaces unclaimed in both Sales Floor (Leads tab) and New Business. First rep to click Claim wins it.',
+        audience: 'Public · Anyone',
+        access: 'public',
       },
     ],
   },
@@ -175,6 +183,14 @@ const SECTIONS: Section[] = [
         name: 'Start Check-In',
         description:
           'GPS-gated visit form. SKU stock + merch audit, in-store + online menu accuracy check, budtender training capture, drop log, vibes score, photos, selfie.',
+        audience: 'Vibes Team',
+        access: 'staff',
+      },
+      {
+        path: '/vibes/lead-visit',
+        name: 'Lead Visit · Sampling Drop-In',
+        description:
+          'Short 5-question form for prospect dispensaries (Leads, not Accounts). Interest level, who she met, samples left, takeaways, sales handoff. Inline Lead create if the store isn\'t in Zoho yet.',
         audience: 'Vibes Team',
         access: 'staff',
       },
@@ -346,6 +362,23 @@ const SECTIONS: Section[] = [
   },
   {
     kicker: 'Section 08',
+    title: 'Launch · Campaigns',
+    accent: BRAND.red,
+    blurb:
+      'Active consumer-facing promotions. Send these links to drive shoppers into participating dispensaries during the launch window.',
+    pages: [
+      {
+        path: '/njlaunch',
+        name: 'NJ Launch Deal · 20% Off',
+        description:
+          'May 14 – June 13 2026 consumer landing page. 20% off Ground Game 7G and Triple Threat 1.2G triple-infused pre-rolls at participating NJ dispensaries. Klaviyo capture, store locator, share-ready OG card.',
+        audience: 'NJ Consumers',
+        access: 'public',
+      },
+    ],
+  },
+  {
+    kicker: 'Section 09',
     title: 'Rewards Store',
     accent: BRAND.gold,
     blurb:
@@ -361,7 +394,7 @@ const SECTIONS: Section[] = [
     ],
   },
   {
-    kicker: 'Section 09',
+    kicker: 'Section 10',
     title: 'Visitor · Support · Policies',
     accent: BRAND.gray,
     blurb:
@@ -511,8 +544,8 @@ export default function Directory() {
         >
           The Highsman site map. {totalPages} pages across{' '}
           {SECTIONS.length} sections — field ops, CRM tools, Vibes Team,
-          dashboards, wholesale, budtender tools, brand, rewards, and
-          policies. Bookmark this. Share it.
+          dashboards, wholesale, budtender tools, brand, active launch
+          campaigns, rewards, and policies. Bookmark this. Share it.
         </p>
 
         {/* Search */}
