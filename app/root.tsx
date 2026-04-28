@@ -58,6 +58,37 @@ function shouldNoIndex(pathname: string): boolean {
   );
 }
 
+/**
+ * Path prefixes where the Klaviyo popup must be suppressed — every
+ * B2B/wholesale, staff-internal, brand-rep, and budtender route.
+ *
+ * Reuses NOINDEX_PREFIXES (internal/staff/budtender/api are 1:1) and
+ * adds the public-but-B2B partner pages (/retail, /newjersey, /njbuyers,
+ * /njlaunch) where the popup is off-brand for the audience even though
+ * the page itself is indexable.
+ *
+ * Strategy: when this matches, root.tsx skips the Klaviyo script tag
+ * entirely AND injects a CSS + MutationObserver kill-switch to wipe any
+ * Klaviyo elements that get injected by Shopify storefront defaults or
+ * any future loader.
+ *
+ * Companion memory: feedback_klaviyo_popup_suppression.md.
+ */
+const NO_KLAVIYO_PREFIXES = [
+  ...NOINDEX_PREFIXES,
+  // B2B partner pages — indexable, but no consumer popup
+  '/retail',
+  '/newjersey',
+  '/njbuyers',
+  '/njlaunch',
+];
+
+function shouldSuppressKlaviyo(pathname: string): boolean {
+  return NO_KLAVIYO_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(p + '/'),
+  );
+}
+
 export const links: LinksFunction = () => [
   {rel: 'stylesheet', href: tailwindCss},
   {
@@ -74,16 +105,78 @@ export async function loader({context, request}: LoaderFunctionArgs) {
   const {storefront, cart} = context;
   const url = new URL(request.url);
   const noIndex = shouldNoIndex(url.pathname);
+  const noKlaviyo = shouldSuppressKlaviyo(url.pathname);
   return {
     cart: cart.get(),
     publicStoreDomain: context.env.PUBLIC_STORE_DOMAIN,
     noIndex,
+    noKlaviyo,
   };
 }
+
+// Belt-and-suspenders kill-switch markup that runs even when the Klaviyo
+// script is gated. Catches:
+//   • Modern Klaviyo wrappers (`kl-private-reset-css-*` hashed classes)
+//   • Legacy `klaviyo-form-overlay` and `needsclick` selectors
+//   • Anything Shopify's storefront defaults inject under `[id^="kl-"]`
+// MutationObserver picks up popups that mount AFTER initial render — Klaviyo
+// loads async and historically injects ~200ms after first paint.
+//
+// Per-route useEffect copies (10+ files) became outdated as Klaviyo shipped
+// new popup variants. This single root-level kill switch is now the single
+// source of truth — see memory feedback_klaviyo_popup_suppression.md.
+const KLAVIYO_KILL_CSS = `
+  [data-testid="klaviyo-form-overlay"],
+  .klaviyo-form-overlay,
+  .klaviyo-form,
+  [class*="klaviyo-form-version-"],
+  [class*="kl-private-reset-css"],
+  [class*="needsclick"][class*="kl-private"],
+  [id^="kl-"],
+  [id^="klaviyo-"],
+  iframe[id^="kl_"],
+  [class*="klaviyo"][class*="overlay"],
+  [class*="klaviyo"][class*="modal"],
+  [id*="klaviyo"][id*="popup"] {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+  body { overflow: auto !important; }
+`;
+
+const KLAVIYO_KILL_OBSERVER = `
+(function(){
+  if (window.__hsKlaviyoKilled) return;
+  window.__hsKlaviyoKilled = true;
+  var SEL = '[data-testid="klaviyo-form-overlay"], .klaviyo-form-overlay, .klaviyo-form, [class*="klaviyo-form-version-"], [class*="kl-private-reset-css"], [class*="needsclick"][class*="kl-private"], [id^="kl-"], [id^="klaviyo-"], iframe[id^="kl_"]';
+  function nuke(){
+    try { document.querySelectorAll(SEL).forEach(function(el){ el.remove(); }); } catch(e){}
+  }
+  // Stub the programmatic openForm API so any third-party trigger fails silently.
+  try {
+    Object.defineProperty(window, 'klaviyo', {
+      configurable: true,
+      get: function(){
+        return { push: function(){}, identify: function(){}, openForm: function(){}, isIdentified: function(){return false;} };
+      },
+    });
+  } catch(e){}
+  nuke();
+  if (typeof MutationObserver === 'function') {
+    var mo = new MutationObserver(function(){ nuke(); });
+    var start = function(){ if (document.body) mo.observe(document.body, {childList:true, subtree:true}); else setTimeout(start, 50); };
+    start();
+  } else {
+    setInterval(nuke, 500);
+  }
+})();
+`;
 
 export default function App() {
   const data = useLoaderData<typeof loader>();
   const noIndex = data?.noIndex ?? false;
+  const noKlaviyo = data?.noKlaviyo ?? false;
   return (
     <html lang="en" className="dark">
       <head>
@@ -91,6 +184,15 @@ export default function App() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         {noIndex ? (
           <meta name="robots" content="noindex, nofollow, noarchive" />
+        ) : null}
+        {/* Klaviyo kill-switch CSS — server-rendered so it's already in the
+            DOM before Klaviyo's async script can inject anything. Active on
+            every B2B/wholesale/staff/budtender path via NO_KLAVIYO_PREFIXES. */}
+        {noKlaviyo ? (
+          <style
+            id="hs-klaviyo-kill"
+            dangerouslySetInnerHTML={{__html: KLAVIYO_KILL_CSS}}
+          />
         ) : null}
         <Meta />
         <Links />
@@ -101,18 +203,29 @@ export default function App() {
         </Layout>
         <ScrollRestoration />
         <Scripts />
-        {/* Klaviyo */}
-        <script
-          async
-          type="text/javascript"
-          src="https://static.klaviyo.com/onsite/js/XiTH4j/klaviyo.js?company_id=XiTH4j"
-        ></script>
-        <script
-          type="text/javascript"
-          dangerouslySetInnerHTML={{
-            __html: `!function(){if(!window.klaviyo){window._klOnsite=window._klOnsite||[];try{window.klaviyo=new Proxy({},{get:function(n,i){return"push"===i?function(){var n;(n=window._klOnsite).push.apply(n,arguments)}:function(){for(var n=arguments.length,o=new Array(n),w=0;w<n;w++)o[w]=arguments[w];var t="function"==typeof o[o.length-1]?o.pop():void 0,e=new Promise((function(n){window._klOnsite.push([i].concat(o,[function(i){t&&t(i),n(i)}]))}));return e}}})}catch(n){window.klaviyo=window.klaviyo||[],window.klaviyo.push=function(){var n;(n=window._klOnsite).push.apply(n,arguments)}}}}();`,
-          }}
-        />
+        {/* Klaviyo — only loaded on consumer routes. Internal/B2B routes
+            both skip the script tag AND get the kill-switch CSS + observer
+            above as belt-and-suspenders against any future loader path. */}
+        {noKlaviyo ? (
+          <script
+            type="text/javascript"
+            dangerouslySetInnerHTML={{__html: KLAVIYO_KILL_OBSERVER}}
+          />
+        ) : (
+          <>
+            <script
+              async
+              type="text/javascript"
+              src="https://static.klaviyo.com/onsite/js/XiTH4j/klaviyo.js?company_id=XiTH4j"
+            ></script>
+            <script
+              type="text/javascript"
+              dangerouslySetInnerHTML={{
+                __html: `!function(){if(!window.klaviyo){window._klOnsite=window._klOnsite||[];try{window.klaviyo=new Proxy({},{get:function(n,i){return"push"===i?function(){var n;(n=window._klOnsite).push.apply(n,arguments)}:function(){for(var n=arguments.length,o=new Array(n),w=0;w<n;w++)o[w]=arguments[w];var t="function"==typeof o[o.length-1]?o.pop():void 0,e=new Promise((function(n){window._klOnsite.push([i].concat(o,[function(i){t&&t(i),n(i)}]))}));return e}}})}catch(n){window.klaviyo=window.klaviyo||[],window.klaviyo.push=function(){var n;(n=window._klOnsite).push.apply(n,arguments)}}}}();`,
+              }}
+            />
+          </>
+        )}
       </body>
     </html>
   );
