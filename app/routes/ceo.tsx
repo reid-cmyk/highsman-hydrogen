@@ -35,6 +35,7 @@ import {
   reopenFlag,
   type FlagRow,
 } from '~/lib/ceo-sentiment';
+import {getZohoAccessToken} from '~/lib/zoho-auth';
 
 export const meta: MetaFunction = () => [
   {title: 'HIGHSMAN | CEO Sentiment'},
@@ -132,7 +133,107 @@ type LoaderData = {
   mailboxes: string[];
   totals: {critical: number; warning: number; watch: number; resolved7d: number};
   lastScan: {finished_at: string | null; status: string | null} | null;
+  launchEnrollment: LaunchEnrollment | null;
 };
+
+type EnrolledStore = {
+  id: string;
+  name: string;
+  city: string | null;
+  redeemedAt: string | null;
+  orderNumber: string | null;
+};
+type NotEnrolledStore = {id: string; name: string; city: string | null};
+type LaunchEnrollment = {
+  enrolled: EnrolledStore[];
+  notEnrolled: NotEnrolledStore[];
+  total: number;
+  error: string | null;
+};
+
+// ── LAUNCH Promo Enrollment — pulled live from Zoho ──────────────────────────
+// Lists every NJ Account and buckets by Launch_Promo_Used so the CEO can see,
+// in real time, who has redeemed the wholesale stock-up code and who hasn't.
+async function loadLaunchEnrollment(env: any): Promise<LaunchEnrollment> {
+  const empty: LaunchEnrollment = {
+    enrolled: [],
+    notEnrolled: [],
+    total: 0,
+    error: null,
+  };
+  try {
+    const token = await getZohoAccessToken(env);
+    if (!token) return {...empty, error: 'Zoho token unavailable'};
+
+    const fields = [
+      'Account_Name',
+      'Billing_City',
+      'Launch_Promo_Used',
+      'Launch_Promo_Redeemed_At',
+      'Launch_Promo_Order_Number',
+    ].join(',');
+    // 2-arity OR is the only criteria shape Zoho's parser likes here — chained
+    // `or` returns 502 SYNTAX_ERROR. Account_State picklist OR'd with
+    // Billing_State free text catches both migrated and fresh records.
+    const criteria = `((Account_State:equals:NJ)or(Billing_State:equals:NJ))`;
+
+    const enrolled: EnrolledStore[] = [];
+    const notEnrolled: NotEnrolledStore[] = [];
+    let page = 1;
+    let more = true;
+    let total = 0;
+    while (more && page <= 10 /* safety: 10 * 200 = 2000 NJ accounts */) {
+      const url = new URL('https://www.zohoapis.com/crm/v7/Accounts/search');
+      url.searchParams.set('criteria', criteria);
+      url.searchParams.set('fields', fields);
+      url.searchParams.set('per_page', '200');
+      url.searchParams.set('page', String(page));
+      const res = await fetch(url.toString(), {
+        headers: {Authorization: `Zoho-oauthtoken ${token}`},
+      });
+      if (res.status === 204) break;
+      if (!res.ok) {
+        const body = await res.text();
+        return {
+          ...empty,
+          error: `Zoho ${res.status}: ${body.slice(0, 160)}`,
+        };
+      }
+      const data: any = await res.json();
+      const rows: any[] = data?.data || [];
+      total += rows.length;
+      for (const a of rows) {
+        const name = a.Account_Name || '(unnamed)';
+        const city = a.Billing_City || null;
+        if (a.Launch_Promo_Used === true) {
+          enrolled.push({
+            id: String(a.id),
+            name,
+            city,
+            redeemedAt: a.Launch_Promo_Redeemed_At || null,
+            orderNumber: a.Launch_Promo_Order_Number || null,
+          });
+        } else {
+          notEnrolled.push({id: String(a.id), name, city});
+        }
+      }
+      more = data?.info?.more_records === true;
+      page++;
+    }
+
+    // Most recent redemptions first; not-enrolled alphabetical for scannability
+    enrolled.sort((a, b) => {
+      const ta = a.redeemedAt ? new Date(a.redeemedAt).getTime() : 0;
+      const tb = b.redeemedAt ? new Date(b.redeemedAt).getTime() : 0;
+      return tb - ta;
+    });
+    notEnrolled.sort((a, b) => a.name.localeCompare(b.name));
+
+    return {enrolled, notEnrolled, total, error: null};
+  } catch (err: any) {
+    return {...empty, error: String(err?.message || err)};
+  }
+}
 
 export async function loader({request, context}: LoaderFunctionArgs) {
   const cookie = request.headers.get('Cookie') || '';
@@ -145,6 +246,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       mailboxes: [],
       totals: {critical: 0, warning: 0, watch: 0, resolved7d: 0},
       lastScan: null,
+      launchEnrollment: null,
     });
   }
 
@@ -154,10 +256,20 @@ export async function loader({request, context}: LoaderFunctionArgs) {
 
   let flags: Flag[] = [];
   let lastScan: {finished_at: string | null; status: string | null} | null = null;
+  let launchEnrollment: LaunchEnrollment | null = null;
   let errorMsg: string | null = null;
   try {
-    flags = await readFlags(env, showResolved);
-    lastScan = await readLastScan(env);
+    // Run Supabase reads + Zoho enrollment fetch in parallel — Zoho is the
+    // slowest leg (~600-1200ms cold) so parallelism shaves about that off
+    // the dashboard's TTFB.
+    const [flagsResult, scanResult, enrollResult] = await Promise.all([
+      readFlags(env, showResolved),
+      readLastScan(env),
+      loadLaunchEnrollment(env),
+    ]);
+    flags = flagsResult;
+    lastScan = scanResult;
+    launchEnrollment = enrollResult;
   } catch (err: any) {
     errorMsg = String(err?.message || err);
   }
@@ -183,6 +295,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     mailboxes,
     totals,
     lastScan,
+    launchEnrollment,
   });
 }
 
@@ -343,6 +456,11 @@ function Dashboard({data, actionData}: {data: LoaderData; actionData: any}) {
           <Stat label="Watch"     value={data.totals.watch}     color="#EAB308" />
           <Stat label="Resolved (7d)" value={data.totals.resolved7d} color="#22C55E" />
         </div>
+
+        {/* LAUNCH Promo enrollment */}
+        {data.launchEnrollment && (
+          <LaunchEnrollmentPanel data={data.launchEnrollment} />
+        )}
 
         {/* Filters */}
         <div className="flex flex-wrap gap-3 mb-6">
@@ -676,6 +794,142 @@ function Section({label, children}: {label: string; children: ReactNode}) {
 // Belt-and-braces. Per memory feedback_klaviyo_popup_suppression any non-consumer
 // page should hide the popup. The site-wide helper does this by URL pattern,
 // but in case the helper hasn't been updated to include /ceo we kill it locally.
+
+function LaunchEnrollmentPanel({data}: {data: LaunchEnrollment}) {
+  const [expanded, setExpanded] = useState(true);
+  const enrolledCount = data.enrolled.length;
+  const notEnrolledCount = data.notEnrolled.length;
+  const total = data.total || enrolledCount + notEnrolledCount;
+  const pct = total > 0 ? Math.round((enrolledCount / total) * 100) : 0;
+
+  return (
+    <section
+      className="mb-6 rounded-lg border"
+      style={{borderColor: '#222', background: 'linear-gradient(180deg, rgba(245,228,0,0.04), rgba(245,228,0,0.01))'}}
+    >
+      <header
+        onClick={() => setExpanded((v) => !v)}
+        className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 cursor-pointer"
+        style={{borderBottom: expanded ? '1px solid #222' : 'none'}}
+      >
+        <div className="flex items-center gap-3 flex-wrap">
+          <span
+            className="text-xs uppercase tracking-[0.25em] font-700 px-2 py-0.5 rounded"
+            style={{fontFamily: 'Teko, sans-serif', background: '#F5E400', color: '#000', letterSpacing: '0.2em'}}
+          >
+            LAUNCH
+          </span>
+          <h2
+            className="uppercase tracking-wider text-lg sm:text-xl"
+            style={{fontFamily: 'Teko, sans-serif', fontWeight: 700, color: '#c8a84b'}}
+          >
+            NJ Wholesale Enrollment
+          </h2>
+          <span className="text-[#A9ACAF] text-xs uppercase tracking-widest hidden sm:inline">
+            Apr 28 - May 8 window
+          </span>
+        </div>
+        <div className="flex items-center gap-4 text-xs">
+          <span style={{color: '#22C55E'}}>
+            <strong className="text-base" style={{fontFamily: 'Teko, sans-serif'}}>{enrolledCount}</strong> enrolled
+          </span>
+          <span className="text-[#A9ACAF]">
+            <strong className="text-base text-white" style={{fontFamily: 'Teko, sans-serif'}}>{notEnrolledCount}</strong> not yet
+          </span>
+          <span className="text-[#A9ACAF] hidden sm:inline">
+            <strong className="text-base text-white" style={{fontFamily: 'Teko, sans-serif'}}>{pct}%</strong> coverage
+          </span>
+          <span className="text-[#666] text-base ml-1">{expanded ? '−' : '+'}</span>
+        </div>
+      </header>
+
+      {expanded && (
+        <>
+          {data.error ? (
+            <div className="px-4 py-3 text-xs text-red-400">
+              Could not load enrollment from Zoho: {data.error}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+              {/* Enrolled column */}
+              <div>
+                <div className="flex items-baseline justify-between mb-2">
+                  <h3 className="text-xs uppercase tracking-widest text-[#22C55E] font-semibold">
+                    Enrolled ({enrolledCount})
+                  </h3>
+                  <span className="text-[10px] text-[#666] uppercase tracking-wider">
+                    Most recent first
+                  </span>
+                </div>
+                {enrolledCount === 0 ? (
+                  <p className="text-xs text-[#666] italic">
+                    No redemptions yet. First retailer to use the LAUNCH code will appear here.
+                  </p>
+                ) : (
+                  <ul className="space-y-1.5 max-h-[420px] overflow-y-auto pr-2">
+                    {data.enrolled.map((s) => (
+                      <li
+                        key={s.id}
+                        className="flex items-baseline justify-between gap-3 px-3 py-2 rounded border"
+                        style={{borderColor: 'rgba(34,197,94,0.2)', background: 'rgba(34,197,94,0.04)'}}
+                      >
+                        <div className="min-w-0">
+                          <div className="text-sm text-white truncate">{s.name}</div>
+                          <div className="text-[10px] text-[#A9ACAF] uppercase tracking-wider">
+                            {s.city || 'NJ'}
+                            {s.orderNumber && <> &middot; #{s.orderNumber}</>}
+                          </div>
+                        </div>
+                        <div className="text-[10px] text-[#22C55E] uppercase tracking-wider whitespace-nowrap">
+                          {s.redeemedAt
+                            ? new Date(s.redeemedAt).toLocaleDateString('en-US', {month: 'short', day: 'numeric'})
+                            : ''}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Not enrolled column */}
+              <div>
+                <div className="flex items-baseline justify-between mb-2">
+                  <h3 className="text-xs uppercase tracking-widest text-[#A9ACAF] font-semibold">
+                    Not yet enrolled ({notEnrolledCount})
+                  </h3>
+                  <span className="text-[10px] text-[#666] uppercase tracking-wider">
+                    Outreach targets
+                  </span>
+                </div>
+                {notEnrolledCount === 0 ? (
+                  <p className="text-xs text-[#22C55E] italic">
+                    Every NJ account is enrolled. Lock in.
+                  </p>
+                ) : (
+                  <ul className="space-y-1 max-h-[420px] overflow-y-auto pr-2 grid grid-cols-1 sm:grid-cols-2 gap-x-3">
+                    {data.notEnrolled.map((s) => (
+                      <li
+                        key={s.id}
+                        className="flex items-baseline justify-between gap-2 text-xs px-2 py-1 rounded"
+                        style={{background: 'rgba(255,255,255,0.02)'}}
+                      >
+                        <span className="text-white truncate">{s.name}</span>
+                        <span className="text-[10px] text-[#666] uppercase whitespace-nowrap">
+                          {s.city || ''}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 function KlaviyoSuppressor() {
   const js = `
     (function () {
