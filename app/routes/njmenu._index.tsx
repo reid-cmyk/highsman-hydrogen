@@ -914,7 +914,7 @@ export default function NJMenu() {
   const menuRef = useRef<HTMLDivElement>(null);
 
   // ── LAUNCH Promo State ───────────────────────────────────────────────────
-  // Apr 28 → May 1, 2026 wholesale stock-up window for the May 14 consumer launch.
+  // Apr 28 → May 8, 2026 wholesale stock-up window for the May 14 consumer launch.
   // Code: LAUNCH. 20% off Triple Threat Pre-Rolls, 10% off Ground Game.
   const [promoCodeInput, setPromoCodeInput] = useState('');
   const [appliedPromoCode, setAppliedPromoCode] = useState<string | null>(null);
@@ -922,7 +922,7 @@ export default function NJMenu() {
   const [launchNow, setLaunchNow] = useState<Date>(() => new Date());
 
   // Tick once per minute so the countdown banner stays fresh and so the
-  // window auto-closes at 2026-05-01 23:59:59 ET without a refresh.
+  // window auto-closes at 2026-05-08 23:59:59 ET without a refresh.
   useEffect(() => {
     const id = setInterval(() => setLaunchNow(new Date()), 60_000);
     return () => clearInterval(id);
@@ -1378,7 +1378,7 @@ export default function NJMenu() {
 
       <div className="nj-menu">
 
-        {/* ── LAUNCH Promo Banner (Apr 28 - May 1, 2026) ─────────────── */}
+        {/* ── LAUNCH Promo Banner (Apr 28 - May 8, 2026) ─────────────── */}
         {launchActive && !confirmedOrder && (
           <div
             style={{

@@ -3,7 +3,7 @@
  * Promotion (May 14 – Jun 13, 2026).
  *
  * Buyers who place an NJ menu order between Apr 28, 2026 and end-of-day
- * May 1, 2026 (ET) and use code `LAUNCH` get:
+ * May 8, 2026 (ET) and use code `LAUNCH` get:
  *   - 20% off Triple Threat Pre-Rolls
  *   - 10% off Ground Game
  *   - No discount on Hit Sticks (excluded — protects the impulse-SKU margin)
@@ -20,7 +20,7 @@ export const LAUNCH_PROMO = {
   code: 'LAUNCH',
   // ET window (UTC offset -04:00 in late April → DST already on)
   startsAt: '2026-04-28T00:00:00-04:00',
-  endsAt: '2026-05-01T23:59:59-04:00',
+  endsAt: '2026-05-08T23:59:59-04:00',
 
   // Per-product-line discount rates (matches PRODUCT_LINES.id values
   // in app/routes/njmenu._index.tsx)
