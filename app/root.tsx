@@ -4,12 +4,59 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useLoaderData,
   useRouteError,
   isRouteErrorResponse,
 } from '@remix-run/react';
 import type {LinksFunction, LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import tailwindCss from '~/styles/tailwind.css?url';
 import {Layout} from '~/components/Layout';
+
+/**
+ * Path prefixes that should NOT be indexed by search engines.
+ * Keep in sync with public/robots.txt.
+ *
+ * robots.txt blocks crawling; this meta tag blocks indexing for any URL
+ * that gets crawled anyway (direct links, leaked URLs, etc.).
+ */
+const NOINDEX_PREFIXES = [
+  // Internal dashboards
+  '/ceo',
+  '/ops',
+  '/sales',
+  '/sales-floor',
+  '/staff-dashboard',
+  '/shift-report',
+  '/grading-rubric',
+  '/expense',
+  '/directory',
+  '/leads',
+  '/new-business',
+  // B2B / wholesale / rep tools
+  '/njmenu',
+  '/njpopups',
+  '/njnorth',
+  '/njsouth',
+  // Vibes brand-rep app
+  '/vibes',
+  // Budtender training & gated education
+  '/budtender-education',
+  '/budtenders',
+  '/budtender-quiz',
+  '/training',
+  '/pages/budtender-education',
+  // API + utility paths
+  '/api',
+  '/account',
+  '/cart',
+  '/search',
+];
+
+function shouldNoIndex(pathname: string): boolean {
+  return NOINDEX_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(p + '/'),
+  );
+}
 
 export const links: LinksFunction = () => [
   {rel: 'stylesheet', href: tailwindCss},
@@ -23,20 +70,28 @@ export const links: LinksFunction = () => [
   },
 ];
 
-export async function loader({context}: LoaderFunctionArgs) {
+export async function loader({context, request}: LoaderFunctionArgs) {
   const {storefront, cart} = context;
+  const url = new URL(request.url);
+  const noIndex = shouldNoIndex(url.pathname);
   return {
     cart: cart.get(),
     publicStoreDomain: context.env.PUBLIC_STORE_DOMAIN,
+    noIndex,
   };
 }
 
 export default function App() {
+  const data = useLoaderData<typeof loader>();
+  const noIndex = data?.noIndex ?? false;
   return (
     <html lang="en" className="dark">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        {noIndex ? (
+          <meta name="robots" content="noindex, nofollow, noarchive" />
+        ) : null}
         <Meta />
         <Links />
       </head>
