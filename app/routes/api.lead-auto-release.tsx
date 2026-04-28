@@ -2,9 +2,11 @@ import type {LoaderFunctionArgs, ActionFunctionArgs} from '@shopify/remix-oxygen
 import {json} from '@shopify/remix-oxygen';
 import {getZohoAccessToken} from '~/lib/zoho-auth';
 import {isClaimLive, TTL_COLD_MS, TTL_ROLLING_MS} from './api.lead-claim';
+import {findRepById} from '~/lib/sales-floor-reps';
+import {sendEmailFromUser, isGmailSAConfigured} from '~/lib/gmail-sa';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// /api/lead-auto-release  (scheduled, cron every 30 min)
+// /api/lead-auto-release  (scheduled — 7am ET pre-work + every 2h, 8am-8pm ET, weekdays)
 // ─────────────────────────────────────────────────────────────────────────────
 // POST | GET → { ok, scanned, released: [...] }
 //
@@ -20,9 +22,10 @@ import {isClaimLive, TTL_COLD_MS, TTL_ROLLING_MS} from './api.lead-claim';
 // env var. This route is meant to be called by the Cowork scheduled task
 // runner, not by reps; the rep-facing release path is /api/lead-release.
 //
-// Slack ping: if a release happens, we optionally POST to SLACK_SALES_FLOOR_WEBHOOK
-// so the team sees "Pete's claim on Jamie @ Premium Gas expired — back in pool"
-// without anyone having to check the dashboard.
+// Notification: when a release happens, email the rep who lost the claim
+// (one email per rep, batching all of their expired claims) so they see it
+// in their own inbox with a 'why' and can re-claim from /sales-floor if they
+// still want it. Replaces the older team-wide Slack ping (too noisy).
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function run(request: Request, env: Record<string, string | undefined>) {
@@ -115,21 +118,71 @@ async function run(request: Request, env: Record<string, string | undefined>) {
     );
   }
 
-  // Slack ping — don't block on failure; the release is the important part.
-  if (released.length && env.SLACK_SALES_FLOOR_WEBHOOK) {
-    const lines = released.map(
-      (r) => `• *${r.name || '(no name)'}*${r.company ? ` — ${r.company}` : ''} returned to pool (was ${r.owner}, ${r.reason})`,
-    );
-    try {
-      await fetch(env.SLACK_SALES_FLOOR_WEBHOOK, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          text: `🎯 *Sales Floor — ${released.length} lead${released.length === 1 ? '' : 's'} returned to pool*\n${lines.join('\n')}`,
-        }),
-      });
-    } catch (e: any) {
-      console.warn('[lead-auto-release] slack ping failed', e?.message);
+  // Per-rep email — group released leads by Working_Owner so a rep who had
+  // 5 expired claims gets one summary email instead of 5. Don't block on
+  // failure; the release is the important part.
+  const emailedReps: string[] = [];
+  if (released.length && isGmailSAConfigured(env)) {
+    const byOwner = new Map<string, typeof released>();
+    for (const r of released) {
+      if (!r.owner) continue;
+      const arr = byOwner.get(r.owner) || [];
+      arr.push(r);
+      byOwner.set(r.owner, arr);
+    }
+    for (const [ownerId, items] of byOwner) {
+      const rep = findRepById(ownerId);
+      if (!rep?.email) {
+        console.warn('[lead-auto-release] no rep record for owner', ownerId);
+        continue;
+      }
+      const itemLines = items.map(
+        (r) =>
+          `• ${r.name || '(no name)'}${
+            r.company ? ` — ${r.company}` : ''
+          } (${r.reason === 'rolling-48h' ? 'past 48h cap' : 'idle 8h+'})`,
+      );
+      const subject =
+        items.length === 1
+          ? `Sales Floor: your claim on ${
+              items[0].name || items[0].company || 'a lead'
+            } expired`
+          : `Sales Floor: ${items.length} of your claims expired`;
+      const textBody = [
+        `Hey ${rep.firstName},`,
+        '',
+        `Heads up — the following Sales Floor claim${
+          items.length === 1 ? '' : 's'
+        } ${items.length === 1 ? 'has' : 'have'} been released back into the pool:`,
+        '',
+        ...itemLines,
+        '',
+        `Why: claims auto-release after 8h idle (no logged activity) or 48h absolute, whichever comes first.`,
+        '',
+        `If you still want any of them, re-claim from https://highsman.com/sales-floor.`,
+        '',
+        `— Highsman Sales Floor`,
+      ].join('\n');
+      try {
+        await sendEmailFromUser(
+          'sky@highsman.com',
+          {
+            to: rep.email,
+            subject,
+            textBody,
+            fromName: 'Highsman Sales Floor',
+            replyTo: 'sky@highsman.com',
+          },
+          env,
+        );
+        emailedReps.push(rep.email);
+      } catch (e: any) {
+        console.warn(
+          '[lead-auto-release] email to rep failed',
+          rep.email,
+          e?.message,
+        );
+      }
     }
   }
 
@@ -138,6 +191,7 @@ async function run(request: Request, env: Record<string, string | undefined>) {
     scanned: collected.length,
     released,
     releasedCount: released.length,
+    emailedReps,
     scannedAt: new Date().toISOString(),
     thresholds: {
       coldMs: TTL_COLD_MS,
