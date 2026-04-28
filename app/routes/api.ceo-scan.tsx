@@ -88,7 +88,8 @@ async function runScan(
         env,
         mailbox,
         days,
-        Math.min(100, Math.max(5, maxThreads * 3)),
+        500,            // listMax — Gmail returns up to 500 thread IDs (free, 1 API call)
+        maxThreads,     // analyzeBudget — controls how many details we actually fetch
       );
       threadsExamined += recent.length;
 

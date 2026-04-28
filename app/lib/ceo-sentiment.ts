@@ -154,21 +154,47 @@ function scrubText(s: string): string {
     .slice(0, 12000);
 }
 
-export async function fetchRecentThreads(env: Env, mailbox: string, days: number, maxFetch = 100): Promise<ThreadSummary[]> {
+export async function fetchRecentThreads(env: Env, mailbox: string, days: number, maxFetch = 100, analyzeBudget = 10): Promise<ThreadSummary[]> {
   const token = await getGmailAccessTokenForUser(mailbox, env);
   const after = Math.floor((Date.now() - days * 86400_000) / 1000);
   const query = `after:${after} -in:drafts -category:promotions -category:updates -from:noreply -from:no-reply -from:notifications`;
 
   const listUrl = new URL('https://gmail.googleapis.com/gmail/v1/users/me/threads');
   listUrl.searchParams.set('q', query);
-  listUrl.searchParams.set('maxResults', String(Math.min(100, Math.max(1, maxFetch))));
+  // List as many thread IDs as Gmail allows (cheap), then dedupe BEFORE fetching details.
+  listUrl.searchParams.set('maxResults', String(Math.min(500, Math.max(10, maxFetch))));
 
   const listRes = await fetch(listUrl.toString(), {headers: {Authorization: `Bearer ${token}`}});
   if (!listRes.ok) {
     throw new Error(`Gmail threads.list ${listRes.status} for ${mailbox}: ${(await listRes.text()).slice(0, 200)}`);
   }
   const listData = (await listRes.json()) as {threads?: Array<{id: string}>};
-  const threadIds = (listData.threads ?? []).map((t) => t.id).filter(Boolean).slice(0, maxFetch);
+  const allListedIds = (listData.threads ?? []).map((t) => t.id).filter(Boolean);
+
+  // Pre-dedupe: drop thread IDs we've already analyzed at any message_count.
+  // (We can't tell here whether a thread has new replies — that needs message_count from the
+  //  detail fetch — so this is a best-effort skip. Threads with new messages will be
+  //  re-fetched on a later pass once the seen-ledger has matching rows pruned.)
+  let unseen = allListedIds;
+  try {
+    const inList = allListedIds.map((id) => `"${id.replace(/"/g, '')}"`).join(',');
+    if (inList) {
+      const seen = await sbSelect<{thread_id: string}>(
+        env,
+        'ceo_thread_seen',
+        `?select=thread_id&mailbox_email=eq.${encodeURIComponent(mailbox)}&thread_id=in.(${encodeURIComponent(inList)})`
+      );
+      const seenSet = new Set(seen.map((r) => r.thread_id));
+      unseen = allListedIds.filter((id) => !seenSet.has(id));
+    }
+  } catch (err) {
+    console.warn('[ceo-scan] pre-dedupe lookup failed (proceeding with full list)', err);
+  }
+
+  // Now only fetch details for the first analyzeBudget*1.2 un-seen IDs (small headroom for any
+  // post-dedupe drops e.g. message_count mismatches), capped at maxFetch.
+  const fetchTarget = Math.min(maxFetch, Math.ceil(analyzeBudget * 1.2));
+  const threadIds = unseen.slice(0, fetchTarget);
   const summaries: ThreadSummary[] = [];
 
   for (const tid of threadIds) {
