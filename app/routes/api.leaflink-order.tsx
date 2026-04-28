@@ -3,6 +3,7 @@ import {json} from '@shopify/remix-oxygen';
 import {encodeHeaderValue} from '~/lib/email-headers';
 import {
   LAUNCH_PROMO,
+  LAUNCH_TERMS_VERSION,
   isLaunchActive,
   SKU_TO_PRODUCT_LINE_ID,
   discountForProductLineId,
@@ -507,6 +508,7 @@ async function stampLaunchPromoOnAccount(
   env: any,
   zohoAccountId: string,
   orderNumber: string | null,
+  termsVersion: string | null,
 ): Promise<{ok: boolean; error?: string}> {
   try {
     const token = await getZohoAccessToken(env);
@@ -524,6 +526,7 @@ async function stampLaunchPromoOnAccount(
             Launch_Promo_Used: true,
             Launch_Promo_Redeemed_At: new Date().toISOString(),
             Launch_Promo_Order_Number: orderNumber || '',
+            Launch_Promo_Terms_Version: termsVersion || '',
           },
         ],
       }),
@@ -681,7 +684,7 @@ export async function action({request, context}: ActionFunctionArgs) {
     return json({ok: false, error: 'Invalid JSON body'}, {status: 400});
   }
 
-  const {dispensaryName, dispensaryId, dispensaryLicense, items, notes, promoCode} = body;
+  const {dispensaryName, dispensaryId, dispensaryLicense, items, notes, promoCode, launchTermsAgreed, launchTermsVersion} = body;
 
   if (!dispensaryName) {
     return json({ok: false, error: 'Dispensary name is required'}, {status: 400});
@@ -722,6 +725,16 @@ export async function action({request, context}: ActionFunctionArgs) {
     }
     if (!isLaunchActive()) {
       return json({ok: false, error: 'The LAUNCH promo window has closed.'}, {status: 400});
+    }
+    if (launchTermsAgreed !== true) {
+      return json(
+        {
+          ok: false,
+          error: 'You must agree to the LAUNCH Promo Terms to use this code.',
+          launchTermsRequired: true,
+        },
+        {status: 400},
+      );
     }
     if (dispensaryId) {
       const used = await checkLaunchPromoUsed(env, String(dispensaryId));
@@ -830,10 +843,16 @@ export async function action({request, context}: ActionFunctionArgs) {
       // Stamp Zoho Account so the LAUNCH code is one-and-done for this dispensary.
       let launchStamped = false;
       if (launchValid && dispensaryId) {
+        // Use the version the buyer actually saw, falling back to the
+        // server's compiled value if the client omitted it.
+        const versionToStamp =
+          (typeof launchTermsVersion === 'string' && launchTermsVersion) ||
+          LAUNCH_TERMS_VERSION;
         const stamp = await stampLaunchPromoOnAccount(
           env,
           String(dispensaryId),
           result.orderNumber || null,
+          versionToStamp,
         );
         launchStamped = stamp.ok;
       }

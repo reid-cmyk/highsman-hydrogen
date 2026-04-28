@@ -6,6 +6,8 @@ import {getBuyerFromRequest, type BuyerSession} from '../lib/njmenu-auth';
 import {
   LAUNCH_PROMO,
   LAUNCH_BANNER_COPY,
+  LAUNCH_TERMS,
+  LAUNCH_TERMS_VERSION,
   isLaunchActive,
   validateLaunchCode,
   decorateWithLaunchDiscount,
@@ -919,6 +921,9 @@ export default function NJMenu() {
   const [promoCodeInput, setPromoCodeInput] = useState('');
   const [appliedPromoCode, setAppliedPromoCode] = useState<string | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
+  // Buyer must agree to LAUNCH consumer-side terms before the discount holds.
+  // Cleared whenever the code is removed so the agreement is per-redemption.
+  const [launchTermsAgreed, setLaunchTermsAgreed] = useState(false);
   const [launchNow, setLaunchNow] = useState<Date>(() => new Date());
 
   // Tick once per minute so the countdown banner stays fresh and so the
@@ -939,6 +944,7 @@ export default function NJMenu() {
       setAppliedPromoCode(null);
       setPromoCodeInput('');
       setPromoError('LAUNCH window has ended.');
+      setLaunchTermsAgreed(false);
     }
   }, [launchActive, appliedPromoCode]);
 
@@ -961,6 +967,7 @@ export default function NJMenu() {
     setAppliedPromoCode(null);
     setPromoCodeInput('');
     setPromoError(null);
+    setLaunchTermsAgreed(false);
   }, []);
 
   // Decorate PRODUCT_LINES with the LAUNCH discount when the code is applied.
@@ -1125,6 +1132,8 @@ export default function NJMenu() {
       items: [...items, ...sampleItems],
       notes: orderNote.trim() || undefined,
       promoCode: appliedPromoCode || undefined,
+      launchTermsAgreed: appliedPromoCode ? launchTermsAgreed : undefined,
+      launchTermsVersion: appliedPromoCode ? LAUNCH_TERMS_VERSION : undefined,
     };
     console.log('[njmenu] Submitting to LeafLink:', JSON.stringify(payload, null, 2));
 
@@ -1246,7 +1255,7 @@ export default function NJMenu() {
         setLeaflinkMessage(`Connection issue: ${err.message || err}`);
         console.error('[njmenu] LeafLink submission error:', err);
       });
-  }, [selectedAccount, cartItems, orderNote, earnedSamples, sampleStrains, buyerContactId, buyerCredit, buyerFirstName, buyerLastName, buyerEmail, appliedPromoCode]);
+  }, [selectedAccount, cartItems, orderNote, earnedSamples, sampleStrains, buyerContactId, buyerCredit, buyerFirstName, buyerLastName, buyerEmail, appliedPromoCode, launchTermsAgreed]);
 
   // Build mailto order
   const buildOrderEmail = useCallback(() => {
@@ -3124,6 +3133,62 @@ export default function NJMenu() {
                   </div>
                 )}
 
+                {/* LAUNCH Terms & Conditions — only shown when code is applied */}
+                {appliedPromoCode && launchActive && (
+                  <div className="mb-6">
+                    <div
+                      className="px-4 py-4 rounded"
+                      style={{background: 'rgba(245,228,0,0.04)', border: '1px solid rgba(245,228,0,0.25)'}}
+                    >
+                      <p className="font-body text-xs uppercase tracking-[0.15em] mb-3" style={{color: BRAND.gold}}>
+                        LAUNCH PROMO TERMS
+                      </p>
+                      <p className="font-body text-sm mb-4" style={{color: 'rgba(255,255,255,0.85)'}}>
+                        {LAUNCH_TERMS.intro}
+                      </p>
+                      <div className="space-y-4 max-h-[320px] overflow-y-auto pr-2 mb-4" style={{borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 12}}>
+                        {LAUNCH_TERMS.sections.map((section, i) => (
+                          <div key={i}>
+                            <h4
+                              className="font-headline text-sm font-600 uppercase tracking-wider mb-1.5"
+                              style={{color: '#fff'}}
+                            >
+                              {section.heading}
+                            </h4>
+                            <ul className="space-y-1">
+                              {section.bullets.map((b, j) => (
+                                <li
+                                  key={j}
+                                  className="font-body text-xs flex items-start gap-2"
+                                  style={{color: 'rgba(255,255,255,0.7)'}}
+                                >
+                                  <span style={{color: BRAND.gold, lineHeight: 1.3}}>&#9656;</span>
+                                  <span style={{lineHeight: 1.45}}>{b}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                      <label
+                        className="flex items-start gap-3 cursor-pointer"
+                        style={{padding: '10px 12px', background: 'rgba(0,0,0,0.25)', borderRadius: 4, border: launchTermsAgreed ? '1px solid rgba(245,228,0,0.6)' : '1px solid rgba(255,255,255,0.08)'}}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={launchTermsAgreed}
+                          onChange={(e) => setLaunchTermsAgreed(e.target.checked)}
+                          className="mt-0.5 cursor-pointer"
+                          style={{accentColor: BRAND.gold, width: 18, height: 18, flexShrink: 0}}
+                        />
+                        <span className="font-body text-sm" style={{color: '#fff', lineHeight: '1.45'}}>
+                          {LAUNCH_TERMS.agreementLabel}
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+
                 {/* Note */}
                 <div className="mb-8">
                   <label className="font-body text-xs font-500 tracking-[0.15em] uppercase block mb-2" style={{color: 'rgba(255,255,255,0.55)'}}>
@@ -3198,10 +3263,19 @@ export default function NJMenu() {
                     </span>
                   </label>
                 )}
+                {appliedPromoCode && !launchTermsAgreed && (
+                  <p className="font-body text-xs mb-3" style={{color: '#ff6b35'}}>
+                    Agree to the LAUNCH Promo Terms above to enable order submission.
+                  </p>
+                )}
                 <a
-                  href={selectedAccount && orderConfirmed ? buildOrderEmail() : undefined}
+                  href={selectedAccount && orderConfirmed && (!appliedPromoCode || launchTermsAgreed) ? buildOrderEmail() : undefined}
                   onClick={(e) => {
                     if (!selectedAccount || !orderConfirmed) {
+                      e.preventDefault();
+                      return;
+                    }
+                    if (appliedPromoCode && !launchTermsAgreed) {
                       e.preventDefault();
                       return;
                     }
@@ -3210,10 +3284,10 @@ export default function NJMenu() {
                   }}
                   className="block font-headline text-lg font-600 uppercase tracking-[0.15em] py-5 w-full text-center transition-opacity"
                   style={{
-                    background: selectedAccount && orderConfirmed ? BRAND.gold : 'rgba(245,228,0,0.3)',
-                    color: selectedAccount && orderConfirmed ? '#000' : 'rgba(0,0,0,0.4)',
-                    cursor: selectedAccount && orderConfirmed ? 'pointer' : 'not-allowed',
-                    pointerEvents: selectedAccount && orderConfirmed ? 'auto' : undefined,
+                    background: selectedAccount && orderConfirmed && (!appliedPromoCode || launchTermsAgreed) ? BRAND.gold : 'rgba(245,228,0,0.3)',
+                    color: selectedAccount && orderConfirmed && (!appliedPromoCode || launchTermsAgreed) ? '#000' : 'rgba(0,0,0,0.4)',
+                    cursor: selectedAccount && orderConfirmed && (!appliedPromoCode || launchTermsAgreed) ? 'pointer' : 'not-allowed',
+                    pointerEvents: selectedAccount && orderConfirmed && (!appliedPromoCode || launchTermsAgreed) ? 'auto' : undefined,
                   }}
                 >
                   Send Order{selectedAccount ? ` — ${selectedAccount.name}` : ' to Highsman'}
