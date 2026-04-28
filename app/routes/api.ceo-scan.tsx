@@ -61,7 +61,7 @@ async function runScan(
   const onlyMailbox = url.searchParams.get('mailbox');
   const dryRun = url.searchParams.get('dry') === '1';
   const days = Number(url.searchParams.get('days') || env.CEO_SCAN_DAYS || DEFAULT_LOOKBACK_DAYS);
-  const maxThreads = Number(env.CEO_SCAN_MAX_THREADS || DEFAULT_MAX_THREADS);
+  const maxThreads = Number(url.searchParams.get("max") || env.CEO_SCAN_MAX_THREADS || DEFAULT_MAX_THREADS);
 
   // 2) Mailbox list
   const allMailboxes = await getActiveMailboxes(env);
