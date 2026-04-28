@@ -1037,7 +1037,7 @@ export default function NJMenu() {
       const product = productLines.find((p) => p.id === i.productId);
       return sum + i.cases * (product?.caseSize ?? 1);
     }, 0),
-    [cartItems],
+    [cartItems, productLines],
   );
 
   const cartTotal = useMemo(() => {
@@ -1047,7 +1047,7 @@ export default function NJMenu() {
       const unitPrice = applyDiscount(product.casePrice, product.discount);
       return sum + unitPrice * item.cases;
     }, 0);
-  }, [cartItems]);
+  }, [cartItems, productLines]);
 
   // Compute earned budtender samples from cart
   const earnedSamples = useMemo(() => {
@@ -1325,7 +1325,7 @@ export default function NJMenu() {
     );
     const body = encodeURIComponent(lines.join('\n'));
     return `mailto:njsales@highsman.com?subject=${subject}&body=${body}`;
-  }, [cartItems, orderNote, earnedSamples, sampleStrains, selectedAccount]);
+  }, [cartItems, orderNote, earnedSamples, sampleStrains, selectedAccount, productLines]);
 
   const getCasesForItem = (productId: string, strainName: string): number => {
     return cart[cartKey(productId, strainName)]?.cases ?? 0;
