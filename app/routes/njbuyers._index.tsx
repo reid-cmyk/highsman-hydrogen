@@ -448,16 +448,9 @@ export default function NjBuyers() {
           <div className="math-grid">
             <div className="math-card">
               <div className="label">Single Order</div>
-              <div className="order">$500</div>
+              <div className="order">$1,000</div>
               <div className="arrow">↓</div>
-              <div className="credit">$2.50</div>
-              <div className="credit-suffix">Banked</div>
-            </div>
-            <div className="math-card">
-              <div className="label">Single Order</div>
-              <div className="order">$2,000</div>
-              <div className="arrow">↓</div>
-              <div className="credit">$10</div>
+              <div className="credit">$5</div>
               <div className="credit-suffix">Banked</div>
             </div>
             <div className="math-card">
@@ -467,12 +460,19 @@ export default function NjBuyers() {
               <div className="credit">$25</div>
               <div className="credit-suffix">Banked</div>
             </div>
+            <div className="math-card">
+              <div className="label">Single Order</div>
+              <div className="order">$10,000</div>
+              <div className="arrow">↓</div>
+              <div className="credit">$50</div>
+              <div className="credit-suffix">Banked</div>
+            </div>
             <div className="math-card highlight">
               <span className="badge">Annual</span>
-              <div className="label">$50K / Year On Menu</div>
-              <div className="order">$50,000</div>
+              <div className="label">$100K / Year On Menu</div>
+              <div className="order">$100,000</div>
               <div className="arrow">↓</div>
-              <div className="credit">$250</div>
+              <div className="credit">$500</div>
               <div className="credit-suffix">Free Gear</div>
             </div>
           </div>
