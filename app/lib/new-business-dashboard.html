@@ -973,14 +973,28 @@
     // source (real confirmed revenue from Zoho Inventory Sales Orders);
     // LeafLink is a fallback for any account Inventory hasn't resolved.
     // Failure on either is non-fatal — the pill silently drops to date-only.
-    const inventoryPromise = fetch('/api/account-last-orders', {credentials: 'same-origin'})
-      .then((r) => r.json())
-      .then((d) => (d?.ok && d.byAccountName) ? d.byAccountName : {})
-      .catch(() => ({}));
-    const lastOrdersPromise = fetch('/api/sales-floor-leaflink-orders', {credentials: 'same-origin'})
-      .then((r) => r.json())
-      .then((d) => (d?.ok && d.lastOrderByAccount) ? d.lastOrderByAccount : {})
-      .catch(() => ({}));
+    // Hard 6s timeout on each: when LeafLink hung indefinitely (Apr 28 2026)
+    // these awaits never resolved, gating Promise.all in refreshAll() and
+    // leaving the Leads card-list stuck on the 'Loading leads…' placeholder
+    // even though /api/new-business-leads had returned all 421 records.
+    const withTimeout = (p, ms) => Promise.race([
+      p,
+      new Promise((resolve) => setTimeout(() => resolve({}), ms)),
+    ]);
+    const inventoryPromise = withTimeout(
+      fetch('/api/account-last-orders', {credentials: 'same-origin'})
+        .then((r) => r.json())
+        .then((d) => (d?.ok && d.byAccountName) ? d.byAccountName : {})
+        .catch(() => ({})),
+      6000,
+    );
+    const lastOrdersPromise = withTimeout(
+      fetch('/api/sales-floor-leaflink-orders', {credentials: 'same-origin'})
+        .then((r) => r.json())
+        .then((d) => (d?.ok && d.lastOrderByAccount) ? d.lastOrderByAccount : {})
+        .catch(() => ({})),
+      6000,
+    );
     const res = await fetch('/api/new-business-followups', {credentials: 'same-origin'});
     const data = await res.json().catch(() => ({ok: false}));
     if (!data.ok) {
@@ -998,9 +1012,20 @@
   async function refreshAll() {
     const icon = document.getElementById('refresh-icon');
     icon.classList.add('spin');
+    // Render each tab independently as its loader returns. A slow upstream
+    // (LeafLink/Inventory) must NEVER gate the Leads list — Apr 28 2026
+    // /api/sales-floor-leaflink-orders hung past timeout, Promise.all never
+    // resolved, renderCurrent() never ran, and the dashboard sat on the
+    // 'Loading leads…' placeholder despite /api/new-business-leads having
+    // returned 421 records.
+    const leadsP = loadLeads()
+      .then(() => { if (currentTab === 'leads') renderCurrent(); })
+      .catch(() => {});
+    const followupsP = loadFollowUps()
+      .then(() => { if (currentTab === 'followups') renderCurrent(); })
+      .catch(() => {});
     try {
-      await Promise.all([loadLeads(), loadFollowUps()]);
-      renderCurrent();
+      await Promise.all([leadsP, followupsP]);
     } finally {
       setTimeout(() => icon.classList.remove('spin'), 300);
     }
