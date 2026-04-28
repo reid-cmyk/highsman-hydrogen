@@ -154,21 +154,21 @@ function scrubText(s: string): string {
     .slice(0, 12000);
 }
 
-export async function fetchRecentThreads(env: Env, mailbox: string, days: number): Promise<ThreadSummary[]> {
+export async function fetchRecentThreads(env: Env, mailbox: string, days: number, maxFetch = 100): Promise<ThreadSummary[]> {
   const token = await getGmailAccessTokenForUser(mailbox, env);
   const after = Math.floor((Date.now() - days * 86400_000) / 1000);
   const query = `after:${after} -in:drafts -category:promotions -category:updates -from:noreply -from:no-reply -from:notifications`;
 
   const listUrl = new URL('https://gmail.googleapis.com/gmail/v1/users/me/threads');
   listUrl.searchParams.set('q', query);
-  listUrl.searchParams.set('maxResults', '100');
+  listUrl.searchParams.set('maxResults', String(Math.min(100, Math.max(1, maxFetch))));
 
   const listRes = await fetch(listUrl.toString(), {headers: {Authorization: `Bearer ${token}`}});
   if (!listRes.ok) {
     throw new Error(`Gmail threads.list ${listRes.status} for ${mailbox}: ${(await listRes.text()).slice(0, 200)}`);
   }
   const listData = (await listRes.json()) as {threads?: Array<{id: string}>};
-  const threadIds = (listData.threads ?? []).map((t) => t.id).filter(Boolean);
+  const threadIds = (listData.threads ?? []).map((t) => t.id).filter(Boolean).slice(0, maxFetch);
   const summaries: ThreadSummary[] = [];
 
   for (const tid of threadIds) {

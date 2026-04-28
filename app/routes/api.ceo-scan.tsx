@@ -83,7 +83,12 @@ async function runScan(
 
   for (const mailbox of mailboxes) {
     try {
-      const recent = await fetchRecentThreads(env, mailbox, days);
+      const recent = await fetchRecentThreads(
+        env,
+        mailbox,
+        days,
+        Math.min(100, Math.max(5, maxThreads * 3)),
+      );
       threadsExamined += recent.length;
 
       const fresh = await dedupeAlreadySeen(env, mailbox, recent);
