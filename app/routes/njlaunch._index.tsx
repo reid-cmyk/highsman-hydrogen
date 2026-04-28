@@ -515,6 +515,20 @@ export default function NjLaunch() {
     }
   }
 
+  // Suppress Klaviyo popup on this conversion-focused launch page
+  // (matches pattern in app/lib/njterr-dashboard.tsx)
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.id = 'suppress-klaviyo-popup-njlaunch';
+    style.textContent =
+      '[data-testid="klaviyo-form-overlay"], .klaviyo-form-overlay, ' +
+      '.needsclick.kl-private-reset-css-Xuajs1, #klaviyo-ios-modal, ' +
+      '[class*="klaviyo"][class*="overlay"], [class*="klaviyo"][class*="modal"], ' +
+      '[id*="klaviyo"][id*="popup"] { display: none !important; }';
+    document.head.appendChild(style);
+    return () => style.remove();
+  }, []);
+
   useEffect(() => {
     function tick() {
       const now = Date.now();
