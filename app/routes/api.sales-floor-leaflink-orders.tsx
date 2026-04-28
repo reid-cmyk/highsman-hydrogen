@@ -37,6 +37,64 @@ import {getZohoAccessToken} from '~/lib/zoho-auth';
 
 const LEAFLINK_API_BASE = 'https://app.leaflink.com/api/v2';
 
+// ─── Latency guards ─────────────────────────────────────────────────────────
+// 2026-04-28: this loader was sitting at 45s+ and occasionally hanging because
+// it fired ~150 sequential Zoho lookups + paginated LeafLink with no timeout.
+// Three fixes layered together:
+//   1. fetchT() — wraps every fetch in an AbortController so no single call
+//      can pin the loader open. 6s default; LeafLink page fetches get 8s.
+//   2. mapLimit() — chunked Promise.all (concurrency 8) for Zoho hydration
+//      loops. Was for-of with await (1 in flight); now ~8 in flight, well
+//      under Zoho's 100/min/IP rate limit.
+//   3. budgetExceeded() — wall-clock budget. Once tripped we skip the
+//      remaining 'extras' Zoho lookups and return with a `budget_exceeded`
+//      flag in meta.errors instead of dragging on for another 30s.
+const FETCH_TIMEOUT_MS = 6000;
+const LEAFLINK_PAGE_TIMEOUT_MS = 8000;
+const LOADER_BUDGET_MS = 12000;
+const ZOHO_HYDRATION_CONCURRENCY = 8;
+// REMAINING_CAP for the lastOrderByAccount densification pass. Used to be
+// 100 sequential calls (~30s alone). Capped lower now and runs in parallel.
+const REMAINING_CAP = 40;
+
+async function fetchT(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs: number = FETCH_TIMEOUT_MS,
+): Promise<Response> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, {...init, signal: ctrl.signal});
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function mapLimit<T, U>(
+  items: T[],
+  limit: number,
+  fn: (item: T, idx: number) => Promise<U>,
+): Promise<U[]> {
+  const out: U[] = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({length: Math.min(limit, items.length)}, async () => {
+    while (cursor < items.length) {
+      const i = cursor++;
+      try {
+        out[i] = await fn(items[i], i);
+      } catch (err) {
+        // Per-item failure must not abort the whole batch. Slot is left
+        // undefined; callers already null-check.
+        // eslint-disable-next-line no-console
+        console.warn('[sf-leaflink-orders] mapLimit item failed:', (err as any)?.message);
+      }
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
 // Canfections seller accounts that carry Highsman product. NJ today; add
 // MA/NY/RI/MO IDs here as we onboard those state-level sellers in LeafLink.
 const HIGHSMAN_SELLER_IDS: number[] = [
@@ -172,9 +230,19 @@ async function fetchHighsmanOrdersForSeller(
       `&page_size=100` +
       `&page=${page}`;
 
-    const res = await fetch(url, {
-      headers: {Authorization: `Token ${apiKey}`},
-    });
+    let res: Response;
+    try {
+      res = await fetchT(
+        url,
+        {headers: {Authorization: `Token ${apiKey}`}},
+        LEAFLINK_PAGE_TIMEOUT_MS,
+      );
+    } catch (err: any) {
+      console.warn(
+        `[sf-leaflink-orders] seller ${sellerId} page ${page} fetch threw: ${err?.message}`,
+      );
+      break;
+    }
     if (!res.ok) {
       console.warn(
         `[sf-leaflink-orders] seller ${sellerId} page ${page} → ${res.status}`,
@@ -254,7 +322,7 @@ async function findZohoAccountByName(
       `https://www.zohoapis.com/crm/v7/Accounts/search` +
       `?criteria=(Account_Name:equals:${encodeURIComponent(name)})` +
       `&fields=Account_Name,Billing_State,Account_State,Phone`;
-    const res = await fetch(url, {
+    const res = await fetchT(url, {
       headers: {Authorization: `Zoho-oauthtoken ${token}`},
     });
     if (res.status === 204 || !res.ok) return null;
@@ -282,7 +350,7 @@ async function findOnboardingDealForAccount(
       `https://www.zohoapis.com/crm/v7/Deals/search` +
       `?criteria=((Account_Name:equals:${accountId})and(Pipeline:equals:${NEEDS_ONBOARDING_PIPELINE}))` +
       `&fields=Deal_Name,Stage,Pipeline`;
-    const res = await fetch(url, {
+    const res = await fetchT(url, {
       headers: {Authorization: `Zoho-oauthtoken ${token}`},
     });
     if (res.status === 204 || !res.ok) return null;
@@ -308,7 +376,7 @@ async function findCheckinNoteForAccount(
     const url =
       `https://www.zohoapis.com/crm/v7/Accounts/${accountId}/Notes` +
       `?fields=Note_Title,Created_Time&per_page=20`;
-    const res = await fetch(url, {
+    const res = await fetchT(url, {
       headers: {Authorization: `Zoho-oauthtoken ${token}`},
     });
     if (res.status === 204 || !res.ok) return null;
@@ -500,13 +568,16 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   // lastOrderByAccount summary at the end (used by Sky + Pete dashboards
   // to render last-order date + dollar amount inline).
   const customerToZohoMap = new Map<number, string>();
+  const startedAt = Date.now();
+  const budgetExceeded = () => Date.now() - startedAt > LOADER_BUDGET_MS;
   const zohoToken = await getZohoToken(env);
   if (zohoToken) {
     // Cap Zoho lookups to top 50 reorder-due + ALL new customers (small set).
     const REORDER_LOOKUP_CAP = 50;
     const reorderToHydrate = reorderDue.slice(0, REORDER_LOOKUP_CAP);
 
-    for (const row of reorderToHydrate) {
+    // ── Hydrate reorder-due rows in parallel chunks ──────────────────────
+    await mapLimit(reorderToHydrate, ZOHO_HYDRATION_CONCURRENCY, async (row) => {
       const acct = await findZohoAccountByName(row.customerName, zohoToken);
       if (acct) {
         row.zohoAccountId = acct.id;
@@ -514,9 +585,10 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         row.phone = acct.phone;
         customerToZohoMap.set(row.customerId, acct.id);
       }
-    }
+    });
 
-    for (const row of newCustomers) {
+    // ── Hydrate new-customer rows in parallel chunks ─────────────────────
+    await mapLimit(newCustomers, ZOHO_HYDRATION_CONCURRENCY, async (row) => {
       const acct = await findZohoAccountByName(row.customerName, zohoToken);
       if (acct) {
         row.zohoAccountId = acct.id;
@@ -524,9 +596,6 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         row.phone = acct.phone;
         row.vibesEligible = !!acct.state && VIBES_COVERED_STATES.has(acct.state);
         customerToZohoMap.set(row.customerId, acct.id);
-
-        // Only check Needs Onboarding deal + checkin note if there's an
-        // account to check against. Cheap parallel fan-out per row.
         const [dealId, noteId] = await Promise.all([
           findOnboardingDealForAccount(acct.id, zohoToken),
           findCheckinNoteForAccount(acct.id, zohoToken),
@@ -552,20 +621,27 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       } else {
         row.cardState = 'pending';
       }
-    }
-    // Resolve Zoho ids for ALL remaining customers with orders so the
-    // lastOrderByAccount map is dense — not just the reorder-due tail and
-    // new-customer cohort. Capped to 100 extras to keep latency sane.
-    const REMAINING_CAP = 100;
-    let extraResolved = 0;
-    for (const bucket of byCustomer.values()) {
-      if (extraResolved >= REMAINING_CAP) break;
-      if (customerToZohoMap.has(bucket.customerId)) continue;
-      const acct = await findZohoAccountByName(bucket.customerName, zohoToken);
-      if (acct) {
-        customerToZohoMap.set(bucket.customerId, acct.id);
-        extraResolved += 1;
+    });
+
+    // ── Densify lastOrderByAccount with leftover customers ───────────────
+    // Powers the inline 'Last: 2026-04-09 · $1,450' pill on follow-up cards.
+    // Non-critical: if budget is blown we skip and the pill drops to date-
+    // only via the Inventory fallback.
+    if (!budgetExceeded()) {
+      const remaining: Array<{customerId: number; customerName: string}> = [];
+      for (const bucket of byCustomer.values()) {
+        if (remaining.length >= REMAINING_CAP) break;
+        if (customerToZohoMap.has(bucket.customerId)) continue;
+        remaining.push({customerId: bucket.customerId, customerName: bucket.customerName});
       }
+      await mapLimit(remaining, ZOHO_HYDRATION_CONCURRENCY, async (item) => {
+        if (budgetExceeded()) return;
+        const acct = await findZohoAccountByName(item.customerName, zohoToken);
+        if (acct) customerToZohoMap.set(item.customerId, acct.id);
+      });
+      if (budgetExceeded()) errors.push('budget_exceeded_during_densify');
+    } else {
+      errors.push('budget_exceeded_before_densify');
     }
   } else {
     errors.push('zoho_unavailable');
