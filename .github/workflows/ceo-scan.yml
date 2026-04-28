@@ -1,0 +1,109 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# /ceo Sentiment Dashboard — daily mailbox scan
+# ─────────────────────────────────────────────────────────────────────────────
+# Runs at 12:00 UTC every day. That's 8am Eastern during EDT (Mar–Nov) and
+# 7am Eastern during EST (Nov–Mar). Pre-workday timing keeps the dashboard
+# fresh when Reid sits down with coffee.
+#
+# What it does:
+#   1. Reads CEO_SCAN_TOKEN from repo secrets
+#   2. For each active mailbox, hits /api/ceo-scan with max=10
+#   3. Runs a second pass per mailbox so days with a flood of mail aren't
+#      capped at 10 (handles up to ~20 new threads/mailbox/day)
+#   4. Logs progress in the Actions UI, surfaces failures as warnings
+#
+# Manual trigger: Actions tab → "CEO Sentiment Scan" → "Run workflow"
+# ─────────────────────────────────────────────────────────────────────────────
+name: CEO Sentiment Scan
+
+on:
+  schedule:
+    # 12:00 UTC daily = 8am EDT / 7am EST
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Analysis mode'
+        required: false
+        default: 'default'
+        type: choice
+        options:
+          - default
+          - complaints
+      max_per_pass:
+        description: 'Threads analyzed per mailbox per pass'
+        required: false
+        default: '10'
+
+jobs:
+  scan:
+    name: Scan active mailboxes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      CEO_SCAN_TOKEN: ${{ secrets.CEO_SCAN_TOKEN }}
+      MODE: ${{ github.event.inputs.mode || 'default' }}
+      MAX: ${{ github.event.inputs.max_per_pass || '10' }}
+
+    steps:
+      - name: Validate token configured
+        run: |
+          if [ -z "$CEO_SCAN_TOKEN" ]; then
+            echo "::error ::CEO_SCAN_TOKEN repo secret is not set."
+            exit 1
+          fi
+
+      - name: Sweep all active mailboxes (2 passes each)
+        run: |
+          set -uo pipefail
+          MAILBOXES=("sky" "peter" "matt" "andrew" "ricky" "zach")
+          PASSES=2
+
+          TOTAL_FLAGS=0
+          TOTAL_ERRORS=0
+          BASE="https://highsman.com/api/ceo-scan"
+          MODE_PARAM=""
+          if [ "$MODE" = "complaints" ]; then
+            MODE_PARAM="&mode=complaints"
+          fi
+
+          for M in "${MAILBOXES[@]}"; do
+            for PASS in $(seq 1 $PASSES); do
+              echo "::group::${M}@highsman.com pass ${PASS}"
+              RESP=$(curl -s --max-time 90 -w "\nHTTP_CODE:%{http_code}\nTIME:%{time_total}\n" \
+                "${BASE}?token=${CEO_SCAN_TOKEN}&mailbox=${M}@highsman.com&max=${MAX}&days=90${MODE_PARAM}")
+              echo "$RESP"
+
+              CODE=$(echo "$RESP" | sed -n 's/^HTTP_CODE://p')
+              if [ "$CODE" != "200" ]; then
+                echo "::warning ::${M} pass ${PASS} failed (HTTP ${CODE})"
+                TOTAL_ERRORS=$((TOTAL_ERRORS + 1))
+                echo "::endgroup::"
+                continue
+              fi
+
+              # Extract counts (jq is preinstalled on ubuntu-latest)
+              JSON=$(echo "$RESP" | sed '/^HTTP_CODE:/,$d')
+              ANALYZED=$(echo "$JSON" | jq -r '.threads_analyzed // 0')
+              FLAGS=$(echo "$JSON" | jq -r '(.flags_created + .flags_updated) // 0')
+              TOTAL_FLAGS=$((TOTAL_FLAGS + FLAGS))
+              echo "  → analyzed=${ANALYZED} flags=${FLAGS}"
+
+              # If a pass analyzed nothing, skip remaining passes for this mailbox
+              if [ "$ANALYZED" = "0" ]; then
+                echo "  (no new threads, skipping remaining passes)"
+                echo "::endgroup::"
+                break
+              fi
+              echo "::endgroup::"
+              # Gentle pacing
+              sleep 3
+            done
+          done
+
+          echo ""
+          echo "Daily scan complete — total flags upserted: ${TOTAL_FLAGS}, errors: ${TOTAL_ERRORS}"
+          if [ "$TOTAL_ERRORS" -gt 0 ]; then
+            echo "::warning ::${TOTAL_ERRORS} mailbox passes returned non-200"
+          fi
