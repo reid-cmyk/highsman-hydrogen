@@ -1,6 +1,13 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {encodeHeaderValue} from '~/lib/email-headers';
+import {
+  LAUNCH_PROMO,
+  isLaunchActive,
+  SKU_TO_PRODUCT_LINE_ID,
+  discountForProductLineId,
+} from '~/lib/launch-promo';
+import {getZohoAccessToken} from '~/lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LeafLink Order Creation — Server-side API Route
@@ -457,6 +464,109 @@ async function createLeafLinkOrder(
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── TEMP: Diagnostic endpoint to verify LeafLink product IDs ──────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// LAUNCH Promo — Zoho Account stamp + once-per-account enforcement
+// ─────────────────────────────────────────────────────────────────────────────
+// Custom fields on the Zoho Accounts module:
+//   Launch_Promo_Used         (boolean)  — true once redeemed
+//   Launch_Promo_Redeemed_At  (datetime) — ISO timestamp of redemption
+//   Launch_Promo_Order_Number (text)     — LeafLink order # for audit trail
+// One-time setup in Zoho UI (see project memory).
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function checkLaunchPromoUsed(
+  env: any,
+  zohoAccountId: string,
+): Promise<{used: boolean; error?: string}> {
+  try {
+    const token = await getZohoAccessToken(env);
+    if (!token) return {used: false, error: 'No Zoho token'};
+    const url = `https://www.zohoapis.com/crm/v7/Accounts/${zohoAccountId}?fields=Launch_Promo_Used,Launch_Promo_Redeemed_At`;
+    const res = await fetch(url, {
+      headers: {Authorization: `Zoho-oauthtoken ${token}`},
+    });
+    if (res.status === 204) return {used: false};
+    if (!res.ok) {
+      const body = await res.text();
+      console.warn('[launch-promo] Zoho Account fetch failed:', res.status, body.slice(0, 200));
+      // Fail-open: if Zoho is unreachable, allow the order to proceed without
+      // the discount-stacking risk being blocked. The audit trail will catch
+      // duplicates via the daily Zoho report.
+      return {used: false, error: `Zoho ${res.status}`};
+    }
+    const data: any = await res.json();
+    const account = data?.data?.[0];
+    return {used: account?.Launch_Promo_Used === true};
+  } catch (err: any) {
+    console.warn('[launch-promo] checkLaunchPromoUsed error:', err.message);
+    return {used: false, error: err.message};
+  }
+}
+
+async function stampLaunchPromoOnAccount(
+  env: any,
+  zohoAccountId: string,
+  orderNumber: string | null,
+): Promise<{ok: boolean; error?: string}> {
+  try {
+    const token = await getZohoAccessToken(env);
+    if (!token) return {ok: false, error: 'No Zoho token'};
+    const url = `https://www.zohoapis.com/crm/v7/Accounts/${zohoAccountId}`;
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Zoho-oauthtoken ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        data: [
+          {
+            Launch_Promo_Used: true,
+            Launch_Promo_Redeemed_At: new Date().toISOString(),
+            Launch_Promo_Order_Number: orderNumber || '',
+          },
+        ],
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      console.warn('[launch-promo] Zoho Account stamp failed:', res.status, body.slice(0, 300));
+      return {ok: false, error: `Zoho ${res.status}`};
+    }
+    console.log(`[launch-promo] Stamped Account ${zohoAccountId} as redeemed (order ${orderNumber || 'n/a'})`);
+    return {ok: true};
+  } catch (err: any) {
+    console.warn('[launch-promo] stampLaunchPromoOnAccount error:', err.message);
+    return {ok: false, error: err.message};
+  }
+}
+
+/**
+ * Sanity-check that a client-sent unitPrice for a LAUNCH-eligible SKU
+ * matches the expected discount rate. Returns true if price looks honest,
+ * false if it deviates more than 1¢ from expected (rounding tolerance).
+ *
+ * BASE prices live in njmenu._index.tsx — we duplicate them here so the
+ * server can validate without importing UI code. Update both if pricing
+ * changes.
+ */
+const BASE_CASE_PRICES: Record<string, number> = {
+  'triple-threat': 174.0,
+  'ground-game': 270.0,
+  'hit-sticks-single': 168.0,
+  'hit-sticks-5pack': 180.0,
+  'fly-high-tins': 180.0,
+};
+
+function expectedDiscountedCasePrice(sku: string): number | null {
+  const lineId = SKU_TO_PRODUCT_LINE_ID[sku];
+  if (!lineId) return null;
+  const base = BASE_CASE_PRICES[lineId];
+  if (base == null) return null;
+  const rate = discountForProductLineId(lineId);
+  return Math.round(base * (1 - rate.percent / 100) * 100) / 100;
+}
+
 export async function loader({request, context}: ActionFunctionArgs) {
   const url = new URL(request.url);
   const env = context.env as any;
@@ -571,7 +681,7 @@ export async function action({request, context}: ActionFunctionArgs) {
     return json({ok: false, error: 'Invalid JSON body'}, {status: 400});
   }
 
-  const {dispensaryName, dispensaryId, dispensaryLicense, items, notes} = body;
+  const {dispensaryName, dispensaryId, dispensaryLicense, items, notes, promoCode} = body;
 
   if (!dispensaryName) {
     return json({ok: false, error: 'Dispensary name is required'}, {status: 400});
@@ -598,6 +708,49 @@ export async function action({request, context}: ActionFunctionArgs) {
       skipped: true,
       message: 'No LeafLink-eligible products in cart',
     });
+  }
+
+  // ── LAUNCH Promo Validation ──────────────────────────────────────
+  // Re-validate window + once-per-account rule server-side. Trust nothing
+  // from the client. Soft-fails (allows order through without discount
+  // stamp) only if Zoho is unreachable — see checkLaunchPromoUsed comment.
+  let launchValid = false;
+  if (promoCode && typeof promoCode === 'string') {
+    const code = promoCode.trim().toUpperCase();
+    if (code !== LAUNCH_PROMO.code) {
+      return json({ok: false, error: `Promo code "${promoCode}" is not valid.`}, {status: 400});
+    }
+    if (!isLaunchActive()) {
+      return json({ok: false, error: 'The LAUNCH promo window has closed.'}, {status: 400});
+    }
+    if (dispensaryId) {
+      const used = await checkLaunchPromoUsed(env, String(dispensaryId));
+      if (used.used) {
+        return json(
+          {
+            ok: false,
+            error: 'The LAUNCH code has already been redeemed by your account. Remove the code and resubmit.',
+            launchAlreadyUsed: true,
+          },
+          {status: 400},
+        );
+      }
+    }
+    // Verify each LAUNCH-eligible line item's unitPrice matches the expected
+    // discounted price (within 1¢ rounding). Catches client tampering / bugs.
+    for (const item of eligibleItems) {
+      const expected = expectedDiscountedCasePrice(item.sku);
+      if (expected != null && Math.abs(item.unitPrice - expected) > 0.01) {
+        console.warn(
+          `[launch-promo] Price mismatch on ${item.sku}: client=${item.unitPrice}, expected=${expected}`,
+        );
+        return json(
+          {ok: false, error: 'Cart pricing looks off. Refresh the page and try again.'},
+          {status: 400},
+        );
+      }
+    }
+    launchValid = true;
   }
 
   try {
@@ -674,6 +827,16 @@ export async function action({request, context}: ActionFunctionArgs) {
     }
 
     if (result.success) {
+      // Stamp Zoho Account so the LAUNCH code is one-and-done for this dispensary.
+      let launchStamped = false;
+      if (launchValid && dispensaryId) {
+        const stamp = await stampLaunchPromoOnAccount(
+          env,
+          String(dispensaryId),
+          result.orderNumber || null,
+        );
+        launchStamped = stamp.ok;
+      }
       return json({
         ok: true,
         orderNumber: result.orderNumber,
@@ -681,6 +844,8 @@ export async function action({request, context}: ActionFunctionArgs) {
         customerName: customer.name,
         itemsSynced: eligibleItems.length,
         itemsSkipped: items.length - eligibleItems.length,
+        launchPromoApplied: launchValid,
+        launchPromoStamped: launchStamped,
       });
     } else {
       // Order creation failed for another reason — send failure notification

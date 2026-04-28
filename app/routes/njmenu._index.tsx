@@ -3,6 +3,15 @@ import type {MetaFunction, LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import {json, redirect} from '@shopify/remix-oxygen';
 import {Link, useFetcher, useLoaderData} from '@remix-run/react';
 import {getBuyerFromRequest, type BuyerSession} from '../lib/njmenu-auth';
+import {
+  LAUNCH_PROMO,
+  LAUNCH_BANNER_COPY,
+  isLaunchActive,
+  validateLaunchCode,
+  decorateWithLaunchDiscount,
+  msUntilLaunchEnd,
+  formatLaunchCountdown,
+} from '../lib/launch-promo';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // META
@@ -904,6 +913,70 @@ export default function NJMenu() {
   const cartRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // ── LAUNCH Promo State ───────────────────────────────────────────────────
+  // Apr 28 → May 1, 2026 wholesale stock-up window for the May 14 consumer launch.
+  // Code: LAUNCH. 20% off Triple Threat Pre-Rolls, 10% off Ground Game.
+  const [promoCodeInput, setPromoCodeInput] = useState('');
+  const [appliedPromoCode, setAppliedPromoCode] = useState<string | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [launchNow, setLaunchNow] = useState<Date>(() => new Date());
+
+  // Tick once per minute so the countdown banner stays fresh and so the
+  // window auto-closes at 2026-05-01 23:59:59 ET without a refresh.
+  useEffect(() => {
+    const id = setInterval(() => setLaunchNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const launchActive = useMemo(() => isLaunchActive(launchNow), [launchNow]);
+  const launchCountdown = useMemo(
+    () => formatLaunchCountdown(msUntilLaunchEnd(launchNow)),
+    [launchNow],
+  );
+  // Auto-clear an applied code once the window closes.
+  useEffect(() => {
+    if (!launchActive && appliedPromoCode) {
+      setAppliedPromoCode(null);
+      setPromoCodeInput('');
+      setPromoError('LAUNCH window has ended.');
+    }
+  }, [launchActive, appliedPromoCode]);
+
+  const applyPromoCode = useCallback(() => {
+    const result = validateLaunchCode(promoCodeInput, new Date());
+    if (result.ok) {
+      setAppliedPromoCode(LAUNCH_PROMO.code);
+      setPromoError(null);
+    } else {
+      setAppliedPromoCode(null);
+      if (result.reason === 'inactive_window') {
+        setPromoError('That promo window is closed.');
+      } else {
+        setPromoError("That code isn't valid.");
+      }
+    }
+  }, [promoCodeInput]);
+
+  const clearPromoCode = useCallback(() => {
+    setAppliedPromoCode(null);
+    setPromoCodeInput('');
+    setPromoError(null);
+  }, []);
+
+  // Decorate PRODUCT_LINES with the LAUNCH discount when the code is applied.
+  // Every cart calc / line-item render reads from this — single source of truth
+  // for what the buyer is actually being quoted.
+  const productLines = useMemo(() => {
+    if (appliedPromoCode === LAUNCH_PROMO.code) {
+      return PRODUCT_LINES.map((p) => decorateWithLaunchDiscount(p));
+    }
+    return PRODUCT_LINES;
+  }, [appliedPromoCode]);
+
+  // Total savings (in $) the LAUNCH code is currently knocking off the cart.
+  // Computed lazily; used in the cart UI's "You're saving $X" line.
+
+
   const showToast = useCallback((msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2800);
@@ -954,7 +1027,7 @@ export default function NJMenu() {
   // Cart count in total units (not cases)
   const cartCount = useMemo(
     () => cartItems.reduce((sum, i) => {
-      const product = PRODUCT_LINES.find((p) => p.id === i.productId);
+      const product = productLines.find((p) => p.id === i.productId);
       return sum + i.cases * (product?.caseSize ?? 1);
     }, 0),
     [cartItems],
@@ -962,7 +1035,7 @@ export default function NJMenu() {
 
   const cartTotal = useMemo(() => {
     return cartItems.reduce((sum, item) => {
-      const product = PRODUCT_LINES.find((p) => p.id === item.productId);
+      const product = productLines.find((p) => p.id === item.productId);
       if (!product) return sum;
       const unitPrice = applyDiscount(product.casePrice, product.discount);
       return sum + unitPrice * item.cases;
@@ -1007,7 +1080,7 @@ export default function NJMenu() {
     // Send quantity in individual units — LeafLink converts to cases automatically
     // Send CASE PRICE as unitPrice — LeafLink applies price per case after conversion
     const items = cartItems.map((item) => {
-      const product = PRODUCT_LINES.find((p) => p.id === item.productId);
+      const product = productLines.find((p) => p.id === item.productId);
       if (!product) return null;
       const strain = product.strains.find((s) => s.name === item.strainName);
       if (!strain?.sku) return null;
@@ -1051,6 +1124,7 @@ export default function NJMenu() {
       dispensaryLicense: selectedAccount.license || undefined,
       items: [...items, ...sampleItems],
       notes: orderNote.trim() || undefined,
+      promoCode: appliedPromoCode || undefined,
     };
     console.log('[njmenu] Submitting to LeafLink:', JSON.stringify(payload, null, 2));
 
@@ -1081,13 +1155,13 @@ export default function NJMenu() {
 
           // ── Capture order summary for confirmation page (both real + manualEntry success) ─
           const orderTotal = cartItems.reduce((sum, item) => {
-            const product = PRODUCT_LINES.find((p) => p.id === item.productId);
+            const product = productLines.find((p) => p.id === item.productId);
             if (!product) return sum;
             const casePrice = applyDiscount(product.casePrice, product.discount);
             return sum + item.cases * casePrice;
           }, 0);
           const orderItems = cartItems.map((item) => {
-            const product = PRODUCT_LINES.find((p) => p.id === item.productId);
+            const product = productLines.find((p) => p.id === item.productId);
             if (!product) return null;
             return {
               name: product.name,
@@ -1172,7 +1246,7 @@ export default function NJMenu() {
         setLeaflinkMessage(`Connection issue: ${err.message || err}`);
         console.error('[njmenu] LeafLink submission error:', err);
       });
-  }, [selectedAccount, cartItems, orderNote, earnedSamples, sampleStrains, buyerContactId, buyerCredit, buyerFirstName, buyerLastName, buyerEmail]);
+  }, [selectedAccount, cartItems, orderNote, earnedSamples, sampleStrains, buyerContactId, buyerCredit, buyerFirstName, buyerLastName, buyerEmail, appliedPromoCode]);
 
   // Build mailto order
   const buildOrderEmail = useCallback(() => {
@@ -1193,7 +1267,7 @@ export default function NJMenu() {
 
     let total = 0;
     cartItems.forEach((item) => {
-      const product = PRODUCT_LINES.find((p) => p.id === item.productId);
+      const product = productLines.find((p) => p.id === item.productId);
       if (!product) return;
       const unitPrice = applyDiscount(product.casePrice, product.discount);
       const lineTotal = unitPrice * item.cases;
@@ -1303,6 +1377,40 @@ export default function NJMenu() {
       />
 
       <div className="nj-menu">
+
+        {/* ── LAUNCH Promo Banner (Apr 28 - May 1, 2026) ─────────────── */}
+        {launchActive && !confirmedOrder && (
+          <div
+            style={{
+              background: 'linear-gradient(90deg, #F5E400 0%, #ff6b35 100%)',
+              color: '#000',
+              padding: '14px 16px',
+              textAlign: 'center',
+              borderBottom: '2px solid #000',
+              position: 'relative',
+              zIndex: 50,
+            }}
+          >
+            <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-center gap-2 md:gap-6">
+              <span className="font-headline text-base md:text-lg font-700 uppercase tracking-[0.15em]">
+                {LAUNCH_BANNER_COPY.eyebrow} - ENDS IN {launchCountdown}
+              </span>
+              <span className="font-headline text-base md:text-lg font-600 tracking-wider">
+                {LAUNCH_BANNER_COPY.headline}
+              </span>
+            </div>
+            <div className="font-body text-xs md:text-sm mt-1" style={{opacity: 0.85}}>
+              {LAUNCH_BANNER_COPY.body}{' '}
+              <span
+                className="font-headline font-700 tracking-[0.2em]"
+                style={{padding: '1px 6px', background: '#000', color: '#F5E400', borderRadius: 3}}
+              >
+                {LAUNCH_BANNER_COPY.codeText}
+              </span>{' '}
+              {LAUNCH_BANNER_COPY.cta}
+            </div>
+          </div>
+        )}
 
         {/* ══════════════════════════════════════════════════════════════════
             ORDER CONFIRMATION VIEW — replaces page after successful order
@@ -2540,11 +2648,11 @@ export default function NJMenu() {
             className="font-body text-xs font-600 tracking-[0.25em] uppercase mb-16"
             style={{color: 'rgba(255,255,255,0.6)'}}
           >
-            Product Catalog &mdash; {PRODUCT_LINES.length} Lines &middot; {PRODUCT_LINES.reduce((n, p) => n + p.strains.length, 0)} SKUs
+            Product Catalog &mdash; {productLines.length} Lines &middot; {productLines.reduce((n, p) => n + p.strains.length, 0)} SKUs
           </p>
 
           {/* Product Cards */}
-          {PRODUCT_LINES.map((product) => {
+          {productLines.map((product) => {
             const isExpanded = expandedProduct === product.id;
             const discountedWholesale = applyDiscount(product.wholesale, product.discount);
             const discountedCase = applyDiscount(product.casePrice, product.discount);
@@ -2867,7 +2975,7 @@ export default function NJMenu() {
                 {/* Cart line items */}
                 <div className="mb-8">
                   {cartItems.map((item) => {
-                    const product = PRODUCT_LINES.find((p) => p.id === item.productId);
+                    const product = productLines.find((p) => p.id === item.productId);
                     if (!product) return null;
                     const unitPrice = applyDiscount(product.casePrice, product.discount);
                     return (
@@ -2933,7 +3041,7 @@ export default function NJMenu() {
                           <option value="">Choose strain</option>
                           {STRAINS.map((s) => {
                             // Check OOS using the underlying product line's real SKU
-                            const productLine = PRODUCT_LINES.find((p) => p.id === sample.productId);
+                            const productLine = productLines.find((p) => p.id === sample.productId);
                             const realStrain = productLine?.strains.find((st) => st.name === s.name);
                             const oos = realStrain?.sku ? !isInStock(realStrain.sku) : false;
                             return (
@@ -2945,6 +3053,74 @@ export default function NJMenu() {
                         </select>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {/* ── Promo Code (LAUNCH window only) ──────────────── */}
+                {launchActive && (
+                  <div className="mb-6">
+                    <label className="font-body text-xs font-500 tracking-[0.15em] uppercase block mb-2" style={{color: 'rgba(255,255,255,0.55)'}}>
+                      Promo Code
+                    </label>
+                    {appliedPromoCode ? (
+                      <div
+                        className="flex items-center justify-between px-4 py-3"
+                        style={{background: 'rgba(245,228,0,0.1)', border: '1px solid rgba(245,228,0,0.4)', borderRadius: 4}}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span
+                            className="font-headline font-700 text-base tracking-[0.2em] px-2 py-0.5"
+                            style={{background: BRAND.gold, color: '#000', borderRadius: 3}}
+                          >
+                            {appliedPromoCode}
+                          </span>
+                          <span className="font-body text-sm" style={{color: BRAND.gold}}>
+                            applied - 20% off Pre-Rolls, 10% off Ground Game
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={clearPromoCode}
+                          className="font-body text-xs uppercase tracking-wider cursor-pointer hover:opacity-70"
+                          style={{background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.6)', padding: '4px 8px'}}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-stretch gap-2">
+                          <input
+                            type="text"
+                            value={promoCodeInput}
+                            onChange={(e) => { setPromoCodeInput(e.target.value); setPromoError(null); }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyPromoCode(); } }}
+                            placeholder="Enter code"
+                            className="flex-1 px-4 py-3 font-body text-sm uppercase tracking-wider"
+                            style={{background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: '#fff', outline: 'none', letterSpacing: '0.15em'}}
+                          />
+                          <button
+                            type="button"
+                            onClick={applyPromoCode}
+                            disabled={!promoCodeInput.trim()}
+                            className="font-headline font-600 text-sm uppercase tracking-wider px-6 cursor-pointer transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+                            style={{background: BRAND.gold, color: '#000', border: 'none'}}
+                          >
+                            Apply
+                          </button>
+                        </div>
+                        {promoError && (
+                          <p className="font-body text-xs mt-2" style={{color: '#ff6b35'}}>
+                            {promoError}
+                          </p>
+                        )}
+                        {!promoError && (
+                          <p className="font-body text-xs mt-2" style={{color: 'rgba(255,255,255,0.5)'}}>
+                            Stock-up window ends in {launchCountdown}.
+                          </p>
+                        )}
+                      </>
+                    )}
                   </div>
                 )}
 
@@ -2964,6 +3140,29 @@ export default function NJMenu() {
                 </div>
 
                 {/* Total + Submit */}
+                {appliedPromoCode && launchActive && (() => {
+                  // Compute savings: full-price subtotal minus discounted cartTotal
+                  const fullPriceSubtotal = cartItems.reduce((sum, item) => {
+                    const base = PRODUCT_LINES.find((p) => p.id === item.productId);
+                    if (!base) return sum;
+                    return sum + item.cases * base.casePrice;
+                  }, 0);
+                  const savings = fullPriceSubtotal - cartTotal;
+                  if (savings <= 0) return null;
+                  return (
+                    <div
+                      className="flex items-center justify-between px-4 py-3 mb-2"
+                      style={{background: 'rgba(245,228,0,0.06)', border: '1px solid rgba(245,228,0,0.25)', borderRadius: 4}}
+                    >
+                      <span className="font-body text-sm font-500" style={{color: BRAND.gold}}>
+                        LAUNCH savings
+                      </span>
+                      <span className="font-headline text-xl font-600" style={{color: BRAND.gold}}>
+                        -{formatCurrency(savings)}
+                      </span>
+                    </div>
+                  );
+                })()}
                 <div className="flex items-center justify-between py-6 mb-6" style={{borderTop: '1px solid rgba(255,255,255,0.08)'}}>
                   <span className="font-headline text-xl font-600 uppercase tracking-wider">Estimated Total</span>
                   <span className="font-headline text-4xl font-700" style={{color: BRAND.gold}}>{formatCurrency(cartTotal)}</span>
