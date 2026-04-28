@@ -1,0 +1,54 @@
+# Highsman.com — robots policy
+# Only consumer-facing pages on highsman.com should be indexed.
+# All internal dashboards, B2B portals, staff tools, and API routes are blocked.
+
+User-agent: *
+
+# --- Internal / staff dashboards ---
+Disallow: /ceo
+Disallow: /ops
+Disallow: /sales
+Disallow: /sales-floor
+Disallow: /sales-floor/
+Disallow: /staff-dashboard
+Disallow: /shift-report
+Disallow: /grading-rubric
+Disallow: /expense
+Disallow: /directory
+Disallow: /leads
+
+# --- Internal sales / new-business tools ---
+Disallow: /new-business
+Disallow: /new-business/
+
+# --- B2B wholesale & rep tooling ---
+Disallow: /njmenu
+Disallow: /njmenu/
+Disallow: /njpopups
+Disallow: /njnorth
+Disallow: /njsouth
+
+# --- Vibes brand-rep internal app ---
+Disallow: /vibes
+Disallow: /vibes/
+
+# --- Budtender training & education portals (gated) ---
+Disallow: /budtender-education
+Disallow: /budtenders
+Disallow: /budtender-quiz
+Disallow: /pages/budtender-education
+Disallow: /training
+Disallow: /training/
+
+# --- All API routes ---
+Disallow: /api/
+Disallow: /api
+
+# --- Auth / account / cart utility paths (no SEO value) ---
+Disallow: /account
+Disallow: /account/
+Disallow: /cart
+Disallow: /search
+
+# --- Sitemap (public consumer pages only) ---
+Sitemap: https://highsman.com/sitemap.xml
