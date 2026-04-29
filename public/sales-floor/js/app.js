@@ -4628,6 +4628,21 @@ function fmtMoneyShort(n) {
   return '$' + v.toFixed(0);
 }
 
+// % delta badge — Reid 2026-04-29: 'show a %age of up or down from Previous
+// months numbers at the same time.' Compares this MTD vs prior month's
+// same-day-of-month window.
+function fmtDeltaBadge(pct, priorTotal) {
+  if (priorTotal === 0) return '<span class="hs-state-tile-delta hs-state-tile-delta--new">NEW</span>';
+  if (pct === 0) return '<span class="hs-state-tile-delta hs-state-tile-delta--flat">Flat</span>';
+  const cls = pct > 0 ? 'hs-state-tile-delta--up' : 'hs-state-tile-delta--down';
+  const arrow = pct > 0 ? '\u25B2' : '\u25BC'; // ▲ ▼
+  const abs = Math.abs(pct);
+  // Cap display at 999% so a tiny prior-period number doesn't blow out the
+  // tile width with a 4-digit delta.
+  const display = abs >= 1000 ? '999+' : abs.toFixed(abs < 10 ? 1 : 0);
+  return `<span class="hs-state-tile-delta ${cls}">${arrow} ${display}%</span>`;
+}
+
 async function loadStatePulse() {
   const grid = document.getElementById('state-pulse-grid');
   const monthEl = document.getElementById('state-pulse-month');
@@ -4639,22 +4654,46 @@ async function loadStatePulse() {
     if (monthEl) monthEl.textContent = data.monthLabel || '—';
     const byState = data.byState || {};
     const orderCounts = data.orderCounts || {};
+    const priorByState = data.priorByState || {};
+    const priorOrderCounts = data.priorOrderCounts || {};
+    const deltaPct = data.deltaPct || {};
     ['NJ', 'MA', 'NY', 'RI', 'MO'].forEach((code) => {
       const amt = grid.querySelector(`[data-amount-for="${code}"]`);
       const ord = grid.querySelector(`[data-orders-for="${code}"]`);
+      const tile = grid.querySelector(`[data-state="${code}"]`);
       if (amt) amt.textContent = fmtMoneyShort(byState[code] || 0);
       if (ord) {
         const n = orderCounts[code] || 0;
         ord.textContent = n === 1 ? '1 order' : `${n} orders`;
       }
+      // Replace any prior delta badge inside the tile and append a fresh one.
+      if (tile) {
+        tile.querySelectorAll('.hs-state-tile-delta').forEach((el) => el.remove());
+        const old = tile.querySelector('.hs-state-tile-prior');
+        if (old) old.remove();
+        if (data.ok) {
+          const badge = fmtDeltaBadge(deltaPct[code] || 0, priorByState[code] || 0);
+          const wrapper = document.createElement('div');
+          wrapper.className = 'hs-state-tile-prior';
+          const priorAmt = fmtMoneyShort(priorByState[code] || 0);
+          const priorN = priorOrderCounts[code] || 0;
+          // Tooltip: full prior-period context for the curious. Keeps the
+          // tile face uncluttered.
+          const tip = `${data.priorLabel || 'prior'}: ${priorAmt} \u00B7 ${priorN} ${priorN === 1 ? 'order' : 'orders'}`;
+          wrapper.innerHTML = badge;
+          wrapper.title = tip;
+          tile.appendChild(wrapper);
+        }
+      }
     });
     if (footEl) {
       if (data.ok) {
-        footEl.textContent = 'Booked revenue MTD · Confirmed + Closed sales orders';
+        const priorBit = data.priorLabel ? ` \u00B7 vs ${data.priorLabel}` : '';
+        footEl.textContent = `Booked revenue MTD${priorBit} \u00B7 Confirmed + Closed sales orders`;
       } else if (data.reason === 'not-configured') {
-        footEl.textContent = 'Zoho Inventory not configured — connect to see live numbers';
+        footEl.textContent = 'Zoho Inventory not configured \u2014 connect to see live numbers';
       } else {
-        footEl.textContent = 'Live data unavailable — showing last known';
+        footEl.textContent = 'Live data unavailable \u2014 showing last known';
       }
     }
   } catch (err) {
