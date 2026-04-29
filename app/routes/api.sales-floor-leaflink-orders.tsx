@@ -436,7 +436,7 @@ async function findZohoAccountByName(
     const url =
       `https://www.zohoapis.com/crm/v7/Accounts/search` +
       `?criteria=(Account_Name:equals:${encodeURIComponent(name)})` +
-      `&fields=Account_Name,Billing_State,Account_State,Phone,Billing_City,Billing_Code`;
+      `&fields=Account_Name,Billing_State,Account_State,Phone,Billing_City,Billing_Code,Shipping_City,Shipping_Code,Shipping_State,Mailing_City`;
     const res = await fetchT(url, {
       headers: {Authorization: `Zoho-oauthtoken ${token}`},
     });
@@ -447,10 +447,10 @@ async function findZohoAccountByName(
     return {
       id: a.id,
       name: a.Account_Name || name,
-      state: a.Billing_State || a.Account_State || null,
+      state: a.Billing_State || a.Account_State || a.Shipping_State || null,
       phone: a.Phone || null,
-      city: a.Billing_City || null,
-      zip: a.Billing_Code || null,
+      city: a.Billing_City || a.Shipping_City || a.Mailing_City || null,
+      zip: a.Billing_Code || a.Shipping_Code || null,
     };
   } catch {
     return null;
