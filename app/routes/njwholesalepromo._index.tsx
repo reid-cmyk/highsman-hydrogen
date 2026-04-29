@@ -923,7 +923,7 @@ export default function NjWholesalePromo() {
 
       <header className="site">
         <a href="https://highsman.com" aria-label="Highsman home">
-          <img src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Brand_Hi-Res_Logo_-_Black_Background.png?v=1759351596" alt="Highsman" />
+          <img src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Logo_White.png?v=1775594430" alt="Highsman" />
         </a>
         <a href="https://highsman.com/njmenu" className="header-cta">
           <span>Place Launch Order</span>
@@ -1276,7 +1276,7 @@ export default function NjWholesalePromo() {
       </section>
 
       <footer className="site">
-        <img src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Brand_Hi-Res_Logo_-_Black_Background.png?v=1759351596" alt="Highsman" />
+        <img src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Logo_White.png?v=1775594430" alt="Highsman" />
         <div className="footer-tag">SPARK GREATNESS&trade;</div>
         <div className="footer-meta">
           Internal partner terms — NJ Retail Launch Deal · April 28 – June 13, 2026.<br />
