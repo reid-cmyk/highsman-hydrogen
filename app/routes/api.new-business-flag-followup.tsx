@@ -33,7 +33,16 @@ export async function action({request, context}: ActionFunctionArgs) {
   }
 
   const env = context.env as Record<string, string | undefined>;
-  let body: {accountId?: string; action?: string};
+  let body: {
+    accountId?: string;
+    action?: string;
+    buyer?: {
+      name?: string;
+      email?: string;
+      phone?: string;
+      role?: string;
+    } | null;
+  };
   try {
     body = await request.json();
   } catch {
@@ -118,7 +127,7 @@ export async function action({request, context}: ActionFunctionArgs) {
       emailError = 'gmail-sa-not-configured';
     } else {
       try {
-        const acct = await fetchAccountForHandoffEmail(accountId, token);
+        const acct = await fetchAccountForHandoffEmail(accountId, token, body.buyer || null);
         const {subject, textBody, htmlBody} = buildHandoffEmail(acct);
         await sendEmailFromUser(
           'sky@highsman.com',
@@ -163,16 +172,24 @@ type HandoffAccount = {
   email: string;
   lastOrderDate: string;
   totalOrders: string;
-  ownerName: string;
+  buyer: {
+    name: string;
+    email: string;
+    phone: string;
+    role: string;
+  } | null;
   zohoUrl: string;
 };
 
 async function fetchAccountForHandoffEmail(
   accountId: string,
   token: string,
+  clientBuyer: {name?: string; email?: string; phone?: string; role?: string} | null,
 ): Promise<HandoffAccount> {
   // Pull just the fields the email body uses. Best-effort: if Zoho 4xx's
   // we still send the email with whatever we have (just the ID/link).
+  // Note: Zoho Owner is intentionally NOT requested — Reid 2026-04-29
+  // dropped it from the email body. Buyer/best-contact replaces it.
   const fields = [
     'Account_Name',
     'Billing_City',
@@ -182,7 +199,6 @@ async function fetchAccountForHandoffEmail(
     'Email',
     'Last_Order_Date',
     'Total_Orders_Count',
-    'Owner',
   ].join(',');
   const url = `https://www.zohoapis.com/crm/v7/Accounts/${encodeURIComponent(accountId)}?fields=${fields}`;
   let row: any = {};
@@ -197,6 +213,24 @@ async function fetchAccountForHandoffEmail(
   } catch {
     // swallow — we degrade to just the ID below
   }
+
+  // Buyer resolution. Order of preference:
+  //   1. Client-provided buyer (Sky's UI already picked one — fastest)
+  //   2. Server-side Zoho Contacts lookup, prefer Job_Role 'Buyer / Manager'
+  // Memory: feedback_zoho_contact_job_role.md — buyer-role lives in Job_Role,
+  // never Title. We still consult Title as a last resort for legacy records.
+  let buyer: HandoffAccount['buyer'] = null;
+  if (clientBuyer && (clientBuyer.name || clientBuyer.email || clientBuyer.phone)) {
+    buyer = {
+      name: String(clientBuyer.name || '').trim(),
+      email: String(clientBuyer.email || '').trim(),
+      phone: String(clientBuyer.phone || '').trim(),
+      role: String(clientBuyer.role || '').trim(),
+    };
+  } else {
+    buyer = await fetchBestContactForAccount(accountId, token);
+  }
+
   const state =
     String(row.Account_State || row.Billing_State || '').trim();
   return {
@@ -211,9 +245,56 @@ async function fetchAccountForHandoffEmail(
       row.Total_Orders_Count != null && row.Total_Orders_Count !== ''
         ? String(row.Total_Orders_Count)
         : '',
-    ownerName: String(row.Owner?.name || '').trim(),
+    buyer,
     zohoUrl: `https://crm.zoho.com/crm/org814057291/tab/Accounts/${accountId}`,
   };
+}
+
+// Server-side fallback when the client didn't pass a buyer. Hits the
+// Account-related Contacts endpoint and ranks: Job_Role contains 'buyer'
+// > 'manager' > 'owner' > first contact with any contact method.
+async function fetchBestContactForAccount(
+  accountId: string,
+  token: string,
+): Promise<HandoffAccount['buyer']> {
+  try {
+    const fields = ['Full_Name', 'Email', 'Phone', 'Mobile', 'Job_Role', 'Title'].join(',');
+    const url =
+      `https://www.zohoapis.com/crm/v7/Accounts/${encodeURIComponent(accountId)}/Contacts` +
+      `?fields=${fields}&per_page=20`;
+    const res = await fetch(url, {
+      headers: {Authorization: `Zoho-oauthtoken ${token}`},
+    });
+    if (res.status === 204 || !res.ok) return null;
+    const data: any = await res.json();
+    const rows: any[] = data?.data || [];
+    if (!rows.length) return null;
+
+    const score = (c: any): number => {
+      const role = String(c.Job_Role || c.Title || '').toLowerCase();
+      if (role.includes('buyer')) return 100;
+      if (role.includes('manager')) return 80;
+      if (role.includes('owner')) return 70;
+      if (role.includes('purchasing')) return 60;
+      const hasContact = !!(c.Email || c.Phone || c.Mobile);
+      return hasContact ? 10 : 0;
+    };
+    const sorted = [...rows].sort((a, b) => score(b) - score(a));
+    const c = sorted[0];
+    if (!c) return null;
+    const name = String(c.Full_Name || '').trim();
+    const email = String(c.Email || '').trim();
+    const phone = String(c.Mobile || c.Phone || '').trim();
+    if (!name && !email && !phone) return null;
+    return {
+      name,
+      email,
+      phone,
+      role: String(c.Job_Role || c.Title || '').trim(),
+    };
+  } catch {
+    return null;
+  }
 }
 
 function buildHandoffEmail(a: HandoffAccount): {
@@ -238,7 +319,14 @@ function buildHandoffEmail(a: HandoffAccount): {
   if (a.email) textLines.push(`  • Email: ${a.email}`);
   if (a.lastOrderDate) textLines.push(`  • Last order: ${a.lastOrderDate}`);
   if (a.totalOrders) textLines.push(`  • Total orders: ${a.totalOrders}`);
-  if (a.ownerName) textLines.push(`  • Zoho owner: ${a.ownerName}`);
+  if (a.buyer && (a.buyer.name || a.buyer.email || a.buyer.phone)) {
+    const label = a.buyer.role ? `Buyer (${a.buyer.role})` : 'Buyer / contact';
+    const parts: string[] = [];
+    if (a.buyer.name) parts.push(a.buyer.name);
+    if (a.buyer.phone) parts.push(a.buyer.phone);
+    if (a.buyer.email) parts.push(a.buyer.email);
+    textLines.push(`  • ${label}: ${parts.join(' · ')}`);
+  }
   textLines.push(
     '',
     `Open in /new-business: https://highsman.com/new-business/app`,
@@ -266,7 +354,19 @@ function buildHandoffEmail(a: HandoffAccount): {
   if (a.email) detailRows.push(`<li><strong>Email:</strong> ${esc(a.email)}</li>`);
   if (a.lastOrderDate) detailRows.push(`<li><strong>Last order:</strong> ${esc(a.lastOrderDate)}</li>`);
   if (a.totalOrders) detailRows.push(`<li><strong>Total orders:</strong> ${esc(a.totalOrders)}</li>`);
-  if (a.ownerName) detailRows.push(`<li><strong>Zoho owner:</strong> ${esc(a.ownerName)}</li>`);
+  if (a.buyer && (a.buyer.name || a.buyer.email || a.buyer.phone)) {
+    const label = a.buyer.role ? `Buyer (${esc(a.buyer.role)})` : 'Buyer / contact';
+    const parts: string[] = [];
+    if (a.buyer.name) parts.push(esc(a.buyer.name));
+    if (a.buyer.phone) {
+      const tel = a.buyer.phone.replace(/[^0-9+]/g, '');
+      parts.push(`<a href="tel:${tel}" style="color:#0a66c2;text-decoration:none;">${esc(a.buyer.phone)}</a>`);
+    }
+    if (a.buyer.email) {
+      parts.push(`<a href="mailto:${esc(a.buyer.email)}" style="color:#0a66c2;text-decoration:none;">${esc(a.buyer.email)}</a>`);
+    }
+    detailRows.push(`<li><strong>${label}:</strong> ${parts.join(' &middot; ')}</li>`);
+  }
 
   const htmlBody = `<!doctype html><html><body style="font-family:Arial,sans-serif;font-size:14px;color:#111;line-height:1.5;">
 <p>Hi Pete,</p>

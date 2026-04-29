@@ -2295,17 +2295,37 @@ async function flagForPete(idx) {
   if (!a || !a.id) return;
   if (a._flaggedForPete) return; // Already on Pete — locked, can't unflag.
 
-  // Optimistic flip. Sky sees the pill lock the instant she clicks;
-  // if the API fails we roll it back and surface a toast.
+  // Optimistic flip. Sky sees the pill lock the instant she clicks; if the
+  // API fails we roll it back and surface a toast.
+  //
+  // Re-render BOTH the Accounts tab AND the Reorder Due tab — the same
+  // accountToCardHtml renders into both `account-list` (renderAccounts)
+  // and `reorder-due-list` (renderOrders). Reid 2026-04-29: Flag Pete
+  // clicked from the Reorder Due tab wasn't greying the button because
+  // only renderAccounts was being called and the Reorder Due card stayed
+  // stale (the Accounts tab is the one that did flip — just not visible).
   a._flaggedForPete = true;
   renderAccounts();
+  if (typeof renderOrders === 'function') renderOrders();
+
+  // Shape the buyer payload from whatever's on the client. The server
+  // falls back to a Zoho Contacts lookup when this isn't passed, but
+  // forwarding what we already have is one less round-trip.
+  const buyerPayload = a.buyer
+    ? {
+        name: a.buyer._fullName || a.buyer.Full_Name || '',
+        email: a.buyer.Email || '',
+        phone: a.buyer.Mobile || a.buyer.Phone || '',
+        role: a.buyer.Job_Role || a.buyer.Role_Title || a.buyer.Title || '',
+      }
+    : null;
 
   try {
     const res = await fetch('/api/new-business-flag-followup', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       credentials: 'same-origin',
-      body: JSON.stringify({accountId: a.id, action: 'flag'}),
+      body: JSON.stringify({accountId: a.id, action: 'flag', buyer: buyerPayload}),
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok || !body.ok) {
@@ -2324,6 +2344,7 @@ async function flagForPete(idx) {
   } catch (err) {
     a._flaggedForPete = false;
     renderAccounts();
+    if (typeof renderOrders === 'function') renderOrders();
     toast(`Flag failed: ${err?.message || 'unknown error'}`, 'error');
   }
 }
