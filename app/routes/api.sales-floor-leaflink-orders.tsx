@@ -57,6 +57,9 @@ const ZOHO_HYDRATION_CONCURRENCY = 8;
 // REMAINING_CAP for the lastOrderByAccount densification pass. Used to be
 // 100 sequential calls (~30s alone). Capped lower now and runs in parallel.
 const REMAINING_CAP = 40;
+// New: contact-pull concurrency. Keep tight — each card does up to 3 calls
+// (LL customer fetch + Zoho contacts list + Zoho contact create).
+const CONTACT_PULL_CONCURRENCY = 4;
 
 async function fetchT(
   url: string,
@@ -304,6 +307,115 @@ function daysBetween(iso: string, now: number): number {
   return Math.floor((now - t) / (1000 * 60 * 60 * 24));
 }
 
+// ─── New: LeafLink customer + contacts pull ─────────────────────────────────
+//
+// LeafLink customer detail shape (subset we read). Per LeafLink dev docs,
+// `?include_children=contacts,managers` embeds full contact records. The
+// store-level `email`/`phone_number` on the customer object itself is the
+// fallback when the primary contact has only one or neither.
+type LLContact = {
+  id?: number;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  phone_number?: string | null;
+  job_title?: string | null;
+  is_primary?: boolean | null;
+};
+
+type LLCustomerDetail = {
+  id?: number;
+  name?: string;
+  // store-level fallbacks
+  email?: string | null;
+  phone_number?: string | null;
+  // child collection when include_children=contacts
+  contacts?: LLContact[];
+};
+
+async function fetchLeafLinkCustomerDetail(
+  customerId: number,
+  apiKey: string,
+): Promise<LLCustomerDetail | null> {
+  try {
+    const url =
+      `${LEAFLINK_API_BASE}/customers/${customerId}/` +
+      `?include_children=contacts,managers`;
+    const res = await fetchT(url, {
+      headers: {Authorization: `Token ${apiKey}`},
+    });
+    if (!res.ok) {
+      console.warn(`[sf-leaflink-orders] LL customer ${customerId} → ${res.status}`);
+      return null;
+    }
+    return (await res.json()) as LLCustomerDetail;
+  } catch (err: any) {
+    console.warn(`[sf-leaflink-orders] LL customer ${customerId} threw: ${err?.message}`);
+    return null;
+  }
+}
+
+type PrimaryContactExtract = {
+  name: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  jobTitle: string | null;
+  // Provenance — useful for the card UI ("name from contact, phone from store").
+  emailSource: 'contact' | 'store' | null;
+  phoneSource: 'contact' | 'store' | null;
+};
+
+/**
+ * Pick the primary contact from a LeafLink customer detail, falling back to
+ * store-level email/phone when the contact record itself is missing them.
+ * Returns null only if there's truly nothing usable (no contact + no store
+ * email/phone).
+ */
+function extractPrimaryContact(
+  detail: LLCustomerDetail | null,
+): PrimaryContactExtract | null {
+  if (!detail) return null;
+
+  const contacts = detail.contacts || [];
+  // Prefer is_primary === true; else first contact with an email; else first.
+  const primary =
+    contacts.find((c) => c.is_primary === true) ||
+    contacts.find((c) => !!(c.email && c.email.trim())) ||
+    contacts[0] ||
+    null;
+
+  const storeEmail = (detail.email || '').trim() || null;
+  const storePhone = (detail.phone_number || '').trim() || null;
+
+  const cFirst = (primary?.first_name || '').trim();
+  const cLast = (primary?.last_name || '').trim();
+  const cEmail = (primary?.email || '').trim();
+  const cPhone = (primary?.phone_number || '').trim();
+  const cTitle = (primary?.job_title || '').trim();
+
+  const email = cEmail || storeEmail;
+  const phone = cPhone || storePhone;
+
+  // No usable contact info at all → null so we don't write a hollow Zoho row.
+  if (!primary && !storeEmail && !storePhone) return null;
+
+  const fullName =
+    cFirst || cLast ? `${cFirst} ${cLast}`.trim() : null;
+
+  return {
+    name: fullName,
+    firstName: cFirst || null,
+    lastName: cLast || null,
+    email: email || null,
+    phone: phone || null,
+    jobTitle: cTitle || null,
+    emailSource: cEmail ? 'contact' : storeEmail ? 'store' : null,
+    phoneSource: cPhone ? 'contact' : storePhone ? 'store' : null,
+  };
+}
+
 // ─── Zoho lookups (best-effort, never throws) ───────────────────────────────
 
 type ZohoAccountLite = {
@@ -400,6 +512,125 @@ async function findCheckinNoteForAccount(
   }
 }
 
+// ─── New: Zoho Contacts under an Account ────────────────────────────────────
+
+type ZohoContactLite = {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+};
+
+/**
+ * List Contacts under a given Zoho Account. Cheap call that lets us decide
+ * whether to skip create (Account already has a Contact) vs. write (Account
+ * has zero Contacts — true initial state). Returns [] on any failure.
+ */
+async function listZohoContactsForAccount(
+  accountId: string,
+  token: string,
+): Promise<ZohoContactLite[]> {
+  try {
+    const url =
+      `https://www.zohoapis.com/crm/v7/Accounts/${accountId}/Contacts` +
+      `?fields=First_Name,Last_Name,Email,Phone&per_page=10`;
+    const res = await fetchT(url, {
+      headers: {Authorization: `Zoho-oauthtoken ${token}`},
+    });
+    if (res.status === 204) return [];
+    if (!res.ok) return [];
+    const data = await res.json();
+    const rows: any[] = data.data || [];
+    return rows.map((r) => ({
+      id: r.id,
+      firstName: r.First_Name || null,
+      lastName: r.Last_Name || null,
+      email: r.Email || null,
+      phone: r.Phone || null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Create a Zoho Contact under the given Account. Best-effort:
+ *   • Returns the new contact ID on success.
+ *   • Returns null (and logs) on any failure — the loader never fails the
+ *     dashboard over a contact-create error.
+ *
+ * Memory: the picklist field "Job Role" has API name `Role_Title` and only
+ * accepts actual_value strings (e.g. "Buyer / Manager"). We try with it
+ * once; if the create 502s for any reason we retry once WITHOUT the picklist
+ * to defend against schema drift on that field.
+ */
+async function createZohoContactUnderAccount(
+  accountId: string,
+  contact: PrimaryContactExtract,
+  token: string,
+): Promise<string | null> {
+  // First name / last name fallback if LL only gave us a single name string.
+  const first =
+    contact.firstName ||
+    (contact.name ? contact.name.split(/\s+/).slice(0, 1).join(' ') : null) ||
+    null;
+  const last =
+    contact.lastName ||
+    (contact.name ? contact.name.split(/\s+/).slice(1).join(' ') : null) ||
+    'Buyer'; // Last_Name is required on Contacts module — never null.
+
+  const recordBase: Record<string, any> = {
+    First_Name: first || undefined,
+    Last_Name: last,
+    Email: contact.email || undefined,
+    Phone: contact.phone || undefined,
+    Account_Name: {id: accountId},
+    Lead_Source: 'LeafLink Initial Order',
+    Description:
+      'Auto-created from LeafLink primary contact on first Highsman order. ' +
+      'Verify and edit role / details.',
+  };
+
+  // Attempt 1: with the Role_Title picklist set to the safe default.
+  const recordWithRole = {...recordBase, Role_Title: 'Buyer / Manager'};
+
+  const post = async (record: Record<string, any>) => {
+    const res = await fetchT('https://www.zohoapis.com/crm/v7/Contacts', {
+      method: 'POST',
+      headers: {
+        Authorization: `Zoho-oauthtoken ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({data: [record]}),
+    });
+    if (!res.ok) return {ok: false as const, status: res.status};
+    const out = await res.json();
+    const row = (out?.data || [])[0];
+    if (row?.code === 'SUCCESS' && row.details?.id) {
+      return {ok: true as const, id: String(row.details.id)};
+    }
+    return {ok: false as const, status: res.status, body: row};
+  };
+
+  const r1 = await post(recordWithRole);
+  if (r1.ok) return r1.id;
+  console.warn(
+    `[sf-leaflink-orders] Zoho contact create attempt 1 failed for account ${accountId}:`,
+    (r1 as any).status,
+    (r1 as any).body,
+  );
+  // Attempt 2: drop Role_Title (most likely picklist schema mismatch).
+  const r2 = await post(recordBase);
+  if (r2.ok) return r2.id;
+  console.warn(
+    `[sf-leaflink-orders] Zoho contact create attempt 2 failed for account ${accountId}:`,
+    (r2 as any).status,
+    (r2 as any).body,
+  );
+  return null;
+}
+
 // ─── Loader ──────────────────────────────────────────────────────────────────
 
 export async function loader({request, context}: LoaderFunctionArgs) {
@@ -485,6 +716,19 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     state?: string | null;
     phone?: string | null;
   };
+  type PrimaryContactPayload = {
+    name: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+    phone: string | null;
+    jobTitle: string | null;
+    emailSource: 'contact' | 'store' | null;
+    phoneSource: 'contact' | 'store' | null;
+    zohoContactId: string | null;          // null if we couldn't write it
+    zohoContactCreated: boolean;           // true iff WE created it just now
+    zohoContactSkippedReason?: string;     // 'account_has_contacts' | 'no_data'
+  };
   type NewCustomerRow = {
     customerId: number;
     customerName: string;
@@ -513,6 +757,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     serenaDayLabel?: string | null;
     serenaDayIso?: string | null;
     outlier?: boolean;
+    // ── New: primary contact pulled from LeafLink (auto-fetch).
+    primaryContact?: PrimaryContactPayload | null;
   };
 
   const reorderDue: ReorderDueRow[] = [];
@@ -661,7 +907,88 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       }
     });
 
-    // ── Densify lastOrderByAccount with leftover customers ───────────────
+    // ── 4b) NEW: Pull primary contact from LeafLink for initial-order cards ──
+    // Fires only on:
+    //   • orderCount === 1 (already true — every newCustomers row is)
+    //   • cardState !== 'done' (we never resurrect a graduated account)
+    //   • row.zohoAccountId resolved (need an Account to write under)
+    //   • Account currently has zero Zoho Contacts (true initial state)
+    //
+    // For matches: pull LL customer detail with embedded contacts, extract
+    // primary (with store-level email/phone fallback per Reid), create the
+    // Zoho Contact, and decorate the row with the contact info so the card
+    // can render it inline.
+    if (!budgetExceeded()) {
+      const cardsNeedingContact = newCustomers.filter(
+        (r) =>
+          r.cardState !== 'done' &&
+          !!r.zohoAccountId &&
+          !r.primaryContact, // idempotent guard
+      );
+
+      await mapLimit(
+        cardsNeedingContact,
+        CONTACT_PULL_CONCURRENCY,
+        async (row) => {
+          if (budgetExceeded()) return;
+          const accountId = row.zohoAccountId!;
+
+          // Skip if Account already has Contacts — we only want to fire on
+          // truly initial state per Reid's scope.
+          const existing = await listZohoContactsForAccount(accountId, zohoToken);
+          if (existing.length > 0) {
+            row.primaryContact = null; // explicit: nothing to display, not initial
+            return;
+          }
+
+          const detail = await fetchLeafLinkCustomerDetail(row.customerId, apiKey);
+          const extract = extractPrimaryContact(detail);
+          if (!extract) {
+            row.primaryContact = {
+              name: null,
+              firstName: null,
+              lastName: null,
+              email: null,
+              phone: null,
+              jobTitle: null,
+              emailSource: null,
+              phoneSource: null,
+              zohoContactId: null,
+              zohoContactCreated: false,
+              zohoContactSkippedReason: 'no_data',
+            };
+            return;
+          }
+
+          // Write to Zoho. Best-effort — display still works if write fails.
+          let createdId: string | null = null;
+          if (extract.email || extract.phone) {
+            createdId = await createZohoContactUnderAccount(
+              accountId,
+              extract,
+              zohoToken,
+            );
+          }
+
+          row.primaryContact = {
+            name: extract.name,
+            firstName: extract.firstName,
+            lastName: extract.lastName,
+            email: extract.email,
+            phone: extract.phone,
+            jobTitle: extract.jobTitle,
+            emailSource: extract.emailSource,
+            phoneSource: extract.phoneSource,
+            zohoContactId: createdId,
+            zohoContactCreated: !!createdId,
+          };
+        },
+      );
+      if (budgetExceeded()) errors.push('budget_exceeded_during_contact_pull');
+    } else {
+      errors.push('budget_exceeded_before_contact_pull');
+    }
+    // ── 4c) Densify lastOrderByAccount with leftover customers ───────────────
     // Powers the inline 'Last: 2026-04-09 · $1,450' pill on follow-up cards.
     // Non-critical: if budget is blown we skip and the pill drops to date-
     // only via the Inventory fallback.
@@ -689,6 +1016,9 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   // the 12-day check-in, the shop graduates to the regular Accounts list.
   const visibleNewCustomers = newCustomers.filter((r) => r.cardState !== 'done');
   const cohort420Count = visibleNewCustomers.filter((r) => r.is420Cohort).length;
+  const contactsCreatedCount = visibleNewCustomers.filter(
+    (r) => r.primaryContact?.zohoContactCreated,
+  ).length;
 
   // Per-Zoho-account last-order summary. Both Sky's Sales-floor cards and
   // Pete's new-business follow-up cards consume this to render
@@ -723,6 +1053,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       lastOrderAccounts: Object.keys(lastOrderByAccount).length,
       cohort420Count,
       cohort420CutoffIso: POST_420_CUTOFF_ISO,
+      contactsCreatedCount,
       errors,
     },
   });
