@@ -504,9 +504,9 @@ export async function sendMagicLinkEmail(
 // Uses Shopify CDN-hosted logos per feedback_highsman_email_logos memory.
 
 const HEADER_LOGO_URL =
-  'https://cdn.shopify.com/s/files/1/0683/5469/4729/files/Highsman-Logo-White.png';
+  'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Logo_White.png?v=1775594430';
 const FOOTER_LOGO_URL =
-  'https://cdn.shopify.com/s/files/1/0683/5469/4729/files/Spark-Greatness-Gold.png';
+  'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Spark_Greatness_White.png?v=1775594430';
 
 function buildMagicLinkHtml(params: {greeting: string; magicLinkUrl: string}): string {
   return `<!doctype html>
