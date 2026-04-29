@@ -243,13 +243,81 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     const byState: Record<StateCode, number> = emptyByState();
     const orderCounts: Record<StateCode, number> = emptyByState();
 
+    // Debug bucket — captured only when ?debug=1. Lets us see, per raw
+    // warehouse name, how many orders + dollars contributed and what they
+    // look like (5-order sample). Built unconditionally so toggling debug
+    // doesn't change the hot path; serialized only when asked.
+    type DebugBucket = {
+      stateCode: string;
+      total: number;
+      count: number;
+      sample: Array<{
+        salesorder_number: string;
+        customer_name: string;
+        total: number;
+        status: string;
+        date: string;
+      }>;
+    };
+    const byWarehouse = new Map<string, DebugBucket>();
+    let droppedNoState = 0;
+    let droppedNoStateDollars = 0;
+
     for (const so of orders) {
       const rawLocation: string = so.location_name || so.warehouse_name || '';
       const code = resolveStateFromLocation(rawLocation);
-      if (!code) continue; // silently drops Head Office + any unmapped warehouse
       const total = Number(so.total || 0) || 0;
+      const whKey = rawLocation || '(blank)';
+      let b = byWarehouse.get(whKey);
+      if (!b) {
+        b = {stateCode: code || '', total: 0, count: 0, sample: []};
+        byWarehouse.set(whKey, b);
+      }
+      b.total += total;
+      b.count += 1;
+      if (b.sample.length < 5) {
+        b.sample.push({
+          salesorder_number: so.salesorder_number || so.reference_number || '',
+          customer_name: so.customer_name || '',
+          total,
+          status: so.status || '',
+          date: so.date || so.created_time || '',
+        });
+      }
+      if (!code) {
+        droppedNoState += 1;
+        droppedNoStateDollars += total;
+        continue; // silently drops Head Office + any unmapped warehouse
+      }
       byState[code] += total;
       orderCounts[code] += 1;
+    }
+
+    const url = new URL(request.url);
+    if (url.searchParams.get('debug') === '1') {
+      const warehouseBreakdown = Array.from(byWarehouse.entries())
+        .map(([name, b]) => ({
+          warehouse: name,
+          stateCode: b.stateCode,
+          total: Math.round(b.total * 100) / 100,
+          count: b.count,
+          avg: b.count ? Math.round((b.total / b.count) * 100) / 100 : 0,
+          sample: b.sample,
+        }))
+        .sort((a, b) => b.count - a.count);
+      return json({
+        ok: true,
+        debug: true,
+        monthLabel: label,
+        monthStart,
+        monthEnd,
+        totalOrdersScanned: orders.length,
+        droppedNoState,
+        droppedNoStateDollars: Math.round(droppedNoStateDollars * 100) / 100,
+        byState,
+        orderCounts,
+        warehouseBreakdown,
+      }, {headers: {'Cache-Control': 'no-store'}});
     }
 
     return json(
