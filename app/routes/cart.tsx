@@ -1,4 +1,4 @@
-import {json, type ActionFunctionArgs, type LoaderFunctionArgs, type MetaFunction} from '@shopify/remix-oxygen';
+import {json, redirect, type ActionFunctionArgs, type LoaderFunctionArgs, type MetaFunction} from '@shopify/remix-oxygen';
 import {useLoaderData, useFetcher} from '@remix-run/react';
 import {CartForm, Image, Money} from '@shopify/hydrogen';
 
@@ -29,6 +29,14 @@ export async function action({request, context}: ActionFunctionArgs) {
 
   const cartId = result.cart?.id;
   const headers = cartId ? cart.setCartId(cartId) : new Headers();
+
+  // After adding from a product page, redirect to /cart so the customer
+  // lands on the populated cart with explicit Checkout / Continue Shopping
+  // options. Update and Remove actions stay where they are (typically the
+  // /cart page itself) and let the route's loader revalidate in place.
+  if (action === CartForm.ACTIONS.LinesAdd) {
+    return redirect('/cart', {headers});
+  }
 
   return json(
     {cart: result.cart, errors: result.errors},
