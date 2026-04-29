@@ -2224,6 +2224,27 @@ button:focus-visible{ outline-offset:1px; }
 }
 /* (Pill `.hs-panel-pill.is-error` already defined above — reused as-is.) */
 
+/* Clickable affordance for any stat card or focus pill that opted into
+   click handling. The `[onclick]` selector also picks up legacy
+   `<div onclick>` cards (e.g. .stat-card-orders) that don't have
+   role="button" yet, fixing their previously-silent clickability. The
+   :not(.stat-card-missed) exclusion preserves that card's distinct red
+   hover treatment (defined just above) — its higher-priority red border
+   would otherwise be overridden by the generic white hover here. */
+.stat-card[onclick]:not(.stat-card-missed),
+.stat-card[role="button"]:not(.stat-card-missed),
+.hs-focus-pill[onclick],
+.hs-focus-pill[role="button"]{
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+.stat-card[onclick]:not(.stat-card-missed):hover,
+.stat-card[role="button"]:not(.stat-card-missed):hover,
+.hs-focus-pill[onclick]:hover,
+.hs-focus-pill[role="button"]:hover{
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
 /* ═══════════════════════════════════════════════════════════════
    CONTACT CARD — unified Leads / Accounts card system
    -----------------------------------------------------------
