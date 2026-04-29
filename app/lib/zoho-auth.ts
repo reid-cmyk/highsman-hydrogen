@@ -63,9 +63,20 @@ export async function getZohoAccessToken(env: ZohoEnv): Promise<string> {
 
   inFlight = (async () => {
     try {
-      const res = await fetch('https://accounts.zoho.com/oauth/v2/token', {
+      // 10s hard timeout. Without this, a stalled accounts.zoho.com (rare
+      // but happens after rate-limit cooldowns) would hang the whole
+      // request — every caller awaiting the in-flight singleton would
+      // wait indefinitely, because `inFlight = null` only runs in finally
+      // after the promise settles. AbortController gives Zoho a deadline
+      // and forces the singleton to clear so the NEXT caller can retry.
+      const ctrl = new AbortController();
+      const timeoutId = setTimeout(() => ctrl.abort(), 10_000);
+      let res: Response;
+      try {
+        res = await fetch('https://accounts.zoho.com/oauth/v2/token', {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        signal: ctrl.signal,
         body: new URLSearchParams({
           grant_type: 'refresh_token',
           client_id: env.ZOHO_CLIENT_ID!,
@@ -73,6 +84,14 @@ export async function getZohoAccessToken(env: ZohoEnv): Promise<string> {
           refresh_token: env.ZOHO_REFRESH_TOKEN!,
         }),
       });
+      } catch (err: any) {
+        if (err?.name === 'AbortError') {
+          throw new Error('Zoho token fetch timed out (>10s) — likely rate-limited or upstream slow');
+        }
+        throw err;
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (!res.ok) {
         const text = await res.text().catch(() => '');
