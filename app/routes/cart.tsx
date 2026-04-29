@@ -28,7 +28,7 @@ export async function action({request, context}: ActionFunctionArgs) {
   }
 
   const cartId = result.cart?.id;
-  const headers = cartId ? cart.setCartId(cartId) : cart.getHeaders();
+  const headers = cartId ? cart.setCartId(cartId) : new Headers();
 
   return json(
     {cart: result.cart, errors: result.errors},
@@ -38,12 +38,18 @@ export async function action({request, context}: ActionFunctionArgs) {
 
 export async function loader({context}: LoaderFunctionArgs) {
   const cart = await context.cart.get();
-  return json({cart}, {headers: cart.getHeaders()});
+  return json({cart});
 }
 
 export default function Cart() {
   const {cart} = useLoaderData<typeof loader>();
-  const lines = cart?.lines?.nodes ?? [];
+  // Hydrogen's default cart query fragment returns lines as a GraphQL
+  // connection (edges/node), not the newer `nodes` shortcut. Support both
+  // shapes so this works regardless of which fragment is configured.
+  const lines =
+    cart?.lines?.nodes ??
+    cart?.lines?.edges?.map((edge: any) => edge.node) ??
+    [];
   const isEmpty = lines.length === 0;
 
   if (isEmpty) {
