@@ -102,12 +102,16 @@ export const links: LinksFunction = () => [
 ];
 
 export async function loader({context, request}: LoaderFunctionArgs) {
-  const {storefront, cart} = context;
+  const {cart} = context;
   const url = new URL(request.url);
   const noIndex = shouldNoIndex(url.pathname);
   const noKlaviyo = shouldSuppressKlaviyo(url.pathname);
+  // Fetch cart server-side and return a slim shape so the Header can
+  // render the cart count badge with the correct totalQuantity on first
+  // paint without shipping the full cart payload to every page.
+  const cartData = await cart.get();
   return {
-    cart: cart.get(),
+    cart: cartData ? {totalQuantity: cartData.totalQuantity ?? 0} : null,
     publicStoreDomain: context.env.PUBLIC_STORE_DOMAIN,
     noIndex,
     noKlaviyo,

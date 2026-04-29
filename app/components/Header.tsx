@@ -1,4 +1,4 @@
-import {Link, useLocation} from '@remix-run/react';
+import {Link, useLocation, useRouteLoaderData} from '@remix-run/react';
 import {useState} from 'react';
 import {IMAGES} from '~/lib/images';
 
@@ -10,9 +10,15 @@ const NAV_LINKS = [
   {label: 'OUR STRAINS', href: '/our-strains'},
 ];
 
+type RootCartData = {cart: {totalQuantity: number} | null};
+
 export function Header() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // Read the cart total from root.tsx's loader so the cart icon can
+  // show a count badge consistently across every page.
+  const rootData = useRouteLoaderData<RootCartData>('root');
+  const cartCount = rootData?.cart?.totalQuantity ?? 0;
 
   return (
     <header className="flex justify-between items-center w-full px-4 py-1 lg:py-2 bg-[#131313] fixed top-0 z-50">
@@ -52,11 +58,23 @@ export function Header() {
         <Link
           to="/cart"
           className="hover:bg-surface-bright transition-all duration-200 p-2 relative"
-          aria-label="Cart"
+          aria-label={
+            cartCount > 0
+              ? `Cart, ${cartCount} ${cartCount === 1 ? 'item' : 'items'}`
+              : 'Cart'
+          }
         >
           <span className="material-symbols-outlined text-white">
             shopping_cart
           </span>
+          {cartCount > 0 && (
+            <span
+              className="absolute top-0 right-0 bg-white text-black text-xs font-headline font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 leading-none"
+              aria-hidden="true"
+            >
+              {cartCount > 99 ? '99+' : cartCount}
+            </span>
+          )}
         </Link>
 
         {/* Mobile/Zoom Menu Toggle — visible below 1024px */}
