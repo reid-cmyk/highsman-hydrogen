@@ -373,7 +373,7 @@ const SECTIONS: Section[] = [
     title: 'Launch · Campaigns',
     accent: BRAND.red,
     blurb:
-      'Active consumer-facing promotions. Send these links to drive shoppers into participating dispensaries during the launch window.',
+      'Active launch pages — consumer-facing promotion to drive shoppers in, and the B2B partner terms reps share with dispensary buyers and owners.',
     pages: [
       {
         path: '/njlaunch',
@@ -382,6 +382,14 @@ const SECTIONS: Section[] = [
           'May 14 – June 13 2026 consumer landing page. 20% off Ground Game 7G and Triple Threat 1.2G triple-infused pre-rolls at participating NJ dispensaries. Klaviyo capture, store locator, share-ready OG card.',
         audience: 'NJ Consumers',
         access: 'public',
+      },
+      {
+        path: '/njwholesalepromo',
+        name: 'NJ Wholesale Promo · Partner Terms',
+        description:
+          'B2B partner landing page for the same launch window. Front-load math by SKU (Triple Threat full absorption, Ground Game 10/10 split), order placement window, qualifying conditions, May 16 menu-proof deadline, FAQ, and non-execution policy.',
+        audience: 'NJ Dispensary Buyers · Reps share externally',
+        access: 'b2b',
       },
     ],
   },
