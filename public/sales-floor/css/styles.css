@@ -4567,3 +4567,125 @@ details[open] > summary .brief-history-chev{
   .hs-training-main   { grid-area: main; }
   .hs-training-when   { grid-area: when; }
 }
+
+
+/* New Customer card — region/Serena-day badge + inline buyer-add form ------ */
+.hs-newcust-region {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Barlow Semi Condensed', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  margin-top: 6px;
+  line-height: 1;
+}
+.hs-newcust-region i { font-size: 11px; }
+.hs-newcust-region.is-in-region {
+  background: rgba(34, 197, 94, 0.10);
+  color: #4ADE80;
+  border: 1px solid rgba(74, 222, 128, 0.22);
+}
+.hs-newcust-region.is-outlier {
+  background: rgba(250, 204, 21, 0.10);
+  color: #FACC15;
+  border: 1px solid rgba(250, 204, 21, 0.25);
+}
+.hs-newcust-region.is-out-of-area {
+  background: rgba(148, 163, 184, 0.08);
+  color: #94A3B8;
+  border: 1px solid rgba(148, 163, 184, 0.20);
+}
+
+.hs-newcust-add-contact {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+}
+.hs-newcust-add-contact-eyebrow {
+  font-family: 'Teko', sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: #A9ACAF;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hs-newcust-add-contact-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.2fr) minmax(110px, 1fr) minmax(140px, 1.4fr) minmax(110px, 1fr) auto;
+  gap: 6px;
+  align-items: stretch;
+}
+.hs-newcust-input {
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  color: #FFF;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: 'Barlow Semi Condensed', sans-serif;
+  outline: none;
+  min-height: 36px;
+}
+.hs-newcust-input:focus {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+.hs-newcust-input::placeholder {
+  color: rgba(169, 172, 175, 0.55);
+}
+.hs-newcust-select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, #A9ACAF 50%), linear-gradient(135deg, #A9ACAF 50%, transparent 50%);
+  background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 26px;
+}
+.hs-newcust-add-btn {
+  background: #FFF;
+  color: #000;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-family: 'Teko', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  min-height: 36px;
+}
+.hs-newcust-add-btn:hover {
+  background: #E8E8E8;
+}
+.hs-newcust-add-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.hs-newcust-add-contact-hint {
+  margin-top: 6px;
+  font-size: 10px;
+  color: #6E7174;
+  letter-spacing: 0.06em;
+}
+@media (max-width: 768px) {
+  .hs-newcust-add-contact-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .hs-newcust-add-contact-row .hs-newcust-add-btn {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+}

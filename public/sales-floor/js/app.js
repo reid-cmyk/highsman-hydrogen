@@ -1137,16 +1137,152 @@ function renderNewCustomers() {
 // CTA buttons as a hover target). Shows "{Name} · {Role}" when we've got a
 // buyer, otherwise a muted "No buyer contact on file" line. Kept as a
 // helper so the Zoho-only and LeafLink card renderers stay in sync.
-function renderNewCustBuyerLine(buyer) {
-  if (!buyer) {
+function renderNewCustBuyerLine(buyer, accountId) {
+  if (buyer) {
+    const name = escapeHtml(buyer._fullName || 'Unnamed Contact');
+    const roleHtml = buyer._jobRole
+      ? ` <span class="hs-newcust-buyer-role">\u00B7 ${escapeHtml(buyer._jobRole)}</span>`
+      : '';
+    return `<div class="hs-newcust-buyer"><i class="fa-solid fa-user"></i> ${name}${roleHtml}</div>`;
+  }
+  // No buyer on file. Reid 2026-04-29: instead of a dead 'No buyer contact'
+  // line, render an inline form so Sky can capture the buyer the moment
+  // she's on the phone with the dispensary. Submit posts to
+  // /api/sales-floor-add-contact, which writes a Zoho Contact linked to
+  // the Account; on success the card re-renders with the new buyer in
+  // place (no full sync required — addNewCustContact updates accounts in
+  // memory then calls renderAll-ish helpers).
+  if (!accountId) {
+    // No Zoho account match yet — can't attach a Contact without an Account
+    // ID. Surface the same muted line as before.
     return `<div class="hs-newcust-buyer is-empty"><i class="fa-solid fa-user-slash"></i> No buyer contact on file</div>`;
   }
-  const name = escapeHtml(buyer._fullName || 'Unnamed Contact');
-  const roleHtml = buyer._jobRole
-    ? ` <span class="hs-newcust-buyer-role">· ${escapeHtml(buyer._jobRole)}</span>`
-    : '';
-  return `<div class="hs-newcust-buyer"><i class="fa-solid fa-user"></i> ${name}${roleHtml}</div>`;
+  const safeId = escapeAttr(accountId);
+  return `
+    <div class="hs-newcust-add-contact" data-add-contact-acct="${safeId}">
+      <div class="hs-newcust-add-contact-eyebrow">
+        <i class="fa-solid fa-user-plus"></i> Add buyer contact
+      </div>
+      <div class="hs-newcust-add-contact-row">
+        <input type="text"  class="hs-newcust-input" data-add-field="name"  placeholder="Buyer name" autocomplete="off" />
+        <input type="tel"   class="hs-newcust-input" data-add-field="phone" placeholder="Phone" autocomplete="off" />
+        <input type="email" class="hs-newcust-input" data-add-field="email" placeholder="Email" autocomplete="off" />
+        <select class="hs-newcust-input hs-newcust-select" data-add-field="role">
+          <option value="buyer">Buyer / Manager</option>
+          <option value="owner">Owner / Founder</option>
+          <option value="purchasing">Purchasing</option>
+          <option value="budtender">Budtender / Staff</option>
+          <option value="other">Other</option>
+        </select>
+        <button class="hs-newcust-add-btn" onclick="event.stopPropagation(); addNewCustContact('${safeId}', this)">
+          <i class="fa-solid fa-plus"></i> Add
+        </button>
+      </div>
+      <div class="hs-newcust-add-contact-hint">Saves to Zoho. Email or phone required.</div>
+    </div>`;
 }
+
+// Render the Vibes region + Serena-day badge for a New Customer card. Reid
+// 2026-04-29: 'put the Details of which Region they fall into for onboarding
+// so we know what day of the week sernea will be there, or if they are out
+// of area'. NJ in-region → green badge with day name; NJ outliers (Cape
+// May / LBI / Shore) → yellow 'quarterly drop-in' badge; non-NJ → grey 'Out
+// of Vibes coverage' badge. Empty when we don't know yet (server hasn't
+// hydrated the row).
+function renderNewCustRegionBadge(c) {
+  // Server didn't hydrate region (e.g. Zoho match failed). Skip the badge
+  // entirely — better silent than misleading.
+  if (!c) return '';
+  const stateUp = String(c.state || '').toUpperCase();
+  const isNJ = stateUp === 'NJ' || stateUp === 'NEW JERSEY';
+
+  if (!isNJ) {
+    if (!c.state) return '';
+    return `<div class="hs-newcust-region is-out-of-area" title="Vibes coverage is NJ-only in v1"><i class="fa-solid fa-map-pin"></i> Out of Vibes coverage (${escapeHtml(c.state)})</div>`;
+  }
+  if (c.outlier) {
+    return `<div class="hs-newcust-region is-outlier" title="Shore / LBI — quarterly drop-in only, arrange direct with Serena"><i class="fa-solid fa-umbrella-beach"></i> Outlier \u2014 quarterly drop-in</div>`;
+  }
+  if (!c.region || !c.serenaDayLabel) return '';
+  const lbl = escapeHtml(c.regionLabel || 'NJ');
+  const day = escapeHtml(c.serenaDayLabel);
+  return `<div class="hs-newcust-region is-in-region" title="Serena's anchor day for this region"><i class="fa-solid fa-calendar-day"></i> ${lbl} \u00B7 ${day} route</div>`;
+}
+
+// Optimistically add a contact to the Sales Floor view AND persist to Zoho.
+// Called from the inline 'Add buyer contact' form on cards that don't have
+// a buyer yet. On success: writes acct.buyer locally, replaces the form
+// with the standard buyer line via renderNewCustomers().
+async function addNewCustContact(accountId, btn) {
+  const wrap = btn?.closest('.hs-newcust-add-contact');
+  if (!wrap) return;
+  const get = (field) => wrap.querySelector(`[data-add-field="${field}"]`)?.value?.trim() || '';
+  const name  = get('name');
+  const email = get('email');
+  const phone = get('phone');
+  const role  = get('role');
+
+  if (!name) {
+    toast('Buyer name is required', 'error');
+    wrap.querySelector('[data-add-field="name"]').focus();
+    return;
+  }
+  if (!email && !phone) {
+    toast('Email or phone is required', 'error');
+    return;
+  }
+
+  // Lock the form during the round-trip — prevents double-submit if Sky
+  // smashes the button while Zoho is creating the record.
+  const inputs = wrap.querySelectorAll('input, select, button');
+  inputs.forEach((el) => (el.disabled = true));
+  const originalBtn = btn.innerHTML;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving';
+
+  try {
+    const res = await fetch('/api/sales-floor-add-contact', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      credentials: 'same-origin',
+      body: JSON.stringify({accountId, name, email, phone, role}),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body.ok) {
+      throw new Error(body?.error || `HTTP ${res.status}`);
+    }
+
+    // Optimistically wire the new buyer onto the matched account so the
+    // card flips immediately. The next full sync will pick it up from
+    // Zoho authoritatively.
+    const acct = accounts.find((a) => a && a.id === accountId);
+    if (acct) {
+      const c = body.contact || {};
+      acct.buyer = {
+        id: c.id,
+        _fullName: c._fullName || name,
+        Full_Name: c._fullName || name,
+        First_Name: c.First_Name || '',
+        Last_Name: c.Last_Name || name,
+        Email: c.Email || email,
+        Phone: c.Phone || phone,
+        Mobile: c.Mobile || phone,
+        Job_Role: c.Job_Role || c._jobRole || role,
+        _jobRole: c._jobRole || c.Job_Role || role,
+      };
+      // Push into the contacts array too (kept in sync with Zoho on next sync).
+      if (!Array.isArray(acct.contacts)) acct.contacts = [];
+      acct.contacts.push(acct.buyer);
+    }
+    toast(`Buyer added to ${acct?.Account_Name || 'account'}`, 'success');
+    renderNewCustomers();
+    if (typeof renderAccounts === 'function') renderAccounts();
+  } catch (err) {
+    inputs.forEach((el) => (el.disabled = false));
+    btn.innerHTML = originalBtn;
+    toast(`Add contact failed: ${err?.message || 'unknown error'}`, 'error');
+  }
+}
+window.addNewCustContact = addNewCustContact;
 
 // Render a simpler "first order from Zoho" card for NY/RI/MO. No LeafLink
 // ship-date / order-status context and no Vibes-onboard button (Vibes is NJ
@@ -1275,7 +1411,8 @@ function renderZohoNewCustCard(c, idx) {
         </div>
       </div>
       ${orderLine}
-      ${renderNewCustBuyerLine(buyer)}
+      ${renderNewCustRegionBadge(c)}
+      ${renderNewCustBuyerLine(buyer, c.zohoAccountId)}
       ${body}
       ${actionRow}
     </div>`;
@@ -1428,7 +1565,8 @@ function renderNewCustCard(c, idx) {
         </div>
       </div>
       ${orderLine}
-      ${renderNewCustBuyerLine(buyer)}
+      ${renderNewCustRegionBadge(c)}
+      ${renderNewCustBuyerLine(buyer, c.zohoAccountId)}
       ${body}
       ${actionRow}
     </div>`;

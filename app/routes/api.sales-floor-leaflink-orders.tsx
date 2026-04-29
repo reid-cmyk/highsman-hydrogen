@@ -2,6 +2,7 @@ import type {LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getRepFromRequest} from '../lib/sales-floor-reps';
 import {getZohoAccessToken} from '~/lib/zoho-auth';
+import {njRegion, regionLabel, predictedDayForRegion} from '~/lib/nj-regions';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sales Floor — LeafLink Orders Backbone
@@ -310,6 +311,8 @@ type ZohoAccountLite = {
   name: string;
   state: string | null;
   phone: string | null;
+  city: string | null;
+  zip: string | null;
 };
 
 /** Find a Zoho Account by exact name. Cached per request inside the loader. */
@@ -321,7 +324,7 @@ async function findZohoAccountByName(
     const url =
       `https://www.zohoapis.com/crm/v7/Accounts/search` +
       `?criteria=(Account_Name:equals:${encodeURIComponent(name)})` +
-      `&fields=Account_Name,Billing_State,Account_State,Phone`;
+      `&fields=Account_Name,Billing_State,Account_State,Phone,Billing_City,Billing_Code`;
     const res = await fetchT(url, {
       headers: {Authorization: `Zoho-oauthtoken ${token}`},
     });
@@ -334,6 +337,8 @@ async function findZohoAccountByName(
       name: a.Account_Name || name,
       state: a.Billing_State || a.Account_State || null,
       phone: a.Phone || null,
+      city: a.Billing_City || null,
+      zip: a.Billing_Code || null,
     };
   } catch {
     return null;
@@ -499,6 +504,15 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     checkInDueDate?: string | null;
     cardState: 'pending' | 'ready' | 'vibes_booked' | 'checkin_due' | 'done';
     is420Cohort: boolean;
+    // ── Vibes routing context (Reid 2026-04-29). Lets the New Customer
+    // card show 'South NJ · Thursday route' or 'Outlier — quarterly drop-in'
+    // so the rep knows which day Serena will land. NJ-only — non-NJ
+    // accounts have all four fields null.
+    region?: 'north' | 'central' | 'south' | null;
+    regionLabel?: string | null;
+    serenaDayLabel?: string | null;
+    serenaDayIso?: string | null;
+    outlier?: boolean;
   };
 
   const reorderDue: ReorderDueRow[] = [];
@@ -602,6 +616,30 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         ]);
         row.onboardBookedDealId = dealId;
         row.checkInDoneNoteId = noteId;
+
+        // Vibes region + Serena day. Only meaningful for NJ — other states
+        // get null fields and the client renders 'Out of Vibes coverage'.
+        const stateUp = String(acct.state || '').toUpperCase();
+        if (stateUp === 'NJ' || stateUp === 'NEW JERSEY') {
+          const r = njRegion(acct.city, acct.zip);
+          row.region = r.region;
+          row.regionLabel = regionLabel(r.region);
+          row.outlier = r.infrequentDropIn;
+          if (!r.infrequentDropIn) {
+            const day = predictedDayForRegion(r.region);
+            row.serenaDayLabel = day.label;
+            row.serenaDayIso = day.iso;
+          } else {
+            row.serenaDayLabel = null;
+            row.serenaDayIso = null;
+          }
+        } else {
+          row.region = null;
+          row.regionLabel = null;
+          row.serenaDayLabel = null;
+          row.serenaDayIso = null;
+          row.outlier = false;
+        }
       } else {
         row.vibesEligible = false;
       }
