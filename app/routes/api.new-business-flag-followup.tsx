@@ -270,7 +270,21 @@ async function fetchBestContactForAccount(
     const rows: any[] = data?.data || [];
     if (!rows.length) return null;
 
+    // Ranking. INTERNAL contacts (Highsman fulfillment / sales mailboxes
+    // synced into the customer's Account record so order confirmations
+    // copy them) must NEVER win this — those are us, not the dispensary.
+    // Pete needs a real buyer, not 'NJ Fulfillment <NJsales@highsman.com>'.
+    const looksInternal = (c: any): boolean => {
+      const email = String(c.Email || '').toLowerCase();
+      const name = String(c.Full_Name || '').toLowerCase();
+      if (email.endsWith('@highsman.com')) return true;
+      if (/(fulfillment|fulfilment|sales\s*ops|customer\s*service|support|noreply|no-reply)/.test(name)) return true;
+      return false;
+    };
     const score = (c: any): number => {
+      // Hard floor for internal contacts: they're tagged but only fall back
+      // to them if absolutely nothing external is on file.
+      if (looksInternal(c)) return -100;
       const role = String(c.Job_Role || c.Title || '').toLowerCase();
       if (role.includes('buyer')) return 100;
       if (role.includes('manager')) return 80;
@@ -280,7 +294,11 @@ async function fetchBestContactForAccount(
       return hasContact ? 10 : 0;
     };
     const sorted = [...rows].sort((a, b) => score(b) - score(a));
+    // If the only candidate left is internal (negative score), bail — the
+    // email body just omits the buyer line rather than send Pete to ping
+    // ourselves. Better empty than misleading.
     const c = sorted[0];
+    if (c && score(c) < 0) return null;
     if (!c) return null;
     const name = String(c.Full_Name || '').trim();
     const email = String(c.Email || '').trim();
