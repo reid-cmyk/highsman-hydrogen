@@ -39,7 +39,7 @@ const BRAND = {
 } as const;
 
 const HEADER_LOGO_URL =
-  'https://cdn.shopify.com/s/files/1/0683/5469/4729/files/Highsman-Logo-White.png';
+  'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Logo_White.png?v=1775594430';
 
 // ── Loader: skip the page entirely if already authed ────────────────────────
 
