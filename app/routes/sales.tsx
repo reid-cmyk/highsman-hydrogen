@@ -97,42 +97,14 @@ function money(n: number): string {
 }
 
 // ── Zoho Inventory API ─────────────────────────────────────────────────────
-// Module-scoped access-token cache. Zoho access tokens live ~60 min; we cache
-// for 55 min to stay well under expiry. Without this cache, the /oauth/v2/token
-// endpoint rate-limits with 400 "too many requests continuously" — each page
-// load or period switch would otherwise force a fresh refresh round-trip.
-let cachedAccessToken: {token: string; expiresAt: number} | null = null;
-const TOKEN_TTL_MS = 55 * 60 * 1000;
-
+// Token fetched via shared cached helper (`app/lib/zoho-inventory-auth.ts`).
+// The previous inline cache here was one of three across the codebase that
+// each refreshed independently, fanning out concurrent /oauth/v2/token POSTs
+// on cold workers and tripping Zoho's 'too many requests' rate limit.
+// Local alias preserved so existing call sites in this file are unchanged.
+import {getInventoryAccessToken as _getInvToken} from '../lib/zoho-inventory-auth';
 async function getZohoAccessToken(env: any): Promise<string> {
-  const now = Date.now();
-  if (cachedAccessToken && cachedAccessToken.expiresAt > now + 30_000) {
-    return cachedAccessToken.token;
-  }
-
-  // Prefer Inventory-scoped credentials; fall back to general Zoho creds
-  const clientId = env.ZOHO_INVENTORY_CLIENT_ID || env.ZOHO_CLIENT_ID;
-  const clientSecret = env.ZOHO_INVENTORY_CLIENT_SECRET || env.ZOHO_CLIENT_SECRET;
-  const refreshToken = env.ZOHO_INVENTORY_REFRESH_TOKEN || env.ZOHO_REFRESH_TOKEN;
-  const body = new URLSearchParams({
-    grant_type: 'refresh_token',
-    client_id: clientId,
-    client_secret: clientSecret,
-    refresh_token: refreshToken,
-  });
-  const res = await fetch('https://accounts.zoho.com/oauth/v2/token', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: body.toString(),
-  });
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '');
-    throw new Error(`Zoho token refresh failed: ${res.status} — ${txt.slice(0, 200)}`);
-  }
-  const data: any = await res.json();
-  if (!data.access_token) throw new Error('Zoho token refresh returned no access_token');
-  cachedAccessToken = {token: data.access_token, expiresAt: now + TOKEN_TTL_MS};
-  return data.access_token;
+  return _getInvToken(env);
 }
 
 // ── Warehouse/location → state mapping ─────────────────────────────────────

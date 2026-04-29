@@ -21,38 +21,14 @@ import {getRepFromRequest} from '../lib/sales-floor-reps';
 
 const DEFAULT_INVENTORY_ORG_ID = '882534504';
 
-let cachedToken: {token: string; expiresAt: number} | null = null;
-const TOKEN_TTL_MS = 55 * 60 * 1000;
-
+// Token via shared cached helper — keeps every Inventory route on a single
+// in-memory cache so cold workers don't fan out concurrent /oauth/v2/token
+// POSTs and trip Zoho's rate limit. (2026-04-28 incident.)
+import {getInventoryAccessToken as _getInvToken} from '../lib/zoho-inventory-auth';
 async function getInventoryToken(env: any): Promise<string> {
-  const now = Date.now();
-  if (cachedToken && cachedToken.expiresAt > now + 30_000) return cachedToken.token;
-  const clientId = env.ZOHO_INVENTORY_CLIENT_ID || env.ZOHO_CLIENT_ID;
-  const clientSecret = env.ZOHO_INVENTORY_CLIENT_SECRET || env.ZOHO_CLIENT_SECRET;
-  const refreshToken = env.ZOHO_INVENTORY_REFRESH_TOKEN || env.ZOHO_REFRESH_TOKEN;
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error('Zoho Inventory credentials missing');
-  }
-  const body = new URLSearchParams({
-    grant_type: 'refresh_token',
-    client_id: clientId,
-    client_secret: clientSecret,
-    refresh_token: refreshToken,
-  });
-  const res = await fetch('https://accounts.zoho.com/oauth/v2/token', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: body.toString(),
-  });
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '');
-    throw new Error(`Zoho Inventory token refresh failed: ${res.status} — ${txt.slice(0, 200)}`);
-  }
-  const data: any = await res.json();
-  if (!data.access_token) throw new Error('Inventory token refresh: no access_token');
-  cachedToken = {token: data.access_token, expiresAt: now + TOKEN_TTL_MS};
-  return data.access_token;
+  return _getInvToken(env);
 }
+
 
 function ymd(d: Date): string {
   return d.toISOString().slice(0, 10);

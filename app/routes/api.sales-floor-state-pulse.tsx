@@ -1,6 +1,7 @@
 import type {LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getRepFromRequest} from '../lib/sales-floor-reps';
+import {getInventoryAccessToken} from '../lib/zoho-inventory-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // /api/sales-floor-state-pulse  (GET, rep-auth)
@@ -86,32 +87,11 @@ function resolveStateFromLocation(locationName: string): StateCode | '' {
 
 const DEFAULT_ZOHO_INVENTORY_ORG_ID = '882534504';
 
-// Inventory has its own OAuth credentials (separate Self Client) — must NOT
-// share the CRM token cache. We still respect any general fallback envs
-// (ZOHO_CLIENT_ID etc.) in case the deployment hasn't split them yet, which
-// matches what /sales does today.
-async function getInventoryAccessToken(env: any): Promise<string> {
-  const clientId = env.ZOHO_INVENTORY_CLIENT_ID || env.ZOHO_CLIENT_ID;
-  const clientSecret = env.ZOHO_INVENTORY_CLIENT_SECRET || env.ZOHO_CLIENT_SECRET;
-  const refreshToken = env.ZOHO_INVENTORY_REFRESH_TOKEN || env.ZOHO_REFRESH_TOKEN;
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error('inventory-oauth-not-configured');
-  }
-  const url =
-    `https://accounts.zoho.com/oauth/v2/token` +
-    `?refresh_token=${encodeURIComponent(refreshToken)}` +
-    `&client_id=${encodeURIComponent(clientId)}` +
-    `&client_secret=${encodeURIComponent(clientSecret)}` +
-    `&grant_type=refresh_token`;
-  const res = await fetch(url, {method: 'POST'});
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '');
-    throw new Error(`inventory-oauth-${res.status}: ${txt.slice(0, 160)}`);
-  }
-  const data: any = await res.json();
-  if (!data.access_token) throw new Error('inventory-oauth-no-token');
-  return data.access_token as string;
-}
+// Inventory uses a separate Self Client. Token fetched via the shared cached
+// helper at app/lib/zoho-inventory-auth.ts so cold workers don't fan out
+// concurrent /oauth/v2/token POSTs and trip Zoho's 'too many requests'
+// rate limit (which is what we hit on 2026-04-28 — three Inventory routes
+// each owned an inline cache, all refreshed together, blocked the org).
 
 function ymd(d: Date): string {
   const yy = d.getFullYear();
