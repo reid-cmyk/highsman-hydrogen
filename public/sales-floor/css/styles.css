@@ -4567,3 +4567,284 @@ details[open] > summary .brief-history-chev{
   .hs-training-main   { grid-area: main; }
   .hs-training-when   { grid-area: when; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   CALL QUEUE — dashboard hot-leads list
+   -----------------------------------------------------------------
+   Backs renderDashboard() in app.js. The .dash-lead-row / .top-of-queue /
+   .dash-lead-name / .dash-lead-company / .lead-action-btn class names
+   were referenced in markup since pre-launch but never had styles, so the
+   list rendered as a flat un-flexed stack — action buttons dropped under
+   the lead info instead of sitting beside it. The styles below align the
+   card with the rest of the dashboard rhythm: an emphasized "top of queue"
+   row with primary CTAs and gold accent, slim subsequent rows with compact
+   action chips.
+═══════════════════════════════════════════════════════════════ */
+.dash-lead-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  padding:14px 18px;
+  cursor:pointer;
+  transition:background-color 120ms ease;
+}
+.dash-lead-row:hover{
+  background:rgba(255,255,255,0.025);
+}
+.dash-lead-row.top-of-queue{
+  padding:18px 18px 18px 22px;
+  border-left:3px solid var(--gold);
+  background:linear-gradient(180deg, rgba(245,228,0,0.05) 0%, rgba(0,0,0,0) 70%);
+}
+.dash-lead-row.top-of-queue:hover{
+  background:linear-gradient(180deg, rgba(245,228,0,0.08) 0%, rgba(0,0,0,0.02) 70%);
+}
+.dash-lead-name{
+  font-family:var(--barlow);
+  font-size:15px;
+  font-weight:600;
+  color:var(--white);
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px;
+  letter-spacing:0.01em;
+}
+.dash-lead-row.top-of-queue .dash-lead-name{
+  font-size:16px;
+}
+.dash-lead-company{
+  font-family:var(--barlow);
+  font-size:12.5px;
+  color:var(--gray-dim);
+  margin-top:3px;
+  letter-spacing:0.02em;
+}
+
+/* Compact action button used by non-top rows. Adapts to icon-only or
+   icon+text by allowing min-width:32px to size to content when text exists. */
+.lead-action-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  height:32px;
+  min-width:32px;
+  padding:0 10px;
+  border-radius:var(--r-sm);
+  background:var(--chip);
+  color:var(--white);
+  border:1px solid var(--line);
+  font-family:var(--barlow);
+  font-size:12px;
+  letter-spacing:0.04em;
+  cursor:pointer;
+  text-decoration:none;
+  transition:background-color 120ms ease, border-color 120ms ease;
+}
+.lead-action-btn:hover{
+  background:var(--chip-strong);
+  border-color:var(--line-strong);
+}
+
+@media (max-width: 640px){
+  .dash-lead-row{
+    flex-direction:column;
+    align-items:stretch;
+    gap:10px;
+  }
+  .dash-lead-row > div:last-child{
+    justify-content:flex-end;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ALERTS PANEL — At a Glance
+   -----------------------------------------------------------------
+   Backs alerts.js renderCard() (Account Loss / Out of Stock / Reorder
+   Due). Same situation as the call queue: full markup shipped without
+   any CSS, so the panel rendered as an unstyled wall of stacked text.
+   These styles communicate severity via a tinted left border, severity-
+   colored type badge, structured 2-col detail grid, and an action row
+   with severity-colored primary CTA.
+═══════════════════════════════════════════════════════════════ */
+
+/* Header counts (e.g. "1 Critical · 2 OOS · 2 Reorder") — sit in
+   #alert-header-counts inside the card header. */
+.alert-count-badge{
+  display:inline-flex;
+  align-items:center;
+  font-family:var(--teko);
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:0.10em;
+  text-transform:uppercase;
+  padding:3px 8px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:var(--chip);
+  color:var(--white);
+}
+.alert-count-badge + .alert-count-badge{ margin-left:5px; }
+.alert-count-badge--critical{ color:#FFB4AE; border-color:rgba(255,59,48,0.45); background:rgba(255,59,48,0.12); }
+.alert-count-badge--oos     { color:#FFC58A; border-color:rgba(255,138,0,0.45); background:rgba(255,138,0,0.12); }
+.alert-count-badge--reorder { color:var(--gold); border-color:rgba(245,228,0,0.42); background:rgba(245,228,0,0.10); }
+
+/* Individual alert cards in #alert-list (scroll container). */
+.alert-card{
+  position:relative;
+  padding:14px 16px 16px;
+  border-bottom:1px solid var(--line);
+  border-left:3px solid var(--line-strong);
+  background:transparent;
+  transition:background-color 120ms ease;
+}
+.alert-card:hover{ background:rgba(255,255,255,0.015); }
+.alert-card:last-child{ border-bottom:none; }
+.alert-card--critical{
+  border-left-color:var(--red);
+  background:linear-gradient(180deg, rgba(255,59,48,0.06) 0%, rgba(0,0,0,0) 60%);
+}
+.alert-card--oos{ border-left-color:var(--orange); }
+.alert-card--reorder{ border-left-color:var(--gold); }
+
+/* Card top row: severity badge + dismiss button */
+.alert-card-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:8px;
+}
+.alert-type-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  font-family:var(--teko);
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:0.12em;
+  text-transform:uppercase;
+  padding:3px 9px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:var(--chip);
+  color:var(--white);
+}
+.alert-type-badge--critical{ color:#FFB4AE; border-color:rgba(255,59,48,0.45); background:rgba(255,59,48,0.12); }
+.alert-type-badge--oos     { color:#FFC58A; border-color:rgba(255,138,0,0.45); background:rgba(255,138,0,0.12); }
+.alert-type-badge--reorder { color:var(--gold); border-color:rgba(245,228,0,0.42); background:rgba(245,228,0,0.10); }
+
+.alert-dismiss-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:24px;
+  height:24px;
+  border-radius:6px;
+  background:transparent;
+  color:var(--gray-dim);
+  font-size:14px;
+  cursor:pointer;
+  transition:background-color 120ms ease, color 120ms ease;
+}
+.alert-dismiss-btn:hover{
+  background:var(--chip);
+  color:var(--white);
+}
+
+/* Account name — primary anchor of each card */
+.alert-account-name{
+  font-family:var(--barlow);
+  font-size:15px;
+  font-weight:600;
+  color:var(--white);
+  letter-spacing:0.01em;
+  margin-bottom:10px;
+}
+
+/* Detail grid — label/value pairs in a 2-column rhythm */
+.alert-details{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:10px 14px;
+  margin-bottom:12px;
+}
+.alert-detail-pair{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:0;
+}
+.alert-detail-label{
+  font-family:var(--barlow);
+  font-size:10px;
+  font-weight:500;
+  letter-spacing:0.10em;
+  text-transform:uppercase;
+  color:var(--gray-dim);
+}
+.alert-detail-value{
+  font-family:var(--barlow);
+  font-size:13px;
+  font-weight:500;
+  color:var(--white);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.alert-detail-unit{
+  font-size:11px;
+  font-weight:400;
+  color:var(--gray-dim);
+  margin-left:2px;
+}
+.alert-value--critical{ color:#FF6B66; }
+.alert-value--oos     { color:#FFB066; }
+.alert-value--reorder { color:var(--gold); }
+
+/* Action row */
+.alert-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.alert-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:7px 11px;
+  border-radius:var(--r-sm);
+  font-family:var(--teko);
+  font-size:13px;
+  font-weight:600;
+  letter-spacing:0.06em;
+  text-transform:uppercase;
+  border:1px solid var(--line);
+  background:var(--chip);
+  color:var(--white);
+  cursor:pointer;
+  transition:background-color 120ms ease, border-color 120ms ease, transform 80ms ease;
+}
+.alert-btn:hover{ background:var(--chip-strong); border-color:var(--line-strong); }
+.alert-btn:active{ transform:scale(0.98); }
+.alert-btn--critical{ background:var(--red); color:var(--white); border-color:transparent; }
+.alert-btn--critical:hover{ background:#E62E24; border-color:transparent; }
+.alert-btn--oos{ background:var(--orange); color:var(--bg); border-color:transparent; }
+.alert-btn--oos:hover{ background:#E67A00; border-color:transparent; }
+.alert-btn--reorder{ background:var(--gold); color:var(--bg); border-color:transparent; }
+.alert-btn--reorder:hover{ background:var(--gold-dark); border-color:transparent; }
+.alert-btn--outline{
+  background:transparent;
+  color:var(--white);
+  border-color:var(--line-strong);
+}
+.alert-btn--outline:hover{ background:var(--chip); }
+
+/* Mobile: collapse the 2-col details grid + tighten the action row */
+@media (max-width: 640px){
+  .alert-details{ grid-template-columns:1fr; gap:8px 0; }
+  .alert-detail-value{ white-space:normal; }
+  .alert-btn{ font-size:12px; padding:6px 10px; }
+}

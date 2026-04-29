@@ -563,7 +563,7 @@ function renderDashboard() {
           <div style="flex:1; min-width:0;">
             <div class="dash-lead-name">
               ${l._fullName || '—'}
-              ${isTop ? '<span class="hs-reason-chip" style="margin-left:10px; color:#fff; border-color:rgba(255,255,255,0.4);">Top of Queue</span>' : ''}
+              ${isTop ? '<span class="hs-reason-chip" style="margin-left:10px;">Top of Queue</span>' : ''}
             </div>
             <div class="dash-lead-company">${l.Company || '—'}${phone ? ` &middot; <a href="tel:${phone}" onclick="event.stopPropagation();" class="hs-tel-link">${phone}</a>` : ''}</div>
             ${isTop ? `<div class="dash-lead-company" style="margin-top:6px; opacity:0.7;">${reason}</div>` : ''}
