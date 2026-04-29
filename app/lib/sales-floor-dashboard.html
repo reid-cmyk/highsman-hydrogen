@@ -27,7 +27,7 @@
     }
   </script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
-  <link rel="stylesheet" href="/sales-floor/css/styles.css?v=18" />
+  <link rel="stylesheet" href="/sales-floor/css/styles.css?v=19" />
 </head>
 <body class="bg-brand-black text-brand-white font-barlow">
 
@@ -72,8 +72,13 @@
       <div class="hs-greeting-sub">Let's run the table today.</div>
     </div>
 
-    <!-- Focus of the Day -->
-    <div class="hs-focus-pill">
+    <!-- Focus of the Day. Click target tracks the focus value: Hot Leads
+         routes to the Leads tab; Reorder Push (when there are no hot leads)
+         routes to Orders. The data-target attribute is updated by the same
+         IIFE that flips the focus label (see bottom of <script>). -->
+    <div class="hs-focus-pill" role="button" tabindex="0" data-target="leads"
+         onclick="showTab(this.dataset.target || 'leads')"
+         aria-label="Today's Focus — open the related tab">
       <div class="hs-focus-label">Today's Focus</div>
       <div class="hs-focus-value" id="focus-value">Hot Leads</div>
       <div class="hs-focus-count" id="focus-count">—</div>
@@ -208,12 +213,14 @@
             <i class="fa-solid fa-fire critical-banner-icon"></i>
             <span class="critical-banner-msg"></span>
           </div>
-          <button onclick="showTab('accounts')" class="critical-banner-cta">View Alerts</button>
+          <button onclick="document.getElementById('section-at-a-glance')?.scrollIntoView({behavior:'smooth',block:'start'})" class="critical-banner-cta">View Alerts</button>
         </div>
 
         <!-- Stats grid — 2-up on mobile, 4-up on desktop -->
         <div class="hs-stats-grid">
-          <div class="stat-card">
+          <div class="stat-card" role="button" tabindex="0"
+               onclick="showTab('leads')"
+               aria-label="Hot Leads — open Leads tab">
             <div class="hs-stat-label">Hot Leads</div>
             <div class="hs-stat-number text-white" id="stat-hot">—</div>
             <div class="hs-stat-sub">Call these first</div>
@@ -228,7 +235,9 @@
             <div class="hs-stat-number text-white" id="stat-missed">0</div>
             <div class="hs-stat-sub">Missed inbounds — return today</div>
           </div>
-          <div class="stat-card">
+          <div class="stat-card" role="button" tabindex="0"
+               onclick="document.getElementById('section-call-queue')?.scrollIntoView({behavior:'smooth',block:'start'})"
+               aria-label="Calls Today — jump to Call Queue">
             <div class="hs-stat-label">Calls Today</div>
             <div class="hs-stat-number text-white" id="stat-calls">0</div>
             <div class="hs-stat-sub">Keep the meter running</div>
@@ -289,7 +298,7 @@
         </div>
 
         <!-- CALL QUEUE — hero zone -->
-        <div class="hs-section-break">
+        <div class="hs-section-break" id="section-call-queue">
           <span class="hs-section-label">Call Queue</span>
           <span class="hs-section-hint">Top of the list is your first call. Hit <strong>CALL</strong>, then <strong>BRIEF</strong>.</span>
         </div>
@@ -310,7 +319,7 @@
         <!-- Secondary row: Orders Due snapshot + Alerts + Onboarding Visits.
              Quick Email moved out — it duplicates the Email tab and ate prime
              dashboard real estate that tells reps nothing about today's plan. -->
-        <div class="hs-section-break">
+        <div class="hs-section-break" id="section-at-a-glance">
           <span class="hs-section-label">At a Glance</span>
         </div>
 
@@ -1465,11 +1474,38 @@
           if (focusVal) {
             const n = parseInt(hotEl.textContent, 10);
             focusVal.textContent = (n > 0) ? 'Hot Leads' : 'Reorder Push';
+            // Keep the click target on the focus pill in sync with the
+            // currently surfaced focus. Hot Leads → Leads tab; otherwise
+            // Reorder Push → Orders tab.
+            const pill = focusVal.closest('.hs-focus-pill');
+            if (pill) pill.dataset.target = (n > 0) ? 'leads' : 'orders';
           }
         }
       };
     }
   })();
+
+  // ───────────────────────────────────────────────────────────
+  // KEYBOARD ACTIVATION FOR role="button" ELEMENTS
+  // -----------------------------------------------------------
+  // Several dashboard surfaces (focus pill, stat cards) are <div> elements
+  // with onclick + role="button" + tabindex="0". Real <button> elements
+  // get Enter/Space activation natively; <div role="button"> does not.
+  // This single delegated listener fills the gap so keyboard users get
+  // the same behavior as click + touch. Scope is narrow: only fires for
+  // elements that opted in via role="button" tabindex="0", and only when
+  // the activated element is not already a real <button>.
+  // ───────────────────────────────────────────────────────────
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const t = e.target;
+    if (!(t instanceof HTMLElement)) return;
+    if (t.tagName === 'BUTTON') return; // native handling
+    if (t.getAttribute('role') !== 'button') return;
+    if (t.getAttribute('tabindex') !== '0') return;
+    e.preventDefault();
+    t.click();
+  });
 
   // ───────────────────────────────────────────────────────────
   // MOBILE SYNC ICON — mirror desktop sync spinner
