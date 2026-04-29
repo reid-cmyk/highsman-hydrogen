@@ -2,6 +2,7 @@ import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {getRepFromRequest} from '../lib/sales-floor-reps';
 import {getZohoAccessToken as getZohoToken} from '~/lib/zoho-auth';
+import {sendEmailFromUser, isGmailSAConfigured} from '~/lib/gmail-sa';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // /api/new-business-flag-followup
@@ -102,10 +103,185 @@ export async function action({request, context}: ActionFunctionArgs) {
     return json({ok: false, error: `Zoho ${row.code}: ${row.message || 'unknown'}`}, {status: 502});
   }
 
+  // ── Sky → Pete handoff email ─────────────────────────────────────────────
+  // Reid 2026-04-29: when Sky flags an account for Pete, also send an email
+  // from sky@highsman.com → peter@highsman.com so Pete has the account in
+  // his inbox (with the details inline) on top of the Zoho tag landing on
+  // his /new-business Follow-Ups list. Skipped on 'unflag' (only fires on
+  // the actual handoff). Best-effort: a Gmail-side failure does NOT roll
+  // back the tag — the tag is the source of truth for Pete's queue, the
+  // email is a notification on top.
+  let emailSent = false;
+  let emailError: string | null = null;
+  if (act === 'flag') {
+    if (!isGmailSAConfigured(env as Record<string, string | undefined>)) {
+      emailError = 'gmail-sa-not-configured';
+    } else {
+      try {
+        const acct = await fetchAccountForHandoffEmail(accountId, token);
+        const {subject, textBody, htmlBody} = buildHandoffEmail(acct);
+        await sendEmailFromUser(
+          'sky@highsman.com',
+          {
+            to: 'peter@highsman.com',
+            subject,
+            textBody,
+            htmlBody,
+            fromName: 'Sky Lima — Highsman',
+            replyTo: 'sky@highsman.com',
+          },
+          env as Record<string, string | undefined>,
+        );
+        emailSent = true;
+      } catch (err: any) {
+        emailError = err?.message || 'gmail-send-failed';
+        console.warn('[flag-followup] handoff email failed:', emailError);
+      }
+    }
+  }
+
   return json({
     ok: true,
     tagged: act === 'flag',
     accountId,
     by: rep.id,
+    emailSent,
+    emailError,
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Account hydration + email body builder
+// ─────────────────────────────────────────────────────────────────────────────
+
+type HandoffAccount = {
+  id: string;
+  name: string;
+  city: string;
+  state: string;
+  phone: string;
+  email: string;
+  lastOrderDate: string;
+  totalOrders: string;
+  ownerName: string;
+  zohoUrl: string;
+};
+
+async function fetchAccountForHandoffEmail(
+  accountId: string,
+  token: string,
+): Promise<HandoffAccount> {
+  // Pull just the fields the email body uses. Best-effort: if Zoho 4xx's
+  // we still send the email with whatever we have (just the ID/link).
+  const fields = [
+    'Account_Name',
+    'Billing_City',
+    'Billing_State',
+    'Account_State',
+    'Phone',
+    'Email',
+    'Last_Order_Date',
+    'Total_Orders_Count',
+    'Owner',
+  ].join(',');
+  const url = `https://www.zohoapis.com/crm/v7/Accounts/${encodeURIComponent(accountId)}?fields=${fields}`;
+  let row: any = {};
+  try {
+    const res = await fetch(url, {
+      headers: {Authorization: `Zoho-oauthtoken ${token}`},
+    });
+    if (res.ok) {
+      const data: any = await res.json();
+      row = (data?.data || [])[0] || {};
+    }
+  } catch {
+    // swallow — we degrade to just the ID below
+  }
+  const state =
+    String(row.Account_State || row.Billing_State || '').trim();
+  return {
+    id: accountId,
+    name: String(row.Account_Name || '').trim() || '(unnamed account)',
+    city: String(row.Billing_City || '').trim(),
+    state,
+    phone: String(row.Phone || '').trim(),
+    email: String(row.Email || '').trim(),
+    lastOrderDate: String(row.Last_Order_Date || '').trim(),
+    totalOrders:
+      row.Total_Orders_Count != null && row.Total_Orders_Count !== ''
+        ? String(row.Total_Orders_Count)
+        : '',
+    ownerName: String(row.Owner?.name || '').trim(),
+    zohoUrl: `https://crm.zoho.com/crm/org814057291/tab/Accounts/${accountId}`,
+  };
+}
+
+function buildHandoffEmail(a: HandoffAccount): {
+  subject: string;
+  textBody: string;
+  htmlBody: string;
+} {
+  const cityState = [a.city, a.state].filter(Boolean).join(', ');
+  const subject = `Reorder follow-up needed: ${a.name}`;
+
+  // Plain-text body — what Pete sees in clients without HTML rendering.
+  const textLines: string[] = [
+    'Hi Pete,',
+    '',
+    'This account needs to be reached out to for reorder. Please action with the account details below.',
+    '',
+    'Account details:',
+    `  • Name: ${a.name}`,
+  ];
+  if (cityState) textLines.push(`  • Location: ${cityState}`);
+  if (a.phone) textLines.push(`  • Phone: ${a.phone}`);
+  if (a.email) textLines.push(`  • Email: ${a.email}`);
+  if (a.lastOrderDate) textLines.push(`  • Last order: ${a.lastOrderDate}`);
+  if (a.totalOrders) textLines.push(`  • Total orders: ${a.totalOrders}`);
+  if (a.ownerName) textLines.push(`  • Zoho owner: ${a.ownerName}`);
+  textLines.push(
+    '',
+    `Open in /new-business: https://highsman.com/new-business/app`,
+    `Open in Zoho: ${a.zohoUrl}`,
+    '',
+    'Thanks,',
+    'Sky',
+  );
+  const textBody = textLines.join('\n');
+
+  // HTML body — same content, just a touch of styling so the detail block
+  // is scannable in Gmail. Escapes are minimal because every value above
+  // came straight from Zoho text fields, but we still escape angle brackets
+  // and ampersands defensively.
+  const esc = (s: string) =>
+    String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  const detailRows: string[] = [
+    `<li><strong>Name:</strong> ${esc(a.name)}</li>`,
+  ];
+  if (cityState) detailRows.push(`<li><strong>Location:</strong> ${esc(cityState)}</li>`);
+  if (a.phone) detailRows.push(`<li><strong>Phone:</strong> ${esc(a.phone)}</li>`);
+  if (a.email) detailRows.push(`<li><strong>Email:</strong> ${esc(a.email)}</li>`);
+  if (a.lastOrderDate) detailRows.push(`<li><strong>Last order:</strong> ${esc(a.lastOrderDate)}</li>`);
+  if (a.totalOrders) detailRows.push(`<li><strong>Total orders:</strong> ${esc(a.totalOrders)}</li>`);
+  if (a.ownerName) detailRows.push(`<li><strong>Zoho owner:</strong> ${esc(a.ownerName)}</li>`);
+
+  const htmlBody = `<!doctype html><html><body style="font-family:Arial,sans-serif;font-size:14px;color:#111;line-height:1.5;">
+<p>Hi Pete,</p>
+<p>This account needs to be reached out to for reorder. Please action with the account details below.</p>
+<p style="margin-bottom:6px;"><strong>Account details</strong></p>
+<ul style="margin-top:0;padding-left:18px;">
+${detailRows.join('\n')}
+</ul>
+<p style="margin-top:18px;">
+  <a href="https://highsman.com/new-business/app" style="color:#0a66c2;text-decoration:none;">Open in /new-business</a>
+  &nbsp;&middot;&nbsp;
+  <a href="${esc(a.zohoUrl)}" style="color:#0a66c2;text-decoration:none;">Open in Zoho</a>
+</p>
+<p style="margin-top:18px;">Thanks,<br/>Sky</p>
+</body></html>`;
+
+  return {subject, textBody, htmlBody};
 }

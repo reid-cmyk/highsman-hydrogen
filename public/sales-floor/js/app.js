@@ -2311,7 +2311,16 @@ async function flagForPete(idx) {
     if (!res.ok || !body.ok) {
       throw new Error(body?.error || `HTTP ${res.status}`);
     }
-    toast(`${a.Account_Name || 'Account'} flagged for Pete`, 'success');
+    // Reflect the Sky→Pete handoff email outcome in the toast so Sky knows
+    // whether the email actually went out (server sends best-effort, never
+    // rolls back the tag if Gmail fails).
+    if (body.emailSent) {
+      toast(`${a.Account_Name || 'Account'} flagged for Pete \u2014 emailed`, 'success');
+    } else if (body.emailError) {
+      toast(`${a.Account_Name || 'Account'} flagged for Pete (email failed: ${body.emailError})`, 'warn');
+    } else {
+      toast(`${a.Account_Name || 'Account'} flagged for Pete`, 'success');
+    }
   } catch (err) {
     a._flaggedForPete = false;
     renderAccounts();
