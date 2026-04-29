@@ -1,5 +1,5 @@
 import type {LoaderFunctionArgs, ActionFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
-import {useActionData, Form} from '@remix-run/react';
+import {useLoaderData, Form} from '@remix-run/react';
 import {json, redirect} from '@shopify/remix-oxygen';
 import {
   findRepByPassword,
@@ -31,12 +31,24 @@ function destinationForUA(ua: string | null): string {
   return isPhone ? '/sales-floor/mobile' : '/sales-floor/app';
 }
 
+// /sales-floor/app and /sales-floor/mobile are resource routes (loader-only,
+// raw text/html). Remix's client-side router has no component to render for
+// them, so a Remix-style redirect from the login action lands the user on the
+// root layout with an empty Outlet — the "blank screen until refresh" bug.
+// Fix: the <Form> below uses reloadDocument so the browser performs a regular
+// document POST and follows the 302 natively (full document GET on
+// /sales-floor/app), and we surface the wrong-password error via the loader
+// (?error=invalid) so a redirect-on-error works in document-submit mode too.
+
 export async function loader({request}: LoaderFunctionArgs) {
   const {authed, repId} = parseSalesFloorCookies(request.headers.get('Cookie'));
   if (authed && repId) {
     return redirect(destinationForUA(request.headers.get('User-Agent')));
   }
-  return json({authenticated: false, error: null});
+  const url = new URL(request.url);
+  const error =
+    url.searchParams.get('error') === 'invalid' ? 'Incorrect password' : null;
+  return json({authenticated: false, error});
 }
 
 export async function action({request}: ActionFunctionArgs) {
@@ -45,7 +57,9 @@ export async function action({request}: ActionFunctionArgs) {
 
   const rep = findRepByPassword(password);
   if (!rep) {
-    return json({authenticated: false, error: 'Incorrect password'});
+    // Redirect (not json) so reloadDocument-mode forms render a real page,
+    // not raw JSON. Loader picks up ?error=invalid and renders inline.
+    return redirect('/sales-floor?error=invalid');
   }
 
   // Remix accepts string[] for Set-Cookie — both cookies land on the response.
@@ -57,7 +71,7 @@ export async function action({request}: ActionFunctionArgs) {
 }
 
 export default function SalesFloorLogin() {
-  const actionData = useActionData<typeof action>();
+  const data = useLoaderData<typeof loader>();
 
   return (
     <div
@@ -113,7 +127,11 @@ export default function SalesFloorLogin() {
           </p>
         </div>
 
-        <Form method="post" style={{display: 'flex', flexDirection: 'column', gap: '16px'}}>
+        <Form
+          method="post"
+          reloadDocument
+          style={{display: 'flex', flexDirection: 'column', gap: '16px'}}
+        >
           <label
             style={{
               display: 'flex',
@@ -145,7 +163,7 @@ export default function SalesFloorLogin() {
             />
           </label>
 
-          {actionData && 'error' in actionData && actionData.error ? (
+          {data.error ? (
             <div
               style={{
                 color: '#ff6b6b',
@@ -156,7 +174,7 @@ export default function SalesFloorLogin() {
                 borderRadius: '6px',
               }}
             >
-              {actionData.error}
+              {data.error}
             </div>
           ) : null}
 
