@@ -83,7 +83,18 @@ export default function Cart() {
   }
 
   const subtotal = cart?.cost?.subtotalAmount;
-  const checkoutUrl = cart?.checkoutUrl;
+  // Append return_to so Shopify's hosted checkout knows where to send the
+  // customer when they click "Continue Shopping" mid-checkout, and where to
+  // redirect after a completed purchase. Without this, Shopify defaults to
+  // the Online Store channel's primary domain (the raw myshopify subdomain),
+  // which lives on a different host than the Hydrogen storefront.
+  // Experimental — Shopify documents return_url for post-purchase redirects;
+  // mid-checkout Continue Shopping behavior is undocumented. If this turns
+  // out to do nothing, it's still a no-op (Shopify ignores unknown params).
+  const baseCheckoutUrl = cart?.checkoutUrl;
+  const checkoutUrl = baseCheckoutUrl
+    ? `${baseCheckoutUrl}${baseCheckoutUrl.includes('?') ? '&' : '?'}return_to=${encodeURIComponent('https://highsman.com/apparel')}`
+    : null;
 
   return (
     <section className="max-w-4xl mx-auto px-6 md:px-8 py-8 md:py-16">
