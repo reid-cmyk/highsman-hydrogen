@@ -610,19 +610,24 @@ function renderDashboard() {
   }
 
   // ─── New Customers snapshot (left At a Glance card) ──────────────────────
+  // Styled mini-cards, sorted newest first (firstOrderDate desc), clickable.
   const ordersEl = document.getElementById('dashboard-orders');
   if (ordersEl) {
     if (!leaflinkOrdersFetched) {
-      ordersEl.innerHTML = `<div class="hs-empty-state">Loading…</div>`;
+      ordersEl.innerHTML = `<div class="hs-empty-state" style="padding:20px 16px;">Loading…</div>`;
     } else {
       const ACTIVE_STATES = ['pending', 'ready', 'checkin_due', 'zoho_new'];
-      const STATE_LABEL = {
-        pending:    'Pending ship',
-        ready:      'Ready — onboard',
-        checkin_due:'Check-in due',
-        zoho_new:   'Welcome call',
-      };
-      const active = combinedNewCustomers().filter(c => ACTIVE_STATES.includes(c.cardState));
+      const STATUS_LABEL = { pending:'Pending', ready:'Ready', checkin_due:'Check-in due', zoho_new:'Welcome call' };
+      const STATUS_CLS   = { pending:'--new', zoho_new:'--new', ready:'--ready', checkin_due:'--due' };
+
+      const active = combinedNewCustomers()
+        .filter(c => ACTIVE_STATES.includes(c.cardState))
+        .sort((a, b) => {
+          const da = a.firstOrderDate ? new Date(a.firstOrderDate).getTime() : 0;
+          const db = b.firstOrderDate ? new Date(b.firstOrderDate).getTime() : 0;
+          return db - da; // newest first
+        });
+
       if (active.length === 0) {
         ordersEl.innerHTML = `
           <div class="hs-empty-state">
@@ -632,18 +637,30 @@ function renderDashboard() {
       } else {
         const top = active.slice(0, 4);
         const overflow = active.length - top.length;
-        const rows = top.map(c => `
-          <div class="hs-orders-snap-row">
-            <div class="hs-orders-snap-name">
-              ${escapeHtml(c.customerName || c.Account_Name || '—')}
-              ${c.state ? `<span class="hs-orders-snap-state">${escapeHtml(c.state)}</span>` : ''}
-            </div>
-            <div class="hs-orders-snap-days">${STATE_LABEL[c.cardState] || c.cardState}</div>
-          </div>`).join('');
+        const cards = top.map(c => {
+          const name    = escapeHtml(c.customerName || c.Account_Name || '—');
+          const state   = c.state ? `<span class="hs-orders-snap-state">${escapeHtml(c.state)}</span>` : '';
+          const dateStr = c.firstOrderDate ? `First order: ${formatDate(c.firstOrderDate)}` : '';
+          const sLabel  = STATUS_LABEL[c.cardState] || c.cardState;
+          const sCls    = STATUS_CLS[c.cardState] || '--new';
+          return `
+            <div class="hs-newcust-snap-card" role="button" tabindex="0"
+                 onclick="showTab('newcustomers')"
+                 aria-label="Open New Customers tab">
+              <div class="hs-newcust-snap-top">
+                <span class="hs-newcust-snap-name">${name}</span>
+                ${state}
+              </div>
+              <div class="hs-newcust-snap-meta">
+                <span class="hs-newcust-snap-date">${dateStr}</span>
+                <span class="hs-newcust-snap-status hs-newcust-snap-status${sCls}">${escapeHtml(sLabel)}</span>
+              </div>
+            </div>`;
+        }).join('');
         const more = overflow > 0
-          ? `<button onclick="showTab('newcustomers')" class="hs-orders-snap-more">+ ${overflow} more →</button>`
+          ? `<button onclick="showTab('newcustomers')" class="hs-orders-snap-more" style="margin:8px 14px 6px;">+ ${overflow} more →</button>`
           : '';
-        ordersEl.innerHTML = rows + more;
+        ordersEl.innerHTML = cards + more;
       }
     }
   }
@@ -661,26 +678,39 @@ function renderDashboard() {
     // Build severity-sorted rows
     const rows = [];
 
+    // Helper: last order date string for an account
+    const lastOrderSub = (accountName, lastOrderDate) => {
+      const nameKey = String(accountName || '').trim().toUpperCase();
+      const inv = nameKey ? (lastOrderByName && lastOrderByName[nameKey]) || null : null;
+      const date = inv?.date || lastOrderDate || null;
+      return date ? `Last order: ${formatDate(date)}` : '';
+    };
+
     // Tier 1 — Off Menu (red/critical)
     for (const item of (litAlertsOffMenu || [])) {
       const a = litAcct(item.zohoAccountId);
       if (!a) continue;
-      rows.push({ name: a.Account_Name || '—', state: normalizeStateCode(a._state || a.Billing_State) || '', tier: 'critical', label: 'OFF MENU' });
+      rows.push({ name: a.Account_Name || '—', state: normalizeStateCode(a._state || a.Billing_State) || '', tier: 'critical', label: 'OFF MENU', sub: lastOrderSub(a.Account_Name, a.Last_Order_Date) });
     }
     // Tier 2 — Low Inventory (orange)
     for (const item of (litAlertsLowInv || [])) {
       const a = litAcct(item.zohoAccountId);
       if (!a) continue;
-      rows.push({ name: a.Account_Name || '—', state: normalizeStateCode(a._state || a.Billing_State) || '', tier: 'warn', label: 'LOW INV' });
+      rows.push({ name: a.Account_Name || '—', state: normalizeStateCode(a._state || a.Billing_State) || '', tier: 'warn', label: 'LOW INV', sub: lastOrderSub(a.Account_Name, a.Last_Order_Date) });
     }
-    // Tier 3 — Reorder Due (gold → red at 60d)
-    // Use fresh accounts.findIndex lookup (same pattern as renderOrders()) —
-    // r.account is a snapshot reference that may be stale after a re-sync.
+    // Tier 3 — Reorder Due, newest to the list first (30-35 days = just entered window).
+    // Accounts past 35 days are established reorders — reps see them in the full Orders Due tab.
     const reorders = (typeof deriveOrdersDue === 'function') ? deriveOrdersDue() : [];
-    for (const r of reorders) {
-      const days = Number.isFinite(r.daysSinceLastOrder) ? r.daysSinceLastOrder : 0;
+    const newReorders = reorders
+      .filter(r => {
+        const days = Number.isFinite(r.daysSinceLastOrder) ? r.daysSinceLastOrder : 0;
+        return days >= 30 && days <= 35; // new to the list in the last 5 days
+      })
+      .sort((a, b) => a.daysSinceLastOrder - b.daysSinceLastOrder); // 30d first = newest
+    for (const r of newReorders) {
+      const days = r.daysSinceLastOrder;
       const acct = accounts.find(a => a && a.id === r.accountId) || r.account;
-      rows.push({ name: acct?.Account_Name || '—', state: r.stateCode || '', tier: days >= 60 ? 'critical' : 'reorder', label: `${days}d` });
+      rows.push({ name: acct?.Account_Name || '—', state: r.stateCode || '', tier: 'reorder', label: `${days}d`, sub: lastOrderSub(acct?.Account_Name, r.lastOrderDate) });
     }
 
     if (rows.length === 0) {
@@ -701,6 +731,7 @@ function renderDashboard() {
             <div class="hs-orders-snap-name">
               ${escapeHtml(r.name)}
               ${r.state ? `<span class="hs-orders-snap-state">${escapeHtml(r.state)}</span>` : ''}
+              ${r.sub ? `<div class="hs-orders-snap-sub">${escapeHtml(r.sub)}</div>` : ''}
             </div>
             <span class="hs-orders-snap-days ${badgeCls}">${escapeHtml(r.label)}</span>
           </div>`;
