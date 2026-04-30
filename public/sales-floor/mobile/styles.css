@@ -776,7 +776,21 @@ a { color: inherit; text-decoration: none; }
 .hs-orders-grid { display: block; }
 .hs-orders-col { margin-bottom: 12px; }
 .hs-orders-col--placeholder { opacity: 0.85; }
-.hs-orders-col--critical { border-color: rgba(220, 38, 38, 0.3); }
+/* Off Menu column — red critical treatment applied to the actual bordered
+   elements (head + body), not the wrapper which has no border of its own. */
+.hs-orders-col--critical .hs-orders-col-head {
+  border-color: rgba(220, 38, 38, 0.35);
+  background: rgba(220, 38, 38, 0.06);
+}
+.hs-orders-col--critical .hs-orders-col-body {
+  border-color: rgba(220, 38, 38, 0.35);
+}
+.hs-orders-col--critical .hs-orders-col-title {
+  color: #FF8888;
+}
+.hs-orders-col--critical .hs-orders-col-title i {
+  color: #FF8888;
+}
 .hs-orders-col-head {
   display: flex;
   align-items: baseline;
