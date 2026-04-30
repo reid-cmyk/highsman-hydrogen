@@ -7,6 +7,12 @@ import {
   buildLoginCookieHeaders,
 } from '../lib/sales-floor-reps';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// HANDLE — hide global consumer header/footer (internal page)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const handle = {hideHeader: true, hideFooter: true};
+
 export const meta: MetaFunction = () => {
   return [
     {title: 'HIGHSMAN | Sales Floor'},

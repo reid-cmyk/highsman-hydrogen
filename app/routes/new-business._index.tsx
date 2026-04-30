@@ -8,6 +8,12 @@ import {
 } from '../lib/sales-floor-reps';
 
 // ─────────────────────────────────────────────────────────────────────────────
+// HANDLE — hide global consumer header/footer (internal page)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const handle = {hideHeader: true, hideFooter: true};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // /new-business — Role-based landing for New Business BDRs
 // ─────────────────────────────────────────────────────────────────────────────
 // Same auth plumbing as /sales-floor (shared cookies, shared rep registry),

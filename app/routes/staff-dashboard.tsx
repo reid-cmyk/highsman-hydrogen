@@ -8,6 +8,12 @@ import {
   fetchTrainingProfilesAndEvents,
 } from '~/lib/vibes-klaviyo-training';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// HANDLE — hide global consumer header/footer (internal page)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const handle = {hideHeader: true, hideFooter: true};
+
 export const meta: MetaFunction = () => {
   return [
     {title: 'HIGHSMAN | Staff Dashboard'},

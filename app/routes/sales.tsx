@@ -3,6 +3,12 @@ import {useLoaderData, useActionData, Form, useSearchParams, useNavigate} from '
 import {json} from '@shopify/remix-oxygen';
 import {useState, useEffect, useMemo} from 'react';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// HANDLE — hide global consumer header/footer (internal page)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const handle = {hideHeader: true, hideFooter: true};
+
 export const meta: MetaFunction = () => {
   return [
     {title: 'HIGHSMAN | Sales by Market'},
