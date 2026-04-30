@@ -27,7 +27,7 @@
     }
   </script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
-  <link rel="stylesheet" href="/sales-floor/css/styles.css?v=27" />
+  <link rel="stylesheet" href="/sales-floor/css/styles.css?v=28" />
 </head>
 <body class="bg-brand-black text-brand-white font-barlow">
 
@@ -112,7 +112,7 @@
       <button onclick="showTab('newcustomers')" id="nav-newcustomers" class="hs-nav-btn">
         <i class="fa-solid fa-user-plus hs-nav-icon"></i>
         <span>New Customers</span>
-        <span id="newcust-nav-badge" class="ml-auto hs-hot-badge hidden" style="background:#F4B400;color:#000;"></span>
+        <span id="newcust-nav-badge" class="ml-auto hs-hot-badge hidden"></span>
       </button>
       <button onclick="showTab('accounts')" id="nav-accounts" class="hs-nav-btn">
         <i class="fa-solid fa-building hs-nav-icon"></i>
@@ -183,7 +183,7 @@
     <!-- Desktop top bar -->
     <header class="hs-topbar">
       <div class="hs-topbar-titles">
-        <h1 id="page-title" class="hs-page-title">Sales Floor Dashboard</h1>
+        <h1 id="page-title" class="hs-page-title">Sales Floor — Dashboard</h1>
         <div id="page-sub" class="hs-page-sub">Run the table today.</div>
       </div>
       <div class="hs-topbar-meta">
@@ -1088,7 +1088,7 @@
     <div class="hs-sheet-title">Tools</div>
     <button onclick="showTab('newcustomers'); closeMoreSheet();" class="hs-sheet-row">
       <i class="fa-solid fa-user-plus"></i> New Customers
-      <span id="sheet-newcust-badge" class="hs-hot-badge ml-auto hidden" style="background:#F4B400;color:#000;"></span>
+      <span id="sheet-newcust-badge" class="hs-hot-badge ml-auto hidden"></span>
     </button>
     <button onclick="showTab('accounts'); closeMoreSheet();" class="hs-sheet-row">
       <i class="fa-solid fa-building"></i> Accounts
@@ -1381,7 +1381,7 @@
       issues:       "Log it, solve it, keep it moving.",
     };
     const TITLES = {
-      dashboard:    "Sales Floor Dashboard",
+      dashboard:    "Sales Floor — Dashboard",
       leads:        "Leads",
       orders:       "Orders Due",
       newcustomers: "New Customers",
@@ -1478,7 +1478,7 @@
         const v = el.textContent.trim();
         if (v !== '—' && v !== '' && !isNaN(parseInt(v, 10))) {
           fired = true; obs.disconnect();
-          countUpInt(el, 900);
+          countUpInt(el, 1800);
         }
       });
       obs.observe(el, { childList: true, characterData: true, subtree: true });
@@ -1492,7 +1492,7 @@
         const v = el.textContent.trim();
         if (v && v !== '—') {
           fired = true; obs.disconnect();
-          countUpAmount(el, 1000);
+          countUpAmount(el, 2200);
         }
       });
       obs.observe(el, { childList: true, characterData: true, subtree: true });
