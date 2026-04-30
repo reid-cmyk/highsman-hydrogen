@@ -27,7 +27,7 @@
     }
   </script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
-  <link rel="stylesheet" href="/sales-floor/css/styles.css?v=26" />
+  <link rel="stylesheet" href="/sales-floor/css/styles.css?v=27" />
 </head>
 <body class="bg-brand-black text-brand-white font-barlow">
 
@@ -68,8 +68,15 @@
       <img class="hs-logo"
            src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Logo_White.png?v=1775594430"
            alt="Highsman" />
-      <div class="hs-greeting" id="user-greeting">Good morning</div>
-      <div class="hs-greeting-sub">Let's run the table today.</div>
+      <div class="hs-sidebar-rep-row">
+        <img class="hs-sidebar-avatar"
+             src="https://agents-assets.nyc3.cdn.digitaloceanspaces.com/sky-avatar.png"
+             alt="Sky" />
+        <div>
+          <div class="hs-greeting" id="user-greeting">Good morning</div>
+          <div class="hs-greeting-sub">Let's run the table today.</div>
+        </div>
+      </div>
     </div>
 
     <!-- Focus of the Day. Click target tracks the focus value: Hot Leads
@@ -176,7 +183,7 @@
     <!-- Desktop top bar -->
     <header class="hs-topbar">
       <div class="hs-topbar-titles">
-        <h1 id="page-title" class="hs-page-title">Dashboard</h1>
+        <h1 id="page-title" class="hs-page-title">Sales Floor Dashboard</h1>
         <div id="page-sub" class="hs-page-sub">Run the table today.</div>
       </div>
       <div class="hs-topbar-meta">
@@ -191,7 +198,7 @@
     <!-- Mobile in-page title block (desktop top bar hidden on mobile) -->
     <div class="hs-mobile-pagehead">
       <div>
-        <h1 id="page-title-m" class="hs-page-title">Dashboard</h1>
+        <h1 id="page-title-m" class="hs-page-title">Sales Floor</h1>
         <div id="page-sub-m" class="hs-page-sub">Run the table today.</div>
       </div>
       <div class="hs-status-chip" aria-live="polite" aria-label="Connection status">
@@ -1374,7 +1381,7 @@
       issues:       "Log it, solve it, keep it moving.",
     };
     const TITLES = {
-      dashboard:    "Dashboard",
+      dashboard:    "Sales Floor Dashboard",
       leads:        "Leads",
       orders:       "Orders Due",
       newcustomers: "New Customers",
@@ -1414,6 +1421,82 @@
       const opts = { weekday: 'short', month: 'short', day: 'numeric' };
       chip.textContent = d.toLocaleDateString('en-US', opts).toUpperCase();
     }
+  })();
+
+  // ───────────────────────────────────────────────────────────
+  // COUNT-UP ANIMATION — stat cards + State Pulse amounts
+  // Fires once per element when its value first changes from "—"
+  // to a real number. Uses cubic ease-out (command-center pattern).
+  // ───────────────────────────────────────────────────────────
+  (function () {
+    const ease = t => 1 - Math.pow(1 - t, 3);
+
+    function countUpInt(el, duration) {
+      const target = parseInt(el.textContent.replace(/[^0-9]/g, ''), 10);
+      if (isNaN(target) || target === 0) return;
+      const orig = el.textContent;
+      const t0 = performance.now();
+      (function tick(now) {
+        const t = Math.min(1, (now - t0) / duration);
+        el.textContent = Math.round(target * ease(t));
+        if (t < 1) requestAnimationFrame(tick);
+        else el.textContent = orig;
+      })(t0);
+    }
+
+    function countUpAmount(el, duration) {
+      const raw = el.textContent.trim();
+      if (!raw || raw === '—') return;
+      const str = raw.replace('$', '').trim();
+      let mult = 1, num;
+      if (str.endsWith('M'))      { mult = 1000000; num = parseFloat(str); }
+      else if (str.endsWith('K')) { mult = 1000;    num = parseFloat(str); }
+      else                        { num = parseFloat(str); }
+      const target = num * mult;
+      if (isNaN(target) || target === 0) return;
+      function fmt(n) {
+        if (n >= 1000000) return '$' + (n / 1000000).toFixed(1) + 'M';
+        if (n >= 1000)    return '$' + Math.round(n / 1000) + 'K';
+        return '$' + Math.round(n);
+      }
+      const t0 = performance.now();
+      (function tick(now) {
+        const t = Math.min(1, (now - t0) / duration);
+        el.textContent = fmt(target * ease(t));
+        if (t < 1) requestAnimationFrame(tick);
+        else el.textContent = raw;
+      })(t0);
+    }
+
+    // Integer stat cards — fire once on first real value
+    ['stat-hot', 'stat-reorder-due', 'stat-calls'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      let fired = false;
+      const obs = new MutationObserver(() => {
+        if (fired) return;
+        const v = el.textContent.trim();
+        if (v !== '—' && v !== '' && !isNaN(parseInt(v, 10))) {
+          fired = true; obs.disconnect();
+          countUpInt(el, 900);
+        }
+      });
+      obs.observe(el, { childList: true, characterData: true, subtree: true });
+    });
+
+    // State Pulse amounts — fire once on first real value
+    document.querySelectorAll('[data-amount-for]').forEach(el => {
+      let fired = false;
+      const obs = new MutationObserver(() => {
+        if (fired) return;
+        const v = el.textContent.trim();
+        if (v && v !== '—') {
+          fired = true; obs.disconnect();
+          countUpAmount(el, 1000);
+        }
+      });
+      obs.observe(el, { childList: true, characterData: true, subtree: true });
+    });
   })();
 
   // ───────────────────────────────────────────────────────────
