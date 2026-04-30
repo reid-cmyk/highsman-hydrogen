@@ -3006,9 +3006,32 @@ async function sendTemplateEmail() {
     const result = await Gmail.send({ to, subject, body });
     const from = result?.from ? ` from ${result.from}` : '';
     toast(`Email sent to ${to}${from}`, 'success');
+    // Mirror typical mail-client UX: after a successful send, reset the form
+    // and return to the Dashboard. Previously the compose stayed filled in,
+    // which read as "did anything actually send?" plus risked a double-send
+    // if the rep hit Send again. The dashboard is where the rep was working
+    // from in the most common path (Brief → Email → Send → back to queue).
+    resetComposeForm();
+    showTab('dashboard');
   } catch (err) {
     toast(`Send failed: ${err.message}`, 'error');
   }
+}
+
+// Clear every field and visual state on the Compose tab so a stale draft
+// can't be accidentally re-sent and the next visit starts from a clean
+// slate. Mirrors the inverse of pickTemplate() + the field-fill in
+// emailFromBrief() / quickEmail().
+function resetComposeForm() {
+  for (const id of ['email-to', 'email-name', 'email-company', 'email-subject', 'email-body']) {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  }
+  const tmpl = document.getElementById('email-template');
+  if (tmpl) tmpl.value = '';
+  document.getElementById('email-preview-box')?.classList.add('hidden');
+  document.getElementById('compose-template-chip')?.classList.add('hidden');
+  document.querySelectorAll('.template-card').forEach((c) => c.classList.remove('active'));
 }
 
 async function sendQuickEmail() {
