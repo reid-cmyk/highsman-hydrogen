@@ -3432,6 +3432,69 @@ a.hs-contact-meta-cell:hover i{ color:var(--gold); }
 }
 .hs-orders-snap-days.is-warn{ color:#F5A623; }
 .hs-orders-snap-days.is-critical{ color:#FF6B6B; }
+/* Sub-text line inside snap rows — last order date etc. */
+.hs-orders-snap-sub{
+  font-size:11px;
+  color:var(--gray-dim);
+  margin-top:2px;
+  letter-spacing:0.02em;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   NEW CUSTOMERS AT A GLANCE — styled mini-cards
+   Each card is clickable, shows name + state + first order date + status
+═══════════════════════════════════════════════════════════════ */
+.hs-newcust-snap-card{
+  padding:10px 14px;
+  border-bottom:1px solid rgba(255,255,255,0.05);
+  cursor:pointer;
+  transition:background 0.12s;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+.hs-newcust-snap-card:last-of-type{ border-bottom:none; }
+.hs-newcust-snap-card:hover{ background:rgba(255,255,255,0.03); }
+.hs-newcust-snap-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+.hs-newcust-snap-name{
+  font-family:var(--teko);
+  font-size:15px;
+  letter-spacing:0.02em;
+  color:var(--white);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  flex:1;
+  min-width:0;
+}
+.hs-newcust-snap-meta{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+.hs-newcust-snap-date{
+  font-size:11.5px;
+  color:var(--gray-dim);
+}
+.hs-newcust-snap-status{
+  font-family:var(--teko);
+  font-size:11px;
+  letter-spacing:0.10em;
+  text-transform:uppercase;
+  padding:2px 7px;
+  border-radius:4px;
+  flex-shrink:0;
+}
+.hs-newcust-snap-status--new { background:rgba(74,158,255,0.14); color:var(--blue); }
+.hs-newcust-snap-status--ready { background:rgba(245,228,0,0.12); color:var(--gold); }
+.hs-newcust-snap-status--due { background:rgba(255,138,0,0.15); color:var(--orange); }
+
 .hs-orders-snap-more{
   font-family:var(--barlow, 'Barlow Semi Condensed', sans-serif);
   font-size:11px;
