@@ -559,15 +559,14 @@ a{ color:inherit; text-decoration:none; }
    makes the three cards look uneven even when grid stretch puts them at
    equal panel height.
 
-   The min/max height pair bounds the grid row: ~280px floor so empty
-   states have presence and the cards don't collapse; ~420px ceiling so
-   a long alerts list doesn't stretch the row to its content height
-   (overflow-y:auto on .hs-alert-scroll handles the rest). */
+   Explicit height forces all three panels to the same row height regardless
+   of content — equalization via CSS grid stretch alone was unreliable on prod
+   when panels had very different content volumes. overflow-y:auto on
+   .hs-alert-scroll handles long alert lists inside the fixed height. */
 .hs-secondary-grid > .hs-panel{
   display:flex;
   flex-direction:column;
-  min-height:280px;
-  max-height:420px;
+  height:380px;
 }
 .hs-secondary-grid > .hs-panel > .hs-card-header{
   flex-shrink:0;
