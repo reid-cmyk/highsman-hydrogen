@@ -123,8 +123,16 @@ const HIGHSMAN_PRODUCT_IDS = new Set<number>([
 ]);
 
 // Reorder window: a shop is "Reorder Due" if their most recent Highsman order
-// is older than this many days.
+// is older than REORDER_DUE_DAYS but not older than REORDER_DUE_MAX_DAYS.
+//   • Lower bound (30d): below this it's a normal cadence, no nudge needed.
+//   • Upper bound (90d): past this, the shop is effectively churned —
+//     trying to "reorder chase" them as if they're an active account
+//     pollutes the panel and pulls focus from real reorder work. Reid
+//     2026-04-30: "remove any accounts in Reorder Due Panel that are
+//     older than 90 days old. We will start from there." Churn-handling
+//     belongs on a dedicated Win-Back / Lost view, not here.
 const REORDER_DUE_DAYS = 30;
+const REORDER_DUE_MAX_DAYS = 90;
 
 // Vibes coverage states. Reid's call: NJ-only for v1. Out-of-state new
 // customers get a greyed-out "no Vibes coverage in [state] yet" note.
@@ -801,7 +809,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       const lastDate = bestOrderDate(newest);
       if (!lastDate) continue;
       const days = daysBetween(lastDate, now);
-      if (days >= REORDER_DUE_DAYS) {
+      if (days >= REORDER_DUE_DAYS && days <= REORDER_DUE_MAX_DAYS) {
         reorderDue.push({
           customerId: bucket.customerId,
           customerName: bucket.customerName,
