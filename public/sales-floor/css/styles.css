@@ -453,7 +453,9 @@ a{ color:inherit; text-decoration:none; }
   overflow:hidden;
 }
 .hs-panel + .hs-panel{ margin-top:12px; }
-.hs-panel--alerts .hs-alert-scroll{ max-height:260px; overflow-y:auto; }
+/* No more standalone height cap — height is governed by .hs-secondary-grid
+   row stretch + flex:1 above. overflow-y:auto handles long alert lists. */
+.hs-panel--alerts .hs-alert-scroll{ overflow-y:auto; }
 .hs-panel--joined{ margin-top:12px; }
 
 .hs-card-header{
@@ -547,6 +549,43 @@ a{ color:inherit; text-decoration:none; }
   grid-template-columns:repeat(3, minmax(0,1fr));
   gap:12px;
   margin-top:4px;
+  align-items:stretch; /* explicit — prevents future regressions */
+}
+/* Make every panel in the At a Glance row a flex column so its inner
+   content fills the grid-stretched height. Without this, empty-state-only
+   panels (Orders Due, Onboarding Visits when idle) sit content at top
+   with whitespace below, while the Alerts panel's standalone
+   max-height:260px caps its scroll shorter than peers. The combination
+   makes the three cards look uneven even when grid stretch puts them at
+   equal panel height.
+
+   The min/max height pair bounds the grid row: ~280px floor so empty
+   states have presence and the cards don't collapse; ~420px ceiling so
+   a long alerts list doesn't stretch the row to its content height
+   (overflow-y:auto on .hs-alert-scroll handles the rest). */
+.hs-secondary-grid > .hs-panel{
+  display:flex;
+  flex-direction:column;
+  min-height:280px;
+  max-height:420px;
+}
+.hs-secondary-grid > .hs-panel > .hs-card-header{
+  flex-shrink:0;
+}
+.hs-secondary-grid > .hs-panel > #dashboard-orders,
+.hs-secondary-grid > .hs-panel > #onboarding-visits-list,
+.hs-secondary-grid > .hs-panel > .hs-alert-scroll{
+  flex:1 1 auto;
+  min-height:0;
+}
+/* Empty states centered vertically inside their content area, instead
+   of pinned to the top with whitespace below. */
+.hs-secondary-grid > .hs-panel .hs-empty-state{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -4705,4 +4744,285 @@ details[open] > summary .brief-history-chev{
   .hs-newcust-name { font-size: 18px; }
   .hs-newcust-pills { gap: 4px; }
   .hs-newcust-pill { font-size: 9px; padding: 3px 7px; letter-spacing: 0.10em; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CALL QUEUE — dashboard hot-leads list
+   -----------------------------------------------------------------
+   Backs renderDashboard() in app.js. The .dash-lead-row / .top-of-queue /
+   .dash-lead-name / .dash-lead-company / .lead-action-btn class names
+   were referenced in markup since pre-launch but never had styles, so the
+   list rendered as a flat un-flexed stack — action buttons dropped under
+   the lead info instead of sitting beside it. The styles below align the
+   card with the rest of the dashboard rhythm: an emphasized "top of queue"
+   row with primary CTAs and gold accent, slim subsequent rows with compact
+   action chips.
+═══════════════════════════════════════════════════════════════ */
+.dash-lead-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  padding:14px 18px;
+  cursor:pointer;
+  transition:background-color 120ms ease;
+}
+.dash-lead-row:hover{
+  background:rgba(255,255,255,0.025);
+}
+.dash-lead-row.top-of-queue{
+  padding:18px 18px 18px 22px;
+  border-left:3px solid var(--gold);
+  background:linear-gradient(180deg, rgba(245,228,0,0.05) 0%, rgba(0,0,0,0) 70%);
+}
+.dash-lead-row.top-of-queue:hover{
+  background:linear-gradient(180deg, rgba(245,228,0,0.08) 0%, rgba(0,0,0,0.02) 70%);
+}
+.dash-lead-name{
+  font-family:var(--barlow);
+  font-size:15px;
+  font-weight:600;
+  color:var(--white);
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px;
+  letter-spacing:0.01em;
+}
+.dash-lead-row.top-of-queue .dash-lead-name{
+  font-size:16px;
+}
+.dash-lead-company{
+  font-family:var(--barlow);
+  font-size:12.5px;
+  color:var(--gray-dim);
+  margin-top:3px;
+  letter-spacing:0.02em;
+}
+
+/* Compact action button used by non-top rows. Adapts to icon-only or
+   icon+text by allowing min-width:32px to size to content when text exists. */
+.lead-action-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  height:32px;
+  min-width:32px;
+  padding:0 10px;
+  border-radius:var(--r-sm);
+  background:var(--chip);
+  color:var(--white);
+  border:1px solid var(--line);
+  font-family:var(--barlow);
+  font-size:12px;
+  letter-spacing:0.04em;
+  cursor:pointer;
+  text-decoration:none;
+  transition:background-color 120ms ease, border-color 120ms ease;
+}
+.lead-action-btn:hover{
+  background:var(--chip-strong);
+  border-color:var(--line-strong);
+}
+
+@media (max-width: 640px){
+  .dash-lead-row{
+    flex-direction:column;
+    align-items:stretch;
+    gap:10px;
+  }
+  .dash-lead-row > div:last-child{
+    justify-content:flex-end;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ALERTS PANEL — At a Glance
+   -----------------------------------------------------------------
+   Backs alerts.js renderCard() (Account Loss / Out of Stock / Reorder
+   Due). Same situation as the call queue: full markup shipped without
+   any CSS, so the panel rendered as an unstyled wall of stacked text.
+   These styles communicate severity via a tinted left border, severity-
+   colored type badge, structured 2-col detail grid, and an action row
+   with severity-colored primary CTA.
+═══════════════════════════════════════════════════════════════ */
+
+/* Header counts (e.g. "1 Critical · 2 OOS · 2 Reorder") — sit in
+   #alert-header-counts inside the card header. */
+.alert-count-badge{
+  display:inline-flex;
+  align-items:center;
+  font-family:var(--teko);
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:0.10em;
+  text-transform:uppercase;
+  padding:3px 8px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:var(--chip);
+  color:var(--white);
+}
+.alert-count-badge + .alert-count-badge{ margin-left:5px; }
+.alert-count-badge--critical{ color:#FFB4AE; border-color:rgba(255,59,48,0.45); background:rgba(255,59,48,0.12); }
+.alert-count-badge--oos     { color:#FFC58A; border-color:rgba(255,138,0,0.45); background:rgba(255,138,0,0.12); }
+.alert-count-badge--reorder { color:var(--gold); border-color:rgba(245,228,0,0.42); background:rgba(245,228,0,0.10); }
+
+/* Individual alert cards in #alert-list (scroll container). */
+.alert-card{
+  position:relative;
+  padding:14px 16px 16px;
+  border-bottom:1px solid var(--line);
+  border-left:3px solid var(--line-strong);
+  background:transparent;
+  transition:background-color 120ms ease;
+}
+.alert-card:hover{ background:rgba(255,255,255,0.015); }
+.alert-card:last-child{ border-bottom:none; }
+.alert-card--critical{
+  border-left-color:var(--red);
+  background:linear-gradient(180deg, rgba(255,59,48,0.06) 0%, rgba(0,0,0,0) 60%);
+}
+.alert-card--oos{ border-left-color:var(--orange); }
+.alert-card--reorder{ border-left-color:var(--gold); }
+
+/* Card top row: severity badge + dismiss button */
+.alert-card-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:8px;
+}
+.alert-type-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  font-family:var(--teko);
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:0.12em;
+  text-transform:uppercase;
+  padding:3px 9px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:var(--chip);
+  color:var(--white);
+}
+.alert-type-badge--critical{ color:#FFB4AE; border-color:rgba(255,59,48,0.45); background:rgba(255,59,48,0.12); }
+.alert-type-badge--oos     { color:#FFC58A; border-color:rgba(255,138,0,0.45); background:rgba(255,138,0,0.12); }
+.alert-type-badge--reorder { color:var(--gold); border-color:rgba(245,228,0,0.42); background:rgba(245,228,0,0.10); }
+
+.alert-dismiss-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:24px;
+  height:24px;
+  border-radius:6px;
+  background:transparent;
+  color:var(--gray-dim);
+  font-size:14px;
+  cursor:pointer;
+  transition:background-color 120ms ease, color 120ms ease;
+}
+.alert-dismiss-btn:hover{
+  background:var(--chip);
+  color:var(--white);
+}
+
+/* Account name — primary anchor of each card */
+.alert-account-name{
+  font-family:var(--barlow);
+  font-size:15px;
+  font-weight:600;
+  color:var(--white);
+  letter-spacing:0.01em;
+  margin-bottom:10px;
+}
+
+/* Detail grid — label/value pairs in a 2-column rhythm */
+.alert-details{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:10px 14px;
+  margin-bottom:12px;
+}
+.alert-detail-pair{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:0;
+}
+.alert-detail-label{
+  font-family:var(--barlow);
+  font-size:10px;
+  font-weight:500;
+  letter-spacing:0.10em;
+  text-transform:uppercase;
+  color:var(--gray-dim);
+}
+.alert-detail-value{
+  font-family:var(--barlow);
+  font-size:13px;
+  font-weight:500;
+  color:var(--white);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.alert-detail-unit{
+  font-size:11px;
+  font-weight:400;
+  color:var(--gray-dim);
+  margin-left:2px;
+}
+.alert-value--critical{ color:#FF6B66; }
+.alert-value--oos     { color:#FFB066; }
+.alert-value--reorder { color:var(--gold); }
+
+/* Action row */
+.alert-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.alert-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:7px 11px;
+  border-radius:var(--r-sm);
+  font-family:var(--teko);
+  font-size:13px;
+  font-weight:600;
+  letter-spacing:0.06em;
+  text-transform:uppercase;
+  border:1px solid var(--line);
+  background:var(--chip);
+  color:var(--white);
+  cursor:pointer;
+  transition:background-color 120ms ease, border-color 120ms ease, transform 80ms ease;
+}
+.alert-btn:hover{ background:var(--chip-strong); border-color:var(--line-strong); }
+.alert-btn:active{ transform:scale(0.98); }
+.alert-btn--critical{ background:var(--red); color:var(--white); border-color:transparent; }
+.alert-btn--critical:hover{ background:#E62E24; border-color:transparent; }
+.alert-btn--oos{ background:var(--orange); color:var(--bg); border-color:transparent; }
+.alert-btn--oos:hover{ background:#E67A00; border-color:transparent; }
+.alert-btn--reorder{ background:var(--gold); color:var(--bg); border-color:transparent; }
+.alert-btn--reorder:hover{ background:var(--gold-dark); border-color:transparent; }
+.alert-btn--outline{
+  background:transparent;
+  color:var(--white);
+  border-color:var(--line-strong);
+}
+.alert-btn--outline:hover{ background:var(--chip); }
+
+/* Mobile: collapse the 2-col details grid + tighten the action row */
+@media (max-width: 640px){
+  .alert-details{ grid-template-columns:1fr; gap:8px 0; }
+  .alert-detail-value{ white-space:normal; }
+  .alert-btn{ font-size:12px; padding:6px 10px; }
 }
