@@ -27,7 +27,7 @@
     }
   </script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
-  <link rel="stylesheet" href="/sales-floor/css/styles.css?v=21" />
+  <link rel="stylesheet" href="/sales-floor/css/styles.css?v=22" />
 </head>
 <body class="bg-brand-black text-brand-white font-barlow">
 
@@ -492,12 +492,19 @@
 
 
       <!-- ═══════════════════ ORDERS DUE ═══════════════════ -->
-      <!-- Three columns powered by /api/sales-floor-leaflink-orders.
-           Reorder Due is wired now (any Highsman LeafLink order across all
-           Canfections sellers; 30-day gap on most-recent order). Low Inv
-           and Off Menu are placeholders — Reid will wire data sources later.
-           Off Menu is the most critical of the three per Reid; flagged
-           clearly in the placeholder copy so we don't forget. -->
+      <!-- Three columns:
+           • Col 1 — Reorder Due (live): /api/sales-floor-leaflink-orders →
+             deriveOrdersDue() against accounts[] + lastOrderByName from
+             Zoho Inventory. 30-day staleness threshold. MA excluded.
+           • Col 2 — Low Inventory Alert (live): /api/sales-floor-lit-alerts
+             → lowInventory[]. Powered by lit-alerts.js's evaluateReorderDue
+             score on the VPS — retailers in the 30-day reorder cooldown.
+           • Col 3 — Off Menu Alert (live, most critical): same proxy →
+             offMenu[]. Powered by the derived signal: retailers where every
+             SKU in their 60-day active set is currently OOS.
+           Lit-driven cards reuse accountToCardHtml so reps get the same
+           Training / Send Reorder / New Product / Flag Pete action surface
+           as Reorder Due — only the header severity badge changes. -->
       <div id="tab-orders" class="tab-content hidden">
         <div class="hs-orders-grid">
 
@@ -528,38 +535,40 @@
             </div>
           </div>
 
-          <!-- Column 2 — Low Inventory Alert (placeholder) -->
-          <div class="hs-orders-col hs-orders-col--placeholder">
+          <!-- Column 2 — Low Inventory Alert (live, lit-alerts driven) -->
+          <div class="hs-orders-col">
             <div class="hs-orders-col-head">
               <div class="hs-orders-col-title">
                 <i class="fa-solid fa-warehouse"></i> Low Inventory Alert
               </div>
-              <div class="hs-orders-col-meta">Coming soon</div>
+              <div class="hs-orders-col-meta" id="low-inv-meta">—</div>
             </div>
-            <div class="hs-orders-col-sub">Shops sitting on 3+ days of cover. Wire this up when shop-level POS data is ready.</div>
-            <div class="hs-orders-col-body">
+            <div class="hs-orders-col-sub">Shops in reorder-due cooldown — Lit Alerts flagged ≥50% of their active SKUs as low or out. Send reorder.</div>
+            <div id="low-inv-list" class="hs-orders-col-body">
               <div class="hs-empty-state hs-empty-state--col">
-                <div class="hs-empty-state-icon"><i class="fa-solid fa-toolbox"></i></div>
-                Data source pending.
+                <div class="hs-empty-state-icon"><i class="fa-solid fa-spinner fa-spin"></i></div>
+                Loading Lit alerts...
               </div>
             </div>
+            <div id="low-inv-footer" class="hs-orders-col-footer" style="display:none;"></div>
           </div>
 
-          <!-- Column 3 — Off Menu Alert (placeholder, most critical) -->
-          <div class="hs-orders-col hs-orders-col--placeholder hs-orders-col--critical">
+          <!-- Column 3 — Off Menu Alert (live, lit-alerts driven, most critical) -->
+          <div class="hs-orders-col hs-orders-col--critical">
             <div class="hs-orders-col-head">
               <div class="hs-orders-col-title">
                 <i class="fa-solid fa-triangle-exclamation"></i> Off Menu Alert
               </div>
-              <div class="hs-orders-col-meta">Coming soon — critical</div>
+              <div class="hs-orders-col-meta" id="off-menu-meta">—</div>
             </div>
-            <div class="hs-orders-col-sub">Shops where Highsman fell off the active menu. Drop everything and call.</div>
-            <div class="hs-orders-col-body">
+            <div class="hs-orders-col-sub">Shops where every Highsman SKU has fallen off the menu (active in last 60 days, all currently OOS). Drop everything and call.</div>
+            <div id="off-menu-list" class="hs-orders-col-body">
               <div class="hs-empty-state hs-empty-state--col">
-                <div class="hs-empty-state-icon"><i class="fa-solid fa-toolbox"></i></div>
-                Data source pending.
+                <div class="hs-empty-state-icon"><i class="fa-solid fa-spinner fa-spin"></i></div>
+                Loading Lit alerts...
               </div>
             </div>
+            <div id="off-menu-footer" class="hs-orders-col-footer" style="display:none;"></div>
           </div>
 
         </div>
@@ -1294,7 +1303,7 @@
 <script src="/sales-floor/js/sms.js"></script>
 <script src="/sales-floor/js/sms-templates.js"></script>
 <script src="/sales-floor/js/missed-calls.js"></script>
-<script src="/sales-floor/js/app.js?v=29"></script>
+<script src="/sales-floor/js/app.js?v=30"></script>
 <script>
   // ───────────────────────────────────────────────────────────
   // DRAWER (mobile sidebar)
