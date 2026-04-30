@@ -644,19 +644,21 @@ function renderDashboard() {
   }
 
   // ─── Reorders Due snapshot (middle At a Glance card) ──────────────────────
+  // Uses deriveOrdersDue() — the same client-side function the Orders Due tab
+  // uses — rather than the reorderDue[] variable from the LeafLink API which
+  // is a separate pre-computed list and may differ.
   const reordersEl = document.getElementById('dashboard-reorders');
   if (reordersEl) {
-    if (!leaflinkOrdersFetched) {
-      reordersEl.innerHTML = `<div class="hs-empty-state">Loading…</div>`;
-    } else if (reorderDue.length === 0) {
+    const allReorders = (typeof deriveOrdersDue === 'function') ? deriveOrdersDue() : [];
+    if (allReorders.length === 0) {
       reordersEl.innerHTML = `
         <div class="hs-empty-state">
           <div class="hs-empty-state-icon"><i class="fa-solid fa-clipboard-check"></i></div>
           Inbox zero on reorders. Spark Greatness.
         </div>`;
     } else {
-      const top = reorderDue.slice(0, 4);
-      const overflow = reorderDue.length - top.length;
+      const top = allReorders.slice(0, 4);
+      const overflow = allReorders.length - top.length;
       const rows = top.map(r => {
         const days = Number.isFinite(r.daysSinceLastOrder) ? r.daysSinceLastOrder : 0;
         const sev  = days >= 60 ? 'is-critical' : days >= 45 ? 'is-warn' : '';
@@ -664,7 +666,7 @@ function renderDashboard() {
           <div class="hs-orders-snap-row">
             <div class="hs-orders-snap-name">
               ${escapeHtml(r.customerName || '—')}
-              ${r.state ? `<span class="hs-orders-snap-state">${escapeHtml(r.state)}</span>` : ''}
+              ${r.stateCode ? `<span class="hs-orders-snap-state">${escapeHtml(r.stateCode)}</span>` : ''}
             </div>
             <div class="hs-orders-snap-days ${sev}">${days}d</div>
           </div>`;
@@ -693,8 +695,8 @@ function updateSummaryBanner() {
     .filter(c => ACTIVE_STATES.includes(c.cardState))
     .map(c => c.Id || c.accountId || c.customerName || '')
     .sort().join(',');
-  const reorderIds  = reorderDue
-    .map(r => r.accountId || r.customerName || '')
+  const reorderIds  = (typeof deriveOrdersDue === 'function' ? deriveOrdersDue() : reorderDue)
+    .map(r => r.id || r.accountId || r.customerName || '')
     .sort().join(',');
   const currentKey  = `nc:${newCustIds}|ro:${reorderIds}`;
 
