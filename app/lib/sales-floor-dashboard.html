@@ -1325,7 +1325,7 @@
 <script src="/sales-floor/js/sms.js"></script>
 <script src="/sales-floor/js/sms-templates.js"></script>
 <script src="/sales-floor/js/missed-calls.js"></script>
-<script src="/sales-floor/js/app.js?v=32"></script>
+<script src="/sales-floor/js/app.js?v=34"></script>
 <script src="/sales-floor/js/lit-state-filter.js?v=1"></script>
 <script>
   // ───────────────────────────────────────────────────────────
@@ -1414,8 +1414,14 @@
           el.classList.toggle('active', el.dataset.bottomNav === tab);
         });
 
-        // Scroll the scroll area to the top on tab change for mobile clarity
-        document.querySelector('.hs-scroll-area')?.scrollTo({ top: 0, behavior: 'instant' });
+        // Scroll the scroll area to the top on tab change. Fired twice:
+        // immediately (hides the old scroll position as the tab flips) and
+        // after a frame (catches any layout shift from tab content rendering).
+        const scrollArea = document.querySelector('.hs-scroll-area');
+        if (scrollArea) {
+          scrollArea.scrollTo({ top: 0, behavior: 'instant' });
+          requestAnimationFrame(() => scrollArea.scrollTo({ top: 0, behavior: 'instant' }));
+        }
       };
     }
     // Today chip
