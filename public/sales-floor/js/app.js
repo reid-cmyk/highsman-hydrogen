@@ -643,38 +643,64 @@ function renderDashboard() {
     }
   }
 
-  // ─── Reorders Due snapshot (middle At a Glance card) ──────────────────────
-  // Uses deriveOrdersDue() — the same client-side function the Orders Due tab
-  // uses — rather than the reorderDue[] variable from the LeafLink API which
-  // is a separate pre-computed list and may differ.
+  // ─── Alerts snapshot (middle At a Glance card) ────────────────────────────
+  // Severity-sorted: Off Menu (critical/red) → Low Inventory (orange) →
+  // Reorder Due (gold, most-overdue first). Mirrors the three columns of the
+  // Orders Due tab in a single compact list so reps see the hottest accounts
+  // without switching tabs.
   const reordersEl = document.getElementById('dashboard-reorders');
   if (reordersEl) {
-    const allReorders = (typeof deriveOrdersDue === 'function') ? deriveOrdersDue() : [];
-    if (allReorders.length === 0) {
+    // Helper: resolve account name + state from a Lit zohoAccountId
+    const litAcct = (zohoId) => accounts.find(a => a && a.id === zohoId) || null;
+
+    // Build severity-sorted rows
+    const rows = [];
+
+    // Tier 1 — Off Menu (red/critical)
+    for (const item of (litAlertsOffMenu || [])) {
+      const a = litAcct(item.zohoAccountId);
+      if (!a) continue;
+      rows.push({ name: a.Account_Name || '—', state: normalizeStateCode(a._state || a.Billing_State) || '', tier: 'critical', label: 'OFF MENU' });
+    }
+    // Tier 2 — Low Inventory (orange)
+    for (const item of (litAlertsLowInv || [])) {
+      const a = litAcct(item.zohoAccountId);
+      if (!a) continue;
+      rows.push({ name: a.Account_Name || '—', state: normalizeStateCode(a._state || a.Billing_State) || '', tier: 'warn', label: 'LOW INV' });
+    }
+    // Tier 3 — Reorder Due (gold → red at 60d)
+    const reorders = (typeof deriveOrdersDue === 'function') ? deriveOrdersDue() : [];
+    for (const r of reorders) {
+      const days = Number.isFinite(r.daysSinceLastOrder) ? r.daysSinceLastOrder : 0;
+      rows.push({ name: r.account?.Account_Name || '—', state: r.stateCode || '', tier: days >= 60 ? 'critical' : 'reorder', label: `${days}d` });
+    }
+
+    if (rows.length === 0) {
       reordersEl.innerHTML = `
         <div class="hs-empty-state">
-          <div class="hs-empty-state-icon"><i class="fa-solid fa-clipboard-check"></i></div>
-          Inbox zero on reorders. Spark Greatness.
+          <div class="hs-empty-state-icon"><i class="fa-solid fa-circle-check"></i></div>
+          All clear — no priority alerts.
         </div>`;
     } else {
-      const top = allReorders.slice(0, 4);
-      const overflow = allReorders.length - top.length;
-      const rows = top.map(r => {
-        const days = Number.isFinite(r.daysSinceLastOrder) ? r.daysSinceLastOrder : 0;
-        const sev  = days >= 60 ? 'is-critical' : days >= 45 ? 'is-warn' : '';
+      const top = rows.slice(0, 5);
+      const overflow = rows.length - top.length;
+      const rowsHtml = top.map(r => {
+        const badgeCls = r.tier === 'critical' ? 'is-critical' : r.tier === 'warn' ? 'is-warn' : '';
+        const rowCls   = r.tier === 'critical' ? 'hs-orders-snap-row--critical'
+                       : r.tier === 'warn'     ? 'hs-orders-snap-row--warn' : '';
         return `
-          <div class="hs-orders-snap-row">
+          <div class="hs-orders-snap-row ${rowCls}">
             <div class="hs-orders-snap-name">
-              ${escapeHtml(r.customerName || '—')}
-              ${r.stateCode ? `<span class="hs-orders-snap-state">${escapeHtml(r.stateCode)}</span>` : ''}
+              ${escapeHtml(r.name)}
+              ${r.state ? `<span class="hs-orders-snap-state">${escapeHtml(r.state)}</span>` : ''}
             </div>
-            <div class="hs-orders-snap-days ${sev}">${days}d</div>
+            <span class="hs-orders-snap-days ${badgeCls}">${escapeHtml(r.label)}</span>
           </div>`;
       }).join('');
       const more = overflow > 0
         ? `<button onclick="showTab('orders')" class="hs-orders-snap-more">+ ${overflow} more →</button>`
         : '';
-      reordersEl.innerHTML = rows + more;
+      reordersEl.innerHTML = rowsHtml + more;
     }
   }
 
