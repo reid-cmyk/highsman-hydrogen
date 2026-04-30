@@ -2950,11 +2950,28 @@ function callLead(lead) {
 
 function emailFromBrief() {
   if (!currentBriefLead) return;
+  const lead = currentBriefLead;
+  const name = lead._fullName || '';
+  const company = lead.Company || '';
   closeBrief();
-  document.getElementById('email-to').value = currentBriefLead.Email || '';
-  document.getElementById('email-name').value = currentBriefLead._fullName || '';
-  document.getElementById('email-company').value = currentBriefLead.Company || '';
+  document.getElementById('email-to').value = lead.Email || '';
+  document.getElementById('email-name').value = name;
+  document.getElementById('email-company').value = company;
   showTab('compose');
+  // Auto-pick the `intro` template — most leads pulled from the call queue
+  // are first-touch outreach. Reps can switch templates with one click if
+  // the conversation is further along. pickTemplate (defined inline at the
+  // bottom of sales-floor-dashboard.html) fills subject/body, highlights
+  // the active template card + chip, and scrolls/focuses the To field.
+  if (typeof window.pickTemplate === 'function') {
+    window.pickTemplate('intro');
+  }
+  // Without a toast the brief→compose handoff is too easy to miss — the
+  // modal closes silently and the tab switch alone doesn't read as
+  // "we drafted something for you, take it from here." Recipient label
+  // degrades gracefully so we never show "Drafting email to ".
+  const recipient = name || company || 'this lead';
+  toast(`Drafting email to ${recipient} — change the template if needed`, 'info');
 }
 
 // Sister of emailFromBrief — opens (or starts) an SMS thread with the
@@ -2989,9 +3006,32 @@ async function sendTemplateEmail() {
     const result = await Gmail.send({ to, subject, body });
     const from = result?.from ? ` from ${result.from}` : '';
     toast(`Email sent to ${to}${from}`, 'success');
+    // Mirror typical mail-client UX: after a successful send, reset the form
+    // and return to the Dashboard. Previously the compose stayed filled in,
+    // which read as "did anything actually send?" plus risked a double-send
+    // if the rep hit Send again. The dashboard is where the rep was working
+    // from in the most common path (Brief → Email → Send → back to queue).
+    resetComposeForm();
+    showTab('dashboard');
   } catch (err) {
     toast(`Send failed: ${err.message}`, 'error');
   }
+}
+
+// Clear every field and visual state on the Compose tab so a stale draft
+// can't be accidentally re-sent and the next visit starts from a clean
+// slate. Mirrors the inverse of pickTemplate() + the field-fill in
+// emailFromBrief() / quickEmail().
+function resetComposeForm() {
+  for (const id of ['email-to', 'email-name', 'email-company', 'email-subject', 'email-body']) {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  }
+  const tmpl = document.getElementById('email-template');
+  if (tmpl) tmpl.value = '';
+  document.getElementById('email-preview-box')?.classList.add('hidden');
+  document.getElementById('compose-template-chip')?.classList.add('hidden');
+  document.querySelectorAll('.template-card').forEach((c) => c.classList.remove('active'));
 }
 
 async function sendQuickEmail() {
