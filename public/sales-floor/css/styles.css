@@ -5026,3 +5026,21 @@ details[open] > summary .brief-history-chev{
   .alert-detail-value{ white-space:normal; }
   .alert-btn{ font-size:12px; padding:6px 10px; }
 }
+
+/* ──────────────────────────────────────────────────────────────────────
+   Orders Due column footer — used by the Lit-driven Off Menu + Low Inv
+   columns to surface unmapped/unmatched alerts (zohoAccountId gaps in
+   retailer-map.json on the VPS, or accounts[] not loaded locally) without
+   cluttering the card list. Rendered by renderLitColumn() in app.js.
+   ────────────────────────────────────────────────────────────────────── */
+.hs-orders-col-footer{
+  font-family:var(--barlow, 'Barlow Semi Condensed', sans-serif);
+  font-size:11px;
+  letter-spacing:0.04em;
+  color:var(--gray-dim, #777);
+  text-align:center;
+  padding:8px 4px 0;
+  margin-top:6px;
+  border-top:1px dashed rgba(255,255,255,0.06);
+  font-style:italic;
+}

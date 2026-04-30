@@ -44,6 +44,20 @@ let leaflinkOrdersMeta = null;
 let leaflinkOrdersFetched = 0;     // ms timestamp of last successful fetch
 let leaflinkOrdersLoading = false; // suppress overlapping fetches
 
+// Lit Alerts-driven Orders Due columns 2+3. Source: /api/sales-floor-lit-alerts
+// (server-side proxy to ~/lit-alerts/lit-alerts-api.js on the OpenClaw VPS).
+//   • litAlertsOffMenu — retailers where the entire 60-day active SKU set
+//     is currently out of stock (Off Menu Alert column, red/critical).
+//   • litAlertsLowInv  — retailers in the 30-day reorder-due cooldown window
+//     who are NOT also off menu (Low Inventory Alert column, orange).
+// Mutual exclusion is enforced VPS-side. See Highsman/Website Integration/
+// api-contract-lit-alerts.md for the canonical shape.
+let litAlertsOffMenu = [];
+let litAlertsLowInv = [];
+let litAlertsMeta = null;
+let litAlertsFetched = 0;
+let litAlertsLoading = false;
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   // The server injects window.__HS_REP__ on every /sales-floor/app response
@@ -180,6 +194,11 @@ function showTab(tab) {
   // but tab focus is a strong "I want fresh data" signal.
   if (tab === 'orders' || tab === 'newcustomers') {
     loadLeaflinkOrders({force: false}).catch(() => {});
+  }
+  // Lit alerts powers Cols 2+3 of Orders Due (Low Inv + Off Menu). Only
+  // refresh on the orders tab since New Customers doesn't consume them.
+  if (tab === 'orders') {
+    loadLitAlerts({force: false}).catch(() => {});
   }
   if (tab === 'funnel') {
     loadFunnel({force: false}).catch(() => {});
@@ -416,6 +435,11 @@ function renderAll() {
   // Last-order $ for the account-card pill. Independent fetch so a slow
   // Inventory call doesn't block the rest of the dashboard.
   loadInventoryLastOrders({force: false}).catch(() => {});
+  // Lit alerts (Off Menu + Low Inv columns on Orders Due). Independent of
+  // LeafLink — separate VPS-side data source, separate failure mode.
+  if (typeof loadLitAlerts === 'function') {
+    loadLitAlerts({force: false}).catch(() => {});
+  }
 }
 
 // ─── Inventory last-orders (primary source for the account-card pill) ─────
@@ -453,6 +477,11 @@ async function loadInventoryLastOrders({force = false} = {}) {
     if (typeof renderAccounts === 'function') renderAccounts();
     if (typeof renderOrdersStateTabs === 'function') renderOrdersStateTabs();
     if (typeof renderOrders === 'function') renderOrders();
+    // Lit cards resolve their zohoAccountId against accounts[] — when
+    // accounts refresh, the per-card body has to repaint too. Cheap call
+    // that's a no-op when litAlertsFetched is still 0.
+    if (typeof renderLitOffMenu === 'function') renderLitOffMenu();
+    if (typeof renderLitLowInv === 'function') renderLitLowInv();
     if (typeof updateStats === 'function') updateStats();
   }
 }
@@ -754,6 +783,176 @@ async function loadLeaflinkOrders({force = false} = {}) {
     renderDashboard();
     updateStats();
   }
+}
+
+// ─── Lit Alerts loader (Off Menu + Low Inv columns on Orders Due) ──────────
+// Source: /api/sales-floor-lit-alerts → server-side proxy to lit-alerts-api
+// on the OpenClaw VPS. The proxy soft-degrades to {offMenu:[], lowInventory:[],
+// meta:{error:"not_configured"}} on preview deploys (env vars don't inherit
+// from prod per decisions.md 2026-04-29 — same pattern as Zoho on previews).
+//
+// Cache: 120s. Lit-alerts.js polls Lit's Partner API every 120 minutes, so
+// a tighter client cache would just spin without value. Reps tabbing around
+// trigger one fetch per ~2 min in steady state.
+async function loadLitAlerts({force = false} = {}) {
+  if (litAlertsLoading) return;
+  if (!force && litAlertsFetched && Date.now() - litAlertsFetched < 120_000) {
+    return;
+  }
+  litAlertsLoading = true;
+  try {
+    const res = await fetch('/api/sales-floor-lit-alerts', {
+      credentials: 'include',
+      headers: {Accept: 'application/json'},
+    });
+    if (!res.ok) throw new Error(`lit-alerts ${res.status}`);
+    const data = await res.json();
+    if (!data?.ok) throw new Error(data?.error || 'lit-alerts failed');
+    litAlertsOffMenu = Array.isArray(data.offMenu) ? data.offMenu : [];
+    litAlertsLowInv = Array.isArray(data.lowInventory) ? data.lowInventory : [];
+    litAlertsMeta = data.meta || null;
+    litAlertsFetched = Date.now();
+  } catch (err) {
+    console.warn('[loadLitAlerts] failed', err);
+    // Surface an error pill instead of leaving the columns spinning forever.
+    // Stamp fetched-at so cache cooldown applies — failed call still counts
+    // for backoff purposes; reps can hit the orders tab again to retry.
+    litAlertsFetched = Date.now();
+    litAlertsMeta = {...(litAlertsMeta || {}), error: 'network'};
+  } finally {
+    litAlertsLoading = false;
+    renderLitOffMenu();
+    renderLitLowInv();
+  }
+}
+
+// Shared shape for both Lit-driven columns. Reuses accountToCardHtml so
+// every card carries the same Training / Send Reorder / New Product / Flag
+// Pete action surface as Reorder Due — only the header severity badge
+// differs. Rows whose zohoAccountId doesn't resolve to a local accounts[]
+// entry are skipped here and counted in the column footer (consistent with
+// the existing Reorder Due fallback pattern).
+function renderLitColumn({listId, metaId, footerId, rows, severity, severityClass, badgeLabel, vpsUnmappedKey, emptyCopy}) {
+  const list = document.getElementById(listId);
+  const meta = document.getElementById(metaId);
+  const footer = document.getElementById(footerId);
+  if (!list) return;
+
+  const rendered = [];
+  let unmatchedLocal = 0; // VPS gave us a zohoAccountId but accounts[] doesn't have it
+  for (const row of rows || []) {
+    if (!row || !row.zohoAccountId) continue;
+    const idx = accounts.findIndex(a => a && a.id === row.zohoAccountId);
+    const acct = idx >= 0 ? accounts[idx] : null;
+    if (!acct) {
+      unmatchedLocal++;
+      continue;
+    }
+    // Tooltip carries the underlying detail (active SKU count, score, etc).
+    let title = '';
+    if (severity === 'critical') {
+      const n = Number(row.activeSkuCount || 0);
+      title = `${n} active SKU${n === 1 ? '' : 's'} currently OOS at this retailer`;
+    } else {
+      const score = Number(row.score || 0);
+      const max = Number(row.maxScore || 0);
+      const pct = max ? Math.round((row.scorePct || 0) * 100) : 0;
+      title = `Reorder score ${score}/${max} (${pct}%) — ${row.activeSkuCount || 0} active SKUs`;
+    }
+    const badge = `<span class="hs-orders-days ${severityClass}" title="${escapeAttr(title)}">${escapeHtml(badgeLabel)}</span>`;
+    rendered.push(accountToCardHtml(acct, idx, {
+      headerExtraOverride: badge,
+      menuMode: 'reorder',
+    }));
+  }
+
+  // Meta pill — three states: loading, error/not-configured, live count.
+  if (meta) {
+    if (!litAlertsFetched) {
+      meta.textContent = '—';
+      meta.classList.remove('is-live', 'is-error');
+    } else if (litAlertsMeta?.error) {
+      const code = litAlertsMeta.error;
+      meta.textContent = code === 'not_configured' ? 'Not configured' : 'Sync error';
+      meta.classList.remove('is-live');
+      meta.classList.add('is-error');
+    } else {
+      meta.textContent = `${rendered.length} ${severity === 'critical' ? 'off menu' : 'low inv'}`;
+      meta.classList.remove('is-error');
+      meta.classList.add('is-live');
+    }
+  }
+
+  // Body — loading / not-configured / empty / list.
+  if (!litAlertsFetched) {
+    list.innerHTML = `<div class="hs-empty-state hs-empty-state--col">
+      <div class="hs-empty-state-icon"><i class="fa-solid fa-spinner fa-spin"></i></div>
+      Loading Lit alerts...
+    </div>`;
+  } else if (litAlertsMeta?.error === 'not_configured') {
+    list.innerHTML = `<div class="hs-empty-state hs-empty-state--col">
+      <div class="hs-empty-state-icon"><i class="fa-solid fa-toolbox"></i></div>
+      Lit alerts not configured on this deploy. Live data only on production.
+    </div>`;
+  } else if (litAlertsMeta?.error) {
+    list.innerHTML = `<div class="hs-empty-state hs-empty-state--col">
+      <div class="hs-empty-state-icon"><i class="fa-solid fa-circle-exclamation"></i></div>
+      Lit alerts sync failed. Reload the Orders Due tab to retry.
+    </div>`;
+  } else if (rendered.length === 0) {
+    list.innerHTML = `<div class="hs-empty-state hs-empty-state--col">
+      <div class="hs-empty-state-icon"><i class="fa-solid fa-check"></i></div>
+      ${escapeHtml(emptyCopy)}
+    </div>`;
+  } else {
+    list.innerHTML = rendered.join('');
+  }
+
+  // Footer surfaces the unmapped/unmatched gap so the retailer-map gap is
+  // visible without cluttering the card list. Combines:
+  //   • VPS-side unmapped: Lit retailer with no zohoAccountId in retailer-map
+  //   • Local-side unmatched: zohoAccountId present but not in accounts[]
+  // (typically a rep whose book-of-business filter excludes that account).
+  if (footer) {
+    const unmappedVps = Number((litAlertsMeta && litAlertsMeta[vpsUnmappedKey]) || 0);
+    const total = unmappedVps + unmatchedLocal;
+    if (total > 0 && litAlertsFetched && !litAlertsMeta?.error) {
+      const noun = total === 1 ? 'alert' : 'alerts';
+      footer.textContent = `+ ${total} ${noun} not yet linked to a Zoho account in your view`;
+      footer.style.display = '';
+    } else {
+      footer.textContent = '';
+      footer.style.display = 'none';
+    }
+  }
+}
+
+function renderLitOffMenu() {
+  renderLitColumn({
+    listId: 'off-menu-list',
+    metaId: 'off-menu-meta',
+    footerId: 'off-menu-footer',
+    rows: litAlertsOffMenu,
+    severity: 'critical',
+    severityClass: 'is-critical',
+    badgeLabel: 'OFF MENU',
+    vpsUnmappedKey: 'unmappedOffMenuCount',
+    emptyCopy: 'No shops have fallen off the menu. Spark Greatness.',
+  });
+}
+
+function renderLitLowInv() {
+  renderLitColumn({
+    listId: 'low-inv-list',
+    metaId: 'low-inv-meta',
+    footerId: 'low-inv-footer',
+    rows: litAlertsLowInv,
+    severity: 'low',
+    severityClass: 'is-warn',
+    badgeLabel: 'REORDER DUE',
+    vpsUnmappedKey: 'unmappedLowInvCount',
+    emptyCopy: 'No shops in reorder cooldown. Inventory is healthy across the board.',
+  });
 }
 
 // ─── Orders Due — derived from CRM accounts + Inventory last-order data ───
