@@ -131,8 +131,8 @@ a{ color:inherit; text-decoration:none; }
   border-radius:50%;
   object-fit:cover;
   flex-shrink:0;
-  border:2px solid rgba(255,255,255,0.80);
-  box-shadow:0 0 22px rgba(255,255,255,0.16), 0 0 44px rgba(255,255,255,0.06);
+  border:1px solid rgba(255,255,255,0.30);
+  box-shadow:0 0 14px rgba(255,255,255,0.08);
 }
 .hs-greeting{
   font-family:var(--teko);
@@ -539,7 +539,7 @@ a{ color:inherit; text-decoration:none; }
 ═══════════════════════════════════════════════════════════════ */
 .hs-stats-grid{
   display:grid;
-  grid-template-columns:repeat(4, minmax(0,1fr));
+  grid-template-columns:repeat(auto-fit, minmax(0,1fr));
   gap:10px;
   margin-top:4px;
 }
@@ -4385,10 +4385,10 @@ details[open] > summary .brief-history-chev{
 
 /* State Pulse strip ------------------------------------------------------- */
 .hs-state-pulse {
-  margin: 14px 0 22px;
-  padding: 14px 16px;
+  margin: 0 0 18px;      /* now first — no top margin */
+  padding: 16px 18px;
   background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
 }
 .hs-state-pulse-head {
@@ -4457,10 +4457,22 @@ details[open] > summary .brief-history-chev{
 .hs-state-tile-amount {
   font-family: var(--teko);
   font-weight: 600;
-  font-size: 28px;
+  font-size: 36px;
   color: var(--white);
   margin-top: 2px;
   line-height: 1;
+}
+/* Top-performing state tile — gold border + glow, set by JS after data loads */
+.hs-state-tile--top {
+  border-color: rgba(245, 228, 0, 0.55);
+  background: linear-gradient(160deg, rgba(245,228,0,0.07) 0%, #0E0E0E 100%);
+  box-shadow: 0 0 18px rgba(245,228,0,0.10);
+}
+.hs-state-tile--top .hs-state-tile-code {
+  color: var(--gold);
+}
+.hs-state-tile--top .hs-state-tile-amount {
+  color: var(--gold);
 }
 .hs-state-tile-sub {
   font-size: 13px;

@@ -27,7 +27,7 @@
     }
   </script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
-  <link rel="stylesheet" href="/sales-floor/css/styles.css?v=30" />
+  <link rel="stylesheet" href="/sales-floor/css/styles.css?v=31" />
 </head>
 <body class="bg-brand-black text-brand-white font-barlow">
 
@@ -106,7 +106,7 @@
       </button>
       <button onclick="showTab('orders')" id="nav-orders" class="hs-nav-btn">
         <i class="fa-solid fa-clipboard-list hs-nav-icon"></i>
-        <span>Orders Due</span>
+        <span>Reorders Due</span>
         <span id="orders-nav-badge" class="ml-auto hs-hot-badge hidden" style="background:#DC2626;"></span>
       </button>
       <button onclick="showTab('newcustomers')" id="nav-newcustomers" class="hs-nav-btn">
@@ -214,10 +214,7 @@
       <!-- ═══════════════════ DASHBOARD ═══════════════════ -->
       <div id="tab-dashboard" class="tab-content">
 
-        <!-- Activity summary banner — amber, full-tap target, localStorage-backed.
-             Shown when New Customers or Reorders Due have changed since the rep
-             last clicked it. Clicking scrolls to At a Glance and marks as read.
-             Populated + dismissed by updateSummaryBanner() in the inline script. -->
+        <!-- Activity summary banner -->
         <div id="critical-alert-banner" class="critical-banner hidden" role="button" tabindex="0"
              aria-label="New activity — click to review At a Glance">
           <div class="critical-banner-inner">
@@ -227,50 +224,7 @@
           <span class="critical-banner-tap">Tap to review ↓</span>
         </div>
 
-        <!-- Stats grid — 2-up on mobile, 4-up on desktop -->
-        <div class="hs-stats-grid">
-          <div class="stat-card" role="button" tabindex="0"
-               onclick="showTab('leads')"
-               aria-label="Hot Leads — open Leads tab">
-            <div class="hs-stat-label">Hot Leads</div>
-            <div class="hs-stat-number text-white" id="stat-hot">—</div>
-            <div class="hs-stat-sub">Call these first</div>
-          </div>
-          <div class="stat-card stat-card-orders" role="button" tabindex="0"
-               onclick="showTab('orders')"
-               aria-label="Reorder Due — open Orders tab">
-            <div class="hs-stat-label">Reorder Due</div>
-            <div class="hs-stat-number text-white" id="stat-reorder-due">—</div>
-            <div class="hs-stat-sub">Shops past 30 days</div>
-          </div>
-          <div class="stat-card stat-card-missed hidden" id="stat-card-missed"
-               role="button" tabindex="0"
-               onclick="document.getElementById('missed-calls-panel')?.scrollIntoView({behavior:'smooth',block:'start'})"
-               aria-label="Missed calls — jump to call-back panel">
-            <div class="hs-stat-label"><i class="fa-solid fa-phone-slash mr-1"></i> Call Back</div>
-            <div class="hs-stat-number text-white" id="stat-missed">0</div>
-            <div class="hs-stat-sub">Missed inbounds — return today</div>
-          </div>
-          <div class="stat-card" role="button" tabindex="0"
-               onclick="document.getElementById('section-call-queue')?.scrollIntoView({behavior:'smooth',block:'start'})"
-               aria-label="Calls Today — jump to Call Queue">
-            <div class="hs-stat-label">Calls Today</div>
-            <div class="hs-stat-number text-white" id="stat-calls">0</div>
-            <div class="hs-stat-sub">Keep the meter running</div>
-          </div>
-          <!-- Active Alerts stat removed — already shown in the Alerts panel
-               below. The hidden #stat-issues sink is preserved for alerts.js
-               so its counter write keeps working without a guard change. -->
-          <div class="stat-card hidden" aria-hidden="true">
-            <div class="hs-stat-number" id="stat-issues">—</div>
-          </div>
-        </div>
-
-        <!-- STATE PULSE — month-to-date booked revenue per focus state.
-             Source: /api/sales-floor-state-pulse (Zoho Inventory, 5 min
-             edge cache). Mirrors the state-tile logic /sales uses, so the
-             dashboard strip and the full /sales report can never disagree.
-             Head Office warehouse drops out via resolveStateFromLocation. -->
+        <!-- STATE PULSE — first section, top of dashboard -->
         <div class="hs-state-pulse" id="state-pulse">
           <div class="hs-state-pulse-head">
             <span class="hs-state-pulse-eyebrow">State Pulse</span>
@@ -313,6 +267,42 @@
           </div>
         </div>
 
+        <!-- Stats grid — full-width 3-up (auto-fit so hidden cards don't leave gaps) -->
+        <div class="hs-stats-grid">
+          <div class="stat-card" role="button" tabindex="0"
+               onclick="showTab('leads'); typeof filterLeads === 'function' && filterLeads('hot')"
+               aria-label="Hot Leads — open Leads tab filtered to hot">
+            <div class="hs-stat-label">Hot Leads</div>
+            <div class="hs-stat-number text-white" id="stat-hot">—</div>
+            <div class="hs-stat-sub">Call these first</div>
+          </div>
+          <div class="stat-card stat-card-orders" role="button" tabindex="0"
+               onclick="showTab('orders')"
+               aria-label="Reorders Due — open Orders tab">
+            <div class="hs-stat-label">Reorders Due</div>
+            <div class="hs-stat-number text-white" id="stat-reorder-due">—</div>
+            <div class="hs-stat-sub">Time to follow up</div>
+          </div>
+          <div class="stat-card stat-card-missed hidden" id="stat-card-missed"
+               role="button" tabindex="0"
+               onclick="document.getElementById('missed-calls-panel')?.scrollIntoView({behavior:'smooth',block:'start'})"
+               aria-label="Missed calls — jump to call-back panel">
+            <div class="hs-stat-label"><i class="fa-solid fa-phone-slash mr-1"></i> Call Back</div>
+            <div class="hs-stat-number text-white" id="stat-missed">0</div>
+            <div class="hs-stat-sub">Missed inbounds — return today</div>
+          </div>
+          <div class="stat-card" role="button" tabindex="0"
+               onclick="document.getElementById('section-call-queue')?.scrollIntoView({behavior:'smooth',block:'start'})"
+               aria-label="Calls Today — jump to Call Queue">
+            <div class="hs-stat-label">Calls Today</div>
+            <div class="hs-stat-number text-white" id="stat-calls">0</div>
+            <div class="hs-stat-sub">Keep the meter running</div>
+          </div>
+          <div class="stat-card hidden" aria-hidden="true">
+            <div class="hs-stat-number" id="stat-issues">—</div>
+          </div>
+        </div>
+
         <!-- CALL QUEUE — hero zone -->
         <div class="hs-section-break" id="section-call-queue">
           <span class="hs-section-label">Call Queue</span>
@@ -345,7 +335,7 @@
           <div class="hs-panel">
             <div class="hs-card-header">
               <span class="hs-card-title">New Customers</span>
-              <button onclick="showTab('newcustomers')" class="hs-link">All customers</button>
+              <button onclick="showTab('newcustomers')" class="hs-link">See New Customers</button>
             </div>
             <div id="dashboard-orders" class="p-5 space-y-3">
               <div class="hs-empty-state">Loading…</div>
@@ -1325,7 +1315,7 @@
 <script src="/sales-floor/js/sms.js"></script>
 <script src="/sales-floor/js/sms-templates.js"></script>
 <script src="/sales-floor/js/missed-calls.js"></script>
-<script src="/sales-floor/js/app.js?v=36"></script>
+<script src="/sales-floor/js/app.js?v=37"></script>
 <script src="/sales-floor/js/lit-state-filter.js?v=1"></script>
 <script>
   // ───────────────────────────────────────────────────────────
@@ -1387,7 +1377,7 @@
     const TITLES = {
       dashboard:    "Sales Floor — Dashboard",
       leads:        "Leads",
-      orders:       "Orders Due",
+      orders:       "Reorders Due",
       newcustomers: "New Customers",
       accounts:     "Accounts",
       compose:      "Email",
@@ -1510,6 +1500,48 @@
       });
       obs.observe(el, { childList: true, characterData: true, subtree: true });
     });
+  })();
+
+  // ───────────────────────────────────────────────────────────
+  // STATE PULSE — highlight top-performing state tile after data loads
+  // Watches all amount tiles; once all have real values, finds the max
+  // and adds .hs-state-tile--top to that tile (gold border + glow).
+  // ───────────────────────────────────────────────────────────
+  (function () {
+    function highlightTopState() {
+      const tiles = document.querySelectorAll('.hs-state-tile[data-state]');
+      let topTile = null, topVal = -1;
+      tiles.forEach(tile => {
+        tile.classList.remove('hs-state-tile--top');
+        const amountEl = tile.querySelector('[data-amount-for]');
+        if (!amountEl) return;
+        const raw = amountEl.textContent.replace(/[$,KMkm]/g, '').trim();
+        const val = parseFloat(raw) || 0;
+        // Re-scale K/M
+        const txt = amountEl.textContent;
+        const multiplied = txt.includes('K') || txt.includes('k') ? val * 1000
+                         : txt.includes('M') || txt.includes('m') ? val * 1000000
+                         : val;
+        if (multiplied > topVal) { topVal = multiplied; topTile = tile; }
+      });
+      if (topTile && topVal > 0) topTile.classList.add('hs-state-tile--top');
+    }
+    // Fire after all amounts populate
+    const grid = document.getElementById('state-pulse-grid');
+    if (grid) {
+      const obs = new MutationObserver(() => {
+        const amounts = grid.querySelectorAll('[data-amount-for]');
+        const allReal = [...amounts].every(el => el.textContent.trim() !== '—');
+        if (allReal) highlightTopState();
+      });
+      obs.observe(grid, { childList: true, subtree: true, characterData: true });
+    }
+    // Also re-highlight on manual refresh
+    const origRefresh = window.refreshStatePulse;
+    window.refreshStatePulse = function () {
+      if (typeof origRefresh === 'function') origRefresh.apply(this, arguments);
+      setTimeout(highlightTopState, 3000);
+    };
   })();
 
   // ───────────────────────────────────────────────────────────
