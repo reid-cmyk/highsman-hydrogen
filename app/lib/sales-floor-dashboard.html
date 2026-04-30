@@ -544,6 +544,9 @@
               <div class="hs-orders-col-meta" id="low-inv-meta">—</div>
             </div>
             <div class="hs-orders-col-sub">Shops in reorder-due cooldown — Lit Alerts flagged ≥50% of their active SKUs as low or out. Send reorder.</div>
+            <div class="hs-orders-toolbar">
+              <div id="low-inv-state-tabs" class="hs-state-tabs" role="tablist" aria-label="Filter Low Inventory by state"></div>
+            </div>
             <div id="low-inv-list" class="hs-orders-col-body">
               <div class="hs-empty-state hs-empty-state--col">
                 <div class="hs-empty-state-icon"><i class="fa-solid fa-spinner fa-spin"></i></div>
@@ -562,6 +565,9 @@
               <div class="hs-orders-col-meta" id="off-menu-meta">—</div>
             </div>
             <div class="hs-orders-col-sub">Shops where every Highsman SKU has fallen off the menu (active in last 60 days, all currently OOS). Drop everything and call.</div>
+            <div class="hs-orders-toolbar">
+              <div id="off-menu-state-tabs" class="hs-state-tabs" role="tablist" aria-label="Filter Off Menu by state"></div>
+            </div>
             <div id="off-menu-list" class="hs-orders-col-body">
               <div class="hs-empty-state hs-empty-state--col">
                 <div class="hs-empty-state-icon"><i class="fa-solid fa-spinner fa-spin"></i></div>
@@ -1304,6 +1310,7 @@
 <script src="/sales-floor/js/sms-templates.js"></script>
 <script src="/sales-floor/js/missed-calls.js"></script>
 <script src="/sales-floor/js/app.js?v=31"></script>
+<script src="/sales-floor/js/lit-state-filter.js?v=1"></script>
 <script>
   // ───────────────────────────────────────────────────────────
   // DRAWER (mobile sidebar)
