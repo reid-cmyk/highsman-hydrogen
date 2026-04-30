@@ -1,89 +1,37 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
-import {getRepFromRequest, type SalesRep} from '../lib/sales-floor-reps';
-import {encodeHeaderValue, encodeAddressHeader} from '../lib/email-headers';
+import {getRepFromRequest} from '../lib/sales-floor-reps';
+import {isGmailSAConfigured, sendEmailFromUser} from '../lib/gmail-sa';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sales Floor — Send Email (per-rep Gmail OAuth)
+// Sales Floor — Send Email (Service Account, Domain-Wide Delegation)
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/sales-floor-send-email
 //   body (JSON): { to, subject, body, cc?, replyTo? }
 //   → { ok: true, messageId, from } | { ok: false, error }
 //
-// Each logged-in rep has their own Gmail OAuth credential triple pointed to
-// their personal @highsman.com mailbox (see app/lib/sales-floor-reps.ts). The
-// resolver:
-//   1. Reads `sales_floor_rep` cookie → rep registry entry
-//   2. Looks up the env var NAMES in that entry
-//   3. Pulls the actual credentials off context.env (set in Oxygen)
-//   4. Sends the message as that rep's mailbox
+// History:
+//   v1 — per-rep OAuth refresh tokens. Each rep had GMAIL_CLIENT_ID /
+//        SECRET / REFRESH_TOKEN env vars pointing at their personal mailbox.
+//        Worked, but had two failure modes:
+//          a) The refresh token gets issued from the wrong mailbox (e.g.
+//             spark@ instead of sky@) and Gmail silently rewrites the From
+//             header back to the authenticated mailbox — resulting in Sky's
+//             customer emails arriving as `spark@highsman.com`.
+//          b) Adding a new rep meant provisioning a new OAuth consent flow
+//             + three new env vars + waiting for someone with that mailbox's
+//             password to complete the dance.
+//   v2 — switched to gmail-sa.ts. The Workspace SA
+//        `highsman-brief-reader@highsman.iam.gserviceaccount.com` (Client
+//        ID 102137292617151899463) already has gmail.send via domain-wide
+//        delegation in admin.google.com. It can impersonate ANY active
+//        @highsman.com mailbox — no per-rep tokens, no rewrite, no consent
+//        flow per rep. Adding a new rep = one entry in sales-floor-reps.ts.
 //
-// No rep = 401. No env vars for a configured rep = 503 (tells the caller
-// the deploy is missing their credentials). Any other failure surfaces the
-// Google error message verbatim so debugging stays easy.
+// Auth: rep cookie (sales_floor_rep). The cookie identifies WHO is sending,
+// the rep's `email` is what we impersonate. The body signature still uses
+// rep.signature so plain-text clients see the rep's name.
 // ─────────────────────────────────────────────────────────────────────────────
-
-// Per-rep token cache: one entry per rep id. Without this we'd hammer
-// Google's token endpoint on every send AND leak one rep's token to another
-// in the cross-rep case. 55-min TTL mirrors the Zoho pattern.
-type TokenCacheEntry = {token: string; expiresAt: number};
-const gmailTokenCache = new Map<string, TokenCacheEntry>();
-
-type RepEnv = {
-  clientId: string;
-  clientSecret: string;
-  refreshToken: string;
-  from: string;
-  fromName: string;
-};
-
-// Resolve the logged-in rep's Gmail environment from the Oxygen env bag.
-// Returns null if any required credential is missing so the caller can
-// surface a clean "not configured" error instead of a cryptic Google failure.
-function resolveRepEnv(rep: SalesRep, env: Record<string, string | undefined>): RepEnv | null {
-  const clientId = env[rep.gmail.clientIdVar];
-  const clientSecret = env[rep.gmail.clientSecretVar];
-  const refreshToken = env[rep.gmail.refreshTokenVar];
-  if (!clientId || !clientSecret || !refreshToken) return null;
-
-  const fromOverride = rep.gmail.fromVar ? env[rep.gmail.fromVar] : undefined;
-  const from = (fromOverride || rep.gmail.defaultFrom).trim();
-
-  return {
-    clientId,
-    clientSecret,
-    refreshToken,
-    from,
-    fromName: rep.gmail.fromName,
-  };
-}
-
-async function getGmailAccessToken(repId: string, cfg: RepEnv): Promise<string> {
-  const now = Date.now();
-  const cached = gmailTokenCache.get(repId);
-  if (cached && now < cached.expiresAt) return cached.token;
-
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: new URLSearchParams({
-      client_id: cfg.clientId,
-      client_secret: cfg.clientSecret,
-      refresh_token: cfg.refreshToken,
-      grant_type: 'refresh_token',
-    }),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Gmail token refresh failed (${res.status}): ${text.slice(0, 300)}`);
-  }
-  const data = (await res.json()) as {access_token: string; expires_in?: number};
-  gmailTokenCache.set(repId, {
-    token: data.access_token,
-    expiresAt: now + 55 * 60 * 1000,
-  });
-  return data.access_token;
-}
 
 function isValidEmail(s: string | null | undefined): boolean {
   if (!s) return false;
@@ -98,111 +46,14 @@ function escapeHtml(s: string): string {
     .replace(/>/g, '&gt;');
 }
 
-/** Convert plain-text template body → lightly-styled HTML (newlines → <br>). */
+/** Convert plain-text template body → lightly-styled HTML (newlines → <br>).
+ *  Preserves the styling the v1 endpoint used so existing emails render the
+ *  same after the SA swap — recipients shouldn't notice the backend change.
+ *  We pass this as `htmlBody` to sendEmailFromUser instead of relying on the
+ *  helper's default plainToHtml, so nothing about the visible message changes. */
 function bodyToHtml(plain: string): string {
   const safe = escapeHtml(plain || '').replace(/\n/g, '<br>');
   return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:1.55;color:#111;max-width:640px;">${safe}</div>`;
-}
-
-function base64UrlEncode(bytes: Uint8Array): string {
-  let binary = '';
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode.apply(
-      null,
-      bytes.subarray(i, i + chunk) as unknown as number[],
-    );
-  }
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-/** Multipart/alternative MIME: plain + HTML so all clients render correctly.
- *  Headers run through encodeHeaderValue / encodeAddressHeader from the
- *  shared lib so non-ASCII chars (em-dashes, smart quotes) survive. */
-function buildMimeMessage(m: {
-  fromName: string;
-  fromAddress: string;
-  to: string;
-  cc?: string | null;
-  replyTo?: string | null;
-  subject: string;
-  textBody: string;
-  htmlBody: string;
-}): Uint8Array {
-  const boundary = `hm_${Math.random().toString(36).slice(2, 14)}`;
-  // Headers that may carry non-ASCII (Subject, From display name) get RFC 2047
-  // encoded-words so downstream clients render UTF-8 correctly. Body parts
-  // declare 8bit so em-dashes and other UTF-8 chars in the body don't get
-  // mangled by transports that assumed 7bit-only.
-  const lines = [
-    `From: ${encodeAddressHeader(m.fromAddress, m.fromName)}`,
-    `To: ${m.to}`,
-    ...(m.cc ? [`Cc: ${m.cc}`] : []),
-    ...(m.replyTo ? [`Reply-To: ${m.replyTo}`] : []),
-    `Subject: ${encodeHeaderValue(m.subject)}`,
-    `MIME-Version: 1.0`,
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    '',
-    `--${boundary}`,
-    `Content-Type: text/plain; charset=UTF-8`,
-    `Content-Transfer-Encoding: 8bit`,
-    '',
-    m.textBody,
-    '',
-    `--${boundary}`,
-    `Content-Type: text/html; charset=UTF-8`,
-    `Content-Transfer-Encoding: 8bit`,
-    '',
-    m.htmlBody,
-    '',
-    `--${boundary}--`,
-    '',
-  ];
-  return new TextEncoder().encode(lines.join('\r\n'));
-}
-
-async function sendViaGmail(
-  repId: string,
-  cfg: RepEnv,
-  payload: {
-    to: string;
-    subject: string;
-    textBody: string;
-    cc?: string | null;
-    replyTo?: string | null;
-  },
-): Promise<string> {
-  const token = await getGmailAccessToken(repId, cfg);
-
-  const mime = buildMimeMessage({
-    fromName: cfg.fromName,
-    fromAddress: cfg.from,
-    to: payload.to,
-    cc: payload.cc || null,
-    replyTo: payload.replyTo || null,
-    subject: payload.subject,
-    textBody: payload.textBody,
-    htmlBody: bodyToHtml(payload.textBody),
-  });
-
-  const raw = base64UrlEncode(mime);
-  const res = await fetch(
-    'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
-    {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${token}`,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({raw}),
-    },
-  );
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Gmail send ${res.status}: ${text.slice(0, 300)}`);
-  }
-  const data = (await res.json().catch(() => ({}))) as {id?: string};
-  return data.id || '';
 }
 
 // ─── Action ──────────────────────────────────────────────────────────────────
@@ -221,16 +72,36 @@ export async function action({request, context}: ActionFunctionArgs) {
   }
 
   const env = context.env as Record<string, string | undefined>;
-  const repEnv = resolveRepEnv(rep, env);
-  if (!repEnv) {
+
+  // SA configuration check — surface a clean 503 if GOOGLE_SA_CLIENT_EMAIL /
+  // GOOGLE_SA_PRIVATE_KEY are missing in this deploy. Saves callers from
+  // chasing cryptic Google JWT errors.
+  if (!isGmailSAConfigured(env)) {
     return json(
       {
         ok: false,
-        error: `Gmail not configured for ${rep.firstName} on this deploy (missing ${rep.gmail.clientIdVar} / ${rep.gmail.clientSecretVar} / ${rep.gmail.refreshTokenVar}).`,
+        error:
+          'Gmail service account not configured on this deploy (missing GOOGLE_SA_CLIENT_EMAIL or GOOGLE_SA_PRIVATE_KEY).',
       },
       {status: 503},
     );
   }
+
+  // Resolve the impersonation target. We prefer the rep's primary email
+  // (`rep.email`) over anything in rep.gmail.* — the gmail.* config
+  // exists for legacy v1 OAuth tokens which we no longer need, but
+  // `rep.email` is the canonical "who is this rep" mailbox.
+  const fromUser = rep.email.trim().toLowerCase();
+  if (!isValidEmail(fromUser)) {
+    return json(
+      {ok: false, error: `Rep ${rep.id} has no usable email on file.`},
+      {status: 500},
+    );
+  }
+
+  // Display name — keeps the existing "Sky Lima — Highsman" treatment so
+  // the From header in the recipient inbox reads as a person, not a brand.
+  const fromName = rep.gmail.fromName || rep.displayName;
 
   // Accept JSON or form-encoded bodies.
   let payload: any;
@@ -269,21 +140,33 @@ export async function action({request, context}: ActionFunctionArgs) {
   }
 
   try {
-    const messageId = await sendViaGmail(rep.id, repEnv, {
-      to,
-      subject,
-      textBody: body,
-      cc,
-      replyTo,
-    });
+    const messageId = await sendEmailFromUser(
+      fromUser,
+      {
+        to,
+        subject,
+        textBody: body,
+        htmlBody: bodyToHtml(body),
+        cc,
+        replyTo,
+        fromName,
+      },
+      env,
+    );
     return json({
       ok: true,
       messageId,
-      from: repEnv.from,
+      from: fromUser,
       rep: {id: rep.id, firstName: rep.firstName},
     });
   } catch (err: any) {
     console.error('[sales-floor-send-email] send error:', err.message);
+    // Surface the Google error verbatim — typical causes (still possible
+    // even with SA path):
+    //   • Domain-wide delegation not authorized for gmail.send → admin
+    //     console fix, not code.
+    //   • fromUser mailbox doesn't exist or was suspended → check Workspace.
+    //   • Daily Gmail quota exceeded → wait, or split sends across mailboxes.
     return json(
       {ok: false, error: err.message || 'Gmail send failed.'},
       {status: 502},
