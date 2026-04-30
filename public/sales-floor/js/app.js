@@ -2950,11 +2950,28 @@ function callLead(lead) {
 
 function emailFromBrief() {
   if (!currentBriefLead) return;
+  const lead = currentBriefLead;
+  const name = lead._fullName || '';
+  const company = lead.Company || '';
   closeBrief();
-  document.getElementById('email-to').value = currentBriefLead.Email || '';
-  document.getElementById('email-name').value = currentBriefLead._fullName || '';
-  document.getElementById('email-company').value = currentBriefLead.Company || '';
+  document.getElementById('email-to').value = lead.Email || '';
+  document.getElementById('email-name').value = name;
+  document.getElementById('email-company').value = company;
   showTab('compose');
+  // Auto-pick the `intro` template — most leads pulled from the call queue
+  // are first-touch outreach. Reps can switch templates with one click if
+  // the conversation is further along. pickTemplate (defined inline at the
+  // bottom of sales-floor-dashboard.html) fills subject/body, highlights
+  // the active template card + chip, and scrolls/focuses the To field.
+  if (typeof window.pickTemplate === 'function') {
+    window.pickTemplate('intro');
+  }
+  // Without a toast the brief→compose handoff is too easy to miss — the
+  // modal closes silently and the tab switch alone doesn't read as
+  // "we drafted something for you, take it from here." Recipient label
+  // degrades gracefully so we never show "Drafting email to ".
+  const recipient = name || company || 'this lead';
+  toast(`Drafting email to ${recipient} — change the template if needed`, 'info');
 }
 
 // Sister of emailFromBrief — opens (or starts) an SMS thread with the
