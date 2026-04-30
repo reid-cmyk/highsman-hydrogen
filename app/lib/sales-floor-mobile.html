@@ -135,23 +135,31 @@
 
     <!-- Stats grid (2-up) -->
     <div class="hs-stats-grid">
-      <div class="stat-card">
+      <div class="stat-card" role="button" tabindex="0"
+           onclick="showTab('leads')"
+           aria-label="Hot Leads — open Leads tab">
         <div class="hs-stat-label">Hot Leads</div>
         <div class="hs-stat-number text-white" id="stat-hot">—</div>
         <div class="hs-stat-sub">Call first</div>
       </div>
-      <div class="stat-card stat-card-orders" onclick="showTab('orders')">
+      <div class="stat-card stat-card-orders" role="button" tabindex="0"
+           onclick="showTab('orders')"
+           aria-label="Reorder Due — open Orders tab">
         <div class="hs-stat-label">Reorder Due</div>
         <div class="hs-stat-number text-white" id="stat-reorder-due">—</div>
         <div class="hs-stat-sub">30+ days</div>
       </div>
       <div class="stat-card stat-card-missed hidden" id="stat-card-missed"
-           onclick="document.getElementById('missed-calls-panel')?.scrollIntoView({behavior:'smooth',block:'start'})">
+           role="button" tabindex="0"
+           onclick="document.getElementById('missed-calls-panel')?.scrollIntoView({behavior:'smooth',block:'start'})"
+           aria-label="Missed calls — jump to call-back panel">
         <div class="hs-stat-label"><i class="fa-solid fa-phone-slash mr-1"></i> Call Back</div>
         <div class="hs-stat-number text-white" id="stat-missed">0</div>
         <div class="hs-stat-sub">Return today</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" role="button" tabindex="0"
+           onclick="document.getElementById('dashboard-hot-leads')?.scrollIntoView({behavior:'smooth',block:'start'})"
+           aria-label="Calls Today — jump to Call Queue">
         <div class="hs-stat-label">Calls Today</div>
         <div class="hs-stat-number text-white" id="stat-calls">0</div>
         <div class="hs-stat-sub">Keep going</div>
