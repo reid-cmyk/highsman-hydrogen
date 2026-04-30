@@ -27,7 +27,7 @@
     }
   </script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
-  <link rel="stylesheet" href="/sales-floor/css/styles.css?v=28" />
+  <link rel="stylesheet" href="/sales-floor/css/styles.css?v=29" />
 </head>
 <body class="bg-brand-black text-brand-white font-barlow">
 
@@ -214,13 +214,17 @@
       <!-- ═══════════════════ DASHBOARD ═══════════════════ -->
       <div id="tab-dashboard" class="tab-content">
 
-        <!-- Critical Account Loss Banner — shown only when critical alerts exist -->
-        <div id="critical-alert-banner" class="critical-banner hidden mb-px">
+        <!-- Activity summary banner — amber, full-tap target, localStorage-backed.
+             Shown when New Customers or Reorders Due have changed since the rep
+             last clicked it. Clicking scrolls to At a Glance and marks as read.
+             Populated + dismissed by updateSummaryBanner() in the inline script. -->
+        <div id="critical-alert-banner" class="critical-banner hidden" role="button" tabindex="0"
+             aria-label="New activity — click to review At a Glance">
           <div class="critical-banner-inner">
-            <i class="fa-solid fa-fire critical-banner-icon"></i>
+            <i class="fa-solid fa-bell critical-banner-icon"></i>
             <span class="critical-banner-msg"></span>
           </div>
-          <button onclick="document.getElementById('section-at-a-glance')?.scrollIntoView({behavior:'smooth',block:'start'})" class="critical-banner-cta">View Alerts</button>
+          <span class="critical-banner-tap">Tap to review ↓</span>
         </div>
 
         <!-- Stats grid — 2-up on mobile, 4-up on desktop -->
@@ -337,25 +341,25 @@
 
         <div class="hs-secondary-grid">
 
-          <!-- Orders Due Snapshot — top reorders + new customer count -->
+          <!-- New Customers snapshot — active onboarding accounts -->
           <div class="hs-panel">
             <div class="hs-card-header">
-              <span class="hs-card-title">Orders Due</span>
-              <button onclick="showTab('orders')" class="hs-link">Full board</button>
+              <span class="hs-card-title">New Customers</span>
+              <button onclick="showTab('newcustomers')" class="hs-link">All customers</button>
             </div>
             <div id="dashboard-orders" class="p-5 space-y-3">
-              <div class="hs-empty-state">Loading orders...</div>
+              <div class="hs-empty-state">Loading…</div>
             </div>
           </div>
 
-          <!-- Inventory Alerts Panel -->
-          <div class="hs-panel hs-panel--alerts">
+          <!-- Reorders Due snapshot — top accounts past 30 days -->
+          <div class="hs-panel">
             <div class="hs-card-header">
-              <span class="hs-card-title">Alerts</span>
-              <div id="alert-header-counts" class="flex items-center gap-1.5"></div>
+              <span class="hs-card-title">Reorders Due</span>
+              <button onclick="showTab('orders')" class="hs-link">Full board</button>
             </div>
-            <div id="alert-list" class="hs-alert-scroll">
-              <div class="hs-empty-state py-10">Loading alerts...</div>
+            <div id="dashboard-reorders" class="p-5 space-y-3">
+              <div class="hs-empty-state">Loading…</div>
             </div>
           </div>
 
