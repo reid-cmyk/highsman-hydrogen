@@ -28,7 +28,7 @@ interface AssetItem {
 
 const NJ_IMAGES = {
   // ── Hero product tiles ─────────────────────────────────────────────────────
-  hitSticksHero: 'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Hit_Sticks_Dancing.png?v=1776280215',
+  hitSticksHero:     '',                        // TODO: add IMAGES.hitStick once confirmed
   groundGameHero:    IMAGES.groundGameProduct,  // ✓ exists
   tripleThreatsHero: IMAGES.preRollsLineup,     // ✓ exists
 
@@ -97,69 +97,6 @@ const NJ_IMAGES = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Menu Image Gallery — per-flavor images with Drive links
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface MenuImageItem {
-  flavor: string;
-  src: string;
-}
-
-interface MenuImageGroup {
-  product: string;
-  label: string;
-  format: string;
-  color: string;
-  driveUrl: string;
-  images: MenuImageItem[];
-}
-
-const MENU_IMAGE_GALLERY: MenuImageGroup[] = [
-  {
-    product: 'hit-sticks',
-    label: 'Hit Sticks · 0.5g',
-    format: '800×800 PNG',
-    color: '#F5E400',
-    driveUrl: 'https://drive.google.com/drive/folders/1Fdznh70tzvKgfGOv-jAA7-cSyY-gs9-_?usp=sharing',
-    images: [
-      {flavor: 'Blueberry Blitz',         src: '/menu-images/hit-sticks/blueberry_blitz.png'},
-      {flavor: 'Cake Quake',              src: '/menu-images/hit-sticks/cake_quake.png'},
-      {flavor: 'Gridiron Grape',          src: '/menu-images/hit-sticks/gridiron_grape.png'},
-      {flavor: 'Touchdown Tango Mango',   src: '/menu-images/hit-sticks/touchdown_tango_mango.png'},
-      {flavor: 'Wavy Watermelon',         src: '/menu-images/hit-sticks/wavy_watermelon.png'},
-    ],
-  },
-  {
-    product: 'pre-rolls',
-    label: '1.2g Pre-Rolls',
-    format: '800×800 PNG',
-    color: '#CE93D8',
-    driveUrl: 'https://drive.google.com/drive/folders/1Q7R4kCiui6aPE47q3HOV1NjSicCUHgOX?usp=sharing',
-    images: [
-      {flavor: 'Blueberry Blitz',   src: '/menu-images/pre-rolls/blueberry.png'},
-      {flavor: 'Cake Quake',        src: '/menu-images/pre-rolls/quake.png'},
-      {flavor: 'Gridiron Grape',    src: '/menu-images/pre-rolls/grape.png'},
-      {flavor: 'Touchdown Tango Mango', src: '/menu-images/pre-rolls/mango.png'},
-      {flavor: 'Wavy Watermelon',   src: '/menu-images/pre-rolls/watermelon.png'},
-    ],
-  },
-  {
-    product: 'ground-game',
-    label: 'Ground Game · 7g',
-    format: '800×800 PNG',
-    color: '#4CAF50',
-    driveUrl: 'https://drive.google.com/drive/folders/1QC16UisQkH9wDUwMCfTemVaZFm8_ud7S?usp=sharing',
-    images: [
-      {flavor: 'Blueberry Blitz',   src: '/menu-images/ground-game/blueberry.png'},
-      {flavor: 'Cake Quake',        src: '/menu-images/ground-game/quake.png'},
-      {flavor: 'Gridiron Grape',    src: '/menu-images/ground-game/grape.png'},
-      {flavor: 'Touchdown Tango Mango', src: '/menu-images/ground-game/mango.png'},
-      {flavor: 'Wavy Watermelon',   src: '/menu-images/ground-game/watermelon.png'},
-    ],
-  },
-];
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Product config (colors + display names)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -175,13 +112,14 @@ const PRODUCT_CONFIG = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const NAV_SECTIONS = [
-  {id: 'wholesale',       label: 'Wholesale',        count: 3},
-  {id: 'menu-images',     label: 'Menu Images',      count: 15},
+  {id: 'wholesale',       label: 'Wholesale',        count: 2},
+  {id: 'menu-images',     label: 'Menu Images',      count: 5},
   {id: 'merchandising',   label: 'Merchandising',    count: 2},
   {id: 'social-media',    label: 'Social Media',     count: 24},
   {id: 'dutchie-banners', label: 'Dutchie Banners',  count: 8},
   {id: 'email-banners',   label: 'Email Banners',    count: 4},
   {id: 'digital-ads',     label: 'Digital Menu Ads', count: 16},
+  {id: 'launch',          label: 'Launch',           count: 3},
   {id: 'brand-assets',    label: 'Brand Assets',     count: 3},
 ];
 
@@ -281,8 +219,6 @@ const AD_SIZES = [
 // ─────────────────────────────────────────────────────────────────────────────
 // Meta
 // ─────────────────────────────────────────────────────────────────────────────
-
-export const handle = {hideHeader: true, hideFooter: true};
 
 export const meta: MetaFunction = () => {
   return [{title: 'HIGHSMAN | NJ Retail Partner Resources'}];
@@ -717,7 +653,7 @@ export default function NewJersey() {
           eyebrow="Section 1"
           title={<>Wholesale &amp;<br />Sell Sheets</>}
           desc="Pricing, sell sheets, and budtender training materials. Start here for everything your team needs to onboard Highsman."
-          downloadLabel="Download All (3)"
+          downloadLabel="Download All (2)"
           onDownload={() => downloadAll('Wholesale & Sell Sheets')}
         />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -725,19 +661,11 @@ export default function NewJersey() {
             icon="request_quote"
             name="Wholesale Menu"
             desc="NJ pricing, SKUs, MOQs · Updated May 7, 2026"
-            href="/njmenu"
           />
           <DocCard
             icon="school"
             name="Budtender Education Folder"
             desc="Training decks, product guides, sell scripts"
-            href="https://drive.google.com/drive/folders/1tUIVNx5R4ldEc8wqDvdrJApJhewdV-eK?usp=sharing"
-          />
-          <DocCard
-            icon="emoji_events"
-            name="Budtender Training Camp"
-            desc="Complete training and earn $50 at the Highsman Merch Store"
-            href="/budtender-education"
           />
         </div>
       </section>
@@ -752,77 +680,28 @@ export default function NewJersey() {
         <SectionHeader
           eyebrow="Section 2"
           title={<>Retail Menu<br />Images</>}
-          desc="Product images sized for Dutchie, iHeartJane, and other digital menus. Click any image to open its Google Drive folder."
-          downloadLabel="Download All (15)"
+          desc="Product images sized for Dutchie, iHeartJane, and other digital menus."
+          downloadLabel="Download All (5)"
           onDownload={() => downloadAll('Menu Images')}
         />
         <UsageTip>
-          <strong>Usage:</strong> All images are 800×800 PNG — the standard for Dutchie, iHeartJane, and most dispensary menus.
-          Click any image to open the Google Drive folder where you can download the full-resolution file.
+          <strong>Usage:</strong> All images are exported at 2× resolution for retina displays.
+          Dutchie recommends square images at 800×800px minimum. iHeartJane accepts both square
+          and landscape.
         </UsageTip>
-
-        {MENU_IMAGE_GALLERY.map((group) => (
-          <div key={group.product} className="mb-12 last:mb-0">
-            {/* Product line header */}
-            <div className="flex items-center gap-3 mb-4">
-              <div
-                className="w-1 h-8 rounded-full"
-                style={{background: group.color}}
-              />
-              <div className="flex-1">
-                <h3 className="font-headline text-lg font-bold uppercase tracking-wide text-white">
-                  {group.label}
-                </h3>
-                <p className="text-xs text-on-surface-variant mt-0.5">
-                  {group.images.length} flavors · {group.format}
-                </p>
+        {(['hit-sticks', 'ground-game', 'triple-threat'] as const).map((product) => {
+          const assets = MENU_ASSETS.filter((a) => a.product === product);
+          if (!assets.length || !sectionVisible(product)) return null;
+          return (
+            <Subsection key={product} product={product} count={assets.length}>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {assets.map((a) => (
+                  <AssetCard key={a.id} asset={a} />
+                ))}
               </div>
-              <a
-                href={group.driveUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide px-4 py-2 border rounded-sm no-underline transition-colors"
-                style={{color: group.color, borderColor: `${group.color}60`}}
-              >
-                <span className="material-symbols-outlined text-sm">folder_open</span>
-                Open Drive Folder
-              </a>
-            </div>
-
-            {/* Image grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {group.images.map((img) => (
-                <a
-                  key={img.flavor}
-                  href={group.driveUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="group relative bg-white border border-outline-variant/20 hover:border-primary/60 transition-all overflow-hidden no-underline"
-                  style={{aspectRatio: '1/1'}}
-                >
-                  <img
-                    src={img.src}
-                    alt={`${group.label} — ${img.flavor}`}
-                    className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
-                    loading="lazy"
-                  />
-                  {/* Hover overlay */}
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center">
-                    <span className="material-symbols-outlined text-white text-2xl opacity-0 group-hover:opacity-100 transition-opacity">
-                      open_in_new
-                    </span>
-                  </div>
-                  {/* Flavor label */}
-                  <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent pt-6 pb-2 px-2">
-                    <p className="text-xs font-bold text-white text-center leading-tight truncate">
-                      {img.flavor}
-                    </p>
-                  </div>
-                </a>
-              ))}
-            </div>
-          </div>
-        ))}
+            </Subsection>
+          );
+        })}
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════════
@@ -1001,15 +880,54 @@ export default function NewJersey() {
         ))}
       </section>
 
-      {/* ═════════════════════════════════════════════════════════════════════
-          SECTION 8 · BRAND ASSETS
+      {/* ══════════════════════════════════════════════════════════════════════
+          SECTION 8 · LAUNCH
+      ══════════════════════════════════════════════════════════════════════ */}
+      <section
+        id="launch"
+        className="px-8 md:px-12 py-16 border-b border-outline-variant/20"
+      >
+        <SectionHeader
+          eyebrow="Section 8"
+          title={<>Launch<br />Deal</>}
+          desc="Ground Game 7G + Triple Threat 1.2G launch promo. Front-loaded wholesale support, May 14 – June 13, 2026."
+        />
+        <UsageTip>
+          <strong>Launch order window:</strong> April 28 – May 8. Place the launch PO through{' '}
+          <strong>highsman.com/njmenu</strong> to get the reduced wholesale price. Menu proof of the
+          live deal due by May 16 (48h after launch).
+        </UsageTip>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <DocCard
+            icon="receipt_long"
+            name="Partner Terms"
+            desc="Front-load math, conditions, proof requirements, FAQ"
+            href="/njwholesalepromo"
+          />
+          <DocCard
+            icon="shopping_cart"
+            name="Place Launch Order"
+            desc="NJ wholesale menu — order through here for the front-load"
+            href="/njmenu"
+          />
+          <DocCard
+            icon="campaign"
+            name="Consumer Promo Page"
+            desc="What shoppers see — share with your team & in-store"
+            href="/njlaunch"
+          />
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          SECTION 9 · BRAND ASSETS
       ══════════════════════════════════════════════════════════════════════ */}
       <section
         id="brand-assets"
         className="px-8 md:px-12 py-16 border-b border-outline-variant/20 bg-surface-container-low"
       >
         <SectionHeader
-          eyebrow="Section 8"
+          eyebrow="Section 9"
           title={<>Brand<br />Assets</>}
           desc="Logos, brand guidelines, and official assets for co-marketing and approved brand use."
           downloadLabel="Download All (3)"
