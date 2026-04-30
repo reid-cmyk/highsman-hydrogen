@@ -27,7 +27,7 @@
     }
   </script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
-  <link rel="stylesheet" href="/sales-floor/css/styles.css?v=29" />
+  <link rel="stylesheet" href="/sales-floor/css/styles.css?v=30" />
 </head>
 <body class="bg-brand-black text-brand-white font-barlow">
 
@@ -352,7 +352,7 @@
             </div>
           </div>
 
-          <!-- Reorders Due snapshot — top accounts past 30 days -->
+          <!-- Alerts snapshot — Off Menu → Low Inv → Reorder Due, severity-sorted -->
           <div class="hs-panel">
             <div class="hs-card-header">
               <span class="hs-card-title">Reorders Due</span>
@@ -1325,7 +1325,7 @@
 <script src="/sales-floor/js/sms.js"></script>
 <script src="/sales-floor/js/sms-templates.js"></script>
 <script src="/sales-floor/js/missed-calls.js"></script>
-<script src="/sales-floor/js/app.js?v=34"></script>
+<script src="/sales-floor/js/app.js?v=36"></script>
 <script src="/sales-floor/js/lit-state-filter.js?v=1"></script>
 <script>
   // ───────────────────────────────────────────────────────────
@@ -1414,14 +1414,17 @@
           el.classList.toggle('active', el.dataset.bottomNav === tab);
         });
 
-        // Scroll the scroll area to the top on tab change. Fired twice:
-        // immediately (hides the old scroll position as the tab flips) and
-        // after a frame (catches any layout shift from tab content rendering).
+        // Scroll to top on tab change. hs-shell uses min-height so on desktop
+        // the body is the real scroll container — reset both the inner scroll
+        // area AND window to cover both layouts (desktop body-scroll + mobile
+        // hs-scroll-area overflow-y).
         const scrollArea = document.querySelector('.hs-scroll-area');
-        if (scrollArea) {
-          scrollArea.scrollTo({ top: 0, behavior: 'instant' });
-          requestAnimationFrame(() => scrollArea.scrollTo({ top: 0, behavior: 'instant' }));
-        }
+        if (scrollArea) scrollArea.scrollTo({ top: 0, behavior: 'instant' });
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        requestAnimationFrame(() => {
+          if (scrollArea) scrollArea.scrollTo({ top: 0, behavior: 'instant' });
+          window.scrollTo({ top: 0, behavior: 'instant' });
+        });
       };
     }
     // Today chip
