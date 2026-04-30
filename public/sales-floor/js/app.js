@@ -36,7 +36,7 @@ let recentCallsRefreshTimer = null;
 // /api/sales-floor-leaflink-orders in a single round-trip and are kept in
 // memory so the dashboard snapshot, Orders Due tab, and New Customers tab
 // stay in sync without separate fetches per tab.
-let reorderDue = [];      // shops 30d+ since last Highsman LeafLink order
+let reorderDue = [];      // shops 30-90 days since last Highsman LeafLink order (90+ = churned, hidden)
 let lastOrderByAccount = {}; // {zohoAccountId: {date, total, orderNumber}} from LeafLink (legacy, partial coverage)
 let lastOrderByName = {};    // {UPPER_ACCOUNT_NAME: {date, total, orderNumber}} from Zoho Inventory — primary source
 let newCustomers = [];    // first-time Highsman LeafLink orders + state machine
@@ -965,6 +965,12 @@ function renderLitLowInv() {
 // accounts (different distribution model). All other states show up unless
 // the rep has filtered to a specific one via the state-tab strip.
 const ORDERS_DUE_STALE_DAYS = 30;
+// Upper bound: past 90 days the shop is effectively churned and shouldn't
+// pollute the Reorder Due panel. Mirrors REORDER_DUE_MAX_DAYS in
+// api.sales-floor-leaflink-orders so the two paths agree on what "due" means.
+// Reid 2026-04-30: "remove any accounts in Reorder Due Panel that are older
+// than 90 days old. We will start from there."
+const ORDERS_DUE_MAX_DAYS = 90;
 function deriveOrdersDue() {
   const today = new Date();
   const out = [];
@@ -986,6 +992,10 @@ function deriveOrdersDue() {
     if (Number.isNaN(lastMs)) continue;
     const daysSince = Math.floor((today.getTime() - lastMs) / 86400000);
     if (daysSince < ORDERS_DUE_STALE_DAYS) continue;
+    // Hide churned accounts (90+ days). They belong on a Win-Back / Lost
+    // view, not here — keeping them in Reorder Due drowns out real reorder
+    // signal with shops that effectively went silent months ago.
+    if (daysSince > ORDERS_DUE_MAX_DAYS) continue;
     out.push({
       accountId: a.id,
       account: a,
