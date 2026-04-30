@@ -309,34 +309,42 @@
         </div>
       </div>
 
-      <!-- Low Inventory -->
-      <div class="hs-orders-col hs-orders-col--placeholder">
+      <!-- Low Inventory Alert (live, lit-alerts driven) -->
+      <div class="hs-orders-col">
         <div class="hs-orders-col-head">
           <div class="hs-orders-col-title"><i class="fa-solid fa-warehouse"></i> Low Inventory</div>
-          <div class="hs-orders-col-meta">Coming soon</div>
+          <div class="hs-orders-col-meta" id="low-inv-meta">—</div>
         </div>
-        <div class="hs-orders-col-sub">Shops sitting on 3+ days of cover.</div>
-        <div class="hs-orders-col-body">
+        <div class="hs-orders-col-sub">Shops in reorder cooldown — Lit flagged ≥50% of their active SKUs as low or out.</div>
+        <div class="hs-orders-toolbar">
+          <div id="low-inv-state-tabs" class="hs-state-tabs" role="tablist" aria-label="Filter Low Inventory by state"></div>
+        </div>
+        <div id="low-inv-list" class="hs-orders-col-body">
           <div class="hs-empty-state hs-empty-state--col">
-            <div class="hs-empty-state-icon"><i class="fa-solid fa-toolbox"></i></div>
-            Data source pending.
+            <div class="hs-empty-state-icon"><i class="fa-solid fa-spinner fa-spin"></i></div>
+            Loading Lit alerts…
           </div>
         </div>
+        <div id="low-inv-footer" class="hs-orders-col-footer" style="display:none;"></div>
       </div>
 
-      <!-- Off Menu -->
-      <div class="hs-orders-col hs-orders-col--placeholder hs-orders-col--critical">
+      <!-- Off Menu Alert (live, most critical) -->
+      <div class="hs-orders-col hs-orders-col--critical">
         <div class="hs-orders-col-head">
           <div class="hs-orders-col-title"><i class="fa-solid fa-triangle-exclamation"></i> Off Menu</div>
-          <div class="hs-orders-col-meta">Critical</div>
+          <div class="hs-orders-col-meta" id="off-menu-meta">—</div>
         </div>
         <div class="hs-orders-col-sub">Highsman fell off the active menu. Drop everything and call.</div>
-        <div class="hs-orders-col-body">
+        <div class="hs-orders-toolbar">
+          <div id="off-menu-state-tabs" class="hs-state-tabs" role="tablist" aria-label="Filter Off Menu by state"></div>
+        </div>
+        <div id="off-menu-list" class="hs-orders-col-body">
           <div class="hs-empty-state hs-empty-state--col">
-            <div class="hs-empty-state-icon"><i class="fa-solid fa-toolbox"></i></div>
-            Data source pending.
+            <div class="hs-empty-state-icon"><i class="fa-solid fa-spinner fa-spin"></i></div>
+            Loading Lit alerts…
           </div>
         </div>
+        <div id="off-menu-footer" class="hs-orders-col-footer" style="display:none;"></div>
       </div>
     </div>
   </div>
@@ -953,6 +961,7 @@
 <script src="/sales-floor/js/sms-templates.js"></script>
 <script src="/sales-floor/js/missed-calls.js"></script>
 <script src="/sales-floor/js/app.js?v=13"></script>
+<script src="/sales-floor/js/lit-state-filter.js?v=1"></script>
 
 
 <!-- ═══════════════════════════════════════════════════════════════
