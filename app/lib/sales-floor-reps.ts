@@ -97,7 +97,13 @@ export const SALES_REPS: Record<SalesRepId, SalesRep> = {
       clientIdVar: 'GMAIL_CLIENT_ID',
       clientSecretVar: 'GMAIL_CLIENT_SECRET',
       refreshTokenVar: 'GMAIL_REFRESH_TOKEN',
-      fromVar: 'GMAIL_SALES_FROM',
+      // fromVar intentionally omitted — Sky's From MUST be sky@highsman.com
+      // and never get hijacked by an Oxygen env override. The legacy
+      // GMAIL_SALES_FROM env was pointing at the spark@ shared mailbox,
+      // which made customer reorder + follow-up emails read like internal
+      // system mail (Reid 2026-04-30: "emails coming from Spark not Sky").
+      // If a re-route is ever needed, do it explicitly with a per-rep env
+      // var (e.g. SKY_GMAIL_FROM), not a generic "sales from".
       defaultFrom: 'sky@highsman.com',
       fromName: 'Sky Lima — Highsman',
     },
