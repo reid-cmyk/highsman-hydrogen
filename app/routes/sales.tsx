@@ -26,8 +26,14 @@ const STATE_LABELS: Record<string, string> = {
   MO: 'Missouri',
 };
 
-const STALE_DAYS = 60; // red — 60+ days no order
-const WATCH_DAYS = 45; // yellow — 45–59 days (healthy = 0–44)
+const STALE_DAYS = 60;          // orange — 60-89 days, late but salvageable
+const WATCH_DAYS = 45;          // yellow — 45-59 days (healthy = 0-44)
+// Risk of Loss — 90+ days since last order. Functionally churned; needs an
+// explicit win-back motion, not regular reorder chase. Mirrors the
+// /sales-floor cutoff (REORDER_DUE_MAX_DAYS) so anything dropped from
+// Sky's Reorder Due panel surfaces here for monitoring instead of falling
+// off the radar entirely. Reid 2026-04-30.
+const RISK_OF_LOSS_DAYS = 90;   // deep red — 90+ days, churn risk
 
 const SKU_CATEGORIES: Record<string, 'Hit Stick' | 'Pre-Rolls' | 'Ground Game' | 'Other'> = {
   // Hit Stick (0.5g disposables)
@@ -446,7 +452,7 @@ type StoreRow = {
   periodRevenue: number;
   ytdRevenue: number;
   topSku: string;
-  status: 'healthy' | 'watch' | 'stale';
+  status: 'healthy' | 'watch' | 'stale' | 'risk_of_loss';
 };
 
 type StateMetric = {
@@ -760,7 +766,10 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     // Finalize store rows (status + topSku placeholder)
     const stores: StoreRow[] = [];
     for (const r of storeMap.values()) {
-      r.status = r.daysSinceLastOrder >= STALE_DAYS ? 'stale' : r.daysSinceLastOrder >= WATCH_DAYS ? 'watch' : 'healthy';
+      r.status = r.daysSinceLastOrder >= RISK_OF_LOSS_DAYS ? 'risk_of_loss'
+             : r.daysSinceLastOrder >= STALE_DAYS ? 'stale'
+             : r.daysSinceLastOrder >= WATCH_DAYS ? 'watch'
+             : 'healthy';
       stores.push(r);
     }
     // Sort by period revenue desc (top performers first)
@@ -979,6 +988,8 @@ const STATUS_STYLES: Record<string, {bg: string; text: string; label: string}> =
   healthy: {bg: 'rgba(34,197,94,0.15)', text: '#22C55E', label: 'HEALTHY'},
   watch: {bg: 'rgba(234,179,8,0.15)', text: '#EAB308', label: 'WATCH'},
   stale: {bg: 'rgba(239,68,68,0.15)', text: '#EF4444', label: 'STALE'},
+  // Risk of Loss — deeper red than STALE so the eye separates the tiers.
+  risk_of_loss: {bg: 'rgba(185,28,28,0.20)', text: '#DC2626', label: 'RISK OF LOSS'},
 };
 
 // ── Dashboard Content ──────────────────────────────────────────────────────
@@ -987,7 +998,7 @@ function DashboardContent({data}: {data: any}) {
   const currentRange = searchParams.get('range') || 'mtd';
   const [filterState, setFilterState] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'All' | 'healthy' | 'watch' | 'stale'>('All');
+  const [statusFilter, setStatusFilter] = useState<'All' | 'healthy' | 'watch' | 'stale' | 'risk_of_loss'>('All');
 
   const metrics = data.metrics;
   const stores: StoreRow[] = data.stores || [];
@@ -1007,6 +1018,17 @@ function DashboardContent({data}: {data: any}) {
     [stores, filterState, statusFilter, searchQuery],
   );
 
+  // Risk of Loss list — explicit alert section + sortable view.
+  // Sorted by YTD revenue DESC so the highest-stakes shops sit at the top —
+  // Reid 2026-04-30: "sorted by YTD revenue lost" prioritizes win-back
+  // effort by $ at stake, not by how stale the account is.
+  // Note: stores from the Head Office warehouse are already excluded
+  // upstream — resolveStateFromLocation returns '' for unmapped
+  // warehouses, and a store with state='' never enters this list because
+  // ytdRevenue > 0 requires at least one in-state attributable order.
+  const riskOfLossStores = stores
+    .filter((s) => s.status === 'risk_of_loss' && s.ytdRevenue > 0)
+    .sort((a, b) => b.ytdRevenue - a.ytdRevenue);
   const staleStores = stores.filter((s) => s.status === 'stale' && s.ytdRevenue > 0);
   const watchStores = stores.filter((s) => s.status === 'watch' && s.ytdRevenue > 0);
 
@@ -1079,12 +1101,30 @@ function DashboardContent({data}: {data: any}) {
         </div>
       </div>
 
-      {/* Alerts */}
+      {/* Alerts — ordered by severity: Risk of Loss first, then Stale, then Watch.
+          Risk of Loss owns the 90+ day cohort exclusively (Reid 2026-04-30).
+          Stale was narrowed to 60-89 so the two tiers don't double-count. */}
+      {riskOfLossStores.length > 0 && (
+        <AlertPanel
+          tone="risk_of_loss"
+          title={`${riskOfLossStores.length} RISK OF LOSS ACCOUNTS (${RISK_OF_LOSS_DAYS}+ DAYS NO ORDER)`}
+          subtitle={`Sorted by YTD revenue at stake. ${money(riskOfLossStores.reduce((sum, s) => sum + s.ytdRevenue, 0))} of book is silent. Win-back motion needed — not regular reorder chase.`}
+          stores={riskOfLossStores}
+          onStoreClick={(storeId) => {
+            const store = stores.find((s) => s.customerId === storeId);
+            if (store) {
+              setFilterState(store.state);
+              setStatusFilter('risk_of_loss');
+            }
+          }}
+        />
+      )}
+
       {staleStores.length > 0 && (
         <AlertPanel
           tone="stale"
-          title={`${staleStores.length} STALE STORES (${STALE_DAYS}+ DAYS NO ORDER)`}
-          subtitle="Prioritize these for rep outreach this week."
+          title={`${staleStores.length} STALE STORES (${STALE_DAYS}-${RISK_OF_LOSS_DAYS - 1} DAYS NO ORDER)`}
+          subtitle="Prioritize these for rep outreach this week — early-warning tier before they slide into Risk of Loss."
           stores={staleStores}
           onStoreClick={(storeId) => {
             const store = stores.find((s) => s.customerId === storeId);
@@ -1134,7 +1174,7 @@ function DashboardContent({data}: {data: any}) {
           ))}
         </select>
         <div className="flex gap-2">
-          {(['All', 'healthy', 'watch', 'stale'] as const).map((st) => {
+          {(['All', 'healthy', 'watch', 'stale', 'risk_of_loss'] as const).map((st) => {
             const active = statusFilter === st;
             const sty = st === 'All' ? {bg: '#c8a84b', text: '#000'} : STATUS_STYLES[st];
             return (
@@ -1324,16 +1364,27 @@ function AlertPanel({
   stores,
   onStoreClick,
 }: {
-  tone: 'stale' | 'watch';
+  tone: 'stale' | 'watch' | 'risk_of_loss';
   title: string;
   subtitle: string;
   stores: StoreRow[];
   onStoreClick?: (customerId: string) => void;
 }) {
+  const isRoL = tone === 'risk_of_loss';
   const isStale = tone === 'stale';
-  const bg = isStale ? 'rgba(239,68,68,0.05)' : 'rgba(234,179,8,0.05)';
-  const border = isStale ? 'rgba(239,68,68,0.2)' : 'rgba(234,179,8,0.2)';
-  const color = isStale ? '#EF4444' : '#EAB308';
+  // Tone palette:
+  //   risk_of_loss → deep red, slightly more opaque so it pops above STALE
+  //   stale        → red (existing)
+  //   watch        → yellow (existing)
+  const bg = isRoL ? 'rgba(220,38,38,0.07)'
+           : isStale ? 'rgba(239,68,68,0.05)'
+           : 'rgba(234,179,8,0.05)';
+  const border = isRoL ? 'rgba(220,38,38,0.30)'
+              : isStale ? 'rgba(239,68,68,0.2)'
+              : 'rgba(234,179,8,0.2)';
+  const color = isRoL ? '#DC2626'
+             : isStale ? '#EF4444'
+             : '#EAB308';
   return (
     <div className="mt-6 rounded-xl p-4" style={{background: bg, border: `1px solid ${border}`}}>
       <p className="text-sm font-bold mb-1" style={{color, fontFamily: 'Teko, sans-serif', fontSize: '1.1rem'}}>
@@ -1347,8 +1398,10 @@ function AlertPanel({
             onClick={() => onStoreClick?.(s.customerId)}
             className="inline-block px-2.5 py-1.5 rounded text-xs cursor-pointer transition-all hover:scale-105"
             style={{background: `${color}1a`, color, border: `1px solid ${color}33`}}
+            title={isRoL ? `YTD revenue at stake: ${money(s.ytdRevenue)}` : undefined}
           >
             {s.storeName} · {STATE_LABELS[s.state] || s.state} · {s.daysSinceLastOrder}d
+            {isRoL ? ` · ${money(s.ytdRevenue)} YTD` : ''}
           </button>
         ))}
       </div>
