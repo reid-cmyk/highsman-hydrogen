@@ -128,7 +128,6 @@ async function bootstrapCRM() {
       leads = snapshot.leads;
       deals = snapshot.deals;
       accounts = snapshot.accounts;
-      loadDemoAlerts(); // keep the alert panel populated until real alert logic lands
       renderAll();
       updateConnectionStatus('connected');
       if (statusEl) statusEl.textContent = `Synced ${new Date().toLocaleTimeString()}`;
@@ -605,41 +604,62 @@ function renderDashboard() {
     }).join('');
   }
 
-  // Render alert panel
-  Alerts.renderPanel();
-
-  // ─── Orders Due snapshot — surfaced on the dashboard "At a Glance" row.
-  // Renders the top 4 most-overdue reorder shops + a small "X new customers"
-  // pill that deep-links to the New Customers tab. Empty/loading states fall
-  // back to friendly copy so the panel never looks broken.
+  // ─── New Customers snapshot (left At a Glance card) ──────────────────────
   const ordersEl = document.getElementById('dashboard-orders');
   if (ordersEl) {
     if (!leaflinkOrdersFetched) {
-      ordersEl.innerHTML = `<div class="hs-empty-state">Loading orders…</div>`;
-    } else if (reorderDue.length === 0 && combinedNewCustomers().length === 0) {
-      ordersEl.innerHTML = `
+      ordersEl.innerHTML = `<div class="hs-empty-state">Loading…</div>`;
+    } else {
+      const ACTIVE_STATES = ['pending', 'ready', 'checkin_due', 'zoho_new'];
+      const STATE_LABEL = {
+        pending:    'Pending ship',
+        ready:      'Ready — onboard',
+        checkin_due:'Check-in due',
+        zoho_new:   'Welcome call',
+      };
+      const active = combinedNewCustomers().filter(c => ACTIVE_STATES.includes(c.cardState));
+      if (active.length === 0) {
+        ordersEl.innerHTML = `
+          <div class="hs-empty-state">
+            <div class="hs-empty-state-icon"><i class="fa-solid fa-user-check"></i></div>
+            All new customers onboarded. Nice work.
+          </div>`;
+      } else {
+        const top = active.slice(0, 4);
+        const overflow = active.length - top.length;
+        const rows = top.map(c => `
+          <div class="hs-orders-snap-row">
+            <div class="hs-orders-snap-name">
+              ${escapeHtml(c.customerName || c.Account_Name || '—')}
+              ${c.state ? `<span class="hs-orders-snap-state">${escapeHtml(c.state)}</span>` : ''}
+            </div>
+            <div class="hs-orders-snap-days">${STATE_LABEL[c.cardState] || c.cardState}</div>
+          </div>`).join('');
+        const more = overflow > 0
+          ? `<button onclick="showTab('newcustomers')" class="hs-orders-snap-more">+ ${overflow} more →</button>`
+          : '';
+        ordersEl.innerHTML = rows + more;
+      }
+    }
+  }
+
+  // ─── Reorders Due snapshot (middle At a Glance card) ──────────────────────
+  const reordersEl = document.getElementById('dashboard-reorders');
+  if (reordersEl) {
+    if (!leaflinkOrdersFetched) {
+      reordersEl.innerHTML = `<div class="hs-empty-state">Loading…</div>`;
+    } else if (reorderDue.length === 0) {
+      reordersEl.innerHTML = `
         <div class="hs-empty-state">
           <div class="hs-empty-state-icon"><i class="fa-solid fa-clipboard-check"></i></div>
           Inbox zero on reorders. Spark Greatness.
         </div>`;
     } else {
-      const newcustActive = combinedNewCustomers().filter(c =>
-        c.cardState === 'pending' ||
-        c.cardState === 'ready' ||
-        c.cardState === 'checkin_due' ||
-        c.cardState === 'zoho_new'
-      ).length;
-      const newcustPill = newcustActive > 0
-        ? `<button onclick="showTab('newcustomers')" class="hs-orders-snap-pill">
-             <i class="fa-solid fa-user-plus"></i>
-             ${newcustActive} new ${newcustActive === 1 ? 'shop' : 'shops'} → onboard
-           </button>`
-        : '';
       const top = reorderDue.slice(0, 4);
       const overflow = reorderDue.length - top.length;
       const rows = top.map(r => {
         const days = Number.isFinite(r.daysSinceLastOrder) ? r.daysSinceLastOrder : 0;
-        const sev = days >= 60 ? 'is-critical' : days >= 45 ? 'is-warn' : '';
+        const sev  = days >= 60 ? 'is-critical' : days >= 45 ? 'is-warn' : '';
         return `
           <div class="hs-orders-snap-row">
             <div class="hs-orders-snap-name">
@@ -649,18 +669,66 @@ function renderDashboard() {
             <div class="hs-orders-snap-days ${sev}">${days}d</div>
           </div>`;
       }).join('');
-      const overflowRow = overflow > 0
-        ? `<button onclick="showTab('orders')" class="hs-orders-snap-more">
-             + ${overflow} more →
-           </button>`
+      const more = overflow > 0
+        ? `<button onclick="showTab('orders')" class="hs-orders-snap-more">+ ${overflow} more →</button>`
         : '';
-      ordersEl.innerHTML = `
-        ${newcustPill}
-        ${rows || '<div class="hs-empty-state" style="padding:12px 0;">No reorders past 30 days.</div>'}
-        ${overflowRow}
-      `;
+      reordersEl.innerHTML = rows + more;
     }
   }
+
+  // ─── Summary banner — amber, localStorage-backed, full-tap dismiss ─────────
+  updateSummaryBanner();
+}
+
+// Called from renderDashboard() whenever At a Glance data changes.
+// Compares current New Customers + Reorders Due account sets against the
+// last snapshot the rep acknowledged. Shows the banner if anything is new.
+function updateSummaryBanner() {
+  const banner = document.getElementById('critical-alert-banner');
+  const msg    = banner?.querySelector('.critical-banner-msg');
+  if (!banner || !msg) return;
+
+  const ACTIVE_STATES = ['pending', 'ready', 'checkin_due', 'zoho_new'];
+  const newCustIds  = combinedNewCustomers()
+    .filter(c => ACTIVE_STATES.includes(c.cardState))
+    .map(c => c.Id || c.accountId || c.customerName || '')
+    .sort().join(',');
+  const reorderIds  = reorderDue
+    .map(r => r.accountId || r.customerName || '')
+    .sort().join(',');
+  const currentKey  = `nc:${newCustIds}|ro:${reorderIds}`;
+
+  // Nothing to surface at all
+  if (!newCustIds && !reorderIds) { banner.classList.add('hidden'); return; }
+
+  // Rep already acknowledged this exact state
+  try {
+    if (localStorage.getItem('hs-atag-seen') === currentKey) {
+      banner.classList.add('hidden'); return;
+    }
+  } catch (_) {}
+
+  // Build message
+  const ncCount = newCustIds ? newCustIds.split(',').filter(Boolean).length : 0;
+  const roCount = reorderIds ? reorderIds.split(',').filter(Boolean).length : 0;
+  const parts   = [];
+  if (ncCount > 0) parts.push(`${ncCount} new customer${ncCount !== 1 ? 's' : ''}`);
+  if (roCount > 0) parts.push(`${roCount} reorder${roCount !== 1 ? 's' : ''} due`);
+  if (!parts.length) { banner.classList.add('hidden'); return; }
+
+  msg.textContent = parts.join(' · ') + ' — tap to review';
+  banner.classList.remove('hidden');
+
+  // Full-banner click: scroll to At a Glance + mark as read
+  banner.onclick = () => {
+    try { localStorage.setItem('hs-atag-seen', currentKey); } catch (_) {}
+    banner.classList.add('hidden');
+    document.getElementById('section-at-a-glance')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  banner.onkeydown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); banner.click(); }
+  };
 }
 
 // ─── Lead List ────────────────────────────────────────────────────────────────
@@ -4573,7 +4641,6 @@ function loadDemoData() {
     { Id: 'acct-006', Account_Name: 'Apex Retail Co.',           Industry: 'Retail',        Billing_City: 'Denver',   Billing_State: 'CO', Phone: '555-1400' },
   ];
 
-  loadDemoAlerts();
   renderAll();
 }
 

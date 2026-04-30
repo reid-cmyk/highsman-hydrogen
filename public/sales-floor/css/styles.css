@@ -601,10 +601,18 @@ a{ color:inherit; text-decoration:none; }
   flex-shrink:0;
 }
 .hs-secondary-grid > .hs-panel > #dashboard-orders,
+.hs-secondary-grid > .hs-panel > #dashboard-reorders,
 .hs-secondary-grid > .hs-panel > #onboarding-visits-list,
 .hs-secondary-grid > .hs-panel > .hs-alert-scroll{
   flex:1 1 auto;
   min-height:0;
+  overflow-y:auto;
+}
+/* Cancel the global .hs-panel + .hs-panel sibling margin inside the grid —
+   that rule adds 12px top margin to 2nd + 3rd panels, pushing them lower
+   than the first card and creating the misalignment. */
+.hs-secondary-grid > .hs-panel + .hs-panel{
+  margin-top:0;
 }
 /* Empty states centered vertically inside their content area, instead
    of pinned to the top with whitespace below. */
@@ -1056,16 +1064,22 @@ optgroup{
 /* ═══════════════════════════════════════════════════════════════
    CRITICAL BANNER
 ═══════════════════════════════════════════════════════════════ */
+/* Summary banner — amber/gold, full-tap target, localStorage-backed dismiss */
 .critical-banner{
   display:flex;
   align-items:center;
-  justify-content:space-between;
   gap:12px;
   padding:12px 16px;
-  background:rgba(255,59,48,0.14);
-  border:1px solid rgba(255,59,48,0.45);
+  background:rgba(245,228,0,0.10);
+  border:1px solid rgba(245,228,0,0.35);
   border-radius:var(--r);
   margin-bottom:8px;
+  cursor:pointer;
+  transition:background 0.15s ease, border-color 0.15s ease;
+}
+.critical-banner:hover{
+  background:rgba(245,228,0,0.15);
+  border-color:rgba(245,228,0,0.55);
 }
 .critical-banner-inner{
   display:flex;
@@ -1074,23 +1088,22 @@ optgroup{
   flex:1;
   min-width:0;
 }
-.critical-banner-icon{ color:var(--red); font-size:15px; }
+.critical-banner-icon{ color:var(--gold); font-size:15px; }
 .critical-banner-msg{
   font-family:var(--teko);
   font-size:15px;
   letter-spacing:0.04em;
   color:var(--white);
 }
-.critical-banner-cta{
+/* Tap hint replaces the old "View Alerts" CTA button */
+.critical-banner-tap{
   font-family:var(--teko);
   font-size:12px;
-  letter-spacing:0.1em;
+  letter-spacing:0.10em;
   text-transform:uppercase;
-  padding:7px 12px;
-  background:var(--red);
-  color:var(--white);
-  border-radius:var(--r-sm);
+  color:var(--gold);
   white-space:nowrap;
+  flex-shrink:0;
 }
 
 /* ═══════════════════════════════════════════════════════════════
