@@ -10,11 +10,11 @@
   --hs-ink: #0a0a0a;
   --hs-panel: #111113;
   --hs-panel-2: #161619;
-  --hs-line: rgba(255, 255, 255, 0.08);
+  --hs-line: rgba(255, 255, 255, 0.11);  /* was 0.08 — more panel definition */
   --hs-line-2: rgba(255, 255, 255, 0.14);
   --hs-white: #ffffff;
   --hs-gray: #a9acaf;
-  --hs-gray-d: #6a6d70;
+  --hs-gray-d: #8c8f92;  /* was #6a6d70 — too dark to read on panel backgrounds */
   --hs-gold: #f4b400;
   --hs-red: #dc2626;
   --hs-green: #16a34a;
@@ -39,7 +39,7 @@ html, body {
   padding: 0;
   background: var(--hs-black);
   color: var(--hs-white);
-  font-family: 'Barlow Semi Condensed', system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   font-size: 15px;
   line-height: 1.4;
   -webkit-font-smoothing: antialiased;
