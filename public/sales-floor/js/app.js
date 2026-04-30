@@ -166,6 +166,11 @@ function showTab(tab) {
   document.querySelectorAll('.hs-nav-btn').forEach(btn => btn.classList.remove('active'));
   document.getElementById(`nav-${tab}`)?.classList.add('active');
 
+  // Scroll to top on every tab change — reset both the inner scroll area
+  // (mobile / constrained layout) and window (desktop body-scroll layout).
+  window.scrollTo({ top: 0, behavior: 'instant' });
+  document.querySelector('.hs-scroll-area')?.scrollTo({ top: 0, behavior: 'instant' });
+
   const titles = {
     dashboard: ['Dashboard', 'Your day at a glance'],
     leads: ['Leads', 'New business development'],
@@ -669,10 +674,13 @@ function renderDashboard() {
       rows.push({ name: a.Account_Name || '—', state: normalizeStateCode(a._state || a.Billing_State) || '', tier: 'warn', label: 'LOW INV' });
     }
     // Tier 3 — Reorder Due (gold → red at 60d)
+    // Use fresh accounts.findIndex lookup (same pattern as renderOrders()) —
+    // r.account is a snapshot reference that may be stale after a re-sync.
     const reorders = (typeof deriveOrdersDue === 'function') ? deriveOrdersDue() : [];
     for (const r of reorders) {
       const days = Number.isFinite(r.daysSinceLastOrder) ? r.daysSinceLastOrder : 0;
-      rows.push({ name: r.account?.Account_Name || '—', state: r.stateCode || '', tier: days >= 60 ? 'critical' : 'reorder', label: `${days}d` });
+      const acct = accounts.find(a => a && a.id === r.accountId) || r.account;
+      rows.push({ name: acct?.Account_Name || '—', state: r.stateCode || '', tier: days >= 60 ? 'critical' : 'reorder', label: `${days}d` });
     }
 
     if (rows.length === 0) {
