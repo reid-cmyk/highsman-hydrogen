@@ -305,26 +305,9 @@ function ReconcileShell() {
               >
                 MISSING FROM ZOHO INVENTORY ({data.summary.missingCount})
               </h2>
-              <div className="flex items-center gap-3">
-                <span className="text-[#666] text-xs uppercase tracking-wider">
-                  Total ${data.summary.missingTotalRevenue.toLocaleString()}
-                </span>
-                {(data.missing?.length || 0) > 0 && (
-                  <button
-                    onClick={() => downloadMissingCsv(data.missing || [])}
-                    className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider cursor-pointer"
-                    style={{
-                      fontFamily: 'Teko, sans-serif',
-                      fontSize: '0.85rem',
-                      background: '#c8a84b',
-                      color: '#000',
-                      border: 'none',
-                    }}
-                  >
-                    DOWNLOAD CSV
-                  </button>
-                )}
-              </div>
+              <span className="text-[#666] text-xs uppercase tracking-wider">
+                Total ${data.summary.missingTotalRevenue.toLocaleString()}
+              </span>
             </div>
             <div className="overflow-x-auto rounded-xl border border-[#A9ACAF]/15 mb-8">
               <table className="w-full text-sm">
@@ -428,4 +411,23 @@ function Th({children, className = ''}: {children: React.ReactNode; className?: 
   );
 }
 
-function Kpi({label, value, accent, sub}: {la
+function Kpi({label, value, accent, sub}: {label: string; value: string; accent: string; sub: string}) {
+  return (
+    <div className="bg-[#111] border border-[#A9ACAF]/15 rounded-xl p-4">
+      <div className="text-[10px] uppercase tracking-widest text-[#666] font-bold mb-1">{label}</div>
+      <div className="text-3xl font-bold" style={{fontFamily: 'Teko, sans-serif', color: accent, lineHeight: 1.1}}>
+        {value}
+      </div>
+      <div className="text-[10px] text-[#666] uppercase tracking-wider mt-1">{sub}</div>
+    </div>
+  );
+}
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
+  } catch {
+    return iso;
+  }
+}
