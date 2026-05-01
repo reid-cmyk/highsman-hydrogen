@@ -285,12 +285,62 @@ async function fetchHighsmanOrders(sellerId: number, apiKey: string, sinceISO: s
 
 async function fetchLLOrderDetail(orderNumber: string, apiKey: string): Promise<LLOrderDetail | null> {
   try {
-    const url = `${LEAFLINK_API_BASE}/orders-received/${orderNumber}/`;
+    // include_children=line_items embeds full line-item records (with sale_price,
+    // quantity, product) — the bare /orders-received/{id}/ response omits prices.
+    const url = `${LEAFLINK_API_BASE}/orders-received/${orderNumber}/?include_children=line_items`;
     const res = await fetchT(url, {headers: {Authorization: `Token ${apiKey}`}});
     if (!res.ok) return null;
     return (await res.json()) as LLOrderDetail;
   } catch {
     return null;
+  }
+}
+
+// Separate /order-line-items/ endpoint — most reliable source of pricing.
+// Returns array of line items with quantity and sale_price. We sum qty * price
+// for HIGHSMAN_PRODUCT_IDS only, so mixed-brand orders show only the Highsman
+// portion (matches how /sales reports Highsman revenue).
+async function fetchLLLineItemsForOrder(
+  orderNumber: string,
+  apiKey: string,
+): Promise<{total: number; productIds: number[]; lineItems: any[]}> {
+  try {
+    const url = `${LEAFLINK_API_BASE}/order-line-items/?order_number=${encodeURIComponent(orderNumber)}&page_size=100`;
+    const res = await fetchT(url, {headers: {Authorization: `Token ${apiKey}`}});
+    if (!res.ok) return {total: 0, productIds: [], lineItems: []};
+    const data: any = await res.json();
+    const items: any[] = data.results || data.line_items || [];
+    let total = 0;
+    const productIds: number[] = [];
+    for (const li of items) {
+      const productId =
+        typeof li.product === 'number'
+          ? li.product
+          : typeof li.product?.id === 'number'
+          ? li.product.id
+          : null;
+      if (productId != null) productIds.push(productId);
+      // Only count Highsman SKUs toward total — non-Highsman items in a mixed
+      // order are someone else's revenue.
+      if (productId == null || !HIGHSMAN_PRODUCT_IDS.has(productId)) continue;
+      const qty = parseTotal(li.quantity);
+      const lineExplicit =
+        parseTotal(li.sale_total) ||
+        parseTotal(li.line_total) ||
+        parseTotal(li.subtotal) ||
+        parseTotal(li.total);
+      if (lineExplicit) {
+        total += lineExplicit;
+        continue;
+      }
+      const unit = parseTotal(
+        li.sale_price ?? li.unit_sale_price ?? li.unit_price ?? li.price,
+      );
+      total += qty * unit;
+    }
+    return {total, productIds, lineItems: items};
+  } catch {
+    return {total: 0, productIds: [], lineItems: []};
   }
 }
 
@@ -434,17 +484,45 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const zohoOrders = zohoOrdersRaw.filter((so) => !isHeadOfficeZohoSO(so, headOfficeIds));
   const zohoMs = Date.now() - t1;
 
-  // 3) LL detail per order (real totals + line items) — concurrency 8
-  // Use short_id since that's the URL key for /orders-received/{id}/
+  // 3) LL detail + line items per order — concurrency 8
+  // Two parallel fetches per order:
+  //   - /orders-received/{id}/?include_children=line_items  → embedded items
+  //   - /order-line-items/?order_number={id}                → authoritative pricing
+  // The line-items endpoint is the only reliable source of totals; the orders
+  // endpoint omits price fields entirely on this org. We also use line-items
+  // to verify Highsman product presence (some orders shipped through this
+  // seller are non-Highsman brands).
   const t2 = Date.now();
   const llDetailMap = new Map<string, LLOrderDetail>();
+  const llLineItemsMap = new Map<string, {total: number; productIds: number[]; lineItems: any[]}>();
   await mapLimit(allLL, DETAIL_CONCURRENCY, async (o) => {
     const key = o.short_id || o.number;
     if (!key) return;
-    const d = await fetchLLOrderDetail(key, apiKey);
-    if (d) llDetailMap.set(key, d);
+    const [detail, lineInfo] = await Promise.all([
+      fetchLLOrderDetail(key, apiKey),
+      fetchLLLineItemsForOrder(key, apiKey),
+    ]);
+    if (detail) llDetailMap.set(key, detail);
+    llLineItemsMap.set(key, lineInfo);
   });
   const llDetailMs = Date.now() - t2;
+
+  // 3b) Hard filter: drop any order where the line-items endpoint shows ZERO
+  // Highsman product IDs. The list-endpoint filter can be wrong if Canfections'
+  // list response embeds product IDs from a stale or shared template — this
+  // pass uses the authoritative line-items API to be sure.
+  const allLLOriginalCount = allLL.length;
+  const allLLConfirmedHighsman = allLL.filter((o) => {
+    const key = o.short_id || o.number;
+    const info = key ? llLineItemsMap.get(key) : undefined;
+    // If line-items fetch failed (info is undefined or empty), fall back to
+    // trusting the list-endpoint filter — better to over-include than drop.
+    if (!info || info.productIds.length === 0) return true;
+    return info.productIds.some((id) => HIGHSMAN_PRODUCT_IDS.has(id));
+  });
+  const droppedNonHighsmanCount = allLLOriginalCount - allLLConfirmedHighsman.length;
+  allLL.length = 0;
+  allLL.push(...allLLConfirmedHighsman);
 
   // 4) Customer detail per unique LL customer
   const t3 = Date.now();
@@ -485,8 +563,12 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     const info = customerId != null ? customerInfo.get(customerId) : undefined;
     const customerName = info?.name || cust?.name || (customerId != null ? `Customer #${customerId}` : '');
     const state = info?.state || '';
-    const detail = (o.short_id || o.number) ? llDetailMap.get(o.short_id || o.number || '') : null;
-    const total = llTotalFromAny(detail || o);
+    const key = o.short_id || o.number || '';
+    const detail = key ? llDetailMap.get(key) : null;
+    const lineInfo = key ? llLineItemsMap.get(key) : undefined;
+    // Prefer line-items total (Highsman-only). Fall back to any total field on
+    // the detail/list response. Last resort: 0 — Reid eyeballs by date+customer.
+    const total = (lineInfo?.total || 0) > 0 ? lineInfo!.total : llTotalFromAny(detail || o);
     return {
       shortId: o.short_id || '',
       number: o.number || '',
@@ -627,6 +709,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     unmatchedZohoIds: unmatchedZoho.map((so) => so.salesorder_id),
     meta: {
       sellerIds: HIGHSMAN_SELLER_IDS,
+      droppedNonHighsmanCount,
       orgId,
       llListMs,
       llDetailMs,
