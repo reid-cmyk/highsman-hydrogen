@@ -507,6 +507,42 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   });
   const llDetailMs = Date.now() - t2;
 
+  // ── DEBUG: ?debugLineItems=1 returns raw LL line-items + detail for first 3 orders
+  if (url.searchParams.get('debugLineItems') === '1') {
+    const sample: any[] = [];
+    const sampleOrders = allLL.slice(0, 3);
+    for (const o of sampleOrders) {
+      const key = o.short_id || o.number;
+      if (!key) continue;
+      // Raw fetch — also try alternate query params LL might want
+      const altQueries = [
+        `?order_number=${encodeURIComponent(key)}`,
+        `?order=${encodeURIComponent(key)}`,
+        `?short_id=${encodeURIComponent(key)}`,
+      ];
+      const altResults: any = {};
+      for (const q of altQueries) {
+        try {
+          const u = `${LEAFLINK_API_BASE}/order-line-items/${q}&page_size=20`;
+          const r = await fetchT(u, {headers: {Authorization: `Token ${apiKey}`}});
+          altResults[q] = {
+            status: r.status,
+            ...(r.ok ? {body: await r.json()} : {error: await r.text().catch(() => '')}),
+          };
+        } catch (e: any) {
+          altResults[q] = {error: e?.message};
+        }
+      }
+      sample.push({
+        shortId: o.short_id,
+        number: o.number,
+        detail: llDetailMap.get(key),
+        lineItemsResults: altResults,
+      });
+    }
+    return json({ok: true, debugLineItems: sample});
+  }
+
   // 3b) Hard filter: drop any order where the line-items endpoint shows ZERO
   // Highsman product IDs. The list-endpoint filter can be wrong if Canfections'
   // list response embeds product IDs from a stale or shared template — this
