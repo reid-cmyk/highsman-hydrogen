@@ -495,14 +495,14 @@ function updateStats() {
   const hot = leads.filter(l => l._status === 'hot').length;
   document.getElementById('stat-hot').textContent = hot;
 
-  // Reorder Due: count of shops with no Highsman LeafLink order in 30+ days.
-  // Source: /api/sales-floor-leaflink-orders. Falls back to "—" until the
-  // first fetch completes so reps don't see a misleading "0" on slow loads.
+  // Reorder Due: use deriveOrdersDue() — same source as the Orders Due tab.
+  // reorderDue[] is the LeafLink API pre-computed list which can be empty/stale.
   const reorderEl = document.getElementById('stat-reorder-due');
   if (reorderEl) {
-    reorderEl.textContent = leaflinkOrdersFetched
-      ? String(reorderDue.length)
-      : '—';
+    const count = (typeof deriveOrdersDue === 'function' && accounts.length > 0)
+      ? deriveOrdersDue().length
+      : (leaflinkOrdersFetched ? reorderDue.length : null);
+    reorderEl.textContent = count !== null ? String(count) : '—';
   }
 
   // Calls Today: prefer the real Quo number when the integration is live;
@@ -637,24 +637,28 @@ function renderDashboard() {
       } else {
         const top = active.slice(0, 4);
         const overflow = active.length - top.length;
+        // Reuse the same hs-orders-snap-row format as Reorders Due so both
+        // At a Glance cards look visually consistent.
+        const STATUS_BADGE = {
+          pending:    ['PENDING',  ''],
+          zoho_new:   ['WELCOME',  ''],
+          ready:      ['READY',    'is-warn'],
+          checkin_due:['CHECK-IN', 'is-warn'],
+        };
         const cards = top.map(c => {
           const name    = escapeHtml(c.customerName || c.Account_Name || '—');
           const state   = c.state ? `<span class="hs-orders-snap-state">${escapeHtml(c.state)}</span>` : '';
           const dateStr = c.firstOrderDate ? `First order: ${formatDate(c.firstOrderDate)}` : '';
-          const sLabel  = STATUS_LABEL[c.cardState] || c.cardState;
-          const sCls    = STATUS_CLS[c.cardState] || '--new';
+          const [bLabel, bCls] = STATUS_BADGE[c.cardState] || ['NEW', ''];
           return `
-            <div class="hs-newcust-snap-card" role="button" tabindex="0"
-                 onclick="showTab('newcustomers')"
-                 aria-label="Open New Customers tab">
-              <div class="hs-newcust-snap-top">
-                <span class="hs-newcust-snap-name">${name}</span>
+            <div class="hs-orders-snap-row" role="button" tabindex="0"
+                 onclick="showTab('newcustomers')" style="cursor:pointer;">
+              <div class="hs-orders-snap-name">
+                ${name}
                 ${state}
+                ${dateStr ? `<div class="hs-orders-snap-sub">${dateStr}</div>` : ''}
               </div>
-              <div class="hs-newcust-snap-meta">
-                <span class="hs-newcust-snap-date">${dateStr}</span>
-                <span class="hs-newcust-snap-status hs-newcust-snap-status${sCls}">${escapeHtml(sLabel)}</span>
-              </div>
+              <span class="hs-orders-snap-days ${bCls}" style="font-size:12px;letter-spacing:0.06em;">${bLabel}</span>
             </div>`;
         }).join('');
         const more = overflow > 0
@@ -686,27 +690,31 @@ function renderDashboard() {
       return date ? `Last order: ${formatDate(date)}` : '';
     };
 
-    // Tier 1 — Off Menu (red/critical)
+    // Each tier is capped at 2 — this is a "heads up" summary, not the full board.
+    // Tier 1 — Off Menu: top 2 (most critical — always surface these)
+    let offMenuShown = 0;
     for (const item of (litAlertsOffMenu || [])) {
+      if (offMenuShown >= 2) break;
       const a = litAcct(item.zohoAccountId);
       if (!a) continue;
       rows.push({ name: a.Account_Name || '—', state: normalizeStateCode(a._state || a.Billing_State) || '', tier: 'critical', label: 'OFF MENU', sub: lastOrderSub(a.Account_Name, a.Last_Order_Date) });
+      offMenuShown++;
     }
-    // Tier 2 — Low Inventory (orange)
+    // Tier 2 — Low Inventory: top 2
+    let lowInvShown = 0;
     for (const item of (litAlertsLowInv || [])) {
+      if (lowInvShown >= 2) break;
       const a = litAcct(item.zohoAccountId);
       if (!a) continue;
       rows.push({ name: a.Account_Name || '—', state: normalizeStateCode(a._state || a.Billing_State) || '', tier: 'warn', label: 'LOW INV', sub: lastOrderSub(a.Account_Name, a.Last_Order_Date) });
+      lowInvShown++;
     }
-    // Tier 3 — Reorder Due, newest to the list first (30-35 days = just entered window).
-    // Accounts past 35 days are established reorders — reps see them in the full Orders Due tab.
+    // Tier 3 — Reorder Due: newest 2 (30-35 days = just entered the window)
     const reorders = (typeof deriveOrdersDue === 'function') ? deriveOrdersDue() : [];
     const newReorders = reorders
-      .filter(r => {
-        const days = Number.isFinite(r.daysSinceLastOrder) ? r.daysSinceLastOrder : 0;
-        return days >= 30 && days <= 35; // new to the list in the last 5 days
-      })
-      .sort((a, b) => a.daysSinceLastOrder - b.daysSinceLastOrder); // 30d first = newest
+      .filter(r => { const d = r.daysSinceLastOrder; return d >= 30 && d <= 35; })
+      .sort((a, b) => a.daysSinceLastOrder - b.daysSinceLastOrder)
+      .slice(0, 2);
     for (const r of newReorders) {
       const days = r.daysSinceLastOrder;
       const acct = accounts.find(a => a && a.id === r.accountId) || r.account;
