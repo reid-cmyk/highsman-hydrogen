@@ -123,6 +123,11 @@ function normalizeAccountName(raw: string): string {
 
 function parseTotal(raw: any): number {
   if (raw == null) return 0;
+  // LeafLink wraps money fields as {amount, currency} objects (e.g. total,
+  // sale_price, ordered_unit_price). Unwrap to scalar.
+  if (typeof raw === 'object' && raw && 'amount' in raw) {
+    raw = (raw as any).amount;
+  }
   const n = parseFloat(String(raw));
   return isNaN(n) ? 0 : n;
 }
@@ -189,10 +194,12 @@ function llTotalFromAny(input: any): number {
     o = input.data;
   }
 
-  // Try every total-shaped field name LeafLink has used. The API has had at least
-  // three different "total" semantics across versions (gross / net / merchandise),
-  // so we try the most-inclusive ones first and fall back gracefully.
+  // Try every total-shaped field name LeafLink has used. parseTotal now
+  // unwraps {amount, currency} objects so `total: {amount: 2616, currency: 'USD'}`
+  // resolves correctly. payment_balance is a scalar duplicate that's safer
+  // when total is a complex object.
   const totalCandidates = [
+    'payment_balance',
     'total',
     'total_value',
     'grand_total',
@@ -205,8 +212,8 @@ function llTotalFromAny(input: any): number {
   ];
   for (const k of totalCandidates) {
     if (o[k] != null) {
-      const n = parseFloat(String(o[k]));
-      if (!isNaN(n) && n > 0) return n;
+      const n = parseTotal(o[k]);
+      if (n > 0) return n;
     }
   }
 
@@ -347,9 +354,11 @@ async function fetchLLLineItemsForOrder(
         total += lineExplicit;
         continue;
       }
-      const unit = parseTotal(
-        li.sale_price ?? li.unit_sale_price ?? li.unit_price ?? li.price,
-      );
+      // ordered_unit_price wraps {amount, currency}; parseTotal unwraps.
+      // sale_price is often 0 — only use if non-zero.
+      const sale = parseTotal(li.sale_price);
+      const ordered = parseTotal(li.ordered_unit_price ?? li.unit_sale_price ?? li.unit_price ?? li.price);
+      const unit = sale > 0 ? sale : ordered;
       total += qty * unit;
     }
     return {total, productIds, lineItems: items};
