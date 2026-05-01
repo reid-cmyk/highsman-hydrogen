@@ -4,30 +4,26 @@ import {getZohoAccessToken} from '~/lib/zoho-auth';
 import {getInventoryAccessToken} from '~/lib/zoho-inventory-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LeafLink ↔ Zoho Inventory Reconciliation
+// LeafLink ↔ Zoho Inventory Reconciliation (v2)
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/reconcile-leaflink-zoho?since=2025-06-01&state=NJ
-//   → { ok, missing: [...], summary: {...}, meta: {...} }
 //
-// Finds LeafLink orders (Highsman brand only, NJ customers only) that did NOT
-// make it into Zoho Inventory Sales Orders. Match strategy:
-//   1. LeafLink order number appearing in Zoho reference_number / salesorder_number / notes (exact)
-//   2. Fuzzy fallback: same customer (normalized) + date within ±3 days + total within ±$5
+// Strategy: pull LeafLink Highsman orders, pull Zoho NJ Inventory SOs, match
+// each LL order against Zoho via ref# (LL number appearing in salesorder_number,
+// reference_number, or notes) with fuzzy fallback (customer name + date ±3d
+// + total ±$5).
 //
-// Reid spotted "Molly Ann Farms" sitting in LeafLink with no Zoho twin —
-// suspect there are more. This route surfaces all of them.
+// State filter: derived from LeafLink customer detail (each LL customer has a
+// billing state) — cached per customer_id. CRM Account_State is no longer the
+// primary filter (it returned 0 rows on first deploy, likely an env or scope
+// issue).
 // ─────────────────────────────────────────────────────────────────────────────
 
 const LEAFLINK_API_BASE = 'https://app.leaflink.com/api/v2';
 const DEFAULT_ZOHO_INVENTORY_ORG_ID = '882534504';
 
-// Highsman seller(s) on LeafLink — same set the Sales Floor uses.
-const HIGHSMAN_SELLER_IDS: number[] = [
-  24087, // Canfections NJ, INC
-];
+const HIGHSMAN_SELLER_IDS: number[] = [24087]; // Canfections NJ, INC
 
-// Highsman product IDs — order must contain at least one of these to count
-// as a "Highsman" order (Canfections also sells non-Highsman SKUs).
 const HIGHSMAN_PRODUCT_IDS = new Set<number>([
   // Hit Stick Singles
   2554071, 2554859, 2554839, 2554077, 2554845,
@@ -41,17 +37,14 @@ const HIGHSMAN_PRODUCT_IDS = new Set<number>([
   2816210, 2816211, 2816212, 2816213, 2816214,
 ]);
 
-// Match tolerances
 const FUZZY_DATE_WINDOW_DAYS = 3;
 const FUZZY_TOTAL_TOLERANCE = 5; // dollars
-
-// Pagination caps (defensive — June 2025 → today should fit comfortably)
 const LEAFLINK_MAX_PAGES = 40;
 const ZOHO_MAX_PAGES_PER_STATUS = 50;
 const FETCH_TIMEOUT_MS = 15000;
+const CUSTOMER_DETAIL_CONCURRENCY = 6;
 
 // ─── Types ─────────────────────────────────────────────────────────────────
-
 type LLOrder = {
   number?: string;
   short_id?: string;
@@ -70,6 +63,14 @@ type LLOrder = {
   created_on?: string;
   modified?: string;
   total?: string | number;
+};
+
+type LLCustomerDetail = {
+  id?: number;
+  name?: string;
+  state?: string | null; // sometimes top-level
+  shipping_address?: {state?: string | null; state_code?: string | null} | null;
+  billing_address?: {state?: string | null; state_code?: string | null} | null;
 };
 
 type ZohoSO = {
@@ -91,7 +92,6 @@ type ZohoSO = {
 type WarehouseInfo = {state: string; isHeadOffice: boolean; name: string};
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
-
 async function fetchT(url: string, init: RequestInit = {}, timeoutMs = FETCH_TIMEOUT_MS): Promise<Response> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -100,6 +100,23 @@ async function fetchT(url: string, init: RequestInit = {}, timeoutMs = FETCH_TIM
   } finally {
     clearTimeout(t);
   }
+}
+
+async function mapLimit<T, U>(items: T[], limit: number, fn: (item: T, idx: number) => Promise<U>): Promise<U[]> {
+  const out: U[] = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({length: Math.min(limit, items.length)}, async () => {
+    while (cursor < items.length) {
+      const i = cursor++;
+      try {
+        out[i] = await fn(items[i], i);
+      } catch (err) {
+        // swallow — out[i] stays undefined
+      }
+    }
+  });
+  await Promise.all(workers);
+  return out;
 }
 
 function ymd(d: Date): string {
@@ -147,8 +164,20 @@ function leaflinkOrderTotal(o: LLOrder): number {
   return sum;
 }
 
-// ─── LeafLink fetch ────────────────────────────────────────────────────────
+function normalizeStateField(raw: any): string {
+  if (raw == null) return '';
+  const trimmed = String(raw).trim().toUpperCase();
+  if (!trimmed) return '';
+  if (/^[A-Z]{2}$/.test(trimmed)) return trimmed;
+  if (trimmed.includes('NEW JERSEY')) return 'NJ';
+  if (trimmed.includes('MASSACHUSETTS')) return 'MA';
+  if (trimmed.includes('NEW YORK')) return 'NY';
+  if (trimmed.includes('RHODE ISLAND')) return 'RI';
+  if (trimmed.includes('MISSOURI')) return 'MO';
+  return '';
+}
 
+// ─── LeafLink fetch ────────────────────────────────────────────────────────
 async function fetchHighsmanOrders(sellerId: number, apiKey: string, sinceISO: string): Promise<LLOrder[]> {
   const out: LLOrder[] = [];
   const sinceMs = new Date(sinceISO).getTime();
@@ -162,10 +191,7 @@ async function fetchHighsmanOrders(sellerId: number, apiKey: string, sinceISO: s
       `&page_size=100` +
       `&page=${page}`;
     const res = await fetchT(url, {headers: {Authorization: `Token ${apiKey}`}});
-    if (!res.ok) {
-      console.warn(`[reconcile] LL seller ${sellerId} page ${page} → ${res.status}`);
-      break;
-    }
+    if (!res.ok) break;
     const data: any = await res.json();
     const results: LLOrder[] = data.results || [];
     if (!results.length) break;
@@ -183,28 +209,42 @@ async function fetchHighsmanOrders(sellerId: number, apiKey: string, sinceISO: s
         if (isHighsman) out.push(order);
       }
     }
-    // Since we're sorted by -created_on, once we cross the floor we can stop.
     if (allOlder) break;
     if (!data.next) break;
     page++;
   }
-
   return out;
 }
 
-// ─── Zoho Inventory fetch ──────────────────────────────────────────────────
+async function fetchLLCustomerState(customerId: number, apiKey: string): Promise<string> {
+  try {
+    const url = `${LEAFLINK_API_BASE}/customers/${customerId}/`;
+    const res = await fetchT(url, {headers: {Authorization: `Token ${apiKey}`}});
+    if (!res.ok) return '';
+    const data: LLCustomerDetail = await res.json();
+    const cands = [
+      data.state,
+      data.shipping_address?.state,
+      data.shipping_address?.state_code,
+      data.billing_address?.state,
+      data.billing_address?.state_code,
+    ];
+    for (const c of cands) {
+      const s = normalizeStateField(c);
+      if (s) return s;
+    }
+    return '';
+  } catch {
+    return '';
+  }
+}
 
-async function fetchZohoSalesOrders(
-  orgId: string,
-  token: string,
-  startDate: Date,
-  endDate: Date,
-): Promise<ZohoSO[]> {
+// ─── Zoho Inventory fetch ──────────────────────────────────────────────────
+async function fetchZohoSalesOrders(orgId: string, token: string, startDate: Date, endDate: Date): Promise<ZohoSO[]> {
   const dateStart = ymd(startDate);
   const dateEnd = ymd(endDate);
   const perPage = 200;
   const statuses = ['Status.Confirmed', 'Status.Closed'];
-
   const orders: ZohoSO[] = [];
   const seen = new Set<string>();
 
@@ -237,7 +277,6 @@ async function fetchZohoSalesOrders(
       page++;
     }
   }
-
   return orders;
 }
 
@@ -258,111 +297,38 @@ async function fetchWarehouseInfoMap(orgId: string, token: string): Promise<Map<
       const id = String(w.warehouse_id || w.location_id || w.id || '');
       const name: string = w.warehouse_name || w.location_name || w.name || '';
       if (!id) continue;
-      const stateRaw = String(w.state || w.state_code || w.address?.state || w.address?.state_code || '').toUpperCase().trim();
-      let state = '';
-      if (/^[A-Z]{2}$/.test(stateRaw)) state = stateRaw;
-      else if (stateRaw.includes('NEW JERSEY')) state = 'NJ';
-      else if (stateRaw.includes('MASSACHUSETTS')) state = 'MA';
-      else if (stateRaw.includes('NEW YORK')) state = 'NY';
-      else if (stateRaw.includes('RHODE ISLAND')) state = 'RI';
-      else if (stateRaw.includes('MISSOURI')) state = 'MO';
-      // Fall back to parsing the warehouse name for NJ
-      if (!state) {
-        const upperName = name.toUpperCase();
-        if (/\bNJ\b/.test(upperName) || upperName.includes('NEW JERSEY')) state = 'NJ';
-      }
+      const state =
+        normalizeStateField(w.state || w.state_code) ||
+        normalizeStateField(w.address?.state || w.address?.state_code) ||
+        '';
       const isHeadOffice = name.toUpperCase().replace(/[^A-Z]/g, '').startsWith('HEADOFFICE');
-      out.set(id, {state, isHeadOffice, name});
+      let resolvedState = state;
+      if (!resolvedState && /\bNJ\b|NEW JERSEY/i.test(name)) resolvedState = 'NJ';
+      out.set(id, {state: resolvedState, isHeadOffice, name});
     }
     if (out.size > 0) break;
   }
   return out;
 }
 
-// ─── Zoho CRM Account_State map (last-resort state resolution) ────────────
-
-async function fetchCrmAccountStateMap(env: any): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
-  let token: string;
-  try {
-    token = await getZohoAccessToken(env);
-  } catch (err: any) {
-    console.warn(`[reconcile] CRM token fetch failed: ${err?.message}`);
-    return out;
-  }
-
-  let offset = 0;
-  const pageSize = 200;
-  while (true) {
-    const select_query = `select Account_Name, Account_State from Accounts where Account_State is not null limit ${offset}, ${pageSize}`;
-    const r = await fetchT('https://www.zohoapis.com/crm/v7/coql', {
-      method: 'POST',
-      headers: {
-        Authorization: `Zoho-oauthtoken ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({select_query}),
-    });
-    if (!r.ok) break;
-    const d: any = await r.json().catch(() => ({}));
-    const items: any[] = d.data || [];
-    for (const row of items) {
-      const rawUpper = String(row.Account_Name || '').trim().toUpperCase();
-      const state = String(row.Account_State || '').trim().toUpperCase();
-      if (!rawUpper || !state) continue;
-      const norm = normalizeAccountName(rawUpper);
-      if (rawUpper && !out.has(rawUpper)) out.set(rawUpper, state);
-      if (norm && !out.has(norm)) out.set(norm, state);
-    }
-    if (!d.info?.more_records) break;
-    offset += pageSize;
-    if (offset > 5000) break;
-  }
-  return out;
-}
-
-function lookupCrmState(name: string, crmMap: Map<string, string>): string {
-  if (!name) return '';
-  const upper = name.trim().toUpperCase();
-  if (crmMap.has(upper)) return crmMap.get(upper) || '';
-  const norm = normalizeAccountName(name);
-  if (norm && crmMap.has(norm)) return crmMap.get(norm) || '';
-  return '';
-}
-
 // ─── Match logic ───────────────────────────────────────────────────────────
-
 type ZohoIndex = {
-  refMap: Map<string, ZohoSO>;     // any ref# (lower) → SO
-  byCustomerNorm: Map<string, ZohoSO[]>; // normalized customer name → SO list (NJ-only)
+  refMap: Map<string, ZohoSO>;
+  byCustomerNorm: Map<string, ZohoSO[]>;
 };
 
-function buildZohoIndex(zohoOrders: ZohoSO[], njWarehouseIds: Set<string>, crmMap: Map<string, string>): ZohoIndex {
+function buildZohoIndex(zohoOrders: ZohoSO[], njWarehouseIds: Set<string>): ZohoIndex {
   const refMap = new Map<string, ZohoSO>();
   const byCustomerNorm = new Map<string, ZohoSO[]>();
 
   for (const so of zohoOrders) {
     const whId = String(so.warehouse_id || so.location_id || '');
-    let isNj = njWarehouseIds.has(whId);
-    if (!isNj) {
-      // Fall back to CRM Account_State match by customer name
-      const state = lookupCrmState(so.customer_name || '', crmMap);
-      if (state === 'NJ') isNj = true;
-    }
-    if (!isNj) continue;
+    if (!njWarehouseIds.has(whId)) continue; // strict NJ-warehouse filter
 
-    // Index every plausible ref# field under lowercased keys
-    const candidates = [
-      so.salesorder_number,
-      so.reference_number,
-      so.notes, // sometimes the LL # gets dropped here
-    ].filter(Boolean) as string[];
+    const candidates = [so.salesorder_number, so.reference_number, so.notes].filter(Boolean) as string[];
     for (const c of candidates) {
       const tokens = c.toLowerCase().split(/[\s,;|]+/).filter(Boolean);
-      for (const tok of tokens) {
-        if (tok.length >= 4) refMap.set(tok, so);
-      }
-      // Also index the whole string
+      for (const tok of tokens) if (tok.length >= 4) refMap.set(tok, so);
       refMap.set(c.toLowerCase().trim(), so);
     }
 
@@ -373,26 +339,19 @@ function buildZohoIndex(zohoOrders: ZohoSO[], njWarehouseIds: Set<string>, crmMa
       byCustomerNorm.set(norm, list);
     }
   }
-
   return {refMap, byCustomerNorm};
 }
 
-type MatchResult =
-  | {matched: true; how: 'ref' | 'fuzzy'; zoho: ZohoSO}
-  | {matched: false};
+type MatchResult = {matched: true; how: 'ref' | 'fuzzy'; zoho: ZohoSO} | {matched: false};
 
 function matchLeafLinkOrder(ll: LLOrder, idx: ZohoIndex): MatchResult {
-  // 1) Ref-number match — try the LL number, short_id, and a few derivations
   const candidates = [ll.number, ll.short_id]
     .filter((v): v is string => !!v)
     .map((v) => v.toLowerCase().trim());
   for (const c of candidates) {
-    if (idx.refMap.has(c)) {
-      return {matched: true, how: 'ref', zoho: idx.refMap.get(c)!};
-    }
+    if (idx.refMap.has(c)) return {matched: true, how: 'ref', zoho: idx.refMap.get(c)!};
   }
 
-  // 2) Fuzzy match — customer + date ±3d + total within $5
   const cust = ll.customer || ll.buyer;
   const custName = cust?.name || '';
   const norm = normalizeAccountName(custName);
@@ -412,17 +371,14 @@ function matchLeafLinkOrder(ll: LLOrder, idx: ZohoIndex): MatchResult {
     if (Math.abs(soTotal - llTotal) > FUZZY_TOTAL_TOLERANCE) continue;
     return {matched: true, how: 'fuzzy', zoho: so};
   }
-
   return {matched: false};
 }
 
 // ─── Loader ────────────────────────────────────────────────────────────────
-
 export async function loader({request, context}: LoaderFunctionArgs) {
   const env = (context as any).env || {};
   const url = new URL(request.url);
 
-  // Optional simple gate — same shared password as /sales
   const cookie = request.headers.get('Cookie') || '';
   const isAuth = cookie.includes('sales_auth=1') || cookie.includes('reconcile_auth=1');
   if (!isAuth) {
@@ -432,7 +388,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const sinceParam = url.searchParams.get('since') || '2025-06-01';
   const stateFilter = (url.searchParams.get('state') || 'NJ').toUpperCase();
   const since = new Date(sinceParam + 'T00:00:00-04:00');
-  const until = new Date(); // now
+  const until = new Date();
 
   const apiKey = env.LEAFLINK_API_KEY;
   if (!apiKey) {
@@ -442,33 +398,29 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const errors: string[] = [];
   const t0 = Date.now();
 
-  // 1) LeafLink — pull Highsman orders since `since`
+  // 1) LeafLink — Highsman orders since `since`
   let allLL: LLOrder[] = [];
   for (const sellerId of HIGHSMAN_SELLER_IDS) {
     try {
       const orders = await fetchHighsmanOrders(sellerId, apiKey, sinceParam);
       allLL = allLL.concat(orders);
     } catch (err: any) {
-      console.error(`[reconcile] LL seller ${sellerId} failed: ${err?.message}`);
-      errors.push(`leaflink_seller_${sellerId}_failed`);
+      errors.push(`leaflink_seller_${sellerId}_failed:${err?.message}`);
     }
   }
   const llDuration = Date.now() - t0;
 
-  // 2) Zoho — token, warehouses, sales orders, CRM Account_State map (parallel)
+  // 2) Zoho Inventory — token, warehouses, orders (in parallel)
   const orgId = env.ZOHO_INVENTORY_ORG_ID || DEFAULT_ZOHO_INVENTORY_ORG_ID;
   let invToken: string;
   try {
     invToken = await getInventoryAccessToken(env);
   } catch (err: any) {
-    return json({
-      ok: false,
-      error: `Zoho Inventory token fetch failed: ${err?.message}`,
-    }, {status: 500});
+    return json({ok: false, error: `Zoho Inventory token fetch failed: ${err?.message}`}, {status: 500});
   }
 
   const t1 = Date.now();
-  const [warehouseInfoMap, zohoOrders, crmMap] = await Promise.all([
+  const [warehouseInfoMap, zohoOrders] = await Promise.all([
     fetchWarehouseInfoMap(orgId, invToken).catch((err) => {
       errors.push(`warehouse_map_failed:${err?.message}`);
       return new Map<string, WarehouseInfo>();
@@ -477,30 +429,47 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       errors.push(`zoho_orders_failed:${err?.message}`);
       return [] as ZohoSO[];
     }),
-    fetchCrmAccountStateMap(env).catch((err) => {
-      errors.push(`crm_map_failed:${err?.message}`);
-      return new Map<string, string>();
-    }),
   ]);
   const zohoDuration = Date.now() - t1;
 
-  // Build NJ warehouse ID set
   const njWarehouseIds = new Set<string>();
   for (const [whId, info] of warehouseInfoMap.entries()) {
     if (info.isHeadOffice) continue;
     if (info.state === stateFilter) njWarehouseIds.add(whId);
   }
 
-  // 3) Build Zoho index (NJ-only)
-  const idx = buildZohoIndex(zohoOrders, njWarehouseIds, crmMap);
+  const idx = buildZohoIndex(zohoOrders, njWarehouseIds);
 
-  // 4) Filter LL to NJ-only via CRM Account_State (or LeafLink customer state if available)
+  // 3) LeafLink — pull customer detail for unique customer IDs to derive state
+  const t2 = Date.now();
+  const uniqueCustomerIds = Array.from(
+    new Set(
+      allLL
+        .map((o) => (o.customer || o.buyer)?.id)
+        .filter((v): v is number => typeof v === 'number'),
+    ),
+  );
+  const customerStates = new Map<number, string>();
+  await mapLimit(uniqueCustomerIds, CUSTOMER_DETAIL_CONCURRENCY, async (id) => {
+    const state = await fetchLLCustomerState(id, apiKey);
+    customerStates.set(id, state);
+  });
+  const customerDuration = Date.now() - t2;
+
+  // 4) Build NJ-Zoho customer name set as additional state hint (any LL customer
+  //    that has appeared in a NJ Zoho SO is definitely NJ — useful for accounts
+  //    where LL state is blank).
+  const njZohoCustomerNorms = new Set<string>();
+  for (const norm of idx.byCustomerNorm.keys()) njZohoCustomerNorms.add(norm);
+
+  // 5) Classify and match every LL order
   type Row = {
     leaflinkOrderNumber: string;
     leaflinkOrderId: string;
     customerId: number | null;
     customerName: string;
     state: string;
+    stateSource: 'leaflink' | 'zoho_inv' | 'unknown';
     orderDate: string | null;
     actualShipDate: string | null;
     status: string;
@@ -511,16 +480,25 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     matchHow?: 'ref' | 'fuzzy';
   };
 
-  const rows: Row[] = [];
   const missing: Row[] = [];
   const matched: Row[] = [];
+  const otherState: Row[] = [];
   const unknownState: Row[] = [];
 
   for (const o of allLL) {
     const cust = o.customer || o.buyer;
     const customerName = cust?.name || '';
     const customerId = cust?.id ?? null;
-    const state = lookupCrmState(customerName, crmMap);
+
+    let state = customerId != null ? customerStates.get(customerId) || '' : '';
+    let stateSource: 'leaflink' | 'zoho_inv' | 'unknown' = state ? 'leaflink' : 'unknown';
+    if (!state) {
+      const norm = normalizeAccountName(customerName);
+      if (norm && njZohoCustomerNorms.has(norm)) {
+        state = stateFilter; // we know they buy from our NJ warehouse
+        stateSource = 'zoho_inv';
+      }
+    }
 
     const row: Row = {
       leaflinkOrderNumber: o.number || o.short_id || '',
@@ -528,6 +506,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       customerId,
       customerName,
       state: state || '',
+      stateSource,
       orderDate: bestOrderDate(o),
       actualShipDate: o.actual_ship_date || null,
       status: o.status || '',
@@ -535,13 +514,14 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       skus: topSkus(o),
     };
 
-    rows.push(row);
-
     if (!state) {
       unknownState.push(row);
       continue;
     }
-    if (state !== stateFilter) continue;
+    if (state !== stateFilter) {
+      otherState.push(row);
+      continue;
+    }
 
     const m = matchLeafLinkOrder(o, idx);
     if (m.matched) {
@@ -554,7 +534,6 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     }
   }
 
-  // Sort missing oldest-first so Reid can see how far back the gap goes
   missing.sort((a, b) => {
     const ta = new Date(a.orderDate || 0).getTime();
     const tb = new Date(b.orderDate || 0).getTime();
@@ -570,7 +549,9 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       stateFilter,
       leaflinkOrdersScanned: allLL.length,
       leaflinkOrdersInState: matched.length + missing.length,
+      leaflinkOrdersOtherState: otherState.length,
       leaflinkOrdersUnknownState: unknownState.length,
+      uniqueLeaflinkCustomers: uniqueCustomerIds.length,
       zohoOrdersScanned: zohoOrders.length,
       zohoOrdersInState: njZohoCount,
       matchedCount: matched.length,
@@ -578,14 +559,15 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       missingTotalRevenue: missing.reduce((s, r) => s + r.total, 0),
     },
     missing,
-    unknownState: unknownState.slice(0, 50), // small sample so Reid can spot misnamed accounts
+    unknownState: unknownState.slice(0, 100),
+    otherStateSample: otherState.slice(0, 30),
     meta: {
       sellerIds: HIGHSMAN_SELLER_IDS,
       orgId,
       njWarehouseIds: Array.from(njWarehouseIds),
-      crmAccountStateRows: crmMap.size,
       llDurationMs: llDuration,
       zohoDurationMs: zohoDuration,
+      customerDetailDurationMs: customerDuration,
       totalDurationMs: Date.now() - t0,
       fetchedAt: new Date().toISOString(),
       errors,
