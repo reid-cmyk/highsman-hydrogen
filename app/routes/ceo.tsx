@@ -43,6 +43,13 @@ export const meta: MetaFunction = () => [
   {name: 'googlebot', content: 'noindex, nofollow'},
 ];
 
+// Suppress the consumer-site header AND footer on /ceo.
+// The Layout component (app/components/Layout.tsx) already reads these
+// flags via useMatches() — we just opt in here. The dashboard has its own
+// "CEO Command Center" header inside Dashboard() and its own confidential
+// footer, so the global chrome would be duplicative + off-tone.
+export const handle = {hideHeader: true, hideFooter: true};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
