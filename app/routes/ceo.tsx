@@ -80,7 +80,7 @@ export async function action({request, context}: ActionFunctionArgs) {
 
   if (intent === 'login') {
     const password = String(formData.get('password') || '');
-    const correct = env.CEO_DASHBOARD_PASSWORD || 'Cristy2026$$';
+    const correct = env.CEO_DASHBOARD_PASSWORD || 'HM3434$$';
     if (password === correct) {
       return json(
         {ok: true, error: null, intent},
