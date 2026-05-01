@@ -28,6 +28,7 @@ import {useLoaderData, useActionData, Form, useFetcher, useSearchParams} from '@
 import {useMemo, useState, type ReactNode} from 'react';
 
 import {
+  getActiveMailboxes,
   readFlags,
   readLastScan,
   setFlagResolved,
@@ -162,7 +163,21 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     errorMsg = String(err?.message || err);
   }
 
-  const mailboxes = Array.from(new Set(flags.map((f) => f.mailbox_email))).sort();
+  // Build mailbox dropdown from BOTH sources:
+  //   • the canonical active list in ceo_monitored_mailboxes (so quiet
+  //     inboxes that haven't produced a flag still appear), and
+  //   • the flag-derived list (so historical mailboxes don't disappear if
+  //     they're later deactivated).
+  // If the active-list lookup hiccups, we silently fall back to flags only —
+  // we don't want a Supabase blip to take the dashboard down.
+  let activeMailboxes: string[] = [];
+  try {
+    activeMailboxes = await getActiveMailboxes(env);
+  } catch (err) {
+    console.warn('[ceo] getActiveMailboxes failed (proceeding with flag-derived list)', err);
+  }
+  const flagMailboxes = flags.map((f) => f.mailbox_email);
+  const mailboxes = Array.from(new Set([...activeMailboxes, ...flagMailboxes])).sort();
 
   const sevenDaysAgo = Date.now() - 7 * 86400_000;
   const resolved7d = flags.filter(
