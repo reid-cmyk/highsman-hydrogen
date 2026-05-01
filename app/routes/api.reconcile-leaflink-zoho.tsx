@@ -368,12 +368,19 @@ async function fetchLLLineItemsForOrder(
 }
 
 async function fetchLLCustomerDetail(customerId: number, apiKey: string): Promise<LLCustomerDetail | null> {
+  // Match the exact pattern used by api.sales-floor-leaflink-orders.tsx —
+  // include_children=contacts,managers is required for this org's data shape;
+  // without it the customer endpoint returns sparse responses or 404.
   try {
-    const url = `${LEAFLINK_API_BASE}/customers/${customerId}/`;
+    const url = `${LEAFLINK_API_BASE}/customers/${customerId}/?include_children=contacts,managers`;
     const res = await fetchT(url, {headers: {Authorization: `Token ${apiKey}`}});
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn(`[reconcile] LL customer ${customerId} -> ${res.status}`);
+      return null;
+    }
     return (await res.json()) as LLCustomerDetail;
-  } catch {
+  } catch (err: any) {
+    console.warn(`[reconcile] LL customer ${customerId} threw: ${err?.message}`);
     return null;
   }
 }
