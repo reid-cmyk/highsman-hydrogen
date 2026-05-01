@@ -287,7 +287,7 @@ async function fetchLLOrderDetail(orderNumber: string, apiKey: string): Promise<
   try {
     // include_children=line_items embeds full line-item records (with sale_price,
     // quantity, product) — the bare /orders-received/{id}/ response omits prices.
-    const url = `${LEAFLINK_API_BASE}/orders-received/${orderNumber}/?include_children=line_items`;
+    const url = `${LEAFLINK_API_BASE}/orders-received/${encodeURIComponent(orderNumber)}/`;
     const res = await fetchT(url, {headers: {Authorization: `Token ${apiKey}`}});
     if (!res.ok) return null;
     return (await res.json()) as LLOrderDetail;
@@ -305,11 +305,25 @@ async function fetchLLLineItemsForOrder(
   apiKey: string,
 ): Promise<{total: number; productIds: number[]; lineItems: any[]}> {
   try {
-    const url = `${LEAFLINK_API_BASE}/order-line-items/?order_number=${encodeURIComponent(orderNumber)}&page_size=100`;
-    const res = await fetchT(url, {headers: {Authorization: `Token ${apiKey}`}});
-    if (!res.ok) return {total: 0, productIds: [], lineItems: []};
-    const data: any = await res.json();
-    const items: any[] = data.results || data.line_items || [];
+    // LL exposes line items as a top-level paginated resource: /line-items/?order={UUID}
+    // Confirmed pattern: order-received UUID (not short_id) keys the relation.
+    // We try a few endpoint shapes because LL has had several over time.
+    const candidateUrls = [
+      `${LEAFLINK_API_BASE}/line-items/?order=${encodeURIComponent(orderNumber)}&page_size=100`,
+      `${LEAFLINK_API_BASE}/order-line-items/?order=${encodeURIComponent(orderNumber)}&page_size=100`,
+      `${LEAFLINK_API_BASE}/orders-received/${encodeURIComponent(orderNumber)}/line-items/?page_size=100`,
+    ];
+    let items: any[] = [];
+    for (const url of candidateUrls) {
+      const res = await fetchT(url, {headers: {Authorization: `Token ${apiKey}`}});
+      if (!res.ok) continue;
+      const data: any = await res.json();
+      const found = data.results || data.line_items || [];
+      if (found.length > 0) {
+        items = found;
+        break;
+      }
+    }
     let total = 0;
     const productIds: number[] = [];
     for (const li of items) {
@@ -496,14 +510,18 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const llDetailMap = new Map<string, LLOrderDetail>();
   const llLineItemsMap = new Map<string, {total: number; productIds: number[]; lineItems: any[]}>();
   await mapLimit(allLL, DETAIL_CONCURRENCY, async (o) => {
-    const key = o.short_id || o.number;
-    if (!key) return;
+    // Use the UUID `number` for API calls — short_id (US1067056) is a display
+    // ref and 404s when used as a URL path. Cache the maps by short_id for
+    // downstream lookup convenience.
+    const apiKey_url = o.number || o.short_id;
+    const cacheKey = o.short_id || o.number;
+    if (!apiKey_url || !cacheKey) return;
     const [detail, lineInfo] = await Promise.all([
-      fetchLLOrderDetail(key, apiKey),
-      fetchLLLineItemsForOrder(key, apiKey),
+      fetchLLOrderDetail(apiKey_url, apiKey),
+      fetchLLLineItemsForOrder(apiKey_url, apiKey),
     ]);
-    if (detail) llDetailMap.set(key, detail);
-    llLineItemsMap.set(key, lineInfo);
+    if (detail) llDetailMap.set(cacheKey, detail);
+    llLineItemsMap.set(cacheKey, lineInfo);
   });
   const llDetailMs = Date.now() - t2;
 
@@ -515,22 +533,24 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       const key = o.short_id || o.number;
       if (!key) continue;
       // Raw fetch — also try alternate query params LL might want
+      // Try all 3 candidate endpoint shapes with the UUID
+      const uuid = o.number || key;
       const altQueries = [
-        `?order_number=${encodeURIComponent(key)}`,
-        `?order=${encodeURIComponent(key)}`,
-        `?short_id=${encodeURIComponent(key)}`,
+        {label: '/line-items/?order={uuid}', url: `${LEAFLINK_API_BASE}/line-items/?order=${encodeURIComponent(uuid)}&page_size=10`},
+        {label: '/order-line-items/?order={uuid}', url: `${LEAFLINK_API_BASE}/order-line-items/?order=${encodeURIComponent(uuid)}&page_size=10`},
+        {label: '/orders-received/{uuid}/line-items/', url: `${LEAFLINK_API_BASE}/orders-received/${encodeURIComponent(uuid)}/line-items/?page_size=10`},
+        {label: '/orders-received/{uuid}/', url: `${LEAFLINK_API_BASE}/orders-received/${encodeURIComponent(uuid)}/`},
       ];
       const altResults: any = {};
       for (const q of altQueries) {
         try {
-          const u = `${LEAFLINK_API_BASE}/order-line-items/${q}&page_size=20`;
-          const r = await fetchT(u, {headers: {Authorization: `Token ${apiKey}`}});
-          altResults[q] = {
+          const r = await fetchT(q.url, {headers: {Authorization: `Token ${apiKey}`}});
+          altResults[q.label] = {
             status: r.status,
-            ...(r.ok ? {body: await r.json()} : {error: await r.text().catch(() => '')}),
+            ...(r.ok ? {body: await r.json()} : {error: (await r.text().catch(() => '')).slice(0, 300)}),
           };
         } catch (e: any) {
-          altResults[q] = {error: e?.message};
+          altResults[q.label] = {error: e?.message};
         }
       }
       sample.push({
