@@ -43,10 +43,10 @@ export const links: LinksFunction = () => [
   },
 ];
 
-const LOGO_URL =
-  'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Logo_Block_Black.png';
+const SPARK_WHITE_URL =
+  'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Spark_Greatness_White.png?v=1775594430';
 const LOGO_WHITE_URL =
-  'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Logo_Block_White.png';
+  'https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Logo_White.png?v=1775594430';
 
 const PAGE_CSS = `
   html { scroll-behavior: smooth; }
@@ -714,9 +714,8 @@ export default function NjBuyers() {
 
       {/* Footer */}
       <footer className="brand">
-        <img src={LOGO_URL} alt="Highsman" />
+        <img src={SPARK_WHITE_URL} alt="Spark Greatness" />
         <div>For NJ buyers ordering through highsman.com/njmenu</div>
-        <div className="tagline">SPARK GREATNESS™</div>
       </footer>
     </div>
   );
