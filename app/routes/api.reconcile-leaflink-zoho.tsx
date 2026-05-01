@@ -26,7 +26,7 @@ const UNSURE_DATE_WINDOW_DAYS = 30;
 const LEAFLINK_MAX_PAGES = 25;
 const ZOHO_MAX_PAGES_PER_STATUS = 50;
 const FETCH_TIMEOUT_MS = 15000;
-const DETAIL_CONCURRENCY = 8;
+const DETAIL_CONCURRENCY = 4;
 
 type LLOrder = {
   number?: string;
@@ -519,18 +519,16 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const llDetailMap = new Map<string, LLOrderDetail>();
   const llLineItemsMap = new Map<string, {total: number; productIds: number[]; lineItems: any[]}>();
   await mapLimit(allLL, DETAIL_CONCURRENCY, async (o) => {
-    // Use the UUID `number` for API calls — short_id (US1067056) is a display
-    // ref and 404s when used as a URL path. Cache the maps by short_id for
-    // downstream lookup convenience.
-    const apiKey_url = o.number || o.short_id;
+    // Use the UUID `number` for the detail URL path; cache by short_id for
+    // downstream lookup convenience. Skip the separate line-items endpoint —
+    // it 404s and detail.total has the authoritative amount we need.
+    const uuid = o.number || o.short_id;
     const cacheKey = o.short_id || o.number;
-    if (!apiKey_url || !cacheKey) return;
-    const [detail, lineInfo] = await Promise.all([
-      fetchLLOrderDetail(apiKey_url, apiKey),
-      fetchLLLineItemsForOrder(apiKey_url, apiKey),
-    ]);
+    if (!uuid || !cacheKey) return;
+    const detail = await fetchLLOrderDetail(uuid, apiKey);
     if (detail) llDetailMap.set(cacheKey, detail);
-    llLineItemsMap.set(cacheKey, lineInfo);
+    // Empty placeholder so existing llLineItemsMap reads return defined info.
+    llLineItemsMap.set(cacheKey, {total: 0, productIds: [], lineItems: []});
   });
   const llDetailMs = Date.now() - t2;
 
@@ -572,18 +570,18 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     return json({ok: true, debugLineItems: sample});
   }
 
-  // 3b) Hard filter: drop any order where the line-items endpoint shows ZERO
-  // Highsman product IDs. The list-endpoint filter can be wrong if Canfections'
-  // list response embeds product IDs from a stale or shared template — this
-  // pass uses the authoritative line-items API to be sure.
+  // 3b) Hard filter: drop any order whose detail line_items contain ZERO
+  // Highsman product IDs. The list-endpoint embedded line_items can be stale,
+  // so we re-check against the authoritative detail response.
   const allLLOriginalCount = allLL.length;
   const allLLConfirmedHighsman = allLL.filter((o) => {
     const key = o.short_id || o.number;
-    const info = key ? llLineItemsMap.get(key) : undefined;
-    // If line-items fetch failed (info is undefined or empty), fall back to
-    // trusting the list-endpoint filter — better to over-include than drop.
-    if (!info || info.productIds.length === 0) return true;
-    return info.productIds.some((id) => HIGHSMAN_PRODUCT_IDS.has(id));
+    const detail = key ? llDetailMap.get(key) : undefined;
+    const items = detail?.line_items;
+    if (!Array.isArray(items) || items.length === 0) return true; // can't verify, keep
+    return items.some(
+      (li: any) => typeof li.product === 'number' && HIGHSMAN_PRODUCT_IDS.has(li.product),
+    );
   });
   const droppedNonHighsmanCount = allLLOriginalCount - allLLConfirmedHighsman.length;
   allLL.length = 0;
@@ -630,10 +628,9 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     const state = info?.state || '';
     const key = o.short_id || o.number || '';
     const detail = key ? llDetailMap.get(key) : null;
-    const lineInfo = key ? llLineItemsMap.get(key) : undefined;
-    // Prefer line-items total (Highsman-only). Fall back to any total field on
-    // the detail/list response. Last resort: 0 — Reid eyeballs by date+customer.
-    const total = (lineInfo?.total || 0) > 0 ? lineInfo!.total : llTotalFromAny(detail || o);
+    // detail.total is {amount, currency} — parseTotal unwraps it.
+    // payment_balance is the scalar duplicate (preferred when present).
+    const total = llTotalFromAny(detail || o);
     return {
       shortId: o.short_id || '',
       number: o.number || '',
