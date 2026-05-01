@@ -35,6 +35,14 @@ const WATCH_DAYS = 45;          // yellow — 45-59 days (healthy = 0-44)
 // off the radar entirely. Reid 2026-04-30.
 const RISK_OF_LOSS_DAYS = 90;   // deep red — 90+ days, churn risk
 
+// Prior-period card labels — pegged to the active range key (matches loader's priorPeriod() math)
+const PRIOR_LABELS: Record<string, string> = {
+  week: 'PRIOR WEEK',
+  mtd: 'PRIOR MTD',
+  last30: 'PRIOR 30',
+  ytd: 'PRIOR YTD',
+};
+
 const SKU_CATEGORIES: Record<string, 'Hit Stick' | 'Pre-Rolls' | 'Ground Game' | 'Other'> = {
   // Hit Stick (0.5g disposables)
   HST: 'Hit Stick',
@@ -451,6 +459,7 @@ type StoreRow = {
   orderCount: number;
   periodRevenue: number;
   ytdRevenue: number;
+  lastOrderValue: number; // LOV — total of the single most-recent sales order
   topSku: string;
   status: 'healthy' | 'watch' | 'stale' | 'risk_of_loss';
 };
@@ -586,6 +595,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
           orderCount: 0,
           periodRevenue: 0,
           ytdRevenue: 0,
+          lastOrderValue: total, // first order we see seeds LOV; updated below if a newer one shows up
           topSku: '',
           status: 'healthy',
         };
@@ -595,6 +605,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       if (new Date(row.lastOrderDate) < orderDate) {
         row.lastOrderDate = so.date;
         row.daysSinceLastOrder = daysBetween(orderDate, end);
+        row.lastOrderValue = total; // newer order — overwrite LOV with this one's total
         if (state) row.state = state;
       }
 
@@ -1088,7 +1099,12 @@ function DashboardContent({data}: {data: any}) {
 
       {/* State breakdown cards */}
       <div className="mb-8">
-        <div className="text-[10px] uppercase tracking-widest text-[#666] font-bold mb-3">STATE BREAKDOWN</div>
+        <div className="flex items-baseline justify-between mb-3">
+          <div className="text-[10px] uppercase tracking-widest text-[#666] font-bold">STATE BREAKDOWN</div>
+          <div className="text-[10px] uppercase tracking-widest text-[#444] font-bold">
+            CURRENT: {data.range?.label?.toUpperCase()} · PRIOR: SAME-LENGTH WINDOW BEFORE
+          </div>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
           {stateBreakdown.map((s: any) => (
             <StateCard
@@ -1096,6 +1112,7 @@ function DashboardContent({data}: {data: any}) {
               data={s}
               active={filterState === s.state}
               onClick={() => setFilterState(filterState === s.state ? 'All' : s.state)}
+              priorLabel={PRIOR_LABELS[currentRange] || 'PRIOR'}
             />
           ))}
         </div>
@@ -1301,7 +1318,17 @@ function KpiCard({label, value, sub, accent}: {label: string; value: string; sub
   );
 }
 
-function StateCard({data, active, onClick}: {data: any; active: boolean; onClick: () => void}) {
+function StateCard({
+  data,
+  active,
+  onClick,
+  priorLabel,
+}: {
+  data: any;
+  active: boolean;
+  onClick: () => void;
+  priorLabel: string;
+}) {
   const totalMix = data.mixHitStick + data.mixPreRolls + data.mixGroundGame + data.mixOther;
   const pct = (n: number) => (totalMix > 0 ? Math.round((n / totalMix) * 100) : 0);
   const deltaColor = data.delta >= 0 ? '#22C55E' : '#EF4444';
@@ -1334,8 +1361,26 @@ function StateCard({data, active, onClick}: {data: any; active: boolean; onClick
       <div className="text-3xl font-bold text-[#c8a84b] mb-1" style={{fontFamily: 'Teko, sans-serif', lineHeight: 1.1}}>
         {money(data.revenue)}
       </div>
-      <div className="text-[10px] text-[#666] uppercase tracking-wider mb-3">
+      <div className="text-[10px] text-[#666] uppercase tracking-wider mb-2">
         {data.stores > 0 ? `${money(data.avgPerStore)} / store` : 'No orders in period'}
+      </div>
+      {/* Previous period — same-length window immediately before current range */}
+      <div
+        className="flex items-center justify-between mb-3 pt-2"
+        style={{borderTop: '1px solid rgba(169,172,175,0.1)'}}
+      >
+        <span className="text-[9px] uppercase tracking-widest text-[#666] font-bold">{priorLabel}</span>
+        <span
+          className="font-bold"
+          style={{
+            fontFamily: 'Teko, sans-serif',
+            fontSize: '1.15rem',
+            color: data.priorRevenue > 0 ? '#A9ACAF' : '#444',
+            lineHeight: 1,
+          }}
+        >
+          {money(data.priorRevenue || 0)}
+        </span>
       </div>
       {/* SKU mix bar */}
       {totalMix > 0 && (
@@ -1400,7 +1445,7 @@ function AlertPanel({
             style={{background: `${color}1a`, color, border: `1px solid ${color}33`}}
             title={isRoL ? `YTD revenue at stake: ${money(s.ytdRevenue)}` : undefined}
           >
-            {s.storeName} · {STATE_LABELS[s.state] || s.state} · {s.daysSinceLastOrder}d
+            {s.storeName} · {STATE_LABELS[s.state] || s.state} · {s.daysSinceLastOrder}d · {money(s.ytdRevenue)} YTD · {money(s.lastOrderValue || 0)} LOV
             {isRoL ? ` · ${money(s.ytdRevenue)} YTD` : ''}
           </button>
         ))}

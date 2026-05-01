@@ -127,6 +127,46 @@ function parseTotal(raw: any): number {
   return isNaN(n) ? 0 : n;
 }
 
+// "Head Office" warehouse on Zoho is the corporate hub — orders shipping FROM
+// there are internal transfers / free merch drops to dispensaries, NOT real
+// retail sales. Must match the same predicate used in /sales (sales.tsx) so
+// the two dashboards never disagree on what counts as revenue.
+function isHeadOfficeName(name: string): boolean {
+  if (!name) return false;
+  const compact = String(name).toUpperCase().replace(/[^A-Z]/g, '');
+  return compact === 'HEADOFFICE' || compact.startsWith('HEADOFFICE');
+}
+
+function isHeadOfficeZohoSO(so: ZohoSO, headOfficeIds: Set<string>): boolean {
+  if (isHeadOfficeName(so.warehouse_name || '') || isHeadOfficeName(so.location_name || '')) return true;
+  const wid = String(so.warehouse_id || so.location_id || '');
+  return wid !== '' && headOfficeIds.has(wid);
+}
+
+async function fetchHeadOfficeWarehouseIds(orgId: string, token: string): Promise<Set<string>> {
+  const ids = new Set<string>();
+  const endpoints = [
+    {url: `https://www.zohoapis.com/inventory/v1/warehouses?organization_id=${orgId}`, listKey: 'warehouses', idKey: 'warehouse_id', nameKey: 'warehouse_name'},
+    {url: `https://www.zohoapis.com/inventory/v1/locations?organization_id=${orgId}`, listKey: 'locations', idKey: 'location_id', nameKey: 'location_name'},
+  ];
+  for (const ep of endpoints) {
+    try {
+      const res = await fetchT(ep.url, {headers: {Authorization: `Zoho-oauthtoken ${token}`, Accept: 'application/json'}});
+      if (!res.ok) continue;
+      const data: any = await res.json();
+      const list = data?.[ep.listKey] || [];
+      for (const w of list) {
+        const id = String(w?.[ep.idKey] || w?.id || '');
+        const name = String(w?.[ep.nameKey] || w?.name || '');
+        if (id && isHeadOfficeName(name)) ids.add(id);
+      }
+    } catch {
+      // ignore — name-based check still active
+    }
+  }
+  return ids;
+}
+
 function bestOrderDate(o: LLOrder): string | null {
   return o.created_on || o.modified || o.actual_ship_date || null;
 }
@@ -139,17 +179,53 @@ function topSkus(o: LLOrder, limit = 3): string[] {
     .map((li) => li.sku || li.product_name || `#${li.product}`);
 }
 
-function llTotalFromAny(o: any): number {
-  if (!o) return 0;
-  for (const k of ['total', 'total_value', 'grand_total', 'sub_total']) {
+function llTotalFromAny(input: any): number {
+  if (!input) return 0;
+  // Some LeafLink detail endpoints wrap the payload as {order: {...}} or {data: {...}}.
+  let o: any = input;
+  if (input.order && typeof input.order === 'object' && (input.order.line_items || input.order.total != null)) {
+    o = input.order;
+  } else if (input.data && typeof input.data === 'object' && (input.data.line_items || input.data.total != null)) {
+    o = input.data;
+  }
+
+  // Try every total-shaped field name LeafLink has used. The API has had at least
+  // three different "total" semantics across versions (gross / net / merchandise),
+  // so we try the most-inclusive ones first and fall back gracefully.
+  const totalCandidates = [
+    'total',
+    'total_value',
+    'grand_total',
+    'order_total',
+    'final_total',
+    'total_paid',
+    'merchandise_total',
+    'sub_total',
+    'subtotal',
+  ];
+  for (const k of totalCandidates) {
     if (o[k] != null) {
       const n = parseFloat(String(o[k]));
       if (!isNaN(n) && n > 0) return n;
     }
   }
+
+  // Last resort: rebuild from line items. CRITICAL: previous version used
+  // `unit_price` as a per-line fallback — that's a per-UNIT price, so a 100-unit
+  // order at $25/unit was scoring as $25. Multiply by quantity if no line subtotal.
   let sum = 0;
   for (const li of o.line_items || []) {
-    sum += parseTotal(li.sale_total ?? li.line_total ?? li.unit_price);
+    let lineTotal =
+      parseTotal(li.sale_total) ||
+      parseTotal(li.line_total) ||
+      parseTotal(li.subtotal) ||
+      parseTotal(li.total);
+    if (!lineTotal) {
+      const qty = parseTotal(li.quantity);
+      const unit = parseTotal(li.sale_price ?? li.unit_sale_price ?? li.unit_price ?? li.price);
+      lineTotal = qty * unit;
+    }
+    sum += lineTotal;
   }
   return sum;
 }
@@ -340,10 +416,22 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     return json({ok: false, error: `Zoho Inventory token: ${err?.message}`}, {status: 500});
   }
   const t1 = Date.now();
-  const zohoOrders = await fetchZohoSalesOrders(orgId, invToken, since, until).catch((err) => {
-    errors.push(`zoho_orders_failed:${err?.message}`);
-    return [] as ZohoSO[];
-  });
+  // Fetch sales orders + Head Office warehouse-id set in parallel — the ID set
+  // is the bullet-proof fallback for the case where the LIST endpoint omits
+  // warehouse_name on shipped Head Office orders.
+  const [zohoOrdersRaw, headOfficeIds] = await Promise.all([
+    fetchZohoSalesOrders(orgId, invToken, since, until).catch((err) => {
+      errors.push(`zoho_orders_failed:${err?.message}`);
+      return [] as ZohoSO[];
+    }),
+    fetchHeadOfficeWarehouseIds(orgId, invToken).catch((err) => {
+      errors.push(`zoho_warehouses_failed:${err?.message}`);
+      return new Set<string>();
+    }),
+  ]);
+  // Drop Head Office shipments — internal transfers / free merch drops, not real sales.
+  const zohoHeadOfficeFiltered = zohoOrdersRaw.filter((so) => isHeadOfficeZohoSO(so, headOfficeIds)).length;
+  const zohoOrders = zohoOrdersRaw.filter((so) => !isHeadOfficeZohoSO(so, headOfficeIds));
   const zohoMs = Date.now() - t1;
 
   // 3) LL detail per order (real totals + line items) — concurrency 8
@@ -412,6 +500,11 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       skus: topSkus(detail || o),
     };
   });
+
+  // Diagnostic only — count $0 LL orders so we can spot extraction-failure spikes
+  // in the API summary. NOT filtered out: a $0 may be a legit cancelled/comped
+  // order, or it may indicate the totals fetch is broken (see llTotalFromAny).
+  const llZeroTotalCount = llViews.filter((v) => v.total <= 0).length;
 
   // 6) Build Zoho index
   const idx = buildZohoIndex(zohoOrders);
@@ -497,6 +590,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       unmatchedZohoCount: unmatchedZoho.length,
       llTotalRevenue: llViews.reduce((s, v) => s + v.total, 0),
       unmatchedLLTotalRevenue: unmatchedLL.reduce((s, r) => s + r.ll.total, 0),
+      llZeroTotalCount, // # of LL orders that ended up at $0 — diagnostic, NOT filtered out
+      zohoHeadOfficeFiltered, // # of Head Office Zoho SOs dropped (internal transfers)
     },
     leaflinkOrders: llViews,
     zohoOrders: zohoNjRelated.map((so) => ({
