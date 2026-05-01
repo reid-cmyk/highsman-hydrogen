@@ -39,7 +39,7 @@
 
   <!-- App styles — mobile-first, overrides desktop defaults.
        ?v= busts Cloudflare edge + SW precache when styles.css ships changes. -->
-  <link rel="stylesheet" href="/sales-floor/mobile/styles.css?v=11" />
+  <link rel="stylesheet" href="/sales-floor/mobile/styles.css?v=12" />
 
   <style>
     /* Inline: suppress desktop-only top bar even if referenced */
@@ -116,13 +116,56 @@
   <!-- ═══════════════════ FLOOR (Dashboard) ═══════════════════ -->
   <div id="tab-dashboard" class="tab-content">
 
-    <!-- Critical alert banner (shown only when critical alerts exist) -->
-    <div id="critical-alert-banner" class="critical-banner hidden mb-px">
+    <!-- Activity summary banner — matches desktop -->
+    <div id="critical-alert-banner" class="critical-banner hidden" role="button" tabindex="0"
+         aria-label="New activity — click to review At a Glance">
       <div class="critical-banner-inner">
-        <i class="fa-solid fa-fire critical-banner-icon"></i>
+        <i class="fa-solid fa-bell critical-banner-icon"></i>
         <span class="critical-banner-msg"></span>
       </div>
-      <button onclick="document.getElementById('alert-list')?.scrollIntoView({behavior:'smooth',block:'start'})" class="critical-banner-cta">View Alerts</button>
+      <span class="critical-banner-tap">Tap to review ↓</span>
+    </div>
+
+    <!-- STATE PULSE — matches desktop, mobile-scrollable -->
+    <div class="hs-state-pulse" id="state-pulse">
+      <div class="hs-state-pulse-head">
+        <span class="hs-state-pulse-eyebrow">State Pulse</span>
+        <span class="hs-state-pulse-month" id="state-pulse-month">—</span>
+        <button onclick="window.refreshStatePulse && window.refreshStatePulse()"
+                class="hs-state-pulse-refresh" title="Refresh" aria-label="Refresh state pulse">
+          <i class="fa-solid fa-rotate-right"></i>
+        </button>
+      </div>
+      <div class="hs-state-pulse-grid" id="state-pulse-grid">
+        <div class="hs-state-tile" data-state="NJ">
+          <div class="hs-state-tile-code">NJ</div>
+          <div class="hs-state-tile-amount" data-amount-for="NJ">—</div>
+          <div class="hs-state-tile-sub" data-orders-for="NJ">— orders</div>
+        </div>
+        <div class="hs-state-tile" data-state="MO">
+          <div class="hs-state-tile-code">MO</div>
+          <div class="hs-state-tile-amount" data-amount-for="MO">—</div>
+          <div class="hs-state-tile-sub" data-orders-for="MO">— orders</div>
+        </div>
+        <div class="hs-state-tile" data-state="NY">
+          <div class="hs-state-tile-code">NY</div>
+          <div class="hs-state-tile-amount" data-amount-for="NY">—</div>
+          <div class="hs-state-tile-sub" data-orders-for="NY">— orders</div>
+        </div>
+        <div class="hs-state-tile" data-state="RI">
+          <div class="hs-state-tile-code">RI</div>
+          <div class="hs-state-tile-amount" data-amount-for="RI">—</div>
+          <div class="hs-state-tile-sub" data-orders-for="RI">— orders</div>
+        </div>
+        <div class="hs-state-tile" data-state="MA">
+          <div class="hs-state-tile-code">MA</div>
+          <div class="hs-state-tile-amount" data-amount-for="MA">—</div>
+          <div class="hs-state-tile-sub" data-orders-for="MA">— orders</div>
+        </div>
+      </div>
+      <div class="hs-state-pulse-foot" id="state-pulse-foot">
+        Booked revenue MTD · Confirmed + Closed sales orders
+      </div>
     </div>
 
     <!-- Focus of the Day hero -->
@@ -133,21 +176,21 @@
       <div class="hs-focus-sub">Top of the list is your first call. Move.</div>
     </div>
 
-    <!-- Stats grid (2-up) -->
+    <!-- Stats grid -->
     <div class="hs-stats-grid">
       <div class="stat-card" role="button" tabindex="0"
-           onclick="showTab('leads')"
-           aria-label="Hot Leads — open Leads tab">
+           onclick="showTab('leads'); typeof filterLeads === 'function' && filterLeads('hot')"
+           aria-label="Hot Leads — open Leads tab filtered to hot">
         <div class="hs-stat-label">Hot Leads</div>
         <div class="hs-stat-number text-white" id="stat-hot">—</div>
         <div class="hs-stat-sub">Call first</div>
       </div>
       <div class="stat-card stat-card-orders" role="button" tabindex="0"
            onclick="showTab('orders')"
-           aria-label="Reorder Due — open Orders tab">
-        <div class="hs-stat-label">Reorder Due</div>
+           aria-label="Reorders Due — open Orders tab">
+        <div class="hs-stat-label">Reorders Due</div>
         <div class="hs-stat-number text-white" id="stat-reorder-due">—</div>
-        <div class="hs-stat-sub">30+ days</div>
+        <div class="hs-stat-sub">Time to follow up</div>
       </div>
       <div class="stat-card stat-card-missed hidden" id="stat-card-missed"
            role="button" tabindex="0"
@@ -164,10 +207,8 @@
         <div class="hs-stat-number text-white" id="stat-calls">0</div>
         <div class="hs-stat-sub">Keep going</div>
       </div>
-      <div class="stat-card">
-        <div class="hs-stat-label">Active Alerts</div>
-        <div class="hs-stat-number text-white" id="stat-issues">—</div>
-        <div class="hs-stat-sub">Inv &amp; accts</div>
+      <div class="stat-card hidden" aria-hidden="true">
+        <div class="hs-stat-number" id="stat-issues">—</div>
       </div>
     </div>
 
