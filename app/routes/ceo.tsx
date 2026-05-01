@@ -1,7 +1,7 @@
 /**
  * app/routes/ceo.tsx
  *
- * Highsman /ceo Sentiment Dashboard — password-gated, unlisted.
+ * Highsman /ceo Sentiment Dashboard + Inbox Search — password-gated, unlisted.
  *
  * What it shows:
  *   • Three columns of flagged email threads, one per severity tier:
@@ -35,7 +35,6 @@ import {
   reopenFlag,
   type FlagRow,
 } from '~/lib/ceo-sentiment';
-import {getZohoAccessToken} from '~/lib/zoho-auth';
 
 export const meta: MetaFunction = () => [
   {title: 'HIGHSMAN | CEO Sentiment'},
@@ -133,107 +132,7 @@ type LoaderData = {
   mailboxes: string[];
   totals: {critical: number; warning: number; watch: number; resolved7d: number};
   lastScan: {finished_at: string | null; status: string | null} | null;
-  launchEnrollment: LaunchEnrollment | null;
 };
-
-type EnrolledStore = {
-  id: string;
-  name: string;
-  city: string | null;
-  redeemedAt: string | null;
-  orderNumber: string | null;
-};
-type NotEnrolledStore = {id: string; name: string; city: string | null};
-type LaunchEnrollment = {
-  enrolled: EnrolledStore[];
-  notEnrolled: NotEnrolledStore[];
-  total: number;
-  error: string | null;
-};
-
-// ── LAUNCH Promo Enrollment — pulled live from Zoho ──────────────────────────
-// Lists every NJ Account and buckets by Launch_Promo_Used so the CEO can see,
-// in real time, who has redeemed the wholesale stock-up code and who hasn't.
-async function loadLaunchEnrollment(env: any): Promise<LaunchEnrollment> {
-  const empty: LaunchEnrollment = {
-    enrolled: [],
-    notEnrolled: [],
-    total: 0,
-    error: null,
-  };
-  try {
-    const token = await getZohoAccessToken(env);
-    if (!token) return {...empty, error: 'Zoho token unavailable'};
-
-    const fields = [
-      'Account_Name',
-      'Billing_City',
-      'Launch_Promo_Used',
-      'Launch_Promo_Redeemed_At',
-      'Launch_Promo_Order_Number',
-    ].join(',');
-    // 2-arity OR is the only criteria shape Zoho's parser likes here — chained
-    // `or` returns 502 SYNTAX_ERROR. Account_State picklist OR'd with
-    // Billing_State free text catches both migrated and fresh records.
-    const criteria = `((Account_State:equals:NJ)or(Billing_State:equals:NJ))`;
-
-    const enrolled: EnrolledStore[] = [];
-    const notEnrolled: NotEnrolledStore[] = [];
-    let page = 1;
-    let more = true;
-    let total = 0;
-    while (more && page <= 10 /* safety: 10 * 200 = 2000 NJ accounts */) {
-      const url = new URL('https://www.zohoapis.com/crm/v7/Accounts/search');
-      url.searchParams.set('criteria', criteria);
-      url.searchParams.set('fields', fields);
-      url.searchParams.set('per_page', '200');
-      url.searchParams.set('page', String(page));
-      const res = await fetch(url.toString(), {
-        headers: {Authorization: `Zoho-oauthtoken ${token}`},
-      });
-      if (res.status === 204) break;
-      if (!res.ok) {
-        const body = await res.text();
-        return {
-          ...empty,
-          error: `Zoho ${res.status}: ${body.slice(0, 160)}`,
-        };
-      }
-      const data: any = await res.json();
-      const rows: any[] = data?.data || [];
-      total += rows.length;
-      for (const a of rows) {
-        const name = a.Account_Name || '(unnamed)';
-        const city = a.Billing_City || null;
-        if (a.Launch_Promo_Used === true) {
-          enrolled.push({
-            id: String(a.id),
-            name,
-            city,
-            redeemedAt: a.Launch_Promo_Redeemed_At || null,
-            orderNumber: a.Launch_Promo_Order_Number || null,
-          });
-        } else {
-          notEnrolled.push({id: String(a.id), name, city});
-        }
-      }
-      more = data?.info?.more_records === true;
-      page++;
-    }
-
-    // Most recent redemptions first; not-enrolled alphabetical for scannability
-    enrolled.sort((a, b) => {
-      const ta = a.redeemedAt ? new Date(a.redeemedAt).getTime() : 0;
-      const tb = b.redeemedAt ? new Date(b.redeemedAt).getTime() : 0;
-      return tb - ta;
-    });
-    notEnrolled.sort((a, b) => a.name.localeCompare(b.name));
-
-    return {enrolled, notEnrolled, total, error: null};
-  } catch (err: any) {
-    return {...empty, error: String(err?.message || err)};
-  }
-}
 
 export async function loader({request, context}: LoaderFunctionArgs) {
   const cookie = request.headers.get('Cookie') || '';
@@ -246,7 +145,6 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       mailboxes: [],
       totals: {critical: 0, warning: 0, watch: 0, resolved7d: 0},
       lastScan: null,
-      launchEnrollment: null,
     });
   }
 
@@ -256,20 +154,10 @@ export async function loader({request, context}: LoaderFunctionArgs) {
 
   let flags: Flag[] = [];
   let lastScan: {finished_at: string | null; status: string | null} | null = null;
-  let launchEnrollment: LaunchEnrollment | null = null;
   let errorMsg: string | null = null;
   try {
-    // Run Supabase reads + Zoho enrollment fetch in parallel — Zoho is the
-    // slowest leg (~600-1200ms cold) so parallelism shaves about that off
-    // the dashboard's TTFB.
-    const [flagsResult, scanResult, enrollResult] = await Promise.all([
-      readFlags(env, showResolved),
-      readLastScan(env),
-      loadLaunchEnrollment(env),
-    ]);
-    flags = flagsResult;
-    lastScan = scanResult;
-    launchEnrollment = enrollResult;
+    flags = await readFlags(env, showResolved);
+    lastScan = await readLastScan(env);
   } catch (err: any) {
     errorMsg = String(err?.message || err);
   }
@@ -295,7 +183,6 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     mailboxes,
     totals,
     lastScan,
-    launchEnrollment,
   });
 }
 
@@ -457,10 +344,8 @@ function Dashboard({data, actionData}: {data: LoaderData; actionData: any}) {
           <Stat label="Resolved (7d)" value={data.totals.resolved7d} color="#22C55E" />
         </div>
 
-        {/* LAUNCH Promo enrollment */}
-        {data.launchEnrollment && (
-          <LaunchEnrollmentPanel data={data.launchEnrollment} />
-        )}
+        {/* Event search — "Did <X> happen?" across organization inboxes */}
+        <EventSearch mailboxes={data.mailboxes} />
 
         {/* Filters */}
         <div className="flex flex-wrap gap-3 mb-6">
@@ -515,6 +400,278 @@ function Dashboard({data, actionData}: {data: LoaderData; actionData: any}) {
           onClose={() => setActiveFlag(null)}
           actionData={actionData}
         />
+      )}
+    </div>
+  );
+}
+
+// ── Event Search ───────────────────────────────────────────────────────────
+// "Did <X> happen?" — fans out across every monitored inbox via /api/ceo-search
+// and renders a yes/no/unclear verdict with cited threads. Uses useFetcher so
+// the rest of the dashboard isn't re-rendered.
+type Citation = {
+  mailbox_email: string;
+  thread_id: string;
+  subject: string;
+  from: string;
+  to: string;
+  message_date: string;
+  thread_url: string;
+  snippet: string;
+};
+type SearchResponse =
+  | {
+      ok: true;
+      query: string;
+      days: number;
+      mailboxes_scanned: number;
+      hits_found: number;
+      verdict: {
+        verdict: 'yes' | 'no' | 'unclear';
+        confidence: number;
+        summary: string;
+        citation_indexes: number[];
+      };
+      citations: Citation[];
+      all_hits?: Citation[];
+      elapsed_ms?: number;
+      errors?: Array<{mailbox: string; error: string}>;
+    }
+  | {ok: false; error: string};
+
+function EventSearch({mailboxes}: {mailboxes: string[]}) {
+  const fetcher = useFetcher<SearchResponse>();
+  const [query, setQuery] = useState('');
+  const [days, setDays] = useState('60');
+  const [mailbox, setMailbox] = useState('all');
+  const [showAll, setShowAll] = useState(false);
+
+  const loading = fetcher.state !== 'idle';
+  const data = fetcher.data;
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const q = query.trim();
+    if (q.length < 3) return;
+    const fd = new FormData();
+    fd.set('query', q);
+    fd.set('days', days);
+    if (mailbox !== 'all') fd.set('mailbox', mailbox);
+    fetcher.submit(fd, {method: 'post', action: '/api/ceo-search', encType: 'multipart/form-data'});
+  }
+
+  return (
+    <section
+      className="mb-6 rounded-xl border p-4 sm:p-5"
+      style={{borderColor: '#1a1a1a', background: '#0a0a0a'}}
+    >
+      <div className="flex items-baseline justify-between gap-3 mb-3 flex-wrap">
+        <div>
+          <h2
+            className="text-xl uppercase tracking-wider"
+            style={{fontFamily: 'Teko, sans-serif', fontWeight: 700, color: '#c8a84b'}}
+          >
+            Ask The Inboxes
+          </h2>
+          <p className="text-[11px] text-[#A9ACAF] uppercase tracking-widest">
+            Live search across {mailboxes.length || 'all'} monitored mailbox{mailboxes.length === 1 ? '' : 'es'}
+            {' · '}Haiku 4.5
+          </p>
+        </div>
+        <div className="text-[10px] text-[#666] uppercase tracking-widest">
+          Not stored · One-shot lookup
+        </div>
+      </div>
+
+      <fetcher.Form method="post" action="/api/ceo-search" onSubmit={submit} className="flex flex-wrap gap-2">
+        <input
+          type="text"
+          name="query"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder='e.g. "did we hear back from the Hudson buyer?" or "did the Acme demo happen?"'
+          className="flex-1 min-w-[260px] bg-[#111] border border-[#222] rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-[#555] outline-none focus:border-[#c8a84b]"
+          maxLength={500}
+        />
+        <select
+          name="days"
+          value={days}
+          onChange={(e) => setDays(e.target.value)}
+          className="bg-[#111] border border-[#222] rounded-lg px-3 py-2 text-xs uppercase tracking-wider text-white"
+          aria-label="Lookback window"
+        >
+          <option value="14">Last 14 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="60">Last 60 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="180">Last 180 days</option>
+          <option value="365">Last 365 days</option>
+        </select>
+        <select
+          name="mailbox"
+          value={mailbox}
+          onChange={(e) => setMailbox(e.target.value)}
+          className="bg-[#111] border border-[#222] rounded-lg px-3 py-2 text-xs uppercase tracking-wider text-white max-w-[220px]"
+          aria-label="Mailbox scope"
+        >
+          <option value="all">All inboxes</option>
+          {mailboxes.map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+        <button
+          type="submit"
+          disabled={loading || query.trim().length < 3}
+          className="px-5 py-2 rounded-lg font-bold text-xs uppercase tracking-wider"
+          style={{
+            fontFamily: 'Teko, sans-serif',
+            fontSize: '1rem',
+            background: loading ? '#555' : '#c8a84b',
+            color: '#000',
+            cursor: loading || query.trim().length < 3 ? 'not-allowed' : 'pointer',
+            border: 'none',
+            opacity: loading ? 0.7 : 1,
+          }}
+        >
+          {loading ? 'Searching…' : 'Search'}
+        </button>
+      </fetcher.Form>
+
+      {/* Result */}
+      {data && !data.ok && (
+        <div className="mt-4 p-3 rounded-lg border border-red-900 bg-red-950/40 text-red-300 text-sm">
+          {data.error}
+        </div>
+      )}
+
+      {data && data.ok && <SearchResult data={data} showAll={showAll} setShowAll={setShowAll} />}
+    </section>
+  );
+}
+
+function SearchResult({
+  data,
+  showAll,
+  setShowAll,
+}: {
+  data: Extract<SearchResponse, {ok: true}>;
+  showAll: boolean;
+  setShowAll: (v: boolean) => void;
+}) {
+  const v = data.verdict.verdict;
+  const verdictMeta =
+    v === 'yes'
+      ? {label: 'YES', color: '#22C55E', bg: 'rgba(34,197,94,0.12)'}
+      : v === 'no'
+      ? {label: 'NO', color: '#EF4444', bg: 'rgba(239,68,68,0.12)'}
+      : {label: 'UNCLEAR', color: '#EAB308', bg: 'rgba(234,179,8,0.12)'};
+
+  const confidencePct = Math.round((data.verdict.confidence ?? 0) * 100);
+  const showList = showAll && data.all_hits ? data.all_hits : data.citations;
+
+  return (
+    <div className="mt-5 space-y-4">
+      <div
+        className="rounded-lg border p-4"
+        style={{borderColor: '#1f1f1f', background: '#0d0d0d'}}
+      >
+        <div className="flex items-center gap-3 mb-2 flex-wrap">
+          <span
+            className="text-sm font-bold px-3 py-1 rounded uppercase tracking-widest"
+            style={{
+              fontFamily: 'Teko, sans-serif',
+              fontSize: '1rem',
+              background: verdictMeta.bg,
+              color: verdictMeta.color,
+              border: `1px solid ${verdictMeta.color}55`,
+            }}
+          >
+            {verdictMeta.label}
+          </span>
+          <span className="text-[10px] uppercase tracking-widest text-[#A9ACAF]">
+            Confidence {confidencePct}%
+          </span>
+          <span className="text-[10px] uppercase tracking-widest text-[#666]">
+            · {data.hits_found} match{data.hits_found === 1 ? '' : 'es'} across {data.mailboxes_scanned} inbox
+            {data.mailboxes_scanned === 1 ? '' : 'es'} · {data.days}d window
+            {typeof data.elapsed_ms === 'number' ? ` · ${(data.elapsed_ms / 1000).toFixed(1)}s` : ''}
+          </span>
+        </div>
+        <p className="text-sm text-[#e8e8e8] leading-relaxed whitespace-pre-wrap">
+          {data.verdict.summary}
+        </p>
+      </div>
+
+      {/* Citations */}
+      {data.citations.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] uppercase tracking-widest text-[#A9ACAF]">
+              {showAll ? 'All matches' : 'Cited evidence'}
+            </div>
+            {data.all_hits && data.all_hits.length > data.citations.length && (
+              <button
+                type="button"
+                onClick={() => setShowAll(!showAll)}
+                className="text-[10px] uppercase tracking-widest text-[#c8a84b] hover:underline"
+              >
+                {showAll
+                  ? `Show only cited (${data.citations.length})`
+                  : `Show all matches (${data.all_hits.length})`}
+              </button>
+            )}
+          </div>
+          <ul className="space-y-2">
+            {showList.map((c) => (
+              <li
+                key={`${c.mailbox_email}:${c.thread_id}`}
+                className="rounded-lg border p-3"
+                style={{borderColor: '#1a1a1a', background: '#0a0a0a'}}
+              >
+                <div className="flex items-baseline justify-between gap-3 mb-1 flex-wrap">
+                  <a
+                    href={c.thread_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-semibold text-white hover:text-[#c8a84b] truncate"
+                  >
+                    {c.subject || '(no subject)'}
+                  </a>
+                  <span className="text-[10px] text-[#666] uppercase whitespace-nowrap">
+                    {new Date(c.message_date).toLocaleDateString()}
+                  </span>
+                </div>
+                <div className="text-[11px] text-[#A9ACAF] mb-1 truncate">
+                  <span className="text-[#666]">via</span> {c.mailbox_email}
+                  {c.from && (
+                    <>
+                      {' · '}
+                      <span className="text-[#666]">from</span> {c.from}
+                    </>
+                  )}
+                </div>
+                {c.snippet && (
+                  <div className="text-xs text-[#bbb] line-clamp-2 italic">"{c.snippet}"</div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {data.errors && data.errors.length > 0 && (
+        <details className="text-[10px] text-[#666]">
+          <summary className="cursor-pointer uppercase tracking-widest hover:text-[#A9ACAF]">
+            {data.errors.length} mailbox error{data.errors.length === 1 ? '' : 's'} (click to expand)
+          </summary>
+          <ul className="mt-2 space-y-1 pl-3">
+            {data.errors.map((e, i) => (
+              <li key={i}>
+                <span className="text-[#A9ACAF]">{e.mailbox}</span>: {e.error}
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </div>
   );
@@ -794,142 +951,6 @@ function Section({label, children}: {label: string; children: ReactNode}) {
 // Belt-and-braces. Per memory feedback_klaviyo_popup_suppression any non-consumer
 // page should hide the popup. The site-wide helper does this by URL pattern,
 // but in case the helper hasn't been updated to include /ceo we kill it locally.
-
-function LaunchEnrollmentPanel({data}: {data: LaunchEnrollment}) {
-  const [expanded, setExpanded] = useState(true);
-  const enrolledCount = data.enrolled.length;
-  const notEnrolledCount = data.notEnrolled.length;
-  const total = data.total || enrolledCount + notEnrolledCount;
-  const pct = total > 0 ? Math.round((enrolledCount / total) * 100) : 0;
-
-  return (
-    <section
-      className="mb-6 rounded-lg border"
-      style={{borderColor: '#222', background: 'linear-gradient(180deg, rgba(245,228,0,0.04), rgba(245,228,0,0.01))'}}
-    >
-      <header
-        onClick={() => setExpanded((v) => !v)}
-        className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 cursor-pointer"
-        style={{borderBottom: expanded ? '1px solid #222' : 'none'}}
-      >
-        <div className="flex items-center gap-3 flex-wrap">
-          <span
-            className="text-xs uppercase tracking-[0.25em] font-700 px-2 py-0.5 rounded"
-            style={{fontFamily: 'Teko, sans-serif', background: '#F5E400', color: '#000', letterSpacing: '0.2em'}}
-          >
-            LAUNCH
-          </span>
-          <h2
-            className="uppercase tracking-wider text-lg sm:text-xl"
-            style={{fontFamily: 'Teko, sans-serif', fontWeight: 700, color: '#c8a84b'}}
-          >
-            NJ Wholesale Enrollment
-          </h2>
-          <span className="text-[#A9ACAF] text-xs uppercase tracking-widest hidden sm:inline">
-            Apr 28 - May 8 window
-          </span>
-        </div>
-        <div className="flex items-center gap-4 text-xs">
-          <span style={{color: '#22C55E'}}>
-            <strong className="text-base" style={{fontFamily: 'Teko, sans-serif'}}>{enrolledCount}</strong> enrolled
-          </span>
-          <span className="text-[#A9ACAF]">
-            <strong className="text-base text-white" style={{fontFamily: 'Teko, sans-serif'}}>{notEnrolledCount}</strong> not yet
-          </span>
-          <span className="text-[#A9ACAF] hidden sm:inline">
-            <strong className="text-base text-white" style={{fontFamily: 'Teko, sans-serif'}}>{pct}%</strong> coverage
-          </span>
-          <span className="text-[#666] text-base ml-1">{expanded ? '−' : '+'}</span>
-        </div>
-      </header>
-
-      {expanded && (
-        <>
-          {data.error ? (
-            <div className="px-4 py-3 text-xs text-red-400">
-              Could not load enrollment from Zoho: {data.error}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-              {/* Enrolled column */}
-              <div>
-                <div className="flex items-baseline justify-between mb-2">
-                  <h3 className="text-xs uppercase tracking-widest text-[#22C55E] font-semibold">
-                    Enrolled ({enrolledCount})
-                  </h3>
-                  <span className="text-[10px] text-[#666] uppercase tracking-wider">
-                    Most recent first
-                  </span>
-                </div>
-                {enrolledCount === 0 ? (
-                  <p className="text-xs text-[#666] italic">
-                    No redemptions yet. First retailer to use the LAUNCH code will appear here.
-                  </p>
-                ) : (
-                  <ul className="space-y-1.5 max-h-[420px] overflow-y-auto pr-2">
-                    {data.enrolled.map((s) => (
-                      <li
-                        key={s.id}
-                        className="flex items-baseline justify-between gap-3 px-3 py-2 rounded border"
-                        style={{borderColor: 'rgba(34,197,94,0.2)', background: 'rgba(34,197,94,0.04)'}}
-                      >
-                        <div className="min-w-0">
-                          <div className="text-sm text-white truncate">{s.name}</div>
-                          <div className="text-[10px] text-[#A9ACAF] uppercase tracking-wider">
-                            {s.city || 'NJ'}
-                            {s.orderNumber && <> &middot; #{s.orderNumber}</>}
-                          </div>
-                        </div>
-                        <div className="text-[10px] text-[#22C55E] uppercase tracking-wider whitespace-nowrap">
-                          {s.redeemedAt
-                            ? new Date(s.redeemedAt).toLocaleDateString('en-US', {month: 'short', day: 'numeric'})
-                            : ''}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              {/* Not enrolled column */}
-              <div>
-                <div className="flex items-baseline justify-between mb-2">
-                  <h3 className="text-xs uppercase tracking-widest text-[#A9ACAF] font-semibold">
-                    Not yet enrolled ({notEnrolledCount})
-                  </h3>
-                  <span className="text-[10px] text-[#666] uppercase tracking-wider">
-                    Outreach targets
-                  </span>
-                </div>
-                {notEnrolledCount === 0 ? (
-                  <p className="text-xs text-[#22C55E] italic">
-                    Every NJ account is enrolled. Lock in.
-                  </p>
-                ) : (
-                  <ul className="space-y-1 max-h-[420px] overflow-y-auto pr-2 grid grid-cols-1 sm:grid-cols-2 gap-x-3">
-                    {data.notEnrolled.map((s) => (
-                      <li
-                        key={s.id}
-                        className="flex items-baseline justify-between gap-2 text-xs px-2 py-1 rounded"
-                        style={{background: 'rgba(255,255,255,0.02)'}}
-                      >
-                        <span className="text-white truncate">{s.name}</span>
-                        <span className="text-[10px] text-[#666] uppercase whitespace-nowrap">
-                          {s.city || ''}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          )}
-        </>
-      )}
-    </section>
-  );
-}
-
 function KlaviyoSuppressor() {
   const js = `
     (function () {
