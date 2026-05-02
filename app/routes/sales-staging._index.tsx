@@ -279,6 +279,7 @@ function NewAccountModal({onClose}:{onClose:()=>void}) {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [predictions, setPredictions] = useState<any[]>([]);
+  const [apiError, setApiError] = useState<string|null>(null);
   const [status, setStatus] = useState<'idle'|'searching'|'resolving'|'creating'>('idle');
   const [manualMode, setManualMode] = useState(false);
   const [manualName, setManualName] = useState('');
@@ -302,9 +303,12 @@ function NewAccountModal({onClose}:{onClose:()=>void}) {
       try {
         const r = await fetch(`/api/places?q=${encodeURIComponent(query)}&type=business`);
         const d = await r.json();
+        if (d.error?.includes('not set') || d.error?.includes('not configured')) {
+          setApiError('Google Places API key not configured in Oxygen. Contact Matt.');
+        }
         setPredictions(d.predictions || []);
-        setStatus(d.error ? 'idle' : 'idle');
-      } catch { setPredictions([]); setStatus('idle'); }
+      } catch { setPredictions([]); }
+      setStatus('idle');
     }, 300);
     return () => clearTimeout(debounceRef.current);
   }, [query, manualMode]);
@@ -393,8 +397,11 @@ function NewAccountModal({onClose}:{onClose:()=>void}) {
               </div>
             )}
 
+            {/* API key error */}
+            {apiError && <div style={{marginTop:8,fontFamily:'JetBrains Mono,monospace',fontSize:11,color:T.redSystems,letterSpacing:'0.08em'}}>{apiError} — <button type="button" onClick={()=>setManualMode(true)} style={{background:'none',border:'none',color:T.yellow,cursor:'pointer',fontFamily:'inherit',fontSize:'inherit',textDecoration:'underline',padding:0}}>create manually instead</button></div>}
+
             {/* No results hint */}
-            {query.length >= 3 && predictions.length === 0 && status === 'idle' && !isLoading && (
+            {!apiError && query.length >= 3 && predictions.length === 0 && status === 'idle' && !isLoading && (
               <div style={{marginTop:10,fontFamily:'JetBrains Mono,monospace',fontSize:11,color:T.textFaint,letterSpacing:'0.08em'}}>
                 No results — try adding the state, e.g. "Premo NJ" ·{' '}
                 <button type="button" onClick={()=>{setManualMode(true);setManualName(query);}} style={{background:'none',border:'none',color:T.yellow,cursor:'pointer',fontFamily:'inherit',fontSize:'inherit',letterSpacing:'inherit',textDecoration:'underline',padding:0}}>
@@ -763,25 +770,75 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
           </div>
         </div>
 
-        {/* 8-button action grid — always below the info row */}
-        <div className="hs-card-actions" style={{padding:'0 56px 10px 70px',display:'grid',gridTemplateColumns:'1fr 1fr',gap:'4px 8px',borderTop:`1px solid ${T.border}`}}>
-          {/* Row 1 */}
-          <CardBtn href={phone?`tel:${phone}`:undefined} color={T.yellow} label="CALL" icon={<PhoneI s={12}/>} disabled={!phone}/>
-          <CardBtn href={phone?`sms:${phone}`:undefined} color={T.textMuted} label="TEXT" icon={<TextI s={12}/>} disabled={!phone}/>
-          {/* Row 2 */}
-          <CardBtn href={email?`mailto:${email}`:undefined} color={T.textMuted} label="EMAIL" icon={<MailI s={12}/>} disabled={!email}/>
-          <CardBtn onClick={openBrief} color={T.cyan} label="BRIEF" icon={<BookI s={12}/>}/>
-          {/* Row 3 */}
-          <CardBtn onClick={requestTraining} color={T.textMuted} label="TRAINING" icon={<StarI s={12}/>} disabled={!zohoIdNumeric}/>
-          <CardBtn onClick={sendMenu} color={T.textMuted} label="SEND MENU" icon={<SendI s={12}/>} disabled={!email}/>
-          {/* Row 4 */}
-          {isUntargeted
-            ?<CardBtn onClick={prospect} color={T.cyan} label="PROSPECT" icon={<BoxI s={12}/>}/>
-            :<CardBtn onClick={newProduct} color={T.textMuted} label="NEW PRODUCT" icon={<BoxI s={12}/>} disabled={!zohoIdNumeric}/>}
-          <CardBtn onClick={flag} color={isFlagged?T.magenta:T.redSystems} label="FLAG PETE" icon={<FlagI s={12}/>} filled={isFlagged}/>
-        </div>
+        {/* Action row — primary actions + ··· more menu */}
+        <CardActions
+          phone={phone} email={email}
+          isFlagged={isFlagged} isUntargeted={isUntargeted} zohoId={zohoIdNumeric}
+          orgId={org.id}
+          onCall={()=>{}} onText={()=>{}} onEmail={()=>{}}
+          onBrief={openBrief} onProspect={prospect} onFlag={flag}
+          onTraining={requestTraining} onSendMenu={sendMenu} onNewProduct={newProduct}
+        />
       </div>
     </a>
+  );
+}
+
+// ─── Card actions — single row primary + ··· more menu ───────────────────────
+function CardActions({phone,email,isFlagged,isUntargeted,zohoId,orgId,onBrief,onProspect,onFlag,onTraining,onSendMenu,onNewProduct}: any) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(()=>{
+    if (!moreOpen) return;
+    const h=(e:MouseEvent)=>{ if (moreRef.current&&!moreRef.current.contains(e.target as Node)) setMoreOpen(false); };
+    document.addEventListener('mousedown',h);
+    return ()=>document.removeEventListener('mousedown',h);
+  },[moreOpen]);
+
+  return (
+    <div style={{padding:'0 16px 10px 70px',display:'flex',alignItems:'center',gap:6,borderTop:`1px solid ${T.border}`,flexWrap:'wrap'}}>
+      {/* PROSPECT chip for untargeted — inline with identity, not a button */}
+      {isUntargeted && (
+        <button type="button" onClick={e=>{e.stopPropagation();onProspect();}}
+          style={{height:28,padding:'0 10px',background:'rgba(0,212,255,0.08)',border:`1px solid ${T.cyan}`,color:T.cyan,fontFamily:'Teko,sans-serif',fontSize:12,letterSpacing:'0.18em',textTransform:'uppercase',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:5}}>
+          <BoxI s={11}/> PROSPECT
+        </button>
+      )}
+      {/* Primary 4 */}
+      <CardBtn href={phone?`tel:${phone}`:undefined} color={phone?T.yellow:T.borderStrong} label="CALL" icon={<PhoneI s={11}/>} disabled={!phone}/>
+      <CardBtn href={phone?`sms:${phone}`:undefined} color={phone?T.textMuted:T.borderStrong} label="TEXT" icon={<TextI s={11}/>} disabled={!phone}/>
+      <CardBtn href={email?`mailto:${email}`:undefined} color={email?T.textMuted:T.borderStrong} label="EMAIL" icon={<MailI s={11}/>} disabled={!email}/>
+      <CardBtn onClick={onBrief} color={T.cyan} label="BRIEF" icon={<BookI s={11}/>}/>
+      {/* Flag Pete — always visible, standalone */}
+      <button type="button" onClick={e=>{e.stopPropagation();onFlag();}} title="Flag for Pete"
+        style={{height:28,width:28,background:isFlagged?'rgba(255,59,127,0.12)':'transparent',border:`1px solid ${isFlagged?T.magenta:T.borderStrong}`,color:isFlagged?T.magenta:T.textFaint,display:'inline-flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0}}>
+        <FlagI s={12}/>
+      </button>
+      {/* ··· More */}
+      <div ref={moreRef} style={{position:'relative',display:'inline-block'}}>
+        <button type="button" onClick={e=>{e.stopPropagation();setMoreOpen(o=>!o);}}
+          style={{height:28,padding:'0 10px',background:'transparent',border:`1px solid ${T.borderStrong}`,color:T.textFaint,fontFamily:'Teko,sans-serif',fontSize:14,letterSpacing:'0.10em',cursor:'pointer'}}>
+          ···
+        </button>
+        {moreOpen&&(
+          <div style={{position:'absolute',bottom:'100%',right:0,background:T.surfaceElev,border:`1px solid ${T.borderStrong}`,zIndex:50,minWidth:160,boxShadow:'0 -8px 24px rgba(0,0,0,0.5)',marginBottom:4}} onClick={e=>e.stopPropagation()}>
+            {[
+              {label:'TRAINING',     icon:<StarI s={11}/>, onClick:()=>{onTraining();setMoreOpen(false);}},
+              {label:'SEND MENU',    icon:<SendI s={11}/>, onClick:()=>{onSendMenu();setMoreOpen(false);}},
+              {label:'NEW PRODUCT',  icon:<BoxI s={11}/>,  onClick:()=>{onNewProduct();setMoreOpen(false);}},
+            ].map(item=>(
+              <button key={item.label} type="button" onClick={item.onClick}
+                style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'10px 14px',background:'transparent',border:'none',borderBottom:`1px solid ${T.border}`,color:T.textMuted,fontFamily:'Teko,sans-serif',fontSize:13,letterSpacing:'0.18em',textTransform:'uppercase',cursor:'pointer',textAlign:'left'}}
+                onMouseEnter={e=>(e.currentTarget.style.background=T.bg)}
+                onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
+                {item.icon}{item.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

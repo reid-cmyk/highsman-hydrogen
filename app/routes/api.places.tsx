@@ -18,8 +18,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const apiKey = env.GOOGLE_PLACES_API_KEY;
 
   if (!apiKey) {
-    console.warn('[api/places] GOOGLE_PLACES_API_KEY not configured');
-    return json({predictions: [], error: 'Places API not configured'}, {
+    console.warn('[api/places] GOOGLE_PLACES_API_KEY not configured — set this in Oxygen env vars');
+    return json({predictions: [], error: 'GOOGLE_PLACES_API_KEY not set'}, {
       status: 200,
       headers: {'Cache-Control': 'no-store'},
     });
@@ -100,9 +100,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       body: JSON.stringify(
         isBusiness
           ? {
-              // Business search: find dispensaries by name anywhere in the US
+              // Business search: no type filter, no location bias — find any business in the US
               input: query,
-              includedPrimaryTypes: ['establishment'],
               includedRegionCodes: ['us'],
             }
           : {
