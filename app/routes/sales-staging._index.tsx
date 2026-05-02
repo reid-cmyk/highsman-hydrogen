@@ -40,9 +40,9 @@ function OrgLogo({website, name, size = 36}: {website: string | null; name: stri
   const hue = [...name].reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
   if (domain && !failed) {
     return (
-      <img src={`https://logo.clearbit.com/${domain}`} alt={name}
+      <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`} alt={name}
         onError={() => setFailed(true)}
-        style={{width:size,height:size,borderRadius:'6px',objectFit:'contain',background:'#1a1a1a',flexShrink:0}} />
+        style={{width:size,height:size,borderRadius:'6px',objectFit:'contain',background:'#1a1a1a',flexShrink:0,imageRendering:'auto'}} />
     );
   }
   return (
