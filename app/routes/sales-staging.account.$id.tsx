@@ -568,14 +568,72 @@ function OnboardingPanel({orgId, steps, refresh}: {orgId:string; steps:any[]; re
 
 // ─── Contact Card ─────────────────────────────────────────────────────────────
 function ContactCard({contact: c, orgId, refresh, borderTop}: {contact:any; orgId:string; refresh:()=>void; borderTop:boolean}) {
-  const [confirming, setConfirming] = useState(false);
+  const [mode, setMode] = useState<'view'|'edit'|'confirm-delete'>('view');
+  const [form, setForm] = useState({first_name:c.first_name||'', last_name:c.last_name||'', email:c.email||'', phone:c.phone||c.mobile||'', job_role:c.job_role||'', is_primary:c.is_primary_buyer||false});
+  const [saving, setSaving] = useState(false);
+  const editFetcher = useFetcher();
   const delFetcher = useFetcher();
   const initials = `${(c.first_name||'')[0]||''}${(c.last_name||'')[0]||''}`.toUpperCase() || '?';
   const name = c.full_name || `${c.first_name||''} ${c.last_name||''}`.trim() || 'Unknown';
 
   useEffect(() => {
-    if ((delFetcher.data as any)?.contact_id) { refresh(); }
+    const d = editFetcher.data as any;
+    if (d?.ok) { setSaving(false); setMode('view'); refresh(); }
+    else if (d && !d.ok) { setSaving(false); }
+  }, [editFetcher.data]);
+
+  useEffect(() => {
+    if ((delFetcher.data as any)?.contact_id) refresh();
   }, [delFetcher.data]);
+
+  const saveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.first_name.trim()) return;
+    setSaving(true);
+    const fd = new FormData();
+    fd.set('intent','update_contact'); fd.set('org_id',orgId); fd.set('contact_id',c.id);
+    fd.set('first_name',form.first_name.trim()); fd.set('last_name',form.last_name.trim());
+    fd.set('email',form.email.trim()); fd.set('phone',form.phone.trim());
+    fd.set('job_role',form.job_role.trim()); fd.set('is_primary',String(form.is_primary));
+    editFetcher.submit(fd, {method:'post', action:'/api/org-update'});
+  };
+
+  const fieldStyle = {background:T.bg, border:`1px solid ${T.borderStrong}`, color:T.text, fontSize:12, fontFamily:'Inter,sans-serif', padding:'5px 8px', outline:'none', width:'100%', boxSizing:'border-box' as const};
+  const labelStyle = {fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase' as const, marginBottom:3};
+
+  if (mode === 'edit') {
+    return (
+      <div style={{borderTop:borderTop?`1px solid ${T.border}`:`1px solid ${T.border}`}}>
+        <form onSubmit={saveEdit} style={{padding:'14px 16px', background:T.surfaceElev, display:'flex', flexDirection:'column', gap:10}}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:2}}>
+            <span style={{fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.20em', color:T.yellow}}>EDIT CONTACT</span>
+            <button type="button" onClick={()=>{setMode('view');setForm({first_name:c.first_name||'',last_name:c.last_name||'',email:c.email||'',phone:c.phone||c.mobile||'',job_role:c.job_role||'',is_primary:c.is_primary_buyer||false});}}
+              style={{background:'none', border:'none', color:T.textFaint, cursor:'pointer', fontFamily:'JetBrains Mono,monospace', fontSize:10, letterSpacing:'0.10em'}}>CANCEL</button>
+          </div>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+            <div><div style={labelStyle}>First name *</div><input value={form.first_name} onChange={e=>setForm(f=>({...f,first_name:e.target.value}))} style={fieldStyle} /></div>
+            <div><div style={labelStyle}>Last name</div><input value={form.last_name} onChange={e=>setForm(f=>({...f,last_name:e.target.value}))} style={fieldStyle} /></div>
+          </div>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+            <div><div style={labelStyle}>Email</div><input type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} style={fieldStyle} /></div>
+            <div><div style={labelStyle}>Phone</div><input type="tel" value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))} style={fieldStyle} /></div>
+          </div>
+          <div><div style={labelStyle}>Job role</div><input value={form.job_role} onChange={e=>setForm(f=>({...f,job_role:e.target.value}))} placeholder="e.g. Buyer, GM" style={fieldStyle} /></div>
+          <label style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer'}}>
+            <input type="checkbox" checked={form.is_primary} onChange={e=>setForm(f=>({...f,is_primary:e.target.checked}))} style={{accentColor:T.yellow, width:14, height:14}} />
+            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textMuted, letterSpacing:'0.12em'}}>PRIMARY BUYER</span>
+          </label>
+          <div style={{display:'flex', gap:8}}>
+            <button type="submit" disabled={saving||!form.first_name.trim()}
+              style={{height:32, padding:'0 16px', background:T.yellow, border:'none', color:'#000', fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.18em', cursor:saving?'not-allowed':'pointer', opacity:saving?0.6:1}}>
+              {saving ? 'SAVING…' : 'SAVE'}
+            </button>
+          </div>
+          {(editFetcher.data as any)?.error && <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.redSystems}}>{(editFetcher.data as any).error}</div>}
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div style={{padding:'14px 16px', borderTop:borderTop?`1px solid ${T.border}`:`1px solid ${T.border}`}}>
@@ -587,15 +645,20 @@ function ContactCard({contact: c, orgId, refresh, borderTop}: {contact:any; orgI
               <span style={{fontFamily:'Teko,sans-serif', fontSize:18, letterSpacing:'0.06em', color:T.text, fontWeight:500}}>{name}</span>
               {c.is_primary_buyer && <span style={{padding:'1px 6px', background:'rgba(255,213,0,0.08)', border:`1px solid ${T.yellow}`, color:T.yellow, fontFamily:'JetBrains Mono,monospace', fontSize:9, letterSpacing:'0.16em'}}>PRIMARY</span>}
             </div>
-            {/* Delete */}
-            {!confirming
-              ? <button type="button" onClick={()=>setConfirming(true)} style={{background:'none', border:'none', color:T.textFaint, cursor:'pointer', padding:'2px 4px', fontFamily:'JetBrains Mono,monospace', fontSize:10, letterSpacing:'0.10em'}}>REMOVE</button>
-              : <div style={{display:'flex', gap:6, alignItems:'center'}}>
-                  <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.redSystems, letterSpacing:'0.08em'}}>Remove?</span>
-                  <button type="button" onClick={()=>{const fd=new FormData();fd.set('intent','delete_contact');fd.set('org_id',orgId);fd.set('contact_id',c.id);delFetcher.submit(fd,{method:'post',action:'/api/org-update'});}} style={{background:T.redSystems, border:'none', color:'#000', fontFamily:'JetBrains Mono,monospace', fontSize:10, padding:'2px 8px', cursor:'pointer', letterSpacing:'0.08em'}}>YES</button>
-                  <button type="button" onClick={()=>setConfirming(false)} style={{background:'none', border:`1px solid ${T.borderStrong}`, color:T.textFaint, fontFamily:'JetBrains Mono,monospace', fontSize:10, padding:'2px 6px', cursor:'pointer'}}>NO</button>
-                </div>
-            }
+            {/* Actions */}
+            {mode === 'view' && (
+              <div style={{display:'flex', gap:8, alignItems:'center'}}>
+                <button type="button" onClick={()=>setMode('edit')} style={{background:'none', border:'none', color:T.yellow, cursor:'pointer', padding:'2px 4px', fontFamily:'JetBrains Mono,monospace', fontSize:10, letterSpacing:'0.10em'}}>EDIT</button>
+                <button type="button" onClick={()=>setMode('confirm-delete')} style={{background:'none', border:'none', color:T.textFaint, cursor:'pointer', padding:'2px 4px', fontFamily:'JetBrains Mono,monospace', fontSize:10, letterSpacing:'0.10em'}}>REMOVE</button>
+              </div>
+            )}
+            {mode === 'confirm-delete' && (
+              <div style={{display:'flex', gap:6, alignItems:'center'}}>
+                <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.redSystems, letterSpacing:'0.08em'}}>Remove?</span>
+                <button type="button" onClick={()=>{const fd=new FormData();fd.set('intent','delete_contact');fd.set('org_id',orgId);fd.set('contact_id',c.id);delFetcher.submit(fd,{method:'post',action:'/api/org-update'});}} style={{background:T.redSystems, border:'none', color:'#000', fontFamily:'JetBrains Mono,monospace', fontSize:10, padding:'2px 8px', cursor:'pointer', letterSpacing:'0.08em'}}>YES</button>
+                <button type="button" onClick={()=>setMode('view')} style={{background:'none', border:`1px solid ${T.borderStrong}`, color:T.textFaint, fontFamily:'JetBrains Mono,monospace', fontSize:10, padding:'2px 6px', cursor:'pointer'}}>NO</button>
+              </div>
+            )}
           </div>
           {c.job_role && <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textSubtle, marginTop:2, letterSpacing:'0.06em'}}>{c.job_role.toUpperCase()}</div>}
           <div style={{marginTop:6, display:'flex', flexDirection:'column', gap:2}}>
@@ -727,6 +790,7 @@ function NotesPanel({orgId, notes, refresh}: {orgId:string; notes:any[]; refresh
   const [draft, setDraft] = useState('');
   const [composing, setComposing] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<string|null>(null);
+  const [confirmingNoteId, setConfirmingNoteId] = useState<string|null>(null);
   const addFetcher = useFetcher();
   const delFetcher = useFetcher();
 
@@ -738,10 +802,12 @@ function NotesPanel({orgId, notes, refresh}: {orgId:string; notes:any[]; refresh
     setDraft(''); setComposing(false); setSelectedChannel(null); refresh();
   };
 
-  const deleteNote = (noteId: string) => {
+  const confirmDelete = (noteId: string) => setConfirmingNoteId(noteId);
+  const cancelDelete = () => setConfirmingNoteId(null);
+  const executeDelete = (noteId: string) => {
     const fd = new FormData(); fd.set('intent','delete_note'); fd.set('org_id',orgId); fd.set('note_id',noteId);
     delFetcher.submit(fd, {method:'post', action:'/api/org-update'});
-    refresh();
+    setConfirmingNoteId(null); refresh();
   };
 
   const CHANNELS = ['CALL','TEXT','EMAIL','VISIT'];
@@ -825,7 +891,15 @@ function NotesPanel({orgId, notes, refresh}: {orgId:string; notes:any[]; refresh
                   <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textFaint, letterSpacing:'0.10em'}}>
                     {new Date(n.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'})}
                   </span>
-                  <button onClick={()=>deleteNote(n.id)} style={{background:'none', border:'none', color:T.textFaint, cursor:'pointer', display:'flex', alignItems:'center', padding:2}}><DeleteIcon /></button>
+                  {confirmingNoteId === n.id ? (
+                    <div style={{display:'flex', alignItems:'center', gap:5}}>
+                      <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, color:T.redSystems, letterSpacing:'0.08em'}}>Delete?</span>
+                      <button onClick={()=>executeDelete(n.id)} style={{background:T.redSystems, border:'none', color:'#000', fontFamily:'JetBrains Mono,monospace', fontSize:9.5, padding:'2px 7px', cursor:'pointer', letterSpacing:'0.08em'}}>YES</button>
+                      <button onClick={cancelDelete} style={{background:'none', border:`1px solid ${T.borderStrong}`, color:T.textFaint, fontFamily:'JetBrains Mono,monospace', fontSize:9.5, padding:'2px 5px', cursor:'pointer'}}>NO</button>
+                    </div>
+                  ) : (
+                    <button onClick={()=>confirmDelete(n.id)} style={{background:'none', border:'none', color:T.textFaint, cursor:'pointer', display:'flex', alignItems:'center', padding:2}}><DeleteIcon /></button>
+                  )}
                 </div>
               </div>
               <div style={{fontSize:13, color:T.textMuted, lineHeight:1.55, whiteSpace:'pre-wrap'}}>{text}</div>
