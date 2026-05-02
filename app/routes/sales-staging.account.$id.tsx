@@ -199,12 +199,14 @@ export default function AccountDetail() {
               const statCells = [
                 {l:'Days since order', v:days===null?'—':String(days), sub:days===null?'no orders':'d', accent:daysColor},
                 {l:'Last order date',  v:org.last_order_date?new Date(org.last_order_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}):'—', sub:'', accent:T.text},
+                {l:'Orders (all time)', v:'—', sub:'coming soon', accent:T.textFaint},
+                {l:'State rank',        v:'—', sub:'vs. roster', accent:T.textFaint},
                 {l:'Contacts',         v:String(contacts?.length||0), sub:contacts?.length===1?'contact':'contacts', accent:T.text},
                 {l:'Budtenders',       v:org.budtender_count?String(org.budtender_count):'—', sub:'on floor', accent:T.text},
                 {l:'Onboarding',       v:onboardingDone?`${onboardingDone}/${onboardingTotal}`:'—', sub:`${onboardingPct}%`, accent:onboardingPct===100?T.green:T.yellow},
               ];
               return (
-                <div style={{marginTop:26, display:'grid', gridTemplateColumns:'repeat(5,1fr)', background:T.border, gap:1, border:`1px solid ${T.border}`}}>
+                <div style={{marginTop:26, display:'grid', gridTemplateColumns:'repeat(7,1fr)', background:T.border, gap:1, border:`1px solid ${T.border}`}}>
                   {statCells.map((s,i) => (
                     <div key={i} style={{background:T.bg, padding:'16px 18px'}}>
                       <div style={{fontFamily:'Teko,sans-serif', fontSize:10.5, letterSpacing:'0.30em', color:T.textFaint, textTransform:'uppercase', marginBottom:4}}>{s.l}</div>
@@ -227,7 +229,7 @@ export default function AccountDetail() {
             {/* Right: Onboarding + Contacts + Notes */}
             <div style={{display:'flex', flexDirection:'column', gap:24}}>
               <OnboardingPanel orgId={org.id} steps={steps} refresh={refresh} />
-              <ContactsPanel contacts={contacts} />
+              <ContactsPanel orgId={org.id} contacts={contacts} refresh={refresh} />
               <NotesPanel orgId={org.id} notes={notes} refresh={refresh} />
             </div>
           </div>
@@ -299,7 +301,7 @@ function DeleteAccountBtn({orgId}: {orgId: string}) {
 }
 
 // ─── Section Head ─────────────────────────────────────────────────────────────
-function SectionHead({title, source, count}: {title:string; source?:string; count?:string|number}) {
+function SectionHead({title, source, count}: {title:string; source?:React.ReactNode; count?:string|number}) {
   return (
     <div className="hs-sweep" style={{padding:'18px 16px 12px', borderBottom:`1px solid ${T.border}`, display:'flex', alignItems:'baseline', justifyContent:'space-between'}}>
       <div style={{fontFamily:'Teko,sans-serif', fontSize:18, letterSpacing:'0.28em', fontWeight:500, color:T.text, textTransform:'uppercase'}}>
@@ -414,7 +416,7 @@ function ReadOnlyField({label, value, note}: {label:string; value:string; note?:
 }
 
 // ─── Online menus checkbox multi-select ──────────────────────────────────────
-const MENU_OPTIONS = ['AIQ','Dutchie','Weedmaps','Jane','LeafLink','Leafly','Nabis'];
+const MENU_OPTIONS = ['AIQ','Blaze','Cova','Dispense','Dutchie','Jane','Leafly','Mosaic','Nabis','Self Administrator','Sweed','Treez','Weedmaps'];
 
 function OnlineMenusField({orgId, value}: {orgId:string; value:string[]}) {
   const fetcher = useFetcher();
@@ -560,16 +562,97 @@ function OnboardingPanel({orgId, steps, refresh}: {orgId:string; steps:any[]; re
 }
 
 // ─── Contacts Panel ───────────────────────────────────────────────────────────
-function ContactsPanel({contacts}: {contacts: any[]}) {
+function ContactsPanel({orgId, contacts, refresh}: {orgId:string; contacts: any[]; refresh:()=>void}) {
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({first_name:'', last_name:'', email:'', phone:'', job_role:'', is_primary:false});
+  const [saving, setSaving] = useState(false);
+  const fetcher = useFetcher();
+
+  // Watch for successful create
+  useEffect(() => {
+    const d = fetcher.data as any;
+    if (d?.ok) { setAdding(false); setForm({first_name:'', last_name:'', email:'', phone:'', job_role:'', is_primary:false}); setSaving(false); refresh(); }
+    else if (d && !d.ok) { setSaving(false); }
+  }, [fetcher.data]);
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.first_name.trim()) return;
+    setSaving(true);
+    const fd = new FormData();
+    fd.set('org_id', orgId);
+    fd.set('first_name', form.first_name.trim());
+    fd.set('last_name', form.last_name.trim());
+    fd.set('email', form.email.trim());
+    fd.set('phone', form.phone.trim());
+    fd.set('job_role', form.job_role.trim());
+    fd.set('is_primary', String(form.is_primary));
+    fetcher.submit(fd, {method:'post', action:'/api/contact-create'});
+  };
+
+  const fieldStyle = {background:T.bg, border:`1px solid ${T.borderStrong}`, color:T.text, fontSize:12, fontFamily:'Inter,sans-serif', padding:'5px 8px', outline:'none', width:'100%', boxSizing:'border-box' as const};
+  const labelStyle = {fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase' as const, marginBottom:3};
+
   return (
     <div style={{background:T.surface, border:`1px solid ${T.border}`}}>
-      <SectionHead title="Contacts" count={`(${contacts.length})`} source="+ add" />
-      {contacts.length === 0 && <div style={{padding:'20px 16px', fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint, letterSpacing:'0.10em'}}>No contacts</div>}
+      <SectionHead title="Contacts" count={`(${contacts.length})`} source={
+        <button type="button" onClick={()=>setAdding(a=>!a)}
+          style={{background:'none', border:'none', color:adding?T.textFaint:T.yellow, fontFamily:'JetBrains Mono,monospace', fontSize:10, letterSpacing:'0.14em', cursor:'pointer', padding:0}}>
+          {adding ? 'CANCEL' : '+ ADD'}
+        </button>
+      } />
+
+      {/* Add contact form */}
+      {adding && (
+        <form onSubmit={submit} style={{padding:'14px 16px', borderBottom:`1px solid ${T.border}`, background:T.surfaceElev, display:'flex', flexDirection:'column', gap:10}}>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+            <div>
+              <div style={labelStyle}>First name *</div>
+              <input autoFocus value={form.first_name} onChange={e=>setForm(f=>({...f,first_name:e.target.value}))} placeholder="First" style={fieldStyle} />
+            </div>
+            <div>
+              <div style={labelStyle}>Last name</div>
+              <input value={form.last_name} onChange={e=>setForm(f=>({...f,last_name:e.target.value}))} placeholder="Last" style={fieldStyle} />
+            </div>
+          </div>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+            <div>
+              <div style={labelStyle}>Email</div>
+              <input type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} placeholder="email@..." style={fieldStyle} />
+            </div>
+            <div>
+              <div style={labelStyle}>Phone</div>
+              <input type="tel" value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))} placeholder="555-555-5555" style={fieldStyle} />
+            </div>
+          </div>
+          <div>
+            <div style={labelStyle}>Job role</div>
+            <input value={form.job_role} onChange={e=>setForm(f=>({...f,job_role:e.target.value}))} placeholder="e.g. Buyer, GM, Budtender" style={fieldStyle} />
+          </div>
+          <label style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer'}}>
+            <input type="checkbox" checked={form.is_primary} onChange={e=>setForm(f=>({...f,is_primary:e.target.checked}))} style={{accentColor:T.yellow, width:14, height:14}} />
+            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textMuted, letterSpacing:'0.12em'}}>PRIMARY BUYER</span>
+          </label>
+          <div style={{display:'flex', gap:8}}>
+            <button type="submit" disabled={saving||!form.first_name.trim()}
+              style={{height:32, padding:'0 16px', background:T.yellow, border:'none', color:'#000', fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.18em', cursor:saving?'not-allowed':'pointer', opacity:saving?0.6:1}}>
+              {saving ? 'SAVING…' : 'SAVE CONTACT'}
+            </button>
+            <button type="button" onClick={()=>{setAdding(false);setForm({first_name:'', last_name:'', email:'', phone:'', job_role:'', is_primary:false});}}
+              style={{height:32, padding:'0 12px', background:'transparent', border:`1px solid ${T.borderStrong}`, color:T.textFaint, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.14em', cursor:'pointer'}}>
+              CANCEL
+            </button>
+          </div>
+          {(fetcher.data as any)?.error && <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.redSystems, letterSpacing:'0.10em'}}>{(fetcher.data as any).error}</div>}
+        </form>
+      )}
+
+      {contacts.length === 0 && !adding && <div style={{padding:'20px 16px', fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint, letterSpacing:'0.10em'}}>No contacts — click + ADD above</div>}
       {contacts.map((c:any, i:number) => {
         const initials = `${(c.first_name||'')[0]||''}${(c.last_name||'')[0]||''}`.toUpperCase() || '?';
         const name = c.full_name || `${c.first_name||''} ${c.last_name||''}`.trim() || 'Unknown';
         return (
-          <div key={c.id} style={{padding:'16px', borderTop:i>0?`1px solid ${T.border}`:'none'}}>
+          <div key={c.id} style={{padding:'16px', borderTop:i>0?`1px solid ${T.border}`:`1px solid ${T.border}`}}>
             <div style={{display:'flex', alignItems:'flex-start', gap:14}}>
               <div style={{width:44, height:44, borderRadius:'50%', background:T.surfaceElev, border:`1px solid ${T.borderStrong}`, display:'flex', alignItems:'center', justifyContent:'center', color:T.textMuted, fontFamily:'Teko,sans-serif', fontSize:20, fontWeight:500, flexShrink:0}}>{initials}</div>
               <div style={{flex:1, minWidth:0}}>
