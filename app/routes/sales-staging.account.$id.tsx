@@ -490,7 +490,7 @@ function FieldsPanel({org}: {org: any}) {
         <ReadOnlyField label="Reorder Cadence" value={org.reorder_cadence_days?`${org.reorder_cadence_days} days avg`:'—'} note="auto-calculated" />
         <EditableField label="Tags" field="tags" value={(org.tags||[]).join(', ')} orgId={org.id} hint="Comma-separated" />
         <SelectField label="Allow Split Promos" field="allow_split_promos" value={org.allow_split_promos?'Yes':'No'} orgId={org.id} options={['Yes','No']} />
-        <EditableField label="Sparkplug" field="sparkplug_enabled" value={org.sparkplug_enabled?'Yes':'No'} orgId={org.id} />
+        <SelectField label="Sparkplug" field="sparkplug_enabled" value={org.sparkplug_enabled?'Yes':'No'} orgId={org.id} />
       </TwoCol>
 
       <GroupLabel>Pop-ups & Training</GroupLabel>
