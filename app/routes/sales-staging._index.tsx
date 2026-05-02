@@ -304,9 +304,7 @@ function NewAccountModal({onClose}:{onClose:()=>void}) {
       // Search both Places AND existing Supabase accounts in parallel
       const [placesResult, sbResult] = await Promise.allSettled([
         fetch(`/api/places?q=${encodeURIComponent(query)}&type=business`).then(r=>r.json()),
-        fetch(`https://kbyhubjefjezgfcrxihi.supabase.co/rest/v1/organizations?select=id,name,market_state,city,lifecycle_stage&name=ilike.*${encodeURIComponent(query)}*&limit=4`, {
-          headers: {apikey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtieWh1YmplZmplemdmY3J4aWhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0NzAwNTUsImV4cCI6MjA5MjA0NjA1NX0.Oc5GT7aCHuiCa5rfb_tVa7tW0r-P3xO1XEE8L4IH3m4'},
-        }).then(r=>r.json()),
+        fetch(`/api/org-search?q=${encodeURIComponent(query)}`).then(r=>r.json()),
       ]);
 
       if (placesResult.status==='fulfilled') {
@@ -316,8 +314,8 @@ function NewAccountModal({onClose}:{onClose:()=>void}) {
         } else { setApiError(null); }
         setPredictions(d.predictions||[]);
       }
-      if (sbResult.status==='fulfilled' && Array.isArray(sbResult.value)) {
-        setExistingMatches(sbResult.value);
+      if (sbResult.status==='fulfilled' && Array.isArray(sbResult.value?.results)) {
+        setExistingMatches(sbResult.value.results);
       }
       setStatus('idle');
     }, 300);
@@ -816,11 +814,18 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
 // ─── Card actions — single row primary + ··· more menu ───────────────────────
 function CardActions({phone,email,isFlagged,isUntargeted,zohoId,orgId,onBrief,onProspect,onFlag,onTraining,onSendMenu,onNewProduct}: any) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState({top:0, left:0});
   const moreRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(()=>{
     if (!moreOpen) return;
-    const h=(e:MouseEvent)=>{ if (moreRef.current&&!moreRef.current.contains(e.target as Node)) setMoreOpen(false); };
+    // Calculate position from button so menu uses fixed positioning (won't be clipped)
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setMenuPos({top: r.top - 4, left: r.right});
+    }
+    const h=(e:MouseEvent)=>{ if (moreRef.current&&!moreRef.current.contains(e.target as Node)&&btnRef.current&&!btnRef.current.contains(e.target as Node)) setMoreOpen(false); };
     document.addEventListener('mousedown',h);
     return ()=>document.removeEventListener('mousedown',h);
   },[moreOpen]);
@@ -841,24 +846,24 @@ function CardActions({phone,email,isFlagged,isUntargeted,zohoId,orgId,onBrief,on
       <CardBtn onClick={onBrief} color={T.cyan} label="BRIEF" icon={<BookI s={11}/>}/>
       {/* Flag Pete — red outline always, filled when flagged */}
       <button type="button" onClick={e=>{e.stopPropagation();onFlag();}} title="Flag for Pete"
-        style={{height:30,padding:'0 9px',background:isFlagged?`rgba(255,51,85,0.15)`:'transparent',border:`1px solid ${T.redSystems}`,color:isFlagged?T.redSystems:T.redSystems,display:'inline-flex',alignItems:'center',gap:5,cursor:'pointer',flexShrink:0,fontFamily:'Teko,sans-serif',fontSize:12,letterSpacing:'0.14em',textTransform:'uppercase'}}>
-        <FlagI s={11}/> P
+        style={{height:30,padding:'0 9px',background:isFlagged?`rgba(255,51,85,0.15)`:'transparent',border:`1px solid ${T.redSystems}`,color:T.redSystems,display:'inline-flex',alignItems:'center',gap:5,cursor:'pointer',flexShrink:0,fontFamily:'Teko,sans-serif',fontSize:12,letterSpacing:'0.14em',textTransform:'uppercase'}}>
+        <FlagI s={11}/> FLAG PETE
       </button>
-      {/* ··· More */}
-      <div ref={moreRef} style={{position:'relative',display:'inline-block'}}>
-        <button type="button" onClick={e=>{e.stopPropagation();setMoreOpen(o=>!o);}}
-          style={{height:28,padding:'0 10px',background:'transparent',border:`1px solid ${T.borderStrong}`,color:T.textFaint,fontFamily:'Teko,sans-serif',fontSize:14,letterSpacing:'0.10em',cursor:'pointer'}}>
+      {/* ··· More — uses fixed position to escape card overflow/z-index */}
+      <div style={{position:'relative',display:'inline-block'}}>
+        <button ref={btnRef} type="button" onClick={e=>{e.stopPropagation();setMoreOpen(o=>!o);}}
+          style={{height:30,padding:'0 10px',background:moreOpen?T.surfaceElev:'transparent',border:`1px solid ${T.borderStrong}`,color:T.textFaint,fontFamily:'Teko,sans-serif',fontSize:14,letterSpacing:'0.10em',cursor:'pointer'}}>
           ···
         </button>
         {moreOpen&&(
-          <div style={{position:'absolute',bottom:'100%',right:0,background:T.surfaceElev,border:`1px solid ${T.borderStrong}`,zIndex:50,minWidth:160,boxShadow:'0 -8px 24px rgba(0,0,0,0.5)',marginBottom:4}} onClick={e=>e.stopPropagation()}>
+          <div ref={moreRef} style={{position:'fixed',top:menuPos.top,left:menuPos.left,transform:'translate(-100%,-100%)',background:T.surfaceElev,border:`1px solid ${T.borderStrong}`,zIndex:9999,minWidth:170,boxShadow:'0 -8px 32px rgba(0,0,0,0.7)'}} onClick={e=>e.stopPropagation()}>
             {[
-              {label:'TRAINING',     icon:<StarI s={11}/>, onClick:()=>{onTraining();setMoreOpen(false);}},
-              {label:'SEND MENU',    icon:<SendI s={11}/>, onClick:()=>{onSendMenu();setMoreOpen(false);}},
-              {label:'NEW PRODUCT',  icon:<BoxI s={11}/>,  onClick:()=>{onNewProduct();setMoreOpen(false);}},
+              {label:'TRAINING',    icon:<StarI s={11}/>, onClick:()=>{onTraining();setMoreOpen(false);}},
+              {label:'SEND MENU',   icon:<SendI s={11}/>, onClick:()=>{onSendMenu();setMoreOpen(false);}},
+              {label:'NEW PRODUCT', icon:<BoxI s={11}/>,  onClick:()=>{onNewProduct();setMoreOpen(false);}},
             ].map(item=>(
               <button key={item.label} type="button" onClick={item.onClick}
-                style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'10px 14px',background:'transparent',border:'none',borderBottom:`1px solid ${T.border}`,color:T.textMuted,fontFamily:'Teko,sans-serif',fontSize:13,letterSpacing:'0.18em',textTransform:'uppercase',cursor:'pointer',textAlign:'left'}}
+                style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'11px 16px',background:'transparent',border:'none',borderBottom:`1px solid ${T.border}`,color:T.textMuted,fontFamily:'Teko,sans-serif',fontSize:13,letterSpacing:'0.18em',textTransform:'uppercase',cursor:'pointer',textAlign:'left'}}
                 onMouseEnter={e=>(e.currentTarget.style.background=T.bg)}
                 onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
                 {item.icon}{item.label}

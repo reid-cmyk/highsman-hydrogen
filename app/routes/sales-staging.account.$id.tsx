@@ -6,7 +6,7 @@
 
 import type {LoaderFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
-import {useLoaderData, useFetcher, Link} from '@remix-run/react';
+import {useLoaderData, useFetcher, Link, useNavigate} from '@remix-run/react';
 import {useState, useRef, useEffect} from 'react';
 import {isStagingAuthed} from '~/lib/staging-auth';
 
@@ -75,6 +75,7 @@ export default function AccountDetail() {
   const primaryContact = contacts?.find((c:any) => c.is_primary_buyer) || contacts?.[0];
   const tc = tierColor(org.tier);
   const lcColor = LC_COLORS[org.lifecycle_stage] || T.textFaint;
+  const isFlagged = (org.tags||[]).includes('pete-followup');
   const nameInitials = (org.name||'').split(/\s+/).slice(0,2).map((w:string)=>w[0]?.toUpperCase()||'').join('');
   const domain = org.website ? (() => { try { return new URL(org.website.startsWith('http')?org.website:`https://${org.website}`).hostname.replace(/^www\./,''); } catch { return null; } })() : null;
 
@@ -130,6 +131,7 @@ export default function AccountDetail() {
               {org.market_state && <span style={{fontFamily:'Teko,sans-serif', fontSize:12, letterSpacing:'0.24em', color:T.textFaint, textTransform:'uppercase'}}>{org.market_state}{org.city?` · ${org.city}`:''}</span>}
               <div style={{flex:1}} />
               <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10.5, color:T.textFaint, letterSpacing:'0.14em'}}>{org.zoho_account_id} · synced</span>
+              <DeleteAccountBtn orgId={org.id}/>
             </div>
 
             {/* Main hero row */}
@@ -157,11 +159,34 @@ export default function AccountDetail() {
                 </div>
               </div>
 
-              {/* Action stack */}
-              <div style={{display:'flex', flexDirection:'column', gap:8, minWidth:240}}>
-                <ActionRow primary label={`CALL ${org.name.split(' ')[0].toUpperCase()}`} sub={org.phone||'—'} icon="phone" href={org.phone?`tel:${org.phone}`:'#'} />
-                <ActionRow label={`TEXT ${org.name.split(' ')[0].toUpperCase()}`} sub="iMessage" icon="text" href={org.phone?`sms:${org.phone}`:'#'} />
-                <ActionRow label={`EMAIL ${primaryContact?.first_name?.toUpperCase()||'CONTACT'}`} sub={primaryContact?.email||'—'} icon="mail" href={primaryContact?.email?`mailto:${primaryContact.email}`:'#'} />
+              {/* Action stack — matches list page buttons */}
+              <div style={{display:'flex', flexDirection:'column', gap:6, minWidth:240}}>
+                <ActionRow primary label={`CALL ${org.name.split(' ')[0].toUpperCase()}`} sub={org.phone||'no phone'} icon="phone" href={org.phone?`tel:${org.phone}`:'#'} disabled={!org.phone}/>
+                <ActionRow label={`TEXT ${org.name.split(' ')[0].toUpperCase()}`} sub="iMessage" icon="text" href={org.phone?`sms:${org.phone}`:'#'} disabled={!org.phone}/>
+                <ActionRow label={`EMAIL ${primaryContact?.first_name?.toUpperCase()||'CONTACT'}`} sub={primaryContact?.email||'no email'} icon="mail" href={primaryContact?.email?`mailto:${primaryContact.email}`:'#'} disabled={!primaryContact?.email}/>
+                <DetailActionBtn label="BRIEF" sub="AI pre-call brief" icon="brief" onClick={()=>{
+                  fetch('/api/brief',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lead:{First_Name:primaryContact?.first_name||'',Last_Name:primaryContact?.last_name||'',_fullName:primaryContact?.full_name||org.name,Company:org.name,Phone:org.phone||primaryContact?.phone||'',Email:primaryContact?.email||'',_status:'active'}})}).catch(()=>{});
+                  window.open('/sales-floor/app?brief=1','_brief','width=720,height=620');
+                }}/>
+                <DetailActionBtn label="TRAINING" sub="Book Vibes training" icon="star" onClick={()=>{
+                  const id=(org.zoho_account_id||'').replace('zcrm_','');
+                  if(id) fetch('/api/sales-floor-vibes-training',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({zohoAccountId:id,customerName:org.name})}).catch(()=>{});
+                }} disabled={!org.zoho_account_id}/>
+                <DetailActionBtn label="SEND MENU" sub="NJ menu via email" icon="send" onClick={()=>{
+                  const e=primaryContact?.email;
+                  if(!e){alert('No email on file.');return;}
+                  const subj=`Highsman NJ Wholesale Menu`;
+                  const body=`Hi ${primaryContact?.first_name||'there'},\n\nHere's our NJ wholesale menu:\n\nhttps://highsman.com/njmenu\n\nBest,\nSky Lima\nHighsman`;
+                  window.open(`mailto:${e}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`);
+                }} disabled={!primaryContact?.email}/>
+                <DetailActionBtn label="NEW PRODUCT" sub="Product onboarding" icon="box" onClick={()=>{
+                  const id=(org.zoho_account_id||'').replace('zcrm_','');
+                  if(id) fetch('/api/sales-floor-vibes-product-onboard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({zohoAccountId:id,customerName:org.name})}).catch(()=>{});
+                }} disabled={!org.zoho_account_id}/>
+                <DetailActionBtn label="FLAG PETE" sub={isFlagged?'Currently flagged':'Flag for follow-up'} icon="flag" onClick={()=>{
+                  const fd=new FormData();fd.set('intent','flag_pete');fd.set('org_id',org.id);
+                  document.dispatchEvent(new CustomEvent('stagingAction',{detail:{fd}}));
+                }} flagged={isFlagged}/>
               </div>
             </div>
 
@@ -227,18 +252,49 @@ function HeroLogo({name, initials, domain, tc}: {name:string; initials:string; d
 }
 
 // ─── Action Row ───────────────────────────────────────────────────────────────
-function ActionRow({primary, label, sub, icon, href}: {primary?: boolean; label:string; sub:string; icon:string; href:string}) {
+function ActionRow({primary, label, sub, icon, href, disabled}: {primary?: boolean; label:string; sub:string; icon:string; href:string; disabled?:boolean}) {
   const I = icon==='phone'?PhoneIcon:icon==='text'?TextIcon:MailIcon;
   return (
-    <a href={href}
-      style={{height:56, padding:'0 16px', background:primary?'rgba(255,213,0,0.06)':'transparent', border:`1px solid ${primary?T.yellow:T.borderStrong}`, color:primary?T.yellow:T.textMuted, display:'flex', alignItems:'center', gap:14, textAlign:'left', width:'100%', textDecoration:'none', boxSizing:'border-box'}}>
+    <a href={disabled?'#':href} onClick={disabled?e=>e.preventDefault():undefined}
+      style={{height:48, padding:'0 14px', background:primary&&!disabled?'rgba(255,213,0,0.06)':'transparent', border:`1px solid ${disabled?T.borderStrong:primary?T.yellow:T.borderStrong}`, color:disabled?T.textFaint:primary?T.yellow:T.textMuted, display:'flex', alignItems:'center', gap:12, textAlign:'left', width:'100%', textDecoration:'none', boxSizing:'border-box', opacity:disabled?0.45:1, cursor:disabled?'not-allowed':'pointer'}}>
       <I />
       <div style={{display:'flex', flexDirection:'column', alignItems:'flex-start', flex:1}}>
-        <span style={{fontFamily:'Teko,sans-serif', fontSize:16, letterSpacing:'0.20em', fontWeight:500}}>{label}</span>
-        <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10.5, color:primary?'rgba(255,213,0,0.6)':T.textFaint, letterSpacing:'0.06em', marginTop:1}}>{sub}</span>
+        <span style={{fontFamily:'Teko,sans-serif', fontSize:15, letterSpacing:'0.20em', fontWeight:500}}>{label}</span>
+        <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:disabled?T.textFaint:primary?'rgba(255,213,0,0.6)':T.textFaint, letterSpacing:'0.06em', marginTop:1}}>{sub}</span>
       </div>
-      <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:primary?'rgba(255,213,0,0.6)':T.textFaint, letterSpacing:'0.14em'}}>↵</span>
+      {!disabled&&<span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:primary?'rgba(255,213,0,0.6)':T.textFaint, letterSpacing:'0.14em'}}>↵</span>}
     </a>
+  );
+}
+
+// ─── Delete Account Button ────────────────────────────────────────────────────
+function DeleteAccountBtn({orgId}: {orgId: string}) {
+  const [confirming, setConfirming] = useState(false);
+  const fetcher = useFetcher();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const d = fetcher.data as any;
+    if (d?.ok && d?.intent === 'delete_account') navigate('/sales-staging');
+  }, [fetcher.data, navigate]);
+
+  if (!confirming) {
+    return (
+      <button type="button" onClick={() => setConfirming(true)}
+        style={{marginLeft:8, fontFamily:'JetBrains Mono,monospace', fontSize:10, letterSpacing:'0.12em', color:T.textFaint, background:'none', border:`1px solid ${T.borderStrong}`, padding:'3px 8px', cursor:'pointer'}}>
+        DELETE
+      </button>
+    );
+  }
+  return (
+    <div style={{display:'flex', alignItems:'center', gap:6, marginLeft:8}}>
+      <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.redSystems, letterSpacing:'0.08em'}}>Delete this account?</span>
+      <button type="button" onClick={() => {
+        const fd = new FormData(); fd.set('intent','delete_account'); fd.set('org_id',orgId);
+        fetcher.submit(fd, {method:'post', action:'/api/org-update'});
+      }} style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:'#000', background:T.redSystems, border:'none', padding:'3px 10px', cursor:'pointer', letterSpacing:'0.10em'}}>CONFIRM</button>
+      <button type="button" onClick={() => setConfirming(false)} style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textFaint, background:'none', border:`1px solid ${T.borderStrong}`, padding:'3px 8px', cursor:'pointer'}}>CANCEL</button>
+    </div>
   );
 }
 
@@ -537,6 +593,31 @@ function ContactsPanel({contacts}: {contacts: any[]}) {
         );
       })}
     </div>
+  );
+}
+
+// ─── Detail action button (for the right-column stack) ───────────────────────
+function DetailActionBtn({label, sub, icon, onClick, disabled, flagged}: {label:string; sub:string; icon:string; onClick:()=>void; disabled?:boolean; flagged?:boolean}) {
+  const icons: Record<string,React.ReactNode> = {
+    brief: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5V4a1 1 0 0 1 1-1h15v18H6.5A2.5 2.5 0 0 1 4 19.5z"/></svg>,
+    star:  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>,
+    send:  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>,
+    box:   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>,
+    flag:  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M5 3v18M5 4h12l-2 4 2 4H5"/></svg>,
+  };
+  const isFlagPete = icon === 'flag';
+  const borderColor = isFlagPete ? T.redSystems : disabled ? T.borderStrong : T.borderStrong;
+  const textColor = isFlagPete ? T.redSystems : disabled ? T.textFaint : T.textMuted;
+  const bg = isFlagPete && flagged ? 'rgba(255,51,85,0.12)' : 'transparent';
+  return (
+    <button type="button" onClick={disabled?undefined:onClick}
+      style={{height:44, padding:'0 14px', background:bg, border:`1px solid ${borderColor}`, color:textColor, display:'flex', alignItems:'center', gap:12, textAlign:'left', width:'100%', cursor:disabled?'not-allowed':'pointer', opacity:disabled?0.4:1, boxSizing:'border-box'}}>
+      {icons[icon]}
+      <div style={{display:'flex', flexDirection:'column', alignItems:'flex-start', flex:1}}>
+        <span style={{fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.20em', fontWeight:500}}>{label}</span>
+        <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, color:disabled?T.textFaint:T.textFaint, letterSpacing:'0.06em', marginTop:1}}>{sub}</span>
+      </div>
+    </button>
   );
 }
 

@@ -122,6 +122,15 @@ export async function action({request, context}: ActionFunctionArgs) {
     return json({ok: true, note_id});
   }
 
+  // ── Delete account ───────────────────────────────────────────────────────
+  if (intent === 'delete_account') {
+    await fetch(`${env.SUPABASE_URL}/rest/v1/organizations?id=eq.${org_id}`, {
+      method: 'DELETE',
+      headers: {apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, Prefer: 'return=minimal'},
+    });
+    return json({ok: true, intent: 'delete_account'});
+  }
+
   return json({ok: false, error: 'unknown intent'}, {status: 400});
 }
 
