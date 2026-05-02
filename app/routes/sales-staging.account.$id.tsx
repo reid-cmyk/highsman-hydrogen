@@ -8,7 +8,7 @@
 import type {LoaderFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {useLoaderData, useFetcher, Link, useRevalidator} from '@remix-run/react';
-import {useState, useRef, useEffect} from 'react';
+import {useState, useRef, useEffect, useCallback} from 'react';
 import {isStagingAuthed} from '~/lib/staging-auth';
 
 export const handle = {hideHeader: true, hideFooter: true};
@@ -64,6 +64,7 @@ export default function AccountDetail() {
         <div style={{display:'flex',alignItems:'center',gap:'12px',minWidth:0}}>
           <Link to="/sales-staging" style={{color:'#555',fontSize:'13px',textDecoration:'none',whiteSpace:'nowrap',flexShrink:0}}>← Accounts</Link>
           <span style={{color:'#333'}}>|</span>
+          <OrgLogo website={org.website} name={org.name} size={36} />
           <span style={{fontFamily:"'Teko',sans-serif",fontSize:'22px',fontWeight:700,color:'#c8a84b',letterSpacing:'0.06em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
             {org.name}
           </span>
@@ -392,6 +393,41 @@ function Card({title, children, action}: {title: string; children: React.ReactNo
   );
 }
 
+<<<<<<< Updated upstream
+=======
+function domainFromUrl(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url.startsWith('http') ? url : `https://${url}`);
+    return u.hostname.replace(/^www\./, '');
+  } catch { return null; }
+}
+
+function OrgLogo({website, name, size = 48}: {website: string | null; name: string; size?: number}) {
+  const domain = domainFromUrl(website);
+  const [failed, setFailed] = useState(false);
+  const initials = name.split(/\s+/).slice(0,2).map(w=>w[0]?.toUpperCase()||'').join('');
+  const hue = [...name].reduce((acc,c)=>acc+c.charCodeAt(0),0) % 360;
+  if (domain && !failed) {
+    return (
+      <img src={`https://logo.clearbit.com/${domain}`} alt={name} onError={()=>setFailed(true)}
+        style={{width:size,height:size,borderRadius:'8px',objectFit:'contain',background:'#1a1a1a',flexShrink:0}} />
+    );
+  }
+  return (
+    <div style={{width:size,height:size,borderRadius:'8px',background:`hsl(${hue},30%,20%)`,
+      border:`1px solid hsl(${hue},30%,30%)`,display:'flex',alignItems:'center',justifyContent:'center',
+      color:`hsl(${hue},60%,70%)`,fontSize:size*0.35,fontWeight:700,flexShrink:0}}>
+      {initials}
+    </div>
+  );
+}
+
+function SectionLabel({children}: {children: React.ReactNode}) {
+  return <div style={{fontSize:'10px',textTransform:'uppercase',letterSpacing:'0.1em',color:'#444',fontWeight:700,marginBottom:'8px',marginTop:'4px',borderBottom:'1px solid rgba(255,255,255,0.04)',paddingBottom:'4px'}}>{children}</div>;
+}
+
+>>>>>>> Stashed changes
 function LifecycleBadge({lc}: {lc: string}) {
   const colors: Record<string,string> = {active:'#22C55E',churned:'#6b7280',untargeted:'#444',dormant:'#f59e0b',first_order_pending:'#3b82f6'};
   const c = colors[lc] || '#666';

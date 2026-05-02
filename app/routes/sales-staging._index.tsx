@@ -25,6 +25,40 @@ function daysSince(dateStr: string | null): number | null {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
 }
 
+function domainFromUrl(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url.startsWith('http') ? url : `https://${url}`);
+    return u.hostname.replace(/^www\./, '');
+  } catch { return null; }
+}
+
+function OrgLogo({website, name, size = 32}: {website: string | null; name: string; size?: number}) {
+  const domain = domainFromUrl(website);
+  const initials = name.split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() || '').join('');
+  const [failed, setFailed] = useState(false);
+
+  if (domain && !failed) {
+    return (
+      <img
+        src={`https://logo.clearbit.com/${domain}`}
+        alt={name}
+        onError={() => setFailed(true)}
+        style={{width:size,height:size,borderRadius:'6px',objectFit:'contain',background:'#1a1a1a',flexShrink:0}}
+      />
+    );
+  }
+  // Initials fallback
+  const hue = [...name].reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
+  return (
+    <div style={{width:size,height:size,borderRadius:'6px',background:`hsl(${hue},30%,20%)`,
+      border:`1px solid hsl(${hue},30%,30%)`,display:'flex',alignItems:'center',justifyContent:'center',
+      color:`hsl(${hue},60%,70%)`,fontSize:size*0.35,fontWeight:700,flexShrink:0,letterSpacing:'-0.02em'}}>
+      {initials}
+    </div>
+  );
+}
+
 // ─── Action ──────────────────────────────────────────────────────────────────
 
 export async function action({request, context}: ActionFunctionArgs) {
@@ -385,11 +419,20 @@ function OrgCard({org, stageFilter}: {org: OrgRow; stageFilter: string}) {
     }}>
       <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'10px',flexWrap:'wrap'}}>
 
+<<<<<<< Updated upstream
         {/* Left */}
         <div style={{flex:1,minWidth:'200px'}}>
           <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'5px',flexWrap:'wrap'}}>
             <a href={`/sales-staging/account/${org.id}`}
               style={{fontWeight:700,fontSize:'15px',color:'#fff',textDecoration:'none',lineHeight:1.2}}>
+=======
+        {/* Left: logo + name + meta */}
+        <div style={{display:'flex',alignItems:'center',gap:'10px',flex:1,minWidth:0}}>
+          <OrgLogo website={org.website as any} name={org.name} size={36} />
+          <div style={{flex:1,minWidth:0}}>
+          <div style={{display:'flex',alignItems:'center',gap:'7px',marginBottom:'4px',flexWrap:'wrap'}}>
+            <span style={{fontWeight:700,fontSize:'14px',color:'#f0f0f0',letterSpacing:'-0.01em'}}>
+>>>>>>> Stashed changes
               {org.name}
             </a>
             {org.tier && (
@@ -416,6 +459,7 @@ function OrgCard({org, stageFilter}: {org: OrgRow; stageFilter: string}) {
             )}
             {!org.last_order_date && <Pill color="#555">No orders</Pill>}
             {(org.online_menus as any)?.length > 0 && <Pill>{(org.online_menus as any).join(' · ')}</Pill>}
+          </div>
           </div>
         </div>
 
