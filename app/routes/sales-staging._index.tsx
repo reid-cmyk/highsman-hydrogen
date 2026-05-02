@@ -306,23 +306,26 @@ function Dashboard({data}: {data: any}) {
             })}
           </div>
 
-          {/* Stage filter row */}
-          <div style={{display:'flex',alignItems:'center',gap:'5px',marginBottom:'12px',flexWrap:'wrap'}}>
-            <span style={{fontSize:'10px',textTransform:'uppercase',letterSpacing:'0.1em',color:'#444',fontWeight:700,marginRight:'2px'}}>STAGE</span>
-            {STAGE_FILTER_ORDER.filter(s => s === 'all' || (stageCounts[s] ?? 0) > 0 || s === stageFilter).map(s => {
-              const {label, color} = STAGE_DISPLAY[s] || {label:s, color:'#666'};
-              const n = s === 'all' ? Object.values(stageCounts).reduce((a,b)=>a+b,0) : (stageCounts[s] ?? 0);
-              const active = stageFilter === s;
-              return (
-                <button key={s} onClick={() => setFilter('stage', s)}
-                  style={{padding:'4px 10px',borderRadius:'5px',fontSize:'11px',fontWeight:600,cursor:'pointer',border:'1px solid',
-                    background: active ? `${color}22` : 'transparent',
-                    borderColor: active ? color : '#222',
-                    color: active ? color : '#555'}}>
-                  {label}{n ? ` (${n})` : ''}
-                </button>
-              );
-            })}
+          {/* Stage filter dropdown */}
+          <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'12px'}}>
+            <span style={{fontSize:'10px',textTransform:'uppercase',letterSpacing:'0.1em',color:'#444',fontWeight:700,whiteSpace:'nowrap'}}>STAGE</span>
+            <select
+              value={stageFilter}
+              onChange={e => setFilter('stage', e.target.value)}
+              style={{background:'#111',border:'1px solid #2a2a2a',borderRadius:'6px',color:'#ddd',fontSize:'13px',padding:'6px 10px',outline:'none',cursor:'pointer',minWidth:'180px'}}
+            >
+              {STAGE_FILTER_ORDER.filter(s => s === 'all' || s === stageFilter || (stageCounts[s] ?? 0) > 0).map(s => {
+                const {label} = STAGE_DISPLAY[s] || {label: s};
+                const n = s === 'all' ? Object.values(stageCounts).reduce((a,b)=>a+b,0) : (stageCounts[s] ?? 0);
+                return <option key={s} value={s}>{label}{n ? ` (${n})` : ''}</option>;
+              })}
+            </select>
+            {stageFilter !== 'active' && (
+              <button onClick={() => setFilter('stage','active')}
+                style={{background:'none',border:'none',color:'#555',fontSize:'12px',cursor:'pointer',textDecoration:'underline'}}>
+                Reset
+              </button>
+            )}
           </div>
 
           {/* Search + count */}
