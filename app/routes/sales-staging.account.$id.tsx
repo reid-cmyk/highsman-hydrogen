@@ -165,24 +165,33 @@ export default function AccountDetail() {
               </div>
             </div>
 
-            {/* Quick stats strip */}
-            <div style={{marginTop:26, display:'grid', gridTemplateColumns:'repeat(5,1fr)', background:T.border, gap:1, border:`1px solid ${T.border}`}}>
-              {[
-                {l:'Days since last order', v: days===null?'—':String(days), sub:days===null?'no orders':'d', accent:days===null?T.cyan:days<=14?T.green:days<=30?T.statusWarn:T.redSystems},
-                {l:'Last order $', v:'—', sub:org.last_order_date?new Date(org.last_order_date).toLocaleDateString('en-US',{month:'numeric',day:'numeric'}):'', accent:T.text},
-                {l:'YTD revenue', v:'—', sub:'', accent:T.yellow},
-                {l:'Orders YTD', v:'—', sub:'orders', accent:T.text},
-                {l:'Reorder cadence', v:org.reorder_cadence_days?String(org.reorder_cadence_days):'—', sub:'d avg', accent:T.text},
-              ].map((s,i) => (
-                <div key={i} style={{background:T.bg, padding:'16px 18px'}}>
-                  <div style={{fontFamily:'Teko,sans-serif', fontSize:10.5, letterSpacing:'0.30em', color:T.textFaint, textTransform:'uppercase', marginBottom:4}}>{s.l}</div>
-                  <div style={{display:'flex', alignItems:'baseline', gap:6}}>
-                    <span style={{fontFamily:'Teko,sans-serif', fontSize:38, fontWeight:600, color:s.accent, lineHeight:0.9, textShadow:s.accent===T.yellow?'0 0 24px rgba(255,213,0,0.18)':'none'}}>{s.v}</span>
-                    <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle, letterSpacing:'0.10em'}}>{s.sub}</span>
-                  </div>
+            {/* Quick stats strip — data we actually have */}
+            {(() => {
+              const daysColor = days===null?T.cyan:days<=14?T.green:days<=30?T.statusWarn:T.redSystems;
+              const onboardingDone = (steps||[]).filter((s:any)=>s.status==='complete').length;
+              const onboardingTotal = 4;
+              const onboardingPct = onboardingTotal > 0 ? Math.round((onboardingDone/onboardingTotal)*100) : 0;
+              const statCells = [
+                {l:'Days since order', v:days===null?'—':String(days), sub:days===null?'no orders':'d', accent:daysColor},
+                {l:'Last order date',  v:org.last_order_date?new Date(org.last_order_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}):'—', sub:'', accent:T.text},
+                {l:'Contacts',         v:String(contacts?.length||0), sub:contacts?.length===1?'contact':'contacts', accent:T.text},
+                {l:'Budtenders',       v:org.budtender_count?String(org.budtender_count):'—', sub:'on floor', accent:T.text},
+                {l:'Onboarding',       v:onboardingDone?`${onboardingDone}/${onboardingTotal}`:'—', sub:`${onboardingPct}%`, accent:onboardingPct===100?T.green:T.yellow},
+              ];
+              return (
+                <div style={{marginTop:26, display:'grid', gridTemplateColumns:'repeat(5,1fr)', background:T.border, gap:1, border:`1px solid ${T.border}`}}>
+                  {statCells.map((s,i) => (
+                    <div key={i} style={{background:T.bg, padding:'16px 18px'}}>
+                      <div style={{fontFamily:'Teko,sans-serif', fontSize:10.5, letterSpacing:'0.30em', color:T.textFaint, textTransform:'uppercase', marginBottom:4}}>{s.l}</div>
+                      <div style={{display:'flex', alignItems:'baseline', gap:6}}>
+                        <span style={{fontFamily:'Teko,sans-serif', fontSize:38, fontWeight:600, color:s.accent, lineHeight:0.9, textShadow:s.accent===T.yellow?'0 0 24px rgba(255,213,0,0.18)':'none'}}>{s.v}</span>
+                        <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle, letterSpacing:'0.10em'}}>{s.sub}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              );
+            })()}
           </div>
 
           {/* Body grid */}
@@ -336,6 +345,51 @@ function SelectField({label, field, value, orgId, options}: {label:string; field
   );
 }
 
+// ─── Read-only field ─────────────────────────────────────────────────────────
+function ReadOnlyField({label, value, note}: {label:string; value:string; note?:string}) {
+  return (
+    <div style={{padding:'14px 16px', borderBottom:`1px solid ${T.border}`}}>
+      <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.30em', color:T.textFaint, textTransform:'uppercase', marginBottom:5}}>
+        {label}{note&&<span style={{marginLeft:8, fontFamily:'JetBrains Mono,monospace', fontSize:9, color:T.textFaint, letterSpacing:'0.10em'}}>· {note}</span>}
+      </div>
+      <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:13, color:T.textSubtle, letterSpacing:'0.02em'}}>{value}</div>
+    </div>
+  );
+}
+
+// ─── Online menus checkbox multi-select ──────────────────────────────────────
+const MENU_OPTIONS = ['AIQ','Dutchie','Weedmaps','Jane','LeafLink','Leafly','Nabis'];
+
+function OnlineMenusField({orgId, value}: {orgId:string; value:string[]}) {
+  const fetcher = useFetcher();
+  const [selected, setSelected] = useState<string[]>(Array.isArray(value)?value:[]);
+
+  const toggle = (opt: string) => {
+    const next = selected.includes(opt) ? selected.filter(s=>s!==opt) : [...selected, opt];
+    setSelected(next);
+    const fd = new FormData();
+    fd.set('intent','patch_field'); fd.set('org_id',orgId); fd.set('field','online_menus'); fd.set('value', next.join(','));
+    fetcher.submit(fd, {method:'post', action:'/api/org-update'});
+  };
+
+  return (
+    <div style={{borderBottom:`1px solid ${T.border}`}}>
+      <div style={{padding:'14px 16px 8px', fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.30em', color:T.textFaint, textTransform:'uppercase'}}>Online Menus</div>
+      <div style={{padding:'0 16px 14px', display:'flex', flexWrap:'wrap', gap:8}}>
+        {MENU_OPTIONS.map(opt => {
+          const on = selected.includes(opt);
+          return (
+            <button key={opt} type="button" onClick={()=>toggle(opt)}
+              style={{height:30, padding:'0 12px', background:on?`rgba(0,212,255,0.1)`:'transparent', border:`1px solid ${on?T.cyan:T.borderStrong}`, color:on?T.cyan:T.textSubtle, fontFamily:'JetBrains Mono,monospace', fontSize:11, letterSpacing:'0.10em', cursor:'pointer'}}>
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Fields Panel ─────────────────────────────────────────────────────────────
 function FieldsPanel({org}: {org: any}) {
   return (
@@ -354,32 +408,33 @@ function FieldsPanel({org}: {org: any}) {
       <TwoCol>
         <EditableField label="Phone" field="phone" value={org.phone} orgId={org.id} mono />
         <EditableField label="Website" field="website" value={org.website} orgId={org.id} link mono />
-        <EditableField label="Payment terms" field="payment_terms" value={org.payment_terms} orgId={org.id} />
+        <SelectField label="Payment Terms" field="payment_terms" value={org.payment_terms||''} orgId={org.id} options={['','Net 30','Net 15','Net 7','Due on receipt','COD','Prepaid']} />
         <EditableField label="Budtenders" field="budtender_count" value={org.budtender_count} orgId={org.id} mono />
       </TwoCol>
 
       <GroupLabel>Address</GroupLabel>
       <TwoCol>
-        <EditableField label="Street" field="street_address" value={org.street_address} orgId={org.id} />
-        <EditableField label="ZIP" field="zip" value={org.zip} orgId={org.id} mono />
+        <EditableField label="Street Address" field="street_address" value={org.street_address} orgId={org.id} />
         <EditableField label="City" field="city" value={org.city} orgId={org.id} />
-        <EditableField label="State" field="market_state" value={org.market_state} orgId={org.id} mono />
+        <SelectField label="State" field="market_state" value={org.market_state||''} orgId={org.id} options={['','NJ','MA','NY','RI','MO','Multi-State']} />
+        <EditableField label="ZIP" field="zip" value={org.zip} orgId={org.id} mono />
       </TwoCol>
 
       <GroupLabel>Compliance</GroupLabel>
       <TwoCol>
-        <EditableField label="License #" field="license_number" value={org.license_number} orgId={org.id} mono locked />
+        <EditableField label="License #" field="license_number" value={org.license_number} orgId={org.id} mono />
         <EditableField label="EIN" field="ein" value={org.ein} orgId={org.id} mono />
         <EditableField label="Legal name" field="legal_name" value={org.legal_name} orgId={org.id} />
-        <EditableField label="Preferred contact" field="preferred_contact_channel" value={org.preferred_contact_channel} orgId={org.id} hint="call / text / email" />
+        <SelectField label="Preferred Contact" field="preferred_contact_channel" value={org.preferred_contact_channel||''} orgId={org.id} options={['','call','text','email']} />
       </TwoCol>
 
       <GroupLabel>Operations</GroupLabel>
+      <OnlineMenusField orgId={org.id} value={org.online_menus||[]} />
       <TwoCol>
-        <EditableField label="Online menus" field="online_menus" value={org.online_menus?.join(', ')} orgId={org.id} hint="Comma-separated" />
-        <EditableField label="Reorder cadence (days)" field="reorder_cadence_days" value={org.reorder_cadence_days} orgId={org.id} mono />
-        <EditableField label="Tags" field="tags" value={org.tags?.join(', ')} orgId={org.id} hint="Comma-separated" />
-        <EditableField label="Allow split promos" field="allow_split_promos" value={org.allow_split_promos?'Yes':'No'} orgId={org.id} />
+        <ReadOnlyField label="Reorder Cadence" value={org.reorder_cadence_days?`${org.reorder_cadence_days} days avg`:'—'} note="auto-calculated" />
+        <EditableField label="Tags" field="tags" value={(org.tags||[]).join(', ')} orgId={org.id} hint="Comma-separated" />
+        <SelectField label="Allow Split Promos" field="allow_split_promos" value={org.allow_split_promos?'Yes':'No'} orgId={org.id} options={['Yes','No']} />
+        <EditableField label="Sparkplug" field="sparkplug_enabled" value={org.sparkplug_enabled?'Yes':'No'} orgId={org.id} />
       </TwoCol>
 
       <GroupLabel>Pop-ups & Training</GroupLabel>
@@ -495,14 +550,16 @@ function MiniBtn({href, children}: {href:string; children:React.ReactNode}) {
 function NotesPanel({orgId, notes, refresh}: {orgId:string; notes:any[]; refresh:()=>void}) {
   const [draft, setDraft] = useState('');
   const [composing, setComposing] = useState(false);
+  const [selectedChannel, setSelectedChannel] = useState<string|null>(null);
   const addFetcher = useFetcher();
   const delFetcher = useFetcher();
 
   const submit = () => {
     if (!draft.trim()) return;
-    const fd = new FormData(); fd.set('org_id',orgId); fd.set('body',draft);
+    const body = selectedChannel ? `[${selectedChannel}] ${draft}` : draft;
+    const fd = new FormData(); fd.set('org_id',orgId); fd.set('body',body);
     addFetcher.submit(fd, {method:'post', action:'/api/org-note-add'});
-    setDraft(''); setComposing(false); refresh();
+    setDraft(''); setComposing(false); setSelectedChannel(null); refresh();
   };
 
   const deleteNote = (noteId: string) => {
@@ -530,12 +587,18 @@ function NotesPanel({orgId, notes, refresh}: {orgId:string; notes:any[]; refresh
           </div>
         ) : (
           <div style={{display:'flex', gap:12, alignItems:'center', cursor:'text'}} onClick={()=>setComposing(true)}>
-            <div style={{width:28, height:28, borderRadius:'50%', background:`linear-gradient(135deg,${T.yellow},${T.yellowWarm})`, display:'flex', alignItems:'center', justifyContent:'center', color:'#000', fontWeight:700, fontSize:11, fontFamily:'Teko,sans-serif', flexShrink:0}}>SL</div>
+            <img src="https://agents-assets.nyc3.cdn.digitaloceanspaces.com/sky-avatar.png" alt="Sky Lima" style={{width:28,height:28,borderRadius:'50%',objectFit:'cover',flexShrink:0}} />
             <div style={{flex:1, fontSize:13, color:T.textFaint, fontStyle:'italic'}}>Add a note about this account…</div>
             <div style={{display:'flex', gap:6}}>
-              {['CALL','TEXT','EMAIL','VISIT'].map(t=>(
-                <span key={t} style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, padding:'3px 7px', border:`1px solid ${T.borderStrong}`, color:T.textSubtle, letterSpacing:'0.14em'}}>{t}</span>
-              ))}
+              {['CALL','TEXT','EMAIL','VISIT'].map(t=>{
+                const on = selectedChannel===t;
+                return (
+                  <button key={t} type="button" onClick={e=>{e.stopPropagation();setSelectedChannel(on?null:t);setComposing(true);}}
+                    style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, padding:'3px 7px', border:`1px solid ${on?T.yellow:T.borderStrong}`, color:on?T.yellow:T.textSubtle, letterSpacing:'0.14em', background:on?'rgba(255,213,0,0.08)':'transparent', cursor:'pointer'}}>
+                    {t}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
