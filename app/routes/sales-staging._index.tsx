@@ -252,129 +252,228 @@ function AnimatedStat({target,accent,label,src}:{target:number;accent:string;lab
   );
 }
 
-// ─── New Account Modal with Google Places ────────────────────────────────────
+// ─── New Account Modal — search-first, Places auto-fill, no manual state ─────
+const STATE_ABBREVIATIONS: Record<string,string> = {
+  'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR','California':'CA',
+  'Colorado':'CO','Connecticut':'CT','Delaware':'DE','Florida':'FL','Georgia':'GA',
+  'Hawaii':'HI','Idaho':'ID','Illinois':'IL','Indiana':'IN','Iowa':'IA',
+  'Kansas':'KS','Kentucky':'KY','Louisiana':'LA','Maine':'ME','Maryland':'MD',
+  'Massachusetts':'MA','Michigan':'MI','Minnesota':'MN','Mississippi':'MS',
+  'Missouri':'MO','Montana':'MT','Nebraska':'NE','Nevada':'NV','New Hampshire':'NH',
+  'New Jersey':'NJ','New Mexico':'NM','New York':'NY','North Carolina':'NC',
+  'North Dakota':'ND','Ohio':'OH','Oklahoma':'OK','Oregon':'OR','Pennsylvania':'PA',
+  'Rhode Island':'RI','South Carolina':'SC','South Dakota':'SD','Tennessee':'TN',
+  'Texas':'TX','Utah':'UT','Vermont':'VT','Virginia':'VA','Washington':'WA',
+  'West Virginia':'WV','Wisconsin':'WI','Wyoming':'WY',
+};
+
+function normalizeState(raw: string): string {
+  if (!raw) return '';
+  const upper = raw.trim().toUpperCase();
+  if (upper.length === 2) return upper;
+  return STATE_ABBREVIATIONS[raw.trim()] || upper.slice(0, 2);
+}
+
 function NewAccountModal({onClose}:{onClose:()=>void}) {
-  const fetcher=useFetcher();
-  const [query,setQuery]=useState('');
-  const [predictions,setPredictions]=useState<any[]>([]);
-  const [selected,setSelected]=useState(false);
-  const [fields,setFields]=useState({name:'',state:'NJ',city:'',street:'',zip:'',phone:'',website:''});
-  const debounceRef=useRef<any>(null);
+  const fetcher = useFetcher();
+  const navigate = useNavigate();
+  const [query, setQuery] = useState('');
+  const [predictions, setPredictions] = useState<any[]>([]);
+  const [existingMatches, setExistingMatches] = useState<any[]>([]);
+  const [apiError, setApiError] = useState<string|null>(null);
+  const [status, setStatus] = useState<'idle'|'searching'|'resolving'|'creating'>('idle');
+  const [manualMode, setManualMode] = useState(false);
+  const [manualName, setManualName] = useState('');
+  const debounceRef = useRef<any>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(()=>{
-    if (selected||query.length<3){setPredictions([]);return;}
+  // Redirect when org is created
+  useEffect(() => {
+    const d = fetcher.data as any;
+    if (d?.ok && d?.intent === 'create_account' && d?.newId) {
+      navigate(`/sales-staging/account/${d.newId}`);
+    }
+  }, [fetcher.data, navigate]);
+
+  // Debounced business search
+  useEffect(() => {
+    if (manualMode || query.length < 2) { setPredictions([]); setExistingMatches([]); setStatus('idle'); return; }
+    setStatus('searching');
     clearTimeout(debounceRef.current);
-    debounceRef.current=setTimeout(async()=>{
-      try{
-        const r=await fetch(`/api/places?q=${encodeURIComponent(query)}`);
-        const d=await r.json();
+    debounceRef.current = setTimeout(async () => {
+      // Search both Places AND existing Supabase accounts in parallel
+      const [placesResult, sbResult] = await Promise.allSettled([
+        fetch(`/api/places?q=${encodeURIComponent(query)}&type=business`).then(r=>r.json()),
+        fetch(`/api/org-search?q=${encodeURIComponent(query)}`).then(r=>r.json()),
+      ]);
+
+      if (placesResult.status==='fulfilled') {
+        const d = placesResult.value;
+        if (d.error?.includes('not set')||d.error?.includes('not configured')) {
+          setApiError('Google Places API key not set in Oxygen env vars — add GOOGLE_PLACES_API_KEY.');
+        } else { setApiError(null); }
         setPredictions(d.predictions||[]);
-      }catch{setPredictions([]);}
-    },280);
-    return ()=>clearTimeout(debounceRef.current);
-  },[query,selected]);
-
-  const pickPlace=async(p:any)=>{
-    setSelected(true);
-    setPredictions([]);
-    setQuery(p.text?.text||p.description||p.name||'');
-    try{
-      const r=await fetch(`/api/places?placeId=${p.placeId||p.place_id}`);
-      const d=await r.json();
-      if (d.address){
-        setFields({
-          name: d.address.name||p.text?.text||p.description||'',
-          state: d.address.state||'NJ',
-          city: d.address.city||'',
-          street: d.address.street||'',
-          zip: d.address.zip||'',
-          phone: d.address.phone||'',
-          website: d.address.website||'',
-        });
-        setQuery(d.address.name||p.text?.text||p.description||'');
       }
-    }catch{}
+      if (sbResult.status==='fulfilled' && Array.isArray(sbResult.value?.results)) {
+        setExistingMatches(sbResult.value.results);
+      }
+      setStatus('idle');
+    }, 300);
+    return () => clearTimeout(debounceRef.current);
+  }, [query, manualMode]);
+
+  // When user selects a prediction: resolve place details → create org → redirect
+  const selectPlace = async (p: any) => {
+    setPredictions([]);
+    setStatus('resolving');
+    const displayName = p.description || p.mainText || p.text?.text || query;
+    setQuery(`${displayName} — loading…`);
+
+    try {
+      const r = await fetch(`/api/places?placeId=${encodeURIComponent(p.placeId)}`);
+      const d = await r.json();
+      const addr = d.address || {};
+
+      // Derive market_state from address (no separate input needed)
+      const market_state = normalizeState(addr.state || '');
+
+      setQuery(addr.name || displayName);
+      setStatus('creating');
+
+      const fd = new FormData();
+      fd.set('intent', 'create_account');
+      fd.set('name', addr.name || displayName);
+      fd.set('state', market_state);
+      fd.set('city', addr.city || '');
+      fd.set('street', addr.street || '');
+      fd.set('zip', addr.zip || '');
+      fd.set('phone', addr.phone || '');
+      fd.set('website', addr.website || '');
+      fetcher.submit(fd, {method: 'post'});
+    } catch {
+      setStatus('idle');
+      setQuery(displayName);
+      setPredictions([]);
+    }
   };
 
-  const submit=()=>{
-    if (!fields.name.trim()) return;
-    const fd=new FormData();
-    fd.set('intent','create_account');
-    Object.entries(fields).forEach(([k,v])=>fd.set(k,v));
-    fetcher.submit(fd,{method:'post'});
+  // Manual fallback (no Places match)
+  const createManual = () => {
+    if (!manualName.trim()) return;
+    setStatus('creating');
+    const fd = new FormData();
+    fd.set('intent', 'create_account');
+    fd.set('name', manualName.trim());
+    fd.set('state', '');
+    fetcher.submit(fd, {method: 'post'});
   };
 
-  const isLoading=fetcher.state!=='idle';
+  const isLoading = status === 'resolving' || status === 'creating' || fetcher.state !== 'idle';
 
   return (
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999}} onClick={onClose}>
-      <div style={{background:T.surface,border:`1px solid ${T.borderStrong}`,padding:'32px',width:520,maxWidth:'90vw',position:'relative'}} onClick={e=>e.stopPropagation()}>
-        <div style={{fontFamily:'Teko,sans-serif',fontSize:24,letterSpacing:'0.20em',color:T.text,textTransform:'uppercase',marginBottom:4}}>New Account</div>
-        <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:10,color:T.textFaint,letterSpacing:'0.12em',marginBottom:20}}>Search for the dispensary to auto-fill address &amp; contact info</div>
-
-        {/* Search box */}
-        <div style={{position:'relative',marginBottom:16}}>
-          <div style={{fontFamily:'Teko,sans-serif',fontSize:10,letterSpacing:'0.30em',color:T.textFaint,textTransform:'uppercase',marginBottom:6}}>Dispensary Search *</div>
-          <input value={query} onChange={e=>{setQuery(e.target.value);setSelected(false);if(!e.target.value)setFields(f=>({...f,name:''}));}} placeholder="Type dispensary name..." autoFocus
-            style={{width:'100%',padding:'10px 12px',background:T.bg,border:`1px solid ${T.borderStrong}`,color:T.text,fontSize:14,outline:'none',boxSizing:'border-box'}}/>
-          {predictions.length>0&&(
-            <div style={{position:'absolute',top:'100%',left:0,right:0,background:T.surface,border:`1px solid ${T.borderStrong}`,zIndex:10,maxHeight:200,overflowY:'auto'}}>
-              {predictions.map((p:any,i:number)=>(
-                <div key={i} onClick={()=>pickPlace(p)}
-                  style={{padding:'10px 14px',cursor:'pointer',borderBottom:`1px solid ${T.border}`,fontFamily:'Inter,sans-serif',fontSize:13,color:T.textMuted}}
-                  onMouseEnter={e=>(e.currentTarget.style.background=T.surfaceElev)}
-                  onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
-                  <div style={{color:T.text}}>{p.text?.text||p.description||p.name}</div>
-                  {p.text?.matches&&<div style={{fontSize:11,color:T.textFaint,marginTop:2}}>{p.structuredFormat?.secondaryText?.text||''}</div>}
-                </div>
-              ))}
-            </div>
-          )}
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.88)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999,padding:16}} onClick={onClose}>
+      <div style={{background:T.surface,border:`1px solid ${T.borderStrong}`,padding:'28px',width:480,maxWidth:'100%',position:'relative'}} onClick={e=>e.stopPropagation()}>
+        <div style={{fontFamily:'Teko,sans-serif',fontSize:26,letterSpacing:'0.20em',color:T.text,textTransform:'uppercase',marginBottom:4}}>New Account</div>
+        <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:10,color:T.textFaint,letterSpacing:'0.12em',marginBottom:20}}>
+          {isLoading ? 'Creating account…' : 'Type the dispensary name to search Google Places'}
         </div>
 
-        {/* Auto-filled fields */}
-        {selected&&(
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}}>
-            {[
-              {label:'Account Name',key:'name',full:true},
-              {label:'State',key:'state'},
-              {label:'City',key:'city'},
-              {label:'Street Address',key:'street'},
-              {label:'ZIP',key:'zip'},
-              {label:'Phone',key:'phone'},
-              {label:'Website',key:'website'},
-            ].filter(f=>!f.full||true).map(f=>(
-              <div key={f.key} style={f.full?{gridColumn:'1/-1'}:{}}>
-                <div style={{fontFamily:'Teko,sans-serif',fontSize:10,letterSpacing:'0.28em',color:T.textFaint,textTransform:'uppercase',marginBottom:4}}>{f.label}</div>
-                <input value={(fields as any)[f.key]} onChange={e=>setFields(prev=>({...prev,[f.key]:e.target.value}))}
-                  style={{width:'100%',padding:'8px 10px',background:T.bg,border:`1px solid ${T.borderStrong}`,color:T.text,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+        {!manualMode ? (
+          <div style={{position:'relative'}}>
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="e.g. Premo Dispensary New Jersey"
+              autoFocus
+              disabled={isLoading}
+              style={{width:'100%',padding:'12px 14px',background:T.bg,border:`1px solid ${isLoading?T.border:T.borderStrong}`,color:T.text,fontSize:14,outline:'none',boxSizing:'border-box',fontFamily:'Inter,sans-serif'}}
+            />
+            {status==='searching'&&<div style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',fontFamily:'JetBrains Mono,monospace',fontSize:10,color:T.textFaint,letterSpacing:'0.14em'}}>searching…</div>}
+
+            {/* Dropdown — existing accounts first, then Places results */}
+            {(existingMatches.length > 0 || predictions.length > 0) && !isLoading && (
+              <div style={{position:'absolute',top:'100%',left:0,right:0,background:T.surfaceElev,border:`1px solid ${T.borderStrong}`,zIndex:20,maxHeight:300,overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,0.4)'}}>
+                {existingMatches.length > 0 && (
+                  <>
+                    <div style={{padding:'6px 16px 4px',fontFamily:'JetBrains Mono,monospace',fontSize:9.5,color:T.yellow,letterSpacing:'0.18em',textTransform:'uppercase',borderBottom:`1px solid ${T.border}`}}>Already in your database</div>
+                    {existingMatches.map((m:any)=>(
+                      <a key={m.id} href={`/sales-staging/account/${m.id}`} onClick={onClose}
+                        style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 16px',background:'rgba(255,213,0,0.04)',borderBottom:`1px solid ${T.border}`,textDecoration:'none',cursor:'pointer'}}
+                        onMouseEnter={e=>(e.currentTarget.style.background='rgba(255,213,0,0.08)')}
+                        onMouseLeave={e=>(e.currentTarget.style.background='rgba(255,213,0,0.04)')}>
+                        <div>
+                          <div style={{fontFamily:'Inter,sans-serif',fontSize:13,color:T.text}}>{m.name}</div>
+                          <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:10,color:T.textFaint,marginTop:2,letterSpacing:'0.04em'}}>{[m.market_state,m.city].filter(Boolean).join(' · ')}</div>
+                        </div>
+                        <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:9.5,color:T.yellow,letterSpacing:'0.14em',border:`1px solid ${T.yellow}44`,padding:'2px 6px'}}>OPEN →</span>
+                      </a>
+                    ))}
+                    {predictions.length > 0 && <div style={{padding:'6px 16px 4px',fontFamily:'JetBrains Mono,monospace',fontSize:9.5,color:T.textFaint,letterSpacing:'0.18em',textTransform:'uppercase',borderBottom:`1px solid ${T.border}`}}>Google Places results</div>}
+                  </>
+                )}
+                {predictions.map((p:any, i:number) => (
+                  <button key={i} type="button" onClick={() => selectPlace(p)}
+                    style={{display:'block',width:'100%',padding:'12px 16px',background:'transparent',border:'none',borderBottom:`1px solid ${T.border}`,textAlign:'left',cursor:'pointer'}}
+                    onMouseEnter={e=>(e.currentTarget.style.background=T.bg)}
+                    onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
+                    <div style={{fontFamily:'Inter,sans-serif',fontSize:14,color:T.text,marginBottom:2}}>{p.description||p.mainText||p.text?.text}</div>
+                    {p.secondaryText&&<div style={{fontFamily:'JetBrains Mono,monospace',fontSize:11,color:T.textFaint,letterSpacing:'0.04em'}}>{p.secondaryText}</div>}
+                  </button>
+                ))}
               </div>
-            ))}
+            )}
+
+            {/* API key error */}
+            {apiError && <div style={{marginTop:8,fontFamily:'JetBrains Mono,monospace',fontSize:11,color:T.redSystems,letterSpacing:'0.08em'}}>{apiError} — <button type="button" onClick={()=>setManualMode(true)} style={{background:'none',border:'none',color:T.yellow,cursor:'pointer',fontFamily:'inherit',fontSize:'inherit',textDecoration:'underline',padding:0}}>create manually instead</button></div>}
+
+            {/* No results hint */}
+            {!apiError && query.length >= 3 && predictions.length === 0 && status === 'idle' && !isLoading && (
+              <div style={{marginTop:10,fontFamily:'JetBrains Mono,monospace',fontSize:11,color:T.textFaint,letterSpacing:'0.08em'}}>
+                No results — try adding the state, e.g. "Premo NJ" ·{' '}
+                <button type="button" onClick={()=>{setManualMode(true);setManualName(query);}} style={{background:'none',border:'none',color:T.yellow,cursor:'pointer',fontFamily:'inherit',fontSize:'inherit',letterSpacing:'inherit',textDecoration:'underline',padding:0}}>
+                  create manually
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Manual mode */
+          <div>
+            <input value={manualName} onChange={e=>setManualName(e.target.value)} autoFocus placeholder="Dispensary name"
+              onKeyDown={e=>{if(e.key==='Enter')createManual();}}
+              style={{width:'100%',padding:'12px 14px',background:T.bg,border:`1px solid ${T.borderStrong}`,color:T.text,fontSize:14,outline:'none',boxSizing:'border-box'}}/>
+            <div style={{marginTop:8,fontFamily:'JetBrains Mono,monospace',fontSize:10,color:T.textFaint,letterSpacing:'0.08em'}}>
+              Address and state can be added on the account page.{' '}
+              <button type="button" onClick={()=>setManualMode(false)} style={{background:'none',border:'none',color:T.cyan,cursor:'pointer',fontFamily:'inherit',fontSize:'inherit',textDecoration:'underline',padding:0}}>
+                back to search
+              </button>
+            </div>
           </div>
         )}
 
-        {!selected&&<div style={{fontFamily:'JetBrains Mono,monospace',fontSize:11,color:T.textFaint,marginBottom:16,letterSpacing:'0.08em'}}>Search above to auto-fill, or type a name and click Create</div>}
-
-        {/* Manual name fallback if no selection */}
-        {!selected&&query.length>=2&&predictions.length===0&&(
-          <div style={{marginBottom:16}}>
-            <div style={{fontFamily:'Teko,sans-serif',fontSize:10,letterSpacing:'0.28em',color:T.textFaint,textTransform:'uppercase',marginBottom:4}}>Market State</div>
-            <select value={fields.state} onChange={e=>setFields(f=>({...f,state:e.target.value}))}
-              style={{width:'100%',padding:'10px 12px',background:T.bg,border:`1px solid ${T.borderStrong}`,color:T.text,fontSize:14,outline:'none'}}>
-              {['NJ','MA','NY','RI','MO'].map(s=><option key={s} value={s}>{s}</option>)}
-            </select>
+        {/* Status bar during creation */}
+        {isLoading && (
+          <div style={{marginTop:16,display:'flex',alignItems:'center',gap:10}}>
+            <div style={{width:6,height:6,borderRadius:'50%',background:T.yellow,animation:'pulse-ring 1.2s infinite'}}/>
+            <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:11,color:T.textFaint,letterSpacing:'0.10em'}}>
+              {status==='resolving'?'Looking up address…':'Creating account, redirecting…'}
+            </span>
           </div>
         )}
 
-        <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
-          <button onClick={onClose} style={{height:36,padding:'0 16px',background:'transparent',border:`1px solid ${T.borderStrong}`,color:T.textMuted,fontFamily:'Teko,sans-serif',fontSize:14,letterSpacing:'0.18em',textTransform:'uppercase',cursor:'pointer'}}>Cancel</button>
-          <button onClick={()=>{if(!selected&&query.length>=2)setFields(f=>({...f,name:query}));submit();}}
-            disabled={isLoading||(!selected&&query.length<2)}
-            style={{height:36,padding:'0 20px',background:isLoading?T.borderStrong:T.yellow,border:'none',color:isLoading?T.textFaint:'#000',fontFamily:'Teko,sans-serif',fontSize:14,fontWeight:600,letterSpacing:'0.18em',textTransform:'uppercase',cursor:'pointer'}}>
-            {isLoading?'Creating…':'Create Account'}
-          </button>
-        </div>
-        <div style={{marginTop:10,fontFamily:'JetBrains Mono,monospace',fontSize:10,color:T.textFaint,letterSpacing:'0.10em'}}>Creates as Untargeted. Fill in more details on the account page.</div>
+        {/* Footer buttons */}
+        {!isLoading && (
+          <div style={{display:'flex',gap:10,justifyContent:'space-between',alignItems:'center',marginTop:20}}>
+            <button onClick={onClose} style={{height:34,padding:'0 16px',background:'transparent',border:`1px solid ${T.borderStrong}`,color:T.textMuted,fontFamily:'Teko,sans-serif',fontSize:13,letterSpacing:'0.18em',textTransform:'uppercase',cursor:'pointer'}}>Cancel</button>
+            {manualMode && (
+              <button onClick={createManual} disabled={!manualName.trim()}
+                style={{height:34,padding:'0 20px',background:manualName.trim()?T.yellow:'#333',border:'none',color:manualName.trim()?'#000':T.textFaint,fontFamily:'Teko,sans-serif',fontSize:13,fontWeight:600,letterSpacing:'0.18em',textTransform:'uppercase',cursor:'pointer'}}>
+                Create
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -640,10 +739,10 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
   const daysColor=days===null?T.cyan:days<=14?T.green:days<=30?T.statusWarn:T.redSystems;
 
   return (
-    <a href={`/sales-staging/account/${org.id}`} style={{textDecoration:'none',display:'block'}} onClick={e=>{if((e.target as HTMLElement).closest('button,a[href^="tel"],a[href^="sms"],a[href^="mailto"]'))e.preventDefault();}}>
-      <div
-        onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)}
-        style={{background:hovered?T.surfaceElev:T.surface,borderTop:`1px solid ${T.border}`,borderBottom:`1px solid ${T.border}`,opacity:isProspecting&&stageFilter!=='all'?0.35:1,transition:'background 120ms'}}>
+    <div
+      onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)}
+      style={{background:hovered?T.surfaceElev:T.surface,borderTop:`1px solid ${T.border}`,borderBottom:`1px solid ${T.border}`,opacity:isProspecting&&stageFilter!=='all'?0.35:1,transition:'background 120ms'}}>
+      <div /* wrapper so actions don't get the block click */>
 
         {/* Main info row */}
         <div className="hs-card-grid" style={{display:'grid',gridTemplateColumns:'4px 56px 1fr 200px 200px',alignItems:'center',gap:0,minHeight:72}}>
@@ -662,7 +761,7 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
           {/* Identity */}
           <div style={{padding:'12px 20px 12px 14px',minWidth:0}}>
             <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-              <span style={{fontFamily:'Teko,sans-serif',fontSize:22,letterSpacing:'0.06em',fontWeight:500,color:T.text,textTransform:'uppercase',lineHeight:1}}>{org.name}</span>
+              <a href={`/sales-staging/account/${org.id}`} style={{fontFamily:'Teko,sans-serif',fontSize:22,letterSpacing:'0.06em',fontWeight:500,color:T.text,textTransform:'uppercase',lineHeight:1,textDecoration:'none'}}>{org.name}</a>
               {org.tier&&<span style={{padding:'2px 6px',border:`1px solid ${T.textSubtle}`,color:T.textSubtle,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.16em',textTransform:'uppercase'}}>TIER {org.tier}</span>}
               {isFlagged&&<span style={{display:'inline-flex',alignItems:'center',gap:4,padding:'2px 6px',border:`1px solid ${T.magenta}`,color:T.magenta,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.14em',textTransform:'uppercase'}}><FlagI s={9}/> PETE</span>}
               {isProspecting&&<span style={{padding:'2px 6px',border:`1px solid ${T.cyan}`,color:T.cyan,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.14em'}}>→ PROSPECTING</span>}
@@ -698,31 +797,96 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
           </div>
         </div>
 
-        {/* 8-button action grid — always below the info row */}
-        <div className="hs-card-actions" style={{padding:'0 56px 10px 70px',display:'grid',gridTemplateColumns:'1fr 1fr',gap:'4px 8px',borderTop:`1px solid ${T.border}`}}>
-          {/* Row 1 */}
-          <CardBtn href={phone?`tel:${phone}`:undefined} color={T.yellow} label="CALL" icon={<PhoneI s={12}/>} disabled={!phone}/>
-          <CardBtn href={phone?`sms:${phone}`:undefined} color={T.textMuted} label="TEXT" icon={<TextI s={12}/>} disabled={!phone}/>
-          {/* Row 2 */}
-          <CardBtn href={email?`mailto:${email}`:undefined} color={T.textMuted} label="EMAIL" icon={<MailI s={12}/>} disabled={!email}/>
-          <CardBtn onClick={openBrief} color={T.cyan} label="BRIEF" icon={<BookI s={12}/>}/>
-          {/* Row 3 */}
-          <CardBtn onClick={requestTraining} color={T.textMuted} label="TRAINING" icon={<StarI s={12}/>} disabled={!zohoIdNumeric}/>
-          <CardBtn onClick={sendMenu} color={T.textMuted} label="SEND MENU" icon={<SendI s={12}/>} disabled={!email}/>
-          {/* Row 4 */}
-          {isUntargeted
-            ?<CardBtn onClick={prospect} color={T.cyan} label="PROSPECT" icon={<BoxI s={12}/>}/>
-            :<CardBtn onClick={newProduct} color={T.textMuted} label="NEW PRODUCT" icon={<BoxI s={12}/>} disabled={!zohoIdNumeric}/>}
-          <CardBtn onClick={flag} color={isFlagged?T.magenta:T.redSystems} label="FLAG PETE" icon={<FlagI s={12}/>} filled={isFlagged}/>
-        </div>
+        {/* Action row — primary actions + ··· more menu */}
+        <CardActions
+          phone={phone} email={email}
+          isFlagged={isFlagged} isUntargeted={isUntargeted} zohoId={zohoIdNumeric}
+          orgId={org.id}
+          onCall={()=>{}} onText={()=>{}} onEmail={()=>{}}
+          onBrief={openBrief} onProspect={prospect} onFlag={flag}
+          onTraining={requestTraining} onSendMenu={sendMenu} onNewProduct={newProduct}
+        />
       </div>
-    </a>
+    </div>
   );
 }
 
-// ─── Card action button ───────────────────────────────────────────────────────
+// ─── Card actions — single row primary + ··· more menu ───────────────────────
+function CardActions({phone,email,isFlagged,isUntargeted,zohoId,orgId,onBrief,onProspect,onFlag,onTraining,onSendMenu,onNewProduct}: any) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState({top:0, left:0});
+  const moreRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(()=>{
+    if (!moreOpen) return;
+    // Calculate position from button so menu uses fixed positioning (won't be clipped)
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setMenuPos({top: r.top - 4, left: r.right});
+    }
+    const h=(e:MouseEvent)=>{ if (moreRef.current&&!moreRef.current.contains(e.target as Node)&&btnRef.current&&!btnRef.current.contains(e.target as Node)) setMoreOpen(false); };
+    document.addEventListener('mousedown',h);
+    return ()=>document.removeEventListener('mousedown',h);
+  },[moreOpen]);
+
+  return (
+    <div style={{padding:'6px 16px 8px 70px',display:'flex',alignItems:'center',gap:6,borderTop:`1px solid ${T.border}`,flexWrap:'nowrap',overflowX:'auto'}}>
+      {/* PROSPECT chip for untargeted — inline with identity, not a button */}
+      {isUntargeted && (
+        <button type="button" onClick={e=>{e.stopPropagation();onProspect();}}
+          style={{height:28,padding:'0 10px',background:'rgba(0,212,255,0.08)',border:`1px solid ${T.cyan}`,color:T.cyan,fontFamily:'Teko,sans-serif',fontSize:12,letterSpacing:'0.18em',textTransform:'uppercase',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:5}}>
+          <BoxI s={11}/> PROSPECT
+        </button>
+      )}
+      {/* Primary 4 */}
+      <CardBtn href={phone?`tel:${phone}`:undefined} color={phone?T.yellow:T.borderStrong} label="CALL" icon={<PhoneI s={11}/>} disabled={!phone}/>
+      <CardBtn href={phone?`sms:${phone}`:undefined} color={phone?T.textMuted:T.borderStrong} label="TEXT" icon={<TextI s={11}/>} disabled={!phone}/>
+      <CardBtn href={email?`mailto:${email}`:undefined} color={email?T.textMuted:T.borderStrong} label="EMAIL" icon={<MailI s={11}/>} disabled={!email}/>
+      <CardBtn onClick={onBrief} color={T.cyan} label="BRIEF" icon={<BookI s={11}/>}/>
+      {/* Flag Pete — red outline always, filled when flagged */}
+      <button type="button" onClick={e=>{e.stopPropagation();onFlag();}} title="Flag for Pete"
+        style={{height:30,padding:'0 9px',background:isFlagged?`rgba(255,51,85,0.15)`:'transparent',border:`1px solid ${T.redSystems}`,color:T.redSystems,display:'inline-flex',alignItems:'center',gap:5,cursor:'pointer',flexShrink:0,fontFamily:'Teko,sans-serif',fontSize:12,letterSpacing:'0.14em',textTransform:'uppercase'}}>
+        <FlagI s={11}/> FLAG PETE
+      </button>
+      {/* ··· More — uses fixed position to escape card overflow/z-index */}
+      <div style={{position:'relative',display:'inline-block'}}>
+        <button ref={btnRef} type="button" onClick={e=>{e.stopPropagation();setMoreOpen(o=>!o);}}
+          style={{height:30,padding:'0 10px',background:moreOpen?T.surfaceElev:'transparent',border:`1px solid ${T.borderStrong}`,color:T.textFaint,fontFamily:'Teko,sans-serif',fontSize:14,letterSpacing:'0.10em',cursor:'pointer'}}>
+          ···
+        </button>
+        {moreOpen&&(
+          <div ref={moreRef} style={{position:'fixed',top:menuPos.top,left:menuPos.left,transform:'translate(-100%,-100%)',background:T.surfaceElev,border:`1px solid ${T.borderStrong}`,zIndex:9999,minWidth:170,boxShadow:'0 -8px 32px rgba(0,0,0,0.7)'}} onClick={e=>e.stopPropagation()}>
+            {[
+              {label:'TRAINING',    icon:<StarI s={11}/>, onClick:()=>{onTraining();setMoreOpen(false);}},
+              {label:'SEND MENU',   icon:<SendI s={11}/>, onClick:()=>{onSendMenu();setMoreOpen(false);}},
+              {label:'NEW PRODUCT', icon:<BoxI s={11}/>,  onClick:()=>{onNewProduct();setMoreOpen(false);}},
+            ].map(item=>(
+              <button key={item.label} type="button" onClick={item.onClick}
+                style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'11px 16px',background:'transparent',border:'none',borderBottom:`1px solid ${T.border}`,color:T.textMuted,fontFamily:'Teko,sans-serif',fontSize:13,letterSpacing:'0.18em',textTransform:'uppercase',cursor:'pointer',textAlign:'left'}}
+                onMouseEnter={e=>(e.currentTarget.style.background=T.bg)}
+                onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
+                {item.icon}{item.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Card action button — fixed width, never full-width ──────────────────────
 function CardBtn({href,onClick,color,label,icon,disabled,filled}:{href?:string;onClick?:()=>void;color:string;label:string;icon:React.ReactNode;disabled?:boolean;filled?:boolean}) {
-  const style:React.CSSProperties={height:32,padding:'0 10px',background:filled?`${color}22`:disabled?'transparent':'transparent',border:`1px solid ${disabled?T.border:filled?color:color+'66'}`,color:disabled?T.border:color,fontFamily:'Teko,sans-serif',fontSize:12,letterSpacing:'0.18em',textTransform:'uppercase' as const,textDecoration:'none',display:'inline-flex',alignItems:'center',justifyContent:'center',gap:6,cursor:disabled?'default':'pointer',width:'100%',opacity:disabled?0.35:1};
+  const style:React.CSSProperties={
+    height:30, padding:'0 10px', flexShrink:0,
+    background: filled?`${color}18`:'transparent',
+    border:`1px solid ${disabled?T.borderStrong:filled?color:color+'88'}`,
+    color: disabled?T.borderStrong:color,
+    fontFamily:'Teko,sans-serif', fontSize:12, letterSpacing:'0.16em', textTransform:'uppercase' as const,
+    textDecoration:'none', display:'inline-flex', alignItems:'center', gap:6,
+    cursor: disabled?'not-allowed':'pointer', opacity: disabled?0.4:1,
+  };
   if (href&&!disabled) return <a href={href} onClick={e=>e.stopPropagation()} style={style}>{icon}{label}</a>;
-  return <button type="button" onClick={e=>{e.stopPropagation();onClick?.();}} disabled={disabled} style={style}>{icon}{label}</button>;
+  return <button type="button" onClick={e=>{e.stopPropagation();if(!disabled)onClick?.();}} style={style}>{icon}{label}</button>;
 }

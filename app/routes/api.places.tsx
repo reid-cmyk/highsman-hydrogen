@@ -18,8 +18,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const apiKey = env.GOOGLE_PLACES_API_KEY;
 
   if (!apiKey) {
-    console.warn('[api/places] GOOGLE_PLACES_API_KEY not configured');
-    return json({predictions: [], error: 'Places API not configured'}, {
+    console.warn('[api/places] GOOGLE_PLACES_API_KEY not configured — set this in Oxygen env vars');
+    return json({predictions: [], error: 'GOOGLE_PLACES_API_KEY not set'}, {
       status: 200,
       headers: {'Cache-Control': 'no-store'},
     });
@@ -80,6 +80,10 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   }
 
   // ── Autocomplete ──────────────────────────────────────────────────────
+  // type=business → search dispensary/business names, no location bias
+  // default       → street address lookup with NJ bias (existing delivery behavior)
+  const isBusiness = url.searchParams.get('type') === 'business';
+
   if (query.length < 3) {
     return json({predictions: []}, {
       headers: {'Cache-Control': 'no-store'},
@@ -93,18 +97,26 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey,
       },
-      body: JSON.stringify({
-        input: query,
-        includedPrimaryTypes: ['street_address', 'premise', 'subpremise', 'route'],
-        includedRegionCodes: ['us'],
-        locationBias: {
-          rectangle: {
-            // Bounding box roughly covering New Jersey
-            low: {latitude: 38.9, longitude: -75.6},
-            high: {latitude: 41.4, longitude: -73.9},
-          },
-        },
-      }),
+      body: JSON.stringify(
+        isBusiness
+          ? {
+              // Business search: no type filter, no location bias — find any business in the US
+              input: query,
+              includedRegionCodes: ['us'],
+            }
+          : {
+              // Address search: street addresses with NJ bias (delivery/retail use)
+              input: query,
+              includedPrimaryTypes: ['street_address', 'premise', 'subpremise', 'route'],
+              includedRegionCodes: ['us'],
+              locationBias: {
+                rectangle: {
+                  low: {latitude: 38.9, longitude: -75.6},
+                  high: {latitude: 41.4, longitude: -73.9},
+                },
+              },
+            }
+      ),
     });
 
     if (!res.ok) {
