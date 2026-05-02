@@ -33,7 +33,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         {
           headers: {
             'X-Goog-Api-Key': apiKey,
-            'X-Goog-FieldMask': 'addressComponents,formattedAddress',
+            'X-Goog-FieldMask': 'addressComponents,formattedAddress,displayName,nationalPhoneNumber,websiteUri',
           },
         },
       );
@@ -66,6 +66,9 @@ export async function loader({request, context}: LoaderFunctionArgs) {
           state,
           zip,
           display: data.formattedAddress || [street, city, state, zip].filter(Boolean).join(', '),
+          name: data.displayName?.text || '',
+          phone: data.nationalPhoneNumber || '',
+          website: data.websiteUri || '',
         },
       }, {
         headers: {'Cache-Control': 'public, max-age=86400'}, // addresses don't change
