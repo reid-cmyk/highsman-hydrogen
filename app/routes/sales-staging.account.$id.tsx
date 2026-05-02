@@ -64,6 +64,7 @@ export default function AccountDetail() {
         <div style={{display:'flex',alignItems:'center',gap:'12px',minWidth:0}}>
           <Link to="/sales-staging" style={{color:'#555',fontSize:'13px',textDecoration:'none',whiteSpace:'nowrap',flexShrink:0}}>← Accounts</Link>
           <span style={{color:'#333'}}>|</span>
+          <OrgLogo website={org.website} name={org.name} size={34} />
           <span style={{fontFamily:"'Teko',sans-serif",fontSize:'22px',fontWeight:700,color:'#c8a84b',letterSpacing:'0.06em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
             {org.name}
           </span>
@@ -429,6 +430,34 @@ function Card({title, children, action}: {title: string; children: React.ReactNo
         {action}
       </div>
       {children}
+    </div>
+  );
+}
+
+function domainFromUrl(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url.startsWith('http') ? url : `https://${url}`);
+    return u.hostname.replace(/^www\./, '');
+  } catch { return null; }
+}
+
+function OrgLogo({website, name, size = 36}: {website: string | null; name: string; size?: number}) {
+  const domain = domainFromUrl(website);
+  const [failed, setFailed] = useState(false);
+  const initials = name.split(/\s+/).slice(0,2).map(w=>w[0]?.toUpperCase()||'').join('');
+  const hue = [...name].reduce((acc,c)=>acc+c.charCodeAt(0),0) % 360;
+  if (domain && !failed) {
+    return (
+      <img src={`https://logo.clearbit.com/${domain}`} alt={name} onError={()=>setFailed(true)}
+        style={{width:size,height:size,borderRadius:'7px',objectFit:'contain',background:'#1a1a1a',flexShrink:0}} />
+    );
+  }
+  return (
+    <div style={{width:size,height:size,borderRadius:'7px',background:`hsl(${hue},30%,20%)`,
+      border:`1px solid hsl(${hue},30%,30%)`,display:'flex',alignItems:'center',justifyContent:'center',
+      color:`hsl(${hue},60%,70%)`,fontSize:size*0.35,fontWeight:700,flexShrink:0}}>
+      {initials}
     </div>
   );
 }
