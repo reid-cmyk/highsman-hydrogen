@@ -6,24 +6,24 @@
 
 import type {LoaderFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
-import {useLoaderData, useFetcher, Link, useNavigate} from '@remix-run/react';
+import {useLoaderData, useFetcher, Link, useNavigate, useRouteError, isRouteErrorResponse} from '@remix-run/react';
 import {useState, useRef, useEffect} from 'react';
 import {isStagingAuthed} from '~/lib/staging-auth';
 
 export const handle = {hideHeader: true, hideFooter: true};
 
-// Catch runtime errors and surface them instead of generic 500
+// Show actual error instead of generic 500
 export function ErrorBoundary() {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const {useRouteError} = require('@remix-run/react');
-  let error: any;
-  try { error = useRouteError(); } catch { error = {message:'unknown'}; }
+  const error = useRouteError();
+  const message = isRouteErrorResponse(error)
+    ? `${error.status} ${error.statusText}: ${JSON.stringify(error.data)}`
+    : error instanceof Error
+    ? `${error.message}\n\n${error.stack}`
+    : JSON.stringify(error, null, 2);
   return (
     <div style={{minHeight:'100vh',background:'#0A0A0A',color:'#F5F5F5',padding:40,fontFamily:'JetBrains Mono,monospace'}}>
-      <div style={{fontSize:14,color:'#FF3355',marginBottom:16,letterSpacing:'0.14em'}}>ACCOUNT DETAIL ERROR</div>
-      <pre style={{fontSize:12,color:'#C8C8C8',whiteSpace:'pre-wrap',wordBreak:'break-all',background:'#141414',padding:20,border:'1px solid #2F2F2F'}}>
-        {error instanceof Error ? `${error.message}\n\n${error.stack}` : JSON.stringify(error, null, 2)}
-      </pre>
+      <div style={{fontSize:14,color:'#FF3355',marginBottom:16,letterSpacing:'0.14em'}}>ACCOUNT DETAIL — ERROR</div>
+      <pre style={{fontSize:11,color:'#C8C8C8',whiteSpace:'pre-wrap',wordBreak:'break-all',background:'#141414',padding:20,border:'1px solid #2F2F2F',maxHeight:400,overflow:'auto'}}>{message}</pre>
       <a href="/sales-staging" style={{display:'inline-block',marginTop:20,color:'#FFD500',fontFamily:'Teko,sans-serif',fontSize:18,letterSpacing:'0.18em',textDecoration:'none'}}>← BACK TO ACCOUNTS</a>
     </div>
   );
