@@ -248,20 +248,45 @@ export default function Budtenders() {
 
       <div id="top" />
 
-      {/* TOP BANNER IMAGE */}
-      <section className="w-full" style={{background: '#000'}}>
-        <img src="https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Budtenders_Only_Banner.png?v=1775671726" alt="Highsman Budtender Championship - Budtenders Only" className="w-full h-auto block" />
-      </section>
-
-      {/* HERO */}
-      <section className="relative overflow-hidden" style={{background: '#000'}}>
-        <div className="absolute inset-0" style={{background: 'linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.7) 60%, #000 100%)'}} />
-        <div className="absolute top-0 left-0 right-0 h-1" style={{background: '#F5E100'}} />
+      {/* HERO BANNER WITH OVERLAY */}
+      <section
+        className="relative overflow-hidden"
+        style={{
+          background: '#000',
+          backgroundImage:
+            "url('https://cdn.shopify.com/s/files/1/0752/8598/7491/files/Highsman_Budtenders_Only_Banner.png?v=1775671726')",
+          backgroundSize: 'cover',
+          backgroundPosition: 'center center',
+          backgroundRepeat: 'no-repeat',
+        }}
+        aria-label="Highsman Budtender Championship hero"
+      >
+        {/* Banner scrim — heavy on the left where text lives, lighter on the right so the art still breathes */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              'linear-gradient(100deg, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.86) 35%, rgba(0,0,0,0.7) 65%, rgba(0,0,0,0.55) 100%)',
+          }}
+        />
+        {/* Top + bottom vignette to anchor edges and fade into the page */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.2) 18%, rgba(0,0,0,0.45) 75%, #000 100%)',
+          }}
+        />
+        {/* Top yellow accent rule */}
+        <div className="absolute top-0 left-0 right-0 h-1 z-30" style={{background: '#F5E100'}} />
+        {/* Top row: logo + NJ Launch pill */}
         <div className="relative z-20 px-6 md:px-16 pt-6 md:pt-7 flex items-center justify-between flex-wrap gap-3">
           <img src={`${CDN}Highsman_Logo_White.png?v=1775594430`} alt="Highsman" className="h-7 md:h-9" />
           <div className="font-label text-[9px] md:text-[10px] tracking-[0.3em] md:tracking-[0.4em] uppercase px-3 md:px-4 py-1.5 md:py-2" style={{background: '#F5E100', color: '#000'}}>NJ Launch &middot; May 7 &ndash; June 7, 2026</div>
         </div>
-        <div className="absolute right-0 bottom-0 pointer-events-none select-none leading-none" aria-hidden="true" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(280px, 45vw, 580px)', lineHeight: 0.85, color: 'rgba(245,225,0,0.06)', letterSpacing: '-0.04em'}}>34</div>
+        {/* "34" jersey-number watermark */}
+        <div className="absolute right-0 bottom-0 pointer-events-none select-none leading-none z-[5]" aria-hidden="true" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(280px, 45vw, 580px)', lineHeight: 0.85, color: 'rgba(245,225,0,0.10)', letterSpacing: '-0.04em', textShadow: '0 0 60px rgba(0,0,0,0.6)'}}>34</div>
+        {/* Hero copy block */}
         <div className="relative z-10 px-6 md:px-16 pt-12 md:pt-24 pb-16 md:pb-28 max-w-6xl">
           <div className="inline-block font-label text-[10px] tracking-[0.4em] uppercase px-3 py-1.5 mb-8" style={{background: 'rgba(245,225,0,0.15)', color: '#F5E100', border: '1px solid rgba(245,225,0,0.25)'}}>Budtender Championship &middot; NJ Only</div>
           <h1 className="font-headline uppercase tracking-tight mb-6" style={{fontSize: 'clamp(72px, 14vw, 160px)', lineHeight: 0.84, color: '#fff'}}>
