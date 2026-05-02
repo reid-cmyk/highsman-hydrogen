@@ -46,12 +46,9 @@ const STATUS: Record<string, {color: string; label: string}> = {
   new:  {color: T.cyan,       label: 'ONBOARDING'},
 };
 
-const TIER_COLOR: Record<string, string> = {
-  A: T.yellow, B: T.cyan, C: T.magenta,
-};
-
-function tierColor(tier: string | null): string {
-  return (tier && TIER_COLOR[tier]) || T.textFaint;
+// Tier pills use neutral color only — no color coding
+function tierColor(_tier: string | null): string {
+  return T.textSubtle;
 }
 
 function daysSince(dateStr: string | null): number | null {
@@ -112,6 +109,19 @@ export async function action({request, context}: ActionFunctionArgs) {
     }
     return json({ok: true, intent, org_id});
   }
+  if (intent === 'create_account') {
+    const name = String(fd.get('name') || '').trim();
+    const state = String(fd.get('state') || 'NJ');
+    if (!name) return json({ok: false, error: 'name required'}, {status: 400});
+    const sbH = {apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation'};
+    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/organizations`, {
+      method: 'POST', headers: sbH,
+      body: JSON.stringify({name, market_state: state, source: 'manual', lifecycle_stage: 'untargeted', is_multi_state: false, do_not_contact: false, risk_of_loss: false, risk_of_loss_threshold_days: 60, sparkplug_enabled: false, online_menus: [], tags: [], allow_split_promos: false, reorder_status: 'ok'}),
+    });
+    const created = await res.json();
+    const newId = Array.isArray(created) ? created[0]?.id : created?.id;
+    return json({ok: true, intent, redirect: `/sales-staging/account/${newId}`});
+  }
   return json({ok: false, error: 'unknown intent'}, {status: 400});
 }
 
@@ -136,11 +146,10 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     if (res.ok) orgs = await res.json();
   } catch {}
 
-  // Stage counts (current state filter)
+  // Stage counts — always global (all states) so stage pills always show
   let stageCounts: Record<string, number> = {};
   try {
-    const sp = new URLSearchParams({select: 'lifecycle_stage', limit: '2000'});
-    if (stateFilter !== 'ALL') sp.set('market_state', `eq.${stateFilter}`);
+    const sp = new URLSearchParams({select: 'lifecycle_stage', limit: '5000'});
     const sr = await fetch(`${base}/rest/v1/organizations?${sp}`, {headers});
     const rows: any[] = await sr.json();
     for (const r of rows) { const s = r.lifecycle_stage || 'unknown'; stageCounts[s] = (stageCounts[s] || 0) + 1; }
@@ -197,11 +206,12 @@ function LoginScreen({error}: {error?: string | null}) {
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 const STATES = ['ALL','NJ','MA','NY','RI','MO'];
 const ALL_STAGES = ['active','untargeted','prospect','contacted','qualified','sample_sent','first_order_pending','reorder_due','churned','all'];
-const STAGE_LABELS: Record<string, string> = {active:'Active', untargeted:'Untargeted', prospect:'Prospect', contacted:'Contacted', qualified:'Qualified', sample_sent:'Sample Sent', first_order_pending:'Onboarding', reorder_due:'Reorder Due', churned:'Churned', all:'All'};
+const STAGE_LABELS: Record<string, string> = {active:'Active', untargeted:'Untargeted', prospect:'Prospect', contacted:'Contacted', qualified:'Qualified', sample_sent:'Sample Sent', first_order_pending:'First Order', reorder_due:'Reorder Due', churned:'Churned', all:'All'};
 
 function Dashboard({data}: {data: any}) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
+  const [showNewAccount, setShowNewAccount] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const stateFilter: string = data.stateFilter || 'ALL';
   const stageFilter: string = data.stageFilter || 'active';
@@ -260,9 +270,10 @@ function Dashboard({data}: {data: any}) {
               </div>
             </div>
             <div style={{display:'flex', alignItems:'center', gap:10}}>
-              <button style={{height:36, padding:'0 14px', background:'transparent', border:`1px solid ${T.borderStrong}`, color:T.textMuted, fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.20em', textTransform:'uppercase', cursor:'pointer'}}>Export CSV</button>
-              <button style={{height:36, padding:'0 16px', background:T.yellow, border:`1px solid ${T.yellow}`, color:'#000', fontFamily:'Teko,sans-serif', fontWeight:600, fontSize:14, letterSpacing:'0.20em', textTransform:'uppercase', cursor:'pointer'}}>+ New Account</button>
+              <button onClick={() => downloadCSV(filtered, stateFilter)} style={{height:36, padding:'0 14px', background:'transparent', border:`1px solid ${T.borderStrong}`, color:T.textMuted, fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.20em', textTransform:'uppercase', cursor:'pointer'}}>Export CSV</button>
+              <button onClick={() => setShowNewAccount(true)} style={{height:36, padding:'0 16px', background:T.yellow, border:`1px solid ${T.yellow}`, color:'#000', fontFamily:'Teko,sans-serif', fontWeight:600, fontSize:14, letterSpacing:'0.20em', textTransform:'uppercase', cursor:'pointer'}}>+ New Account</button>
             </div>
+            {showNewAccount && <NewAccountModal onClose={() => setShowNewAccount(false)} />}
           </div>
 
           {/* Stats strip — numbers count up from 0 on load */}
@@ -300,7 +311,7 @@ function Dashboard({data}: {data: any}) {
             <div style={{display:'flex', alignItems:'center', gap:22, marginTop:14}}>
               <div style={{fontFamily:'Teko,sans-serif', fontSize:11, letterSpacing:'0.30em', color:T.textFaint, textTransform:'uppercase', minWidth:50}}>Stage</div>
               <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
-                {ALL_STAGES.filter(s => s==='all' || s===stageFilter || (stageCounts[s]??0)>0).map(s => {
+                {ALL_STAGES.filter(s => s==='all' || (stageCounts[s]??0)>0).map(s => {
                   const active = stageFilter===s;
                   const n = s==='all' ? (Object.values(stageCounts) as number[]).reduce((a,b)=>a+b,0) : (stageCounts[s]??0);
                   return (
@@ -361,7 +372,7 @@ function TopBar() {
         </div>
         <div style={{width:1, height:20, background:T.border}} />
         <div style={{display:'flex', alignItems:'center', gap:8}}>
-          <div style={{width:28, height:28, borderRadius:'50%', background:`linear-gradient(135deg, ${T.yellow}, ${T.yellowWarm})`, display:'flex', alignItems:'center', justifyContent:'center', color:'#000', fontWeight:700, fontSize:11, fontFamily:'Teko,sans-serif'}}>SL</div>
+          <img src="https://agents-assets.nyc3.cdn.digitaloceanspaces.com/sky-avatar.png" alt="Sky Lima" style={{width:28,height:28,borderRadius:'50%',objectFit:'cover'}} />
           <span style={{fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.14em', color:T.textMuted}}>SKY LIMA</span>
         </div>
         <div style={{width:1, height:20, background:T.border}} />
@@ -527,39 +538,88 @@ function AccountCard({org, stageFilter}: {org: OrgRow; stageFilter: string}) {
           )}
         </div>
 
-        {/* Actions */}
-        <div style={{padding:'14px 20px 14px 16px', borderLeft:`1px solid ${T.border}`, height:'100%', display:'flex', alignItems:'center', justifyContent:'flex-end', gap:8}}>
-          {isUntargeted && (
-            <button type="button" onClick={(e)=>{e.stopPropagation();prospect();}}
-              style={{height:36, minWidth:64, padding:'0 12px', background:'transparent', border:`1px solid ${T.cyan}`, color:T.cyan, fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.20em', textTransform:'uppercase', cursor:'pointer', display:'inline-flex', alignItems:'center', gap:7}}>
-              PROSPECT
-            </button>
+        {/* Actions — fixed set, grayed when unavailable */}
+        <div style={{padding:'14px 20px 14px 16px', borderLeft:`1px solid ${T.border}`, height:'100%', display:'flex', alignItems:'center', justifyContent:'flex-end', gap:6}}>
+          {isUntargeted && !isProspecting && (
+            <Btn onClick={(e)=>{e.stopPropagation();prospect();}} color={T.cyan} label="PROSPECT" icon={null} />
           )}
-          {phone && (
-            <a href={`tel:${phone}`} onClick={e=>e.stopPropagation()}
-              style={{height:36, minWidth:64, padding:'0 12px', background:'transparent', border:`1px solid ${T.yellow}`, color:T.yellow, fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.20em', textTransform:'uppercase', textDecoration:'none', display:'inline-flex', alignItems:'center', gap:7}}>
-              <PhoneI size={13}/> CALL
-            </a>
-          )}
-          {phone && (
-            <a href={`sms:${phone}`} onClick={e=>e.stopPropagation()}
-              style={{height:36, minWidth:52, padding:'0 12px', background:'transparent', border:`1px solid ${T.borderStrong}`, color:T.textMuted, fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.20em', textTransform:'uppercase', textDecoration:'none', display:'inline-flex', alignItems:'center', gap:7}}>
-              <TextI size={13}/> TEXT
-            </a>
-          )}
-          {email && (
-            <a href={`mailto:${email}`} onClick={e=>e.stopPropagation()}
-              style={{height:36, minWidth:64, padding:'0 12px', background:'transparent', border:`1px solid ${T.borderStrong}`, color:T.textMuted, fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.20em', textTransform:'uppercase', textDecoration:'none', display:'inline-flex', alignItems:'center', gap:7}}>
-              <MailI size={13}/> EMAIL
-            </a>
-          )}
+          <Btn href={phone?`tel:${phone}`:undefined} onClick={phone?undefined:(e)=>e.stopPropagation()} color={phone?T.yellow:T.borderStrong} label="CALL" icon={<PhoneI size={12}/>} disabled={!phone} />
+          <Btn href={phone?`sms:${phone}`:undefined} onClick={phone?undefined:(e)=>e.stopPropagation()} color={phone?T.textMuted:T.borderStrong} label="TEXT" icon={<TextI size={12}/>} disabled={!phone} />
+          <Btn href={email?`mailto:${email}`:undefined} onClick={email?undefined:(e)=>e.stopPropagation()} color={email?T.textMuted:T.borderStrong} label="EMAIL" icon={<MailI size={12}/>} disabled={!email} />
           <button type="button" onClick={(e)=>{e.stopPropagation();flagPete();}} title="Flag for Pete"
-            style={{height:36, width:36, background:isFlagged?'rgba(255,59,127,0.08)':'transparent', border:`1px solid ${isFlagged?T.magenta:T.borderStrong}`, color:isFlagged?T.magenta:T.textFaint, display:'inline-flex', alignItems:'center', justifyContent:'center', cursor:'pointer'}}>
+            style={{height:36, width:36, flexShrink:0, background:isFlagged?'rgba(255,59,127,0.08)':'transparent', border:`1px solid ${isFlagged?T.magenta:T.borderStrong}`, color:isFlagged?T.magenta:T.textFaint, display:'inline-flex', alignItems:'center', justifyContent:'center', cursor:'pointer'}}>
             <FlagI size={14}/>
           </button>
         </div>
       </div>
     </a>
+  );
+}
+
+// ─── CSV export ──────────────────────────────────────────────────────────────
+function downloadCSV(orgs: OrgRow[], stateFilter: string) {
+  const headers = ['Name','State','City','Phone','Lifecycle','Tier','Last Order Date','License #','Website','Reorder Status','Tags'];
+  const rows = orgs.map(o => [
+    `"${(o.name||'').replace(/"/g,'""')}"`,
+    o.market_state||'',
+    `"${(o.city||'').replace(/"/g,'""')}"`,
+    o.phone||'',
+    o.lifecycle_stage||'',
+    o.tier||'',
+    o.last_order_date||'',
+    o.license_number||'',
+    o.website||'',
+    o.reorder_status||'',
+    `"${((o.tags as any)||[]).join(', ')}"`,
+  ].join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], {type: 'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `highsman-accounts-${stateFilter.toLowerCase()}-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+// ─── New Account modal ────────────────────────────────────────────────────────
+function NewAccountModal({onClose}: {onClose: () => void}) {
+  const fetcher = useFetcher();
+  const [name, setName] = useState('');
+  const [state, setState] = useState('NJ');
+
+  const submit = () => {
+    if (!name.trim()) return;
+    const fd = new FormData();
+    fd.set('intent', 'create_account'); fd.set('name', name); fd.set('state', state);
+    fetcher.submit(fd, {method: 'post'});
+    onClose();
+  };
+
+  return (
+    <div style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.8)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999}} onClick={onClose}>
+      <div style={{background:T.surface, border:`1px solid ${T.borderStrong}`, padding:'32px', width:480, maxWidth:'90vw'}} onClick={e=>e.stopPropagation()}>
+        <div style={{fontFamily:'Teko,sans-serif', fontSize:24, letterSpacing:'0.20em', color:T.text, textTransform:'uppercase', marginBottom:24}}>New Account</div>
+        <div style={{display:'flex', flexDirection:'column', gap:16}}>
+          <div>
+            <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.30em', color:T.textFaint, textTransform:'uppercase', marginBottom:6}}>Account Name *</div>
+            <input value={name} onChange={e=>setName(e.target.value)} placeholder="Dispensary name" autoFocus
+              onKeyDown={e=>{if(e.key==='Enter')submit(); if(e.key==='Escape')onClose();}}
+              style={{width:'100%', padding:'10px 12px', background:T.bg, border:`1px solid ${T.borderStrong}`, color:T.text, fontSize:14, outline:'none', boxSizing:'border-box'}} />
+          </div>
+          <div>
+            <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.30em', color:T.textFaint, textTransform:'uppercase', marginBottom:6}}>Market State</div>
+            <select value={state} onChange={e=>setState(e.target.value)}
+              style={{width:'100%', padding:'10px 12px', background:T.bg, border:`1px solid ${T.borderStrong}`, color:T.text, fontSize:14, outline:'none'}}>
+              {['NJ','MA','NY','RI','MO'].map(s=><option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+        </div>
+        <div style={{display:'flex', gap:10, marginTop:24, justifyContent:'flex-end'}}>
+          <button onClick={onClose} style={{height:36, padding:'0 16px', background:'transparent', border:`1px solid ${T.borderStrong}`, color:T.textMuted, fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.18em', textTransform:'uppercase', cursor:'pointer'}}>Cancel</button>
+          <button onClick={submit} disabled={!name.trim()} style={{height:36, padding:'0 20px', background:name.trim()?T.yellow:'#333', border:'none', color:name.trim()?'#000':T.textFaint, fontFamily:'Teko,sans-serif', fontSize:14, fontWeight:600, letterSpacing:'0.18em', textTransform:'uppercase', cursor:name.trim()?'pointer':'default'}}>Create Account</button>
+        </div>
+        <div style={{marginTop:12, fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textFaint, letterSpacing:'0.10em'}}>Account will be created as Untargeted. Fill in details on the account page.</div>
+      </div>
+    </div>
   );
 }
 
@@ -593,6 +653,13 @@ function AnimatedStat({target, accent, label, src}: {target: number; accent: str
       </div>
     </div>
   );
+}
+
+// ─── Consistent action button ────────────────────────────────────────────────
+function Btn({href, onClick, color, label, icon, disabled}: {href?:string; onClick?:(e:any)=>void; color:string; label:string; icon:React.ReactNode; disabled?:boolean}) {
+  const style: React.CSSProperties = {height:36, minWidth:62, padding:'0 10px', background:'transparent', border:`1px solid ${disabled?T.border:color}`, color:disabled?T.border:color, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.18em', textTransform:'uppercase' as const, textDecoration:'none', display:'inline-flex', alignItems:'center', justifyContent:'center', gap:6, cursor:disabled?'default':'pointer', flexShrink:0, opacity:disabled?0.4:1};
+  if (href && !disabled) return <a href={href} onClick={onClick} style={style}>{icon}{label}</a>;
+  return <button type="button" onClick={onClick} disabled={disabled} style={style}>{icon}{label}</button>;
 }
 
 // ─── Sweep line animation ─────────────────────────────────────────────────────
