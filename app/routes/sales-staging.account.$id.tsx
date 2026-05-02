@@ -610,7 +610,7 @@ function ContactsPanel({contacts, orgId, refresh}: {contacts: any[]; orgId: stri
 
       {/* Add contact form */}
       {adding && (
-        <fetcher.Form method="post" action="/api/contact-create" style={{padding:'14px 16px',borderBottom:`1px solid ${T.border}`,background:T.surfaceElev}}>
+        <form onSubmit={e=>{e.preventDefault();const fd=new FormData(e.currentTarget);fetcher.submit(fd,{method:'post',action:'/api/contact-create'});}} style={{padding:'14px 16px',borderBottom:`1px solid ${T.border}`,background:T.surfaceElev}}>
           <input type="hidden" name="org_id" value={orgId}/>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
             {[
@@ -637,7 +637,7 @@ function ContactsPanel({contacts, orgId, refresh}: {contacts: any[]; orgId: stri
             style={{height:32,padding:'0 16px',background:T.yellow,border:'none',color:'#000',fontFamily:'Teko,sans-serif',fontSize:13,fontWeight:600,letterSpacing:'0.18em',textTransform:'uppercase',cursor:'pointer'}}>
             {fetcher.state!=='idle'?'Saving…':'Save Contact'}
           </button>
-        </fetcher.Form>
+        </form>
       )}
       {contacts.length === 0 && <div style={{padding:'20px 16px', fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint, letterSpacing:'0.10em'}}>No contacts</div>}
       {contacts.map((c:any, i:number) => {
