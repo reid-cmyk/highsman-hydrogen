@@ -25,6 +25,35 @@ function daysSince(dateStr: string | null): number | null {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
 }
 
+function domainFromUrl(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url.startsWith('http') ? url : `https://${url}`);
+    return u.hostname.replace(/^www\./, '');
+  } catch { return null; }
+}
+
+function OrgLogo({website, name, size = 36}: {website: string | null; name: string; size?: number}) {
+  const domain = domainFromUrl(website);
+  const [failed, setFailed] = useState(false);
+  const initials = name.split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() || '').join('');
+  const hue = [...name].reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
+  if (domain && !failed) {
+    return (
+      <img src={`https://logo.clearbit.com/${domain}`} alt={name}
+        onError={() => setFailed(true)}
+        style={{width:size,height:size,borderRadius:'6px',objectFit:'contain',background:'#1a1a1a',flexShrink:0}} />
+    );
+  }
+  return (
+    <div style={{width:size,height:size,borderRadius:'6px',background:`hsl(${hue},30%,20%)`,
+      border:`1px solid hsl(${hue},30%,30%)`,display:'flex',alignItems:'center',justifyContent:'center',
+      color:`hsl(${hue},60%,70%)`,fontSize:size*0.35,fontWeight:700,flexShrink:0,letterSpacing:'-0.02em'}}>
+      {initials}
+    </div>
+  );
+}
+
 // ─── Action ──────────────────────────────────────────────────────────────────
 
 export async function action({request, context}: ActionFunctionArgs) {
@@ -395,8 +424,10 @@ function OrgCard({org, stageFilter}: {org: OrgRow; stageFilter: string}) {
     }}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'12px'}}>
 
-        {/* Left: name + meta */}
-        <div style={{flex:1,minWidth:0}}>
+        {/* Left: logo + name + meta */}
+        <div style={{display:'flex',alignItems:'center',gap:'10px',flex:1,minWidth:0}}>
+          <OrgLogo website={(org as any).website} name={org.name} size={36} />
+          <div style={{flex:1,minWidth:0}}>
           <div style={{display:'flex',alignItems:'center',gap:'7px',marginBottom:'4px',flexWrap:'wrap'}}>
             <span style={{fontWeight:700,fontSize:'14px',color:'#f0f0f0',letterSpacing:'-0.01em'}}>
               {org.name}
@@ -424,6 +455,7 @@ function OrgCard({org, stageFilter}: {org: OrgRow; stageFilter: string}) {
                 </span>
               : <span style={{fontSize:'12px',color:'#f59e0b',fontWeight:600}}>No orders yet</span>
             }
+          </div>
           </div>
         </div>
 
