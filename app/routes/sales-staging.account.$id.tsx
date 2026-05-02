@@ -8,7 +8,7 @@
 import type {LoaderFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {useLoaderData, useFetcher, Link, useRevalidator} from '@remix-run/react';
-import {useState, useRef, useEffect, useCallback} from 'react';
+import {useState, useRef, useEffect} from 'react';
 import {isStagingAuthed} from '~/lib/staging-auth';
 
 export const handle = {hideHeader: true, hideFooter: true};
@@ -130,23 +130,64 @@ export default function AccountDetail() {
 
 function DetailsForm({org, onSaved}: {org: any; onSaved: () => void}) {
   return (
-    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
-      <EditableSelect label="Lifecycle" field="lifecycle_stage" value={org.lifecycle_stage} orgId={org.id} options={LC_OPTIONS} onSaved={onSaved} />
-      <EditableSelect label="Tier" field="tier" value={org.tier || ''} orgId={org.id} options={TIER_OPTIONS} onSaved={onSaved} />
-      <EditableText label="Market State" field="market_state" value={org.market_state} orgId={org.id} onSaved={onSaved} />
-      <EditableText label="City" field="city" value={org.city} orgId={org.id} onSaved={onSaved} />
-      <EditableText label="Phone" field="phone" value={org.phone} orgId={org.id} onSaved={onSaved} />
-      <EditableText label="Website" field="website" value={org.website} orgId={org.id} onSaved={onSaved} href={org.website} />
-      <EditableText label="License #" field="license_number" value={org.license_number} orgId={org.id} onSaved={onSaved} />
-      <EditableText label="EIN" field="ein" value={org.ein} orgId={org.id} onSaved={onSaved} />
-      <EditableText label="Payment Terms" field="payment_terms" value={org.payment_terms} orgId={org.id} onSaved={onSaved} />
-      <EditableSelect label="Reorder Status" field="reorder_status" value={org.reorder_status} orgId={org.id} options={REORDER_OPTIONS} onSaved={onSaved} />
-      <EditableText label="Last Order" field="last_order_date" value={org.last_order_date} orgId={org.id} onSaved={onSaved} />
-      <EditableText label="Budtenders" field="budtender_count" value={org.budtender_count} orgId={org.id} onSaved={onSaved} />
-      <EditableText label="Online Menus" field="online_menus" value={org.online_menus?.join(', ')} orgId={org.id} onSaved={onSaved} hint="Comma-separated" />
-      <EditableToggle label="Do Not Contact" field="do_not_contact" value={org.do_not_contact} orgId={org.id} onSaved={onSaved} />
-      <EditableToggle label="Sparkplug" field="sparkplug_enabled" value={org.sparkplug_enabled} orgId={org.id} onSaved={onSaved} />
-      <EditableText label="Tags" field="tags" value={org.tags?.join(', ')} orgId={org.id} onSaved={onSaved} hint="Comma-separated" />
+    <div style={{display:'flex',flexDirection:'column',gap:'0'}}>
+      {/* Status row */}
+      <SectionLabel>Status</SectionLabel>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'14px'}}>
+        <EditableSelect label="Lifecycle" field="lifecycle_stage" value={org.lifecycle_stage} orgId={org.id} options={LC_OPTIONS} onSaved={onSaved} />
+        <EditableSelect label="Tier" field="tier" value={org.tier || ''} orgId={org.id} options={TIER_OPTIONS} onSaved={onSaved} />
+        <EditableSelect label="Reorder Status" field="reorder_status" value={org.reorder_status} orgId={org.id} options={REORDER_OPTIONS} onSaved={onSaved} />
+        <EditableText label="Last Order Date" field="last_order_date" value={org.last_order_date} orgId={org.id} onSaved={onSaved} hint="YYYY-MM-DD" />
+      </div>
+
+      {/* Contact row */}
+      <SectionLabel>Contact</SectionLabel>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'14px'}}>
+        <EditableText label="Phone" field="phone" value={org.phone} orgId={org.id} onSaved={onSaved} />
+        <EditableText label="Website" field="website" value={org.website} orgId={org.id} onSaved={onSaved} href={org.website} />
+        <EditableText label="Payment Terms" field="payment_terms" value={org.payment_terms} orgId={org.id} onSaved={onSaved} />
+        <EditableText label="Budtenders" field="budtender_count" value={org.budtender_count} orgId={org.id} onSaved={onSaved} />
+      </div>
+
+      {/* Address */}
+      <SectionLabel>Address</SectionLabel>
+      <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:'10px',marginBottom:'14px'}}>
+        <EditableText label="Street Address" field="street_address" value={org.street_address} orgId={org.id} onSaved={onSaved} />
+        <EditableText label="Zip" field="zip" value={org.zip} orgId={org.id} onSaved={onSaved} />
+        <EditableText label="City" field="city" value={org.city} orgId={org.id} onSaved={onSaved} />
+        <EditableText label="State" field="market_state" value={org.market_state} orgId={org.id} onSaved={onSaved} />
+      </div>
+
+      {/* Compliance */}
+      <SectionLabel>Compliance</SectionLabel>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'14px'}}>
+        <EditableText label="License #" field="license_number" value={org.license_number} orgId={org.id} onSaved={onSaved} />
+        <EditableText label="EIN" field="ein" value={org.ein} orgId={org.id} onSaved={onSaved} />
+        <EditableText label="Legal Name" field="legal_name" value={org.legal_name} orgId={org.id} onSaved={onSaved} />
+        <EditableText label="Preferred Contact" field="preferred_contact_channel" value={org.preferred_contact_channel} orgId={org.id} onSaved={onSaved} hint="call / text / email" />
+      </div>
+
+      {/* Pop-ups & Training */}
+      <SectionLabel>Pop-ups & Training</SectionLabel>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'14px'}}>
+        <EditableText label="Pop-up Email" field="pop_up_email" value={org.pop_up_email} orgId={org.id} onSaved={onSaved} />
+        <EditableText label="Pop-up Link" field="pop_up_link" value={org.pop_up_link} orgId={org.id} onSaved={onSaved} href={org.pop_up_link} />
+        <EditableText label="Last Pop-up Date" field="last_pop_up_date" value={org.last_pop_up_date} orgId={org.id} onSaved={onSaved} hint="YYYY-MM-DD" />
+        <EditableText label="Training Email" field="staff_training_email" value={org.staff_training_email} orgId={org.id} onSaved={onSaved} />
+        <EditableText label="Training Link" field="staff_training_link" value={org.staff_training_link} orgId={org.id} onSaved={onSaved} href={org.staff_training_link} />
+        <EditableText label="Last Training Date" field="last_staff_training_date" value={org.last_staff_training_date} orgId={org.id} onSaved={onSaved} hint="YYYY-MM-DD" />
+      </div>
+
+      {/* Ops */}
+      <SectionLabel>Operations</SectionLabel>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
+        <EditableText label="Online Menus" field="online_menus" value={org.online_menus?.join(', ')} orgId={org.id} onSaved={onSaved} hint="Comma-separated" />
+        <EditableText label="Reorder Cadence (days)" field="reorder_cadence_days" value={org.reorder_cadence_days} orgId={org.id} onSaved={onSaved} />
+        <EditableText label="Tags" field="tags" value={org.tags?.join(', ')} orgId={org.id} onSaved={onSaved} hint="Comma-separated" />
+        <EditableToggle label="Allow Split Promos" field="allow_split_promos" value={org.allow_split_promos} orgId={org.id} onSaved={onSaved} />
+        <EditableToggle label="Do Not Contact" field="do_not_contact" value={org.do_not_contact} orgId={org.id} onSaved={onSaved} />
+        <EditableToggle label="Sparkplug" field="sparkplug_enabled" value={org.sparkplug_enabled} orgId={org.id} onSaved={onSaved} />
+      </div>
     </div>
   );
 }
@@ -393,8 +434,6 @@ function Card({title, children, action}: {title: string; children: React.ReactNo
   );
 }
 
-<<<<<<< Updated upstream
-=======
 function domainFromUrl(url: string | null): string | null {
   if (!url) return null;
   try {
@@ -403,7 +442,7 @@ function domainFromUrl(url: string | null): string | null {
   } catch { return null; }
 }
 
-function OrgLogo({website, name, size = 48}: {website: string | null; name: string; size?: number}) {
+function OrgLogo({website, name, size = 40}: {website: string | null; name: string; size?: number}) {
   const domain = domainFromUrl(website);
   const [failed, setFailed] = useState(false);
   const initials = name.split(/\s+/).slice(0,2).map(w=>w[0]?.toUpperCase()||'').join('');
@@ -427,7 +466,6 @@ function SectionLabel({children}: {children: React.ReactNode}) {
   return <div style={{fontSize:'10px',textTransform:'uppercase',letterSpacing:'0.1em',color:'#444',fontWeight:700,marginBottom:'8px',marginTop:'4px',borderBottom:'1px solid rgba(255,255,255,0.04)',paddingBottom:'4px'}}>{children}</div>;
 }
 
->>>>>>> Stashed changes
 function LifecycleBadge({lc}: {lc: string}) {
   const colors: Record<string,string> = {active:'#22C55E',churned:'#6b7280',untargeted:'#444',dormant:'#f59e0b',first_order_pending:'#3b82f6'};
   const c = colors[lc] || '#666';
