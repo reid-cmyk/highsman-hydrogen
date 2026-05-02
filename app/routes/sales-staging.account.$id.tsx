@@ -67,6 +67,15 @@ export default function AccountDetail() {
   const {authenticated, org, contacts, notes, steps} = useLoaderData<typeof loader>() as any;
   const [, rerender] = useState(0);
   const refresh = () => rerender(n => n + 1);
+  const [stateRank, setStateRank] = useState<{rank:number|null; total:number|null; loading:boolean}>({rank:null, total:null, loading:true});
+
+  useEffect(() => {
+    if (!org?.market_state) { setStateRank({rank:null, total:null, loading:false}); return; }
+    fetch(`/api/state-rank?state=${encodeURIComponent(org.market_state)}&name=${encodeURIComponent(org.name||'')}`)
+      .then(r => r.json())
+      .then(d => setStateRank({rank:d.rank||null, total:d.total||null, loading:false}))
+      .catch(() => setStateRank({rank:null, total:null, loading:false}));
+  }, [org?.id]);
 
   if (!authenticated) return <div style={{minHeight:'100vh',background:T.bg,display:'flex',alignItems:'center',justifyContent:'center'}}><Link to="/sales-staging" style={{color:T.yellow,fontFamily:'Teko,sans-serif',fontSize:18,letterSpacing:'0.18em',textDecoration:'none'}}>← BACK TO LOGIN</Link></div>;
   if (!org) return <div style={{minHeight:'100vh',background:T.bg,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:16}}><div style={{fontFamily:'Teko,sans-serif',fontSize:24,letterSpacing:'0.20em',color:T.textFaint,textTransform:'uppercase'}}>Account not found</div><Link to="/sales-staging" style={{color:T.yellow,fontFamily:'JetBrains Mono,monospace',fontSize:12,textDecoration:'none'}}>← back to list</Link></div>;
@@ -173,8 +182,8 @@ export default function AccountDetail() {
               const statCells = [
                 {l:'Days since order', v:days===null?'—':String(days), sub:days===null?'no orders':'d', accent:daysColor},
                 {l:'Last order date',  v:org.last_order_date?new Date(org.last_order_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}):'—', sub:'', accent:T.text},
-                {l:'Orders (all time)', v:'—', sub:'coming soon', accent:T.textFaint},
-                {l:'State rank',        v:'—', sub:'vs. roster', accent:T.textFaint},
+                {l:'Orders (all time)', v:org.orders_count>0?String(org.orders_count):'0', sub:org.orders_count===1?'order':'orders', accent:org.orders_count>0?T.text:T.textFaint},
+                {l:'State rank', v:stateRank.loading?'…':stateRank.rank?`#${stateRank.rank}`:'—', sub:stateRank.total?`of ${stateRank.total} in ${org.market_state}`:'vs. roster', accent:stateRank.rank?T.cyan:T.textFaint},
                 {l:'Contacts',         v:String(contacts?.length||0), sub:contacts?.length===1?'contact':'contacts', accent:T.text},
                 {l:'Budtenders',       v:org.budtender_count?String(org.budtender_count):'—', sub:'on floor', accent:T.text},
                 {l:'Onboarding',       v:onboardingDone?`${onboardingDone}/${onboardingTotal}`:'—', sub:`${onboardingPct}%`, accent:onboardingPct===100?T.green:T.yellow},
