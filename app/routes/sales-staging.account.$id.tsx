@@ -162,13 +162,28 @@ function DetailsForm({org, onSaved}: {org: any; onSaved: () => void}) {
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'14px'}}>
         <EditableText label="License #" field="license_number" value={org.license_number} orgId={org.id} onSaved={onSaved} />
         <EditableText label="EIN" field="ein" value={org.ein} orgId={org.id} onSaved={onSaved} />
+        <EditableText label="Legal Name" field="legal_name" value={org.legal_name} orgId={org.id} onSaved={onSaved} />
+        <EditableText label="Preferred Contact" field="preferred_contact_channel" value={org.preferred_contact_channel} orgId={org.id} onSaved={onSaved} hint="call / text / email" />
+      </div>
+
+      {/* Pop-ups & Training */}
+      <SectionLabel>Pop-ups & Training</SectionLabel>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'14px'}}>
+        <EditableText label="Pop-up Email" field="pop_up_email" value={org.pop_up_email} orgId={org.id} onSaved={onSaved} />
+        <EditableText label="Pop-up Link" field="pop_up_link" value={org.pop_up_link} orgId={org.id} onSaved={onSaved} href={org.pop_up_link} />
+        <EditableText label="Last Pop-up Date" field="last_pop_up_date" value={org.last_pop_up_date} orgId={org.id} onSaved={onSaved} hint="YYYY-MM-DD" />
+        <EditableText label="Training Email" field="staff_training_email" value={org.staff_training_email} orgId={org.id} onSaved={onSaved} />
+        <EditableText label="Training Link" field="staff_training_link" value={org.staff_training_link} orgId={org.id} onSaved={onSaved} href={org.staff_training_link} />
+        <EditableText label="Last Training Date" field="last_staff_training_date" value={org.last_staff_training_date} orgId={org.id} onSaved={onSaved} hint="YYYY-MM-DD" />
       </div>
 
       {/* Ops */}
       <SectionLabel>Operations</SectionLabel>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
         <EditableText label="Online Menus" field="online_menus" value={org.online_menus?.join(', ')} orgId={org.id} onSaved={onSaved} hint="Comma-separated" />
+        <EditableText label="Reorder Cadence (days)" field="reorder_cadence_days" value={org.reorder_cadence_days} orgId={org.id} onSaved={onSaved} />
         <EditableText label="Tags" field="tags" value={org.tags?.join(', ')} orgId={org.id} onSaved={onSaved} hint="Comma-separated" />
+        <EditableToggle label="Allow Split Promos" field="allow_split_promos" value={org.allow_split_promos} orgId={org.id} onSaved={onSaved} />
         <EditableToggle label="Do Not Contact" field="do_not_contact" value={org.do_not_contact} orgId={org.id} onSaved={onSaved} />
         <EditableToggle label="Sparkplug" field="sparkplug_enabled" value={org.sparkplug_enabled} orgId={org.id} onSaved={onSaved} />
       </div>

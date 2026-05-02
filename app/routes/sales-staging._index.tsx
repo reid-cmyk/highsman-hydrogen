@@ -314,10 +314,10 @@ function Dashboard({data}: {data: any}) {
               onChange={e => setFilter('stage', e.target.value)}
               style={{background:'#111',border:'1px solid #2a2a2a',borderRadius:'6px',color:'#ddd',fontSize:'13px',padding:'6px 10px',outline:'none',cursor:'pointer',minWidth:'180px'}}
             >
-              {STAGE_FILTER_ORDER.filter(s => s === 'all' || s === stageFilter || (stageCounts[s] ?? 0) > 0).map(s => {
+              {STAGE_FILTER_ORDER.map(s => {
                 const {label} = STAGE_DISPLAY[s] || {label: s};
                 const n = s === 'all' ? Object.values(stageCounts).reduce((a,b)=>a+b,0) : (stageCounts[s] ?? 0);
-                return <option key={s} value={s}>{label}{n ? ` (${n})` : ''}</option>;
+                return <option key={s} value={s}>{label}{n > 0 ? ` (${n})` : ''}</option>;
               })}
             </select>
             {stageFilter !== 'active' && (
@@ -361,11 +361,8 @@ function OrgCard({org, stageFilter}: {org: OrgRow; stageFilter: string}) {
   const phone = org.phone || primaryContact?.phone || primaryContact?.mobile;
   const email = primaryContact?.email;
   const days = daysSince(org.last_order_date);
-  const lcInfo = STAGE_DISPLAY[org.lifecycle_stage] || {label: org.lifecycle_stage, color: '#666'};
   const isFlagged = (org.tags as any)?.includes('pete-followup');
   const isUntargeted = org.lifecycle_stage === 'untargeted';
-
-  // Optimistic prospecting
   const isProspecting = fetcher.state !== 'idle' && fetcher.formData?.get('intent') === 'prospect';
   const isProspected = isProspecting || (fetcher.data as any)?.intent === 'prospect';
 
@@ -378,65 +375,93 @@ function OrgCard({org, stageFilter}: {org: OrgRow; stageFilter: string}) {
     fetcher.submit(fd, {method:'post'});
   };
 
+  // Days color
+  const daysColor = days === null ? '#555' : days > 90 ? '#dc2626' : days > 60 ? '#f59e0b' : '#22C55E';
+
+  // Only show non-default lifecycle badges
+  const showLcBadge = org.lifecycle_stage !== 'active' && org.lifecycle_stage !== 'untargeted';
+  const lcInfo = STAGE_DISPLAY[org.lifecycle_stage] || {label: org.lifecycle_stage, color: '#666'};
+
   return (
+    <a href={`/sales-staging/account/${org.id}`} style={{textDecoration:'none',display:'block'}}
+      onClick={e => { if ((e.target as HTMLElement).closest('button, a[href^="tel"], a[href^="sms"], a[href^="mailto"]')) e.preventDefault(); }}>
     <div style={{
       background:'#0d0d0d',
-      border:`1px solid ${org.risk_of_loss ? 'rgba(220,38,38,0.25)' : 'rgba(255,255,255,0.055)'}`,
-      borderRadius:'9px', padding:'12px 14px',
-      opacity: isProspected && stageFilter !== 'all' ? 0.4 : 1,
-      transition:'opacity 0.3s',
+      border:`1px solid ${org.risk_of_loss ? 'rgba(220,38,38,0.3)' : 'rgba(255,255,255,0.06)'}`,
+      borderLeft: org.risk_of_loss ? '3px solid #dc2626' : isFlagged ? '3px solid #f59e0b' : '3px solid transparent',
+      borderRadius:'8px', padding:'11px 14px',
+      opacity: isProspected && stageFilter !== 'all' ? 0.35 : 1,
+      transition:'all 0.2s', cursor:'pointer',
     }}>
-      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'10px',flexWrap:'wrap'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'12px'}}>
 
-        {/* Left */}
-        <div style={{flex:1,minWidth:'200px'}}>
-          <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'5px',flexWrap:'wrap'}}>
-            <a href={`/sales-staging/account/${org.id}`}
-              style={{fontWeight:700,fontSize:'15px',color:'#fff',textDecoration:'none',lineHeight:1.2}}>
+        {/* Left: name + meta */}
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:'flex',alignItems:'center',gap:'7px',marginBottom:'4px',flexWrap:'wrap'}}>
+            <span style={{fontWeight:700,fontSize:'14px',color:'#f0f0f0',letterSpacing:'-0.01em'}}>
               {org.name}
-            </a>
+            </span>
             {org.tier && (
-              <span style={{background:'rgba(200,168,75,0.12)',color:'#c8a84b',borderRadius:'3px',padding:'1px 6px',fontSize:'10px',fontWeight:700}}>
-                {org.tier}
+              <span style={{background:'rgba(200,168,75,0.15)',color:'#c8a84b',borderRadius:'3px',padding:'1px 5px',fontSize:'10px',fontWeight:700,letterSpacing:'0.04em'}}>
+                TIER {org.tier}
               </span>
             )}
-            <span style={{background:`${lcInfo.color}18`,color:lcInfo.color,borderRadius:'3px',padding:'1px 6px',fontSize:'10px',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.05em'}}>
-              {lcInfo.label}
-            </span>
-            {org.risk_of_loss && <span style={{background:'rgba(220,38,38,0.12)',color:'#dc2626',borderRadius:'3px',padding:'1px 6px',fontSize:'10px',fontWeight:600}}>RISK</span>}
-            {isFlagged && <span style={{background:'rgba(139,92,246,0.12)',color:'#a78bfa',borderRadius:'3px',padding:'1px 6px',fontSize:'10px',fontWeight:600}}>PETE ✓</span>}
-            {isProspected && <span style={{background:'rgba(96,165,250,0.12)',color:'#60a5fa',borderRadius:'3px',padding:'1px 6px',fontSize:'10px',fontWeight:600}}>→ PROSPECTED</span>}
-          </div>
-
-          {/* Pills */}
-          <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
-            {org.market_state && <Pill>{org.market_state}{org.city ? ` · ${org.city}` : ''}</Pill>}
-            {phone && <Pill>📞 {phone}</Pill>}
-            {days !== null && (
-              <Pill color={days > 90 ? '#dc2626' : days > 60 ? '#f59e0b' : undefined}>
-                Last order {days}d ago
-              </Pill>
+            {showLcBadge && (
+              <span style={{background:`${lcInfo.color}18`,color:lcInfo.color,borderRadius:'3px',padding:'1px 5px',fontSize:'10px',fontWeight:600,textTransform:'uppercase'}}>
+                {lcInfo.label}
+              </span>
             )}
-            {!org.last_order_date && <Pill color="#555">No orders</Pill>}
-            {(org.online_menus as any)?.length > 0 && <Pill>{(org.online_menus as any).join(' · ')}</Pill>}
+            {org.risk_of_loss && <span style={{color:'#dc2626',fontSize:'10px',fontWeight:700}}>⚠ RISK</span>}
+            {isFlagged && <span style={{color:'#f59e0b',fontSize:'10px',fontWeight:700}}>★ PETE</span>}
+            {isProspected && <span style={{color:'#60a5fa',fontSize:'10px',fontWeight:700}}>→ PROSPECTED</span>}
+          </div>
+          <div style={{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}}>
+            {org.market_state && <span style={{fontSize:'12px',color:'#666'}}>{org.market_state}{org.city ? ` · ${org.city}` : ''}</span>}
+            {phone && <span style={{fontSize:'12px',color:'#555'}}>{phone}</span>}
+            {days !== null
+              ? <span style={{fontSize:'12px',color:daysColor,fontWeight: days > 60 ? 600 : 400}}>
+                  {days > 0 ? `${days}d since last order` : 'Ordered today'}
+                </span>
+              : <span style={{fontSize:'12px',color:'#f59e0b',fontWeight:600}}>No orders yet</span>
+            }
           </div>
         </div>
 
-        {/* Actions */}
-        <div style={{display:'flex',gap:'5px',flexWrap:'wrap',alignItems:'center'}}>
+        {/* Right: actions — primary prominent, secondary ghost */}
+        <div style={{display:'flex',gap:'5px',alignItems:'center',flexShrink:0}}>
           {isUntargeted && !isProspected && (
-            <ActionBtn onClick={prospect} color="#60a5fa">PROSPECT</ActionBtn>
+            <PrimaryBtn onClick={prospect} color="#60a5fa">PROSPECT</PrimaryBtn>
           )}
-          {phone && <ActionBtn href={`tel:${phone}`} color="#22C55E">CALL</ActionBtn>}
-          {phone && <ActionBtn href={`sms:${phone}`} color="#3b82f6">TEXT</ActionBtn>}
-          {email && <ActionBtn href={`mailto:${email}`} color="#a78bfa">EMAIL</ActionBtn>}
-          <ActionBtn href={`/sales-staging/account/${org.id}`} color="#888">VIEW</ActionBtn>
-          <ActionBtn onClick={flagPete} color={isFlagged ? '#555' : '#f59e0b'}>
-            {isFlagged ? 'PETE ✓' : 'FLAG PETE'}
-          </ActionBtn>
+          {phone && <PrimaryBtn href={`tel:${phone}`} color="#22C55E">CALL</PrimaryBtn>}
+          {phone && <PrimaryBtn href={`sms:${phone}`} color="#3b82f6">TEXT</PrimaryBtn>}
+          {email && <PrimaryBtn href={`mailto:${email}`} color="#a78bfa">EMAIL</PrimaryBtn>}
+          <GhostBtn onClick={flagPete} color={isFlagged ? '#f59e0b' : '#444'}>
+            {isFlagged ? '★' : '⚑'}
+          </GhostBtn>
         </div>
       </div>
     </div>
+    </a>
+  );
+}
+
+function PrimaryBtn({href, onClick, color, children}: {href?:string; onClick?:()=>void; color:string; children:React.ReactNode}) {
+  const style: React.CSSProperties = {
+    display:'inline-flex',alignItems:'center',padding:'5px 11px',borderRadius:'5px',fontSize:'11px',
+    fontWeight:700,letterSpacing:'0.06em',cursor:'pointer',textDecoration:'none',
+    border:`1px solid ${color}55`,background:`${color}18`,color,fontFamily:'inherit',
+    whiteSpace:'nowrap',
+  };
+  if (href) return <a href={href} style={style} onClick={e => e.stopPropagation()}>{children}</a>;
+  return <button type="button" onClick={e => { e.stopPropagation(); onClick?.(); }} style={style}>{children}</button>;
+}
+
+function GhostBtn({onClick, color, children}: {onClick?:()=>void; color:string; children:React.ReactNode}) {
+  return (
+    <button type="button" onClick={e => { e.stopPropagation(); onClick?.(); }}
+      style={{background:'none',border:'none',color,fontSize:'14px',cursor:'pointer',padding:'4px 6px',lineHeight:1}}>
+      {children}
+    </button>
   );
 }
 
