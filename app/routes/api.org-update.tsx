@@ -131,6 +131,52 @@ export async function action({request, context}: ActionFunctionArgs) {
     return json({ok: true, intent: 'delete_account'});
   }
 
+  // ── Update contact ────────────────────────────────────────────────────────
+  if (intent === 'update_contact') {
+    const contact_id = String(fd.get('contact_id') || '');
+    if (!contact_id) return json({ok: false, error: 'contact_id required'}, {status: 400});
+    const patch: any = {updated_at: new Date().toISOString()};
+    for (const f of ['first_name','last_name','email','phone','job_role']) {
+      const v = fd.get(f);
+      if (v !== null) patch[f] = String(v).trim() || null;
+    }
+    const isPrimary = fd.get('is_primary');
+    if (isPrimary !== null) patch.is_primary_buyer = isPrimary === 'true';
+    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/contacts?id=eq.${contact_id}`, {
+      method: 'PATCH', headers: sbHeaders, body: JSON.stringify(patch),
+    });
+    if (!res.ok) { const txt = await res.text().catch(()=>''); return json({ok:false,error:`${res.status}: ${txt}`},{status:500}); }
+    return json({ok: true, contact_id});
+  }
+
+  // ── Delete contact ────────────────────────────────────────────────────────
+  if (intent === 'delete_contact') {
+    const contact_id = String(fd.get('contact_id') || '');
+    if (!contact_id) return json({ok: false, error: 'contact_id required'}, {status: 400});
+    await fetch(`${env.SUPABASE_URL}/rest/v1/contacts?id=eq.${contact_id}`, {
+      method: 'DELETE',
+      headers: {apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, Prefer: 'return=minimal'},
+    });
+    return json({ok: true, contact_id});
+  }
+
+  // ── Flag Pete ─────────────────────────────────────────────────────────────
+  if (intent === 'flag_pete') {
+    const orgRes = await fetch(`${env.SUPABASE_URL}/rest/v1/organizations?id=eq.${org_id}&select=tags`, {
+      headers: {apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`},
+    });
+    const rows = await orgRes.json().catch(() => []);
+    const currentTags: string[] = rows?.[0]?.tags || [];
+    const hasPete = currentTags.includes('pete-followup');
+    const newTags = hasPete ? currentTags.filter((t: string) => t !== 'pete-followup') : [...currentTags, 'pete-followup'];
+    await fetch(`${env.SUPABASE_URL}/rest/v1/organizations?id=eq.${org_id}`, {
+      method: 'PATCH',
+      headers: sbHeaders,
+      body: JSON.stringify({tags: newTags, updated_at: new Date().toISOString()}),
+    });
+    return json({ok: true, flagged: !hasPete});
+  }
+
   return json({ok: false, error: 'unknown intent'}, {status: 400});
 }
 

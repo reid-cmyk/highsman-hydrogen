@@ -159,36 +159,10 @@ export default function AccountDetail() {
                 </div>
               </div>
 
-              {/* Action stack — matches list page buttons */}
-              <div style={{display:'flex', flexDirection:'column', gap:6, minWidth:240}}>
-                <ActionRow primary label={`CALL ${org.name.split(' ')[0].toUpperCase()}`} sub={org.phone||'no phone'} icon="phone" href={org.phone?`tel:${org.phone}`:'#'} disabled={!org.phone}/>
-                <ActionRow label={`TEXT ${org.name.split(' ')[0].toUpperCase()}`} sub="iMessage" icon="text" href={org.phone?`sms:${org.phone}`:'#'} disabled={!org.phone}/>
-                <ActionRow label={`EMAIL ${primaryContact?.first_name?.toUpperCase()||'CONTACT'}`} sub={primaryContact?.email||'no email'} icon="mail" href={primaryContact?.email?`mailto:${primaryContact.email}`:'#'} disabled={!primaryContact?.email}/>
-                <DetailActionBtn label="BRIEF" sub="AI pre-call brief" icon="brief" onClick={()=>{
-                  fetch('/api/brief',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lead:{First_Name:primaryContact?.first_name||'',Last_Name:primaryContact?.last_name||'',_fullName:primaryContact?.full_name||org.name,Company:org.name,Phone:org.phone||primaryContact?.phone||'',Email:primaryContact?.email||'',_status:'active'}})}).catch(()=>{});
-                  window.open('/sales-floor/app?brief=1','_brief','width=720,height=620');
-                }}/>
-                <DetailActionBtn label="TRAINING" sub="Book Vibes training" icon="star" onClick={()=>{
-                  const id=(org.zoho_account_id||'').replace('zcrm_','');
-                  if(id) fetch('/api/sales-floor-vibes-training',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({zohoAccountId:id,customerName:org.name})}).catch(()=>{});
-                }} disabled={!org.zoho_account_id}/>
-                <DetailActionBtn label="SEND MENU" sub="NJ menu via email" icon="send" onClick={()=>{
-                  const e=primaryContact?.email;
-                  if(!e){alert('No email on file.');return;}
-                  const subj=`Highsman NJ Wholesale Menu`;
-                  const body=`Hi ${primaryContact?.first_name||'there'},\n\nHere's our NJ wholesale menu:\n\nhttps://highsman.com/njmenu\n\nBest,\nSky Lima\nHighsman`;
-                  window.open(`mailto:${e}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`);
-                }} disabled={!primaryContact?.email}/>
-                <DetailActionBtn label="NEW PRODUCT" sub="Product onboarding" icon="box" onClick={()=>{
-                  const id=(org.zoho_account_id||'').replace('zcrm_','');
-                  if(id) fetch('/api/sales-floor-vibes-product-onboard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({zohoAccountId:id,customerName:org.name})}).catch(()=>{});
-                }} disabled={!org.zoho_account_id}/>
-                <DetailActionBtn label="FLAG PETE" sub={isFlagged?'Currently flagged':'Flag for follow-up'} icon="flag" onClick={()=>{
-                  const fd=new FormData();fd.set('intent','flag_pete');fd.set('org_id',org.id);
-                  document.dispatchEvent(new CustomEvent('stagingAction',{detail:{fd}}));
-                }} flagged={isFlagged}/>
-              </div>
             </div>
+
+            {/* Action strip — horizontal row of all 8 actions */}
+            <ActionStrip org={org} primaryContact={primaryContact} isFlagged={isFlagged} />
 
             {/* Quick stats strip — data we actually have */}
             {(() => {
@@ -199,12 +173,14 @@ export default function AccountDetail() {
               const statCells = [
                 {l:'Days since order', v:days===null?'—':String(days), sub:days===null?'no orders':'d', accent:daysColor},
                 {l:'Last order date',  v:org.last_order_date?new Date(org.last_order_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}):'—', sub:'', accent:T.text},
+                {l:'Orders (all time)', v:'—', sub:'coming soon', accent:T.textFaint},
+                {l:'State rank',        v:'—', sub:'vs. roster', accent:T.textFaint},
                 {l:'Contacts',         v:String(contacts?.length||0), sub:contacts?.length===1?'contact':'contacts', accent:T.text},
                 {l:'Budtenders',       v:org.budtender_count?String(org.budtender_count):'—', sub:'on floor', accent:T.text},
                 {l:'Onboarding',       v:onboardingDone?`${onboardingDone}/${onboardingTotal}`:'—', sub:`${onboardingPct}%`, accent:onboardingPct===100?T.green:T.yellow},
               ];
               return (
-                <div style={{marginTop:26, display:'grid', gridTemplateColumns:'repeat(5,1fr)', background:T.border, gap:1, border:`1px solid ${T.border}`}}>
+                <div style={{marginTop:26, display:'grid', gridTemplateColumns:'repeat(7,1fr)', background:T.border, gap:1, border:`1px solid ${T.border}`}}>
                   {statCells.map((s,i) => (
                     <div key={i} style={{background:T.bg, padding:'16px 18px'}}>
                       <div style={{fontFamily:'Teko,sans-serif', fontSize:10.5, letterSpacing:'0.30em', color:T.textFaint, textTransform:'uppercase', marginBottom:4}}>{s.l}</div>
@@ -227,7 +203,7 @@ export default function AccountDetail() {
             {/* Right: Onboarding + Contacts + Notes */}
             <div style={{display:'flex', flexDirection:'column', gap:24}}>
               <OnboardingPanel orgId={org.id} steps={steps} refresh={refresh} />
-              <ContactsPanel contacts={contacts} />
+              <ContactsPanel orgId={org.id} contacts={contacts} refresh={refresh} />
               <NotesPanel orgId={org.id} notes={notes} refresh={refresh} />
             </div>
           </div>
@@ -251,19 +227,80 @@ function HeroLogo({name, initials, domain, tc}: {name:string; initials:string; d
   );
 }
 
-// ─── Action Row ───────────────────────────────────────────────────────────────
-function ActionRow({primary, label, sub, icon, href, disabled}: {primary?: boolean; label:string; sub:string; icon:string; href:string; disabled?:boolean}) {
-  const I = icon==='phone'?PhoneIcon:icon==='text'?TextIcon:MailIcon;
+// ─── Action Strip ─────────────────────────────────────────────────────────────
+function ActionStrip({org, primaryContact, isFlagged}: {org:any; primaryContact:any; isFlagged:boolean}) {
+  const flagFetcher = useFetcher();
+  const flagPete = () => {
+    const fd = new FormData(); fd.set('intent','flag_pete'); fd.set('org_id', org.id);
+    flagFetcher.submit(fd, {method:'post', action:'/api/org-update'});
+  };
+  const sendBrief = () => {
+    fetch('/api/brief',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lead:{First_Name:primaryContact?.first_name||'',Last_Name:primaryContact?.last_name||'',_fullName:primaryContact?.full_name||org.name,Company:org.name,Phone:org.phone||primaryContact?.phone||'',Email:primaryContact?.email||'',_status:'active'}})}).catch(()=>{});
+    window.open('/sales-floor/app?brief=1','_brief','width=720,height=620');
+  };
+  const sendMenu = () => {
+    const e = primaryContact?.email;
+    if (!e) { alert('No email on file.'); return; }
+    const subj = `Highsman NJ Wholesale Menu`;
+    const body = `Hi ${primaryContact?.first_name||'there'},\n\nHere's our NJ wholesale menu:\n\nhttps://highsman.com/njmenu\n\nBest,\nSky Lima\nHighsman`;
+    window.open(`mailto:${e}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`);
+  };
+
+  const btnBase: React.CSSProperties = {height:40, padding:'0 16px', background:'transparent', border:'none', borderRight:`1px solid ${T.border}`, color:T.textMuted, fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.18em', cursor:'pointer', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:7, flexShrink:0};
+
   return (
-    <a href={disabled?'#':href} onClick={disabled?e=>e.preventDefault():undefined}
-      style={{height:48, padding:'0 14px', background:primary&&!disabled?'rgba(255,213,0,0.06)':'transparent', border:`1px solid ${disabled?T.borderStrong:primary?T.yellow:T.borderStrong}`, color:disabled?T.textFaint:primary?T.yellow:T.textMuted, display:'flex', alignItems:'center', gap:12, textAlign:'left', width:'100%', textDecoration:'none', boxSizing:'border-box', opacity:disabled?0.45:1, cursor:disabled?'not-allowed':'pointer'}}>
-      <I />
-      <div style={{display:'flex', flexDirection:'column', alignItems:'flex-start', flex:1}}>
-        <span style={{fontFamily:'Teko,sans-serif', fontSize:15, letterSpacing:'0.20em', fontWeight:500}}>{label}</span>
-        <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:disabled?T.textFaint:primary?'rgba(255,213,0,0.6)':T.textFaint, letterSpacing:'0.06em', marginTop:1}}>{sub}</span>
-      </div>
-      {!disabled&&<span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:primary?'rgba(255,213,0,0.6)':T.textFaint, letterSpacing:'0.14em'}}>↵</span>}
-    </a>
+    <div style={{display:'flex', background:T.surfaceElev, borderTop:`1px solid ${T.border}`, borderBottom:`1px solid ${T.border}`, marginTop:20, overflow:'auto'}}>
+      {/* CALL */}
+      <a href={org.phone?`tel:${org.phone}`:'#'} onClick={!org.phone?e=>e.preventDefault():undefined}
+        style={{...btnBase, borderLeft:`2px solid ${T.yellow}`, color:org.phone?T.yellow:T.textFaint, background:org.phone?'rgba(255,213,0,0.04)':'transparent', opacity:org.phone?1:0.4, textDecoration:'none'}}>
+        <PhoneIcon/> CALL
+      </a>
+      {/* TEXT */}
+      <a href={org.phone?`sms:${org.phone}`:'#'} onClick={!org.phone?e=>e.preventDefault():undefined}
+        style={{...btnBase, opacity:org.phone?1:0.4, textDecoration:'none', color:T.textMuted}}>
+        <TextIcon/> TEXT
+      </a>
+      {/* EMAIL */}
+      <a href={primaryContact?.email?`mailto:${primaryContact.email}`:'#'} onClick={!primaryContact?.email?e=>e.preventDefault():undefined}
+        style={{...btnBase, opacity:primaryContact?.email?1:0.4, textDecoration:'none', color:T.textMuted}}>
+        <MailIcon/> EMAIL {primaryContact?.first_name?primaryContact.first_name.toUpperCase():''}
+      </a>
+
+      <div style={{width:1, background:T.borderStrong, margin:'8px 0', flexShrink:0}} />
+
+      {/* BRIEF */}
+      <button type="button" onClick={sendBrief} style={btnBase}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5V4a1 1 0 0 1 1-1h15v18H6.5A2.5 2.5 0 0 1 4 19.5z"/></svg>
+        BRIEF
+      </button>
+      {/* TRAINING */}
+      <button type="button" disabled={!org.zoho_account_id} onClick={()=>{const id=(org.zoho_account_id||'').replace('zcrm_','');if(id)fetch('/api/sales-floor-vibes-training',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({zohoAccountId:id,customerName:org.name})}).catch(()=>{});}}
+        style={{...btnBase, opacity:org.zoho_account_id?1:0.4}}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        TRAINING
+      </button>
+      {/* SEND MENU */}
+      <button type="button" disabled={!primaryContact?.email} onClick={sendMenu}
+        style={{...btnBase, opacity:primaryContact?.email?1:0.4}}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+        SEND MENU
+      </button>
+      {/* NEW PRODUCT */}
+      <button type="button" disabled={!org.zoho_account_id} onClick={()=>{const id=(org.zoho_account_id||'').replace('zcrm_','');if(id)fetch('/api/sales-floor-vibes-product-onboard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({zohoAccountId:id,customerName:org.name})}).catch(()=>{});}}
+        style={{...btnBase, opacity:org.zoho_account_id?1:0.4}}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+        NEW PRODUCT
+      </button>
+
+      <div style={{flex:1}} />
+
+      {/* FLAG PETE */}
+      <button type="button" onClick={flagPete}
+        style={{...btnBase, borderRight:'none', borderLeft:`1px solid ${T.border}`, color:isFlagged?T.redSystems:T.textSubtle, background:isFlagged?'rgba(255,51,85,0.08)':'transparent'}}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M5 3v18M5 4h12l-2 4 2 4H5"/></svg>
+        {isFlagged ? 'PETE FLAGGED' : 'FLAG PETE'}
+      </button>
+    </div>
   );
 }
 
@@ -299,7 +336,7 @@ function DeleteAccountBtn({orgId}: {orgId: string}) {
 }
 
 // ─── Section Head ─────────────────────────────────────────────────────────────
-function SectionHead({title, source, count}: {title:string; source?:string; count?:string|number}) {
+function SectionHead({title, source, count}: {title:string; source?:React.ReactNode; count?:string|number}) {
   return (
     <div className="hs-sweep" style={{padding:'18px 16px 12px', borderBottom:`1px solid ${T.border}`, display:'flex', alignItems:'baseline', justifyContent:'space-between'}}>
       <div style={{fontFamily:'Teko,sans-serif', fontSize:18, letterSpacing:'0.28em', fontWeight:500, color:T.text, textTransform:'uppercase'}}>
@@ -413,38 +450,8 @@ function ReadOnlyField({label, value, note}: {label:string; value:string; note?:
   );
 }
 
-// ─── Online menus checkbox multi-select ──────────────────────────────────────
-const MENU_OPTIONS = ['AIQ','Dutchie','Weedmaps','Jane','LeafLink','Leafly','Nabis'];
-
-function OnlineMenusField({orgId, value}: {orgId:string; value:string[]}) {
-  const fetcher = useFetcher();
-  const [selected, setSelected] = useState<string[]>(Array.isArray(value)?value:[]);
-
-  const toggle = (opt: string) => {
-    const next = selected.includes(opt) ? selected.filter(s=>s!==opt) : [...selected, opt];
-    setSelected(next);
-    const fd = new FormData();
-    fd.set('intent','patch_field'); fd.set('org_id',orgId); fd.set('field','online_menus'); fd.set('value', next.join(','));
-    fetcher.submit(fd, {method:'post', action:'/api/org-update'});
-  };
-
-  return (
-    <div style={{borderBottom:`1px solid ${T.border}`}}>
-      <div style={{padding:'14px 16px 8px', fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.30em', color:T.textFaint, textTransform:'uppercase'}}>Online Menus</div>
-      <div style={{padding:'0 16px 14px', display:'flex', flexWrap:'wrap', gap:8}}>
-        {MENU_OPTIONS.map(opt => {
-          const on = selected.includes(opt);
-          return (
-            <button key={opt} type="button" onClick={()=>toggle(opt)}
-              style={{height:30, padding:'0 12px', background:on?`rgba(0,212,255,0.1)`:'transparent', border:`1px solid ${on?T.cyan:T.borderStrong}`, color:on?T.cyan:T.textSubtle, fontFamily:'JetBrains Mono,monospace', fontSize:11, letterSpacing:'0.10em', cursor:'pointer'}}>
-              {opt}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+// ─── Online menu constants ────────────────────────────────────────────────────
+const MENU_OPTIONS = ['','AIQ','Blaze','Cova','Dispense','Dutchie','Jane','Leafly','Mosaic','Nabis','Self Administrator','Sweed','Treez','Weedmaps'];
 
 // ─── Fields Panel ─────────────────────────────────────────────────────────────
 function FieldsPanel({org}: {org: any}) {
@@ -485,12 +492,12 @@ function FieldsPanel({org}: {org: any}) {
       </TwoCol>
 
       <GroupLabel>Operations</GroupLabel>
-      <OnlineMenusField orgId={org.id} value={org.online_menus||[]} />
       <TwoCol>
+        <SelectField label="Online Menu" field="online_menus" value={(Array.isArray(org.online_menus)?org.online_menus[0]:org.online_menus)||''} orgId={org.id} options={MENU_OPTIONS} />
         <ReadOnlyField label="Reorder Cadence" value={org.reorder_cadence_days?`${org.reorder_cadence_days} days avg`:'—'} note="auto-calculated" />
         <EditableField label="Tags" field="tags" value={(org.tags||[]).join(', ')} orgId={org.id} hint="Comma-separated" />
         <SelectField label="Allow Split Promos" field="allow_split_promos" value={org.allow_split_promos?'Yes':'No'} orgId={org.id} options={['Yes','No']} />
-        <EditableField label="Sparkplug" field="sparkplug_enabled" value={org.sparkplug_enabled?'Yes':'No'} orgId={org.id} />
+        <SelectField label="Sparkplug" field="sparkplug_enabled" value={org.sparkplug_enabled?'Yes':'No'} orgId={org.id} options={['Yes','No']} />
       </TwoCol>
 
       <GroupLabel>Pop-ups & Training</GroupLabel>
@@ -559,67 +566,210 @@ function OnboardingPanel({orgId, steps, refresh}: {orgId:string; steps:any[]; re
   );
 }
 
-// ─── Contacts Panel ───────────────────────────────────────────────────────────
-function ContactsPanel({contacts}: {contacts: any[]}) {
-  return (
-    <div style={{background:T.surface, border:`1px solid ${T.border}`}}>
-      <SectionHead title="Contacts" count={`(${contacts.length})`} source="+ add" />
-      {contacts.length === 0 && <div style={{padding:'20px 16px', fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint, letterSpacing:'0.10em'}}>No contacts</div>}
-      {contacts.map((c:any, i:number) => {
-        const initials = `${(c.first_name||'')[0]||''}${(c.last_name||'')[0]||''}`.toUpperCase() || '?';
-        const name = c.full_name || `${c.first_name||''} ${c.last_name||''}`.trim() || 'Unknown';
-        return (
-          <div key={c.id} style={{padding:'16px', borderTop:i>0?`1px solid ${T.border}`:'none'}}>
-            <div style={{display:'flex', alignItems:'flex-start', gap:14}}>
-              <div style={{width:44, height:44, borderRadius:'50%', background:T.surfaceElev, border:`1px solid ${T.borderStrong}`, display:'flex', alignItems:'center', justifyContent:'center', color:T.textMuted, fontFamily:'Teko,sans-serif', fontSize:20, fontWeight:500, flexShrink:0}}>{initials}</div>
-              <div style={{flex:1, minWidth:0}}>
-                <div style={{display:'flex', alignItems:'center', gap:8}}>
-                  <span style={{fontFamily:'Teko,sans-serif', fontSize:19, letterSpacing:'0.06em', color:T.text, fontWeight:500}}>{name}</span>
-                  {c.is_primary_buyer && <span style={{padding:'1px 6px', background:'rgba(255,213,0,0.08)', border:`1px solid ${T.yellow}`, color:T.yellow, fontFamily:'JetBrains Mono,monospace', fontSize:9, letterSpacing:'0.16em'}}>PRIMARY</span>}
-                </div>
-                {c.job_role && <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textSubtle, marginTop:2, letterSpacing:'0.06em'}}>{c.job_role.toUpperCase()}</div>}
-                <div style={{marginTop:8, display:'flex', flexDirection:'column', gap:3}}>
-                  {c.email && <a href={`mailto:${c.email}`} style={{fontFamily:'JetBrains Mono,monospace', color:T.cyan, fontSize:12, textDecoration:'none', letterSpacing:'0.02em'}}>{c.email}</a>}
-                  {(c.phone||c.mobile) && <a href={`tel:${c.phone||c.mobile}`} style={{fontFamily:'JetBrains Mono,monospace', color:T.textMuted, fontSize:12, textDecoration:'none', letterSpacing:'0.02em'}}>{c.phone||c.mobile}</a>}
-                </div>
-                <div style={{marginTop:10, display:'flex', gap:6}}>
-                  {(c.phone||c.mobile) && <MiniBtn href={`tel:${c.phone||c.mobile}`}><PhoneIcon/></MiniBtn>}
-                  {(c.phone||c.mobile) && <MiniBtn href={`sms:${c.phone||c.mobile}`}><TextIcon/></MiniBtn>}
-                  {c.email && <MiniBtn href={`mailto:${c.email}`}><MailIcon/></MiniBtn>}
-                </div>
-              </div>
-            </div>
+// ─── Contact Card ─────────────────────────────────────────────────────────────
+function ContactCard({contact: c, orgId, refresh, borderTop}: {contact:any; orgId:string; refresh:()=>void; borderTop:boolean}) {
+  const [mode, setMode] = useState<'view'|'edit'|'confirm-delete'>('view');
+  const [form, setForm] = useState({first_name:c.first_name||'', last_name:c.last_name||'', email:c.email||'', phone:c.phone||c.mobile||'', job_role:c.job_role||'', is_primary:c.is_primary_buyer||false});
+  const [saving, setSaving] = useState(false);
+  const editFetcher = useFetcher();
+  const delFetcher = useFetcher();
+  const initials = `${(c.first_name||'')[0]||''}${(c.last_name||'')[0]||''}`.toUpperCase() || '?';
+  const name = c.full_name || `${c.first_name||''} ${c.last_name||''}`.trim() || 'Unknown';
+
+  useEffect(() => {
+    const d = editFetcher.data as any;
+    if (d?.ok) { setSaving(false); setMode('view'); refresh(); }
+    else if (d && !d.ok) { setSaving(false); }
+  }, [editFetcher.data]);
+
+  useEffect(() => {
+    if ((delFetcher.data as any)?.contact_id) refresh();
+  }, [delFetcher.data]);
+
+  const saveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.first_name.trim()) return;
+    setSaving(true);
+    const fd = new FormData();
+    fd.set('intent','update_contact'); fd.set('org_id',orgId); fd.set('contact_id',c.id);
+    fd.set('first_name',form.first_name.trim()); fd.set('last_name',form.last_name.trim());
+    fd.set('email',form.email.trim()); fd.set('phone',form.phone.trim());
+    fd.set('job_role',form.job_role.trim()); fd.set('is_primary',String(form.is_primary));
+    editFetcher.submit(fd, {method:'post', action:'/api/org-update'});
+  };
+
+  const fieldStyle = {background:T.bg, border:`1px solid ${T.borderStrong}`, color:T.text, fontSize:12, fontFamily:'Inter,sans-serif', padding:'5px 8px', outline:'none', width:'100%', boxSizing:'border-box' as const};
+  const labelStyle = {fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase' as const, marginBottom:3};
+
+  if (mode === 'edit') {
+    return (
+      <div style={{borderTop:borderTop?`1px solid ${T.border}`:`1px solid ${T.border}`}}>
+        <form onSubmit={saveEdit} style={{padding:'14px 16px', background:T.surfaceElev, display:'flex', flexDirection:'column', gap:10}}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:2}}>
+            <span style={{fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.20em', color:T.yellow}}>EDIT CONTACT</span>
+            <button type="button" onClick={()=>{setMode('view');setForm({first_name:c.first_name||'',last_name:c.last_name||'',email:c.email||'',phone:c.phone||c.mobile||'',job_role:c.job_role||'',is_primary:c.is_primary_buyer||false});}}
+              style={{background:'none', border:'none', color:T.textFaint, cursor:'pointer', fontFamily:'JetBrains Mono,monospace', fontSize:10, letterSpacing:'0.10em'}}>CANCEL</button>
           </div>
-        );
-      })}
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+            <div><div style={labelStyle}>First name *</div><input value={form.first_name} onChange={e=>setForm(f=>({...f,first_name:e.target.value}))} style={fieldStyle} /></div>
+            <div><div style={labelStyle}>Last name</div><input value={form.last_name} onChange={e=>setForm(f=>({...f,last_name:e.target.value}))} style={fieldStyle} /></div>
+          </div>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+            <div><div style={labelStyle}>Email</div><input type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} style={fieldStyle} /></div>
+            <div><div style={labelStyle}>Phone</div><input type="tel" value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))} style={fieldStyle} /></div>
+          </div>
+          <div><div style={labelStyle}>Job role</div><input value={form.job_role} onChange={e=>setForm(f=>({...f,job_role:e.target.value}))} placeholder="e.g. Buyer, GM" style={fieldStyle} /></div>
+          <label style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer'}}>
+            <input type="checkbox" checked={form.is_primary} onChange={e=>setForm(f=>({...f,is_primary:e.target.checked}))} style={{accentColor:T.yellow, width:14, height:14}} />
+            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textMuted, letterSpacing:'0.12em'}}>PRIMARY BUYER</span>
+          </label>
+          <div style={{display:'flex', gap:8}}>
+            <button type="submit" disabled={saving||!form.first_name.trim()}
+              style={{height:32, padding:'0 16px', background:T.yellow, border:'none', color:'#000', fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.18em', cursor:saving?'not-allowed':'pointer', opacity:saving?0.6:1}}>
+              {saving ? 'SAVING…' : 'SAVE'}
+            </button>
+          </div>
+          {(editFetcher.data as any)?.error && <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.redSystems}}>{(editFetcher.data as any).error}</div>}
+        </form>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{padding:'14px 16px', borderTop:borderTop?`1px solid ${T.border}`:`1px solid ${T.border}`}}>
+      <div style={{display:'flex', alignItems:'flex-start', gap:12}}>
+        <div style={{width:40, height:40, borderRadius:'50%', background:T.surfaceElev, border:`1px solid ${T.borderStrong}`, display:'flex', alignItems:'center', justifyContent:'center', color:T.textMuted, fontFamily:'Teko,sans-serif', fontSize:18, fontWeight:500, flexShrink:0}}>{initials}</div>
+        <div style={{flex:1, minWidth:0}}>
+          <div style={{display:'flex', alignItems:'center', gap:8, justifyContent:'space-between'}}>
+            <div style={{display:'flex', alignItems:'center', gap:8}}>
+              <span style={{fontFamily:'Teko,sans-serif', fontSize:18, letterSpacing:'0.06em', color:T.text, fontWeight:500}}>{name}</span>
+              {c.is_primary_buyer && <span style={{padding:'1px 6px', background:'rgba(255,213,0,0.08)', border:`1px solid ${T.yellow}`, color:T.yellow, fontFamily:'JetBrains Mono,monospace', fontSize:9, letterSpacing:'0.16em'}}>PRIMARY</span>}
+            </div>
+            {/* Actions */}
+            {mode === 'view' && (
+              <div style={{display:'flex', gap:8, alignItems:'center'}}>
+                <button type="button" onClick={()=>setMode('edit')} style={{background:'none', border:'none', color:T.yellow, cursor:'pointer', padding:'2px 4px', fontFamily:'JetBrains Mono,monospace', fontSize:10, letterSpacing:'0.10em'}}>EDIT</button>
+                <button type="button" onClick={()=>setMode('confirm-delete')} style={{background:'none', border:'none', color:T.textFaint, cursor:'pointer', padding:'2px 4px', fontFamily:'JetBrains Mono,monospace', fontSize:10, letterSpacing:'0.10em'}}>REMOVE</button>
+              </div>
+            )}
+            {mode === 'confirm-delete' && (
+              <div style={{display:'flex', gap:6, alignItems:'center'}}>
+                <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.redSystems, letterSpacing:'0.08em'}}>Remove?</span>
+                <button type="button" onClick={()=>{const fd=new FormData();fd.set('intent','delete_contact');fd.set('org_id',orgId);fd.set('contact_id',c.id);delFetcher.submit(fd,{method:'post',action:'/api/org-update'});}} style={{background:T.redSystems, border:'none', color:'#000', fontFamily:'JetBrains Mono,monospace', fontSize:10, padding:'2px 8px', cursor:'pointer', letterSpacing:'0.08em'}}>YES</button>
+                <button type="button" onClick={()=>setMode('view')} style={{background:'none', border:`1px solid ${T.borderStrong}`, color:T.textFaint, fontFamily:'JetBrains Mono,monospace', fontSize:10, padding:'2px 6px', cursor:'pointer'}}>NO</button>
+              </div>
+            )}
+          </div>
+          {c.job_role && <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textSubtle, marginTop:2, letterSpacing:'0.06em'}}>{c.job_role.toUpperCase()}</div>}
+          <div style={{marginTop:6, display:'flex', flexDirection:'column', gap:2}}>
+            {c.email && <a href={`mailto:${c.email}`} style={{fontFamily:'JetBrains Mono,monospace', color:T.cyan, fontSize:12, textDecoration:'none', letterSpacing:'0.02em'}}>{c.email}</a>}
+            {(c.phone||c.mobile) && <a href={`tel:${c.phone||c.mobile}`} style={{fontFamily:'JetBrains Mono,monospace', color:T.textMuted, fontSize:12, textDecoration:'none', letterSpacing:'0.02em'}}>{c.phone||c.mobile}</a>}
+          </div>
+          <div style={{marginTop:8, display:'flex', gap:5}}>
+            {(c.phone||c.mobile) && <MiniBtn href={`tel:${c.phone||c.mobile}`}><PhoneIcon/></MiniBtn>}
+            {(c.phone||c.mobile) && <MiniBtn href={`sms:${c.phone||c.mobile}`}><TextIcon/></MiniBtn>}
+            {c.email && <MiniBtn href={`mailto:${c.email}`}><MailIcon/></MiniBtn>}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-// ─── Detail action button (for the right-column stack) ───────────────────────
-function DetailActionBtn({label, sub, icon, onClick, disabled, flagged}: {label:string; sub:string; icon:string; onClick:()=>void; disabled?:boolean; flagged?:boolean}) {
-  const icons: Record<string,React.ReactNode> = {
-    brief: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5V4a1 1 0 0 1 1-1h15v18H6.5A2.5 2.5 0 0 1 4 19.5z"/></svg>,
-    star:  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>,
-    send:  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>,
-    box:   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>,
-    flag:  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M5 3v18M5 4h12l-2 4 2 4H5"/></svg>,
+// ─── Contacts Panel ───────────────────────────────────────────────────────────
+function ContactsPanel({orgId, contacts, refresh}: {orgId:string; contacts: any[]; refresh:()=>void}) {
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({first_name:'', last_name:'', email:'', phone:'', job_role:'', is_primary:false});
+  const [saving, setSaving] = useState(false);
+  const fetcher = useFetcher();
+
+  // Watch for successful create
+  useEffect(() => {
+    const d = fetcher.data as any;
+    if (d?.ok) { setAdding(false); setForm({first_name:'', last_name:'', email:'', phone:'', job_role:'', is_primary:false}); setSaving(false); refresh(); }
+    else if (d && !d.ok) { setSaving(false); }
+  }, [fetcher.data]);
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.first_name.trim()) return;
+    setSaving(true);
+    const fd = new FormData();
+    fd.set('org_id', orgId);
+    fd.set('first_name', form.first_name.trim());
+    fd.set('last_name', form.last_name.trim());
+    fd.set('email', form.email.trim());
+    fd.set('phone', form.phone.trim());
+    fd.set('job_role', form.job_role.trim());
+    fd.set('is_primary', String(form.is_primary));
+    fetcher.submit(fd, {method:'post', action:'/api/contact-create'});
   };
-  const isFlagPete = icon === 'flag';
-  const borderColor = isFlagPete ? T.redSystems : disabled ? T.borderStrong : T.borderStrong;
-  const textColor = isFlagPete ? T.redSystems : disabled ? T.textFaint : T.textMuted;
-  const bg = isFlagPete && flagged ? 'rgba(255,51,85,0.12)' : 'transparent';
+
+  const fieldStyle = {background:T.bg, border:`1px solid ${T.borderStrong}`, color:T.text, fontSize:12, fontFamily:'Inter,sans-serif', padding:'5px 8px', outline:'none', width:'100%', boxSizing:'border-box' as const};
+  const labelStyle = {fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase' as const, marginBottom:3};
+
   return (
-    <button type="button" onClick={disabled?undefined:onClick}
-      style={{height:44, padding:'0 14px', background:bg, border:`1px solid ${borderColor}`, color:textColor, display:'flex', alignItems:'center', gap:12, textAlign:'left', width:'100%', cursor:disabled?'not-allowed':'pointer', opacity:disabled?0.4:1, boxSizing:'border-box'}}>
-      {icons[icon]}
-      <div style={{display:'flex', flexDirection:'column', alignItems:'flex-start', flex:1}}>
-        <span style={{fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.20em', fontWeight:500}}>{label}</span>
-        <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, color:disabled?T.textFaint:T.textFaint, letterSpacing:'0.06em', marginTop:1}}>{sub}</span>
-      </div>
-    </button>
+    <div style={{background:T.surface, border:`1px solid ${T.border}`}}>
+      <SectionHead title="Contacts" count={`(${contacts.length})`} source={
+        <button type="button" onClick={()=>setAdding(a=>!a)}
+          style={{background:'none', border:'none', color:adding?T.textFaint:T.yellow, fontFamily:'JetBrains Mono,monospace', fontSize:10, letterSpacing:'0.14em', cursor:'pointer', padding:0}}>
+          {adding ? 'CANCEL' : '+ ADD'}
+        </button>
+      } />
+
+      {/* Add contact form */}
+      {adding && (
+        <form onSubmit={submit} style={{padding:'14px 16px', borderBottom:`1px solid ${T.border}`, background:T.surfaceElev, display:'flex', flexDirection:'column', gap:10}}>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+            <div>
+              <div style={labelStyle}>First name *</div>
+              <input autoFocus value={form.first_name} onChange={e=>setForm(f=>({...f,first_name:e.target.value}))} placeholder="First" style={fieldStyle} />
+            </div>
+            <div>
+              <div style={labelStyle}>Last name</div>
+              <input value={form.last_name} onChange={e=>setForm(f=>({...f,last_name:e.target.value}))} placeholder="Last" style={fieldStyle} />
+            </div>
+          </div>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+            <div>
+              <div style={labelStyle}>Email</div>
+              <input type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} placeholder="email@..." style={fieldStyle} />
+            </div>
+            <div>
+              <div style={labelStyle}>Phone</div>
+              <input type="tel" value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))} placeholder="555-555-5555" style={fieldStyle} />
+            </div>
+          </div>
+          <div>
+            <div style={labelStyle}>Job role</div>
+            <input value={form.job_role} onChange={e=>setForm(f=>({...f,job_role:e.target.value}))} placeholder="e.g. Buyer, GM, Budtender" style={fieldStyle} />
+          </div>
+          <label style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer'}}>
+            <input type="checkbox" checked={form.is_primary} onChange={e=>setForm(f=>({...f,is_primary:e.target.checked}))} style={{accentColor:T.yellow, width:14, height:14}} />
+            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textMuted, letterSpacing:'0.12em'}}>PRIMARY BUYER</span>
+          </label>
+          <div style={{display:'flex', gap:8}}>
+            <button type="submit" disabled={saving||!form.first_name.trim()}
+              style={{height:32, padding:'0 16px', background:T.yellow, border:'none', color:'#000', fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.18em', cursor:saving?'not-allowed':'pointer', opacity:saving?0.6:1}}>
+              {saving ? 'SAVING…' : 'SAVE CONTACT'}
+            </button>
+            <button type="button" onClick={()=>{setAdding(false);setForm({first_name:'', last_name:'', email:'', phone:'', job_role:'', is_primary:false});}}
+              style={{height:32, padding:'0 12px', background:'transparent', border:`1px solid ${T.borderStrong}`, color:T.textFaint, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.14em', cursor:'pointer'}}>
+              CANCEL
+            </button>
+          </div>
+          {(fetcher.data as any)?.error && <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.redSystems, letterSpacing:'0.10em'}}>{(fetcher.data as any).error}</div>}
+        </form>
+      )}
+
+      {contacts.length === 0 && !adding && <div style={{padding:'20px 16px', fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint, letterSpacing:'0.10em'}}>No contacts — click + ADD above</div>}
+      {contacts.map((c:any, i:number) => (
+        <ContactCard key={c.id} contact={c} orgId={orgId} refresh={refresh} borderTop={i > 0} />
+      ))}
+    </div>
   );
 }
+
 
 function MiniBtn({href, children}: {href:string; children:React.ReactNode}) {
   return (
@@ -627,11 +777,20 @@ function MiniBtn({href, children}: {href:string; children:React.ReactNode}) {
   );
 }
 
+// ─── Note channel helpers ─────────────────────────────────────────────────────
+const CHANNEL_COLORS: Record<string,string> = {CALL:T.green, TEXT:T.cyan, EMAIL:T.yellow, VISIT:T.magenta};
+function parseNote(body: string): {channel:string|null; text:string} {
+  const m = (body||'').match(/^\[(\w+)\]\s*([\s\S]*)/);
+  if (m && ['CALL','TEXT','EMAIL','VISIT'].includes(m[1])) return {channel:m[1], text:m[2]};
+  return {channel:null, text:body||''};
+}
+
 // ─── Notes Panel ──────────────────────────────────────────────────────────────
 function NotesPanel({orgId, notes, refresh}: {orgId:string; notes:any[]; refresh:()=>void}) {
   const [draft, setDraft] = useState('');
   const [composing, setComposing] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<string|null>(null);
+  const [confirmingNoteId, setConfirmingNoteId] = useState<string|null>(null);
   const addFetcher = useFetcher();
   const delFetcher = useFetcher();
 
@@ -643,70 +802,107 @@ function NotesPanel({orgId, notes, refresh}: {orgId:string; notes:any[]; refresh
     setDraft(''); setComposing(false); setSelectedChannel(null); refresh();
   };
 
-  const deleteNote = (noteId: string) => {
+  const confirmDelete = (noteId: string) => setConfirmingNoteId(noteId);
+  const cancelDelete = () => setConfirmingNoteId(null);
+  const executeDelete = (noteId: string) => {
     const fd = new FormData(); fd.set('intent','delete_note'); fd.set('org_id',orgId); fd.set('note_id',noteId);
     delFetcher.submit(fd, {method:'post', action:'/api/org-update'});
-    refresh();
+    setConfirmingNoteId(null); refresh();
   };
+
+  const CHANNELS = ['CALL','TEXT','EMAIL','VISIT'];
 
   return (
     <div style={{background:T.surface, border:`1px solid ${T.border}`}}>
-      <SectionHead title="Notes" count={`(${notes.length})`} source={composing?undefined:'+ add note ⌘N'} />
+      <SectionHead title="Notes" count={`(${notes.length})`} source={
+        <button type="button" onClick={()=>setComposing(true)}
+          style={{background:'none', border:'none', color:composing?T.textFaint:T.yellow, fontFamily:'JetBrains Mono,monospace', fontSize:10, letterSpacing:'0.14em', cursor:'pointer', padding:0}}>
+          {composing ? '' : '+ ADD ⌘N'}
+        </button>
+      } />
 
-      {/* Compose row */}
-      <div style={{padding:'14px 16px', borderBottom:`1px solid ${T.border}`, background:T.surfaceElev}}>
-        {composing ? (
-          <div style={{display:'flex', flexDirection:'column', gap:8}}>
-            <textarea value={draft} onChange={e=>setDraft(e.target.value)} autoFocus rows={3} placeholder="Add a note about this account…"
-              onKeyDown={e=>{if((e.metaKey||e.ctrlKey)&&e.key==='Enter')submit(); if(e.key==='Escape'){setComposing(false);setDraft('');}}}
-              style={{background:T.bg, border:`1px solid ${T.borderStrong}`, color:T.text, fontSize:13, padding:'10px 12px', resize:'vertical', outline:'none', fontFamily:'inherit', lineHeight:1.5}} />
-            <div style={{display:'flex', gap:8, alignItems:'center'}}>
-              <button onClick={submit} style={{height:32, padding:'0 14px', background:T.yellow, border:'none', color:'#000', fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.18em', textTransform:'uppercase', cursor:'pointer'}}>Save</button>
-              <button onClick={()=>{setComposing(false);setDraft('');}} style={{height:32, padding:'0 12px', background:'transparent', border:`1px solid ${T.borderStrong}`, color:T.textFaint, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.14em', cursor:'pointer'}}>Cancel</button>
-              <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textFaint, letterSpacing:'0.10em'}}>⌘↵ to save</span>
-            </div>
+      {/* Compose area */}
+      {composing && (
+        <div style={{padding:'12px 16px', borderBottom:`1px solid ${T.border}`, background:T.surfaceElev, display:'flex', flexDirection:'column', gap:8}}>
+          {/* Channel selector — always visible in compose */}
+          <div style={{display:'flex', gap:6, alignItems:'center'}}>
+            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, color:T.textFaint, letterSpacing:'0.12em', marginRight:2}}>LOG AS:</span>
+            {CHANNELS.map(ch => {
+              const on = selectedChannel === ch;
+              const col = CHANNEL_COLORS[ch];
+              return (
+                <button key={ch} type="button" onClick={()=>setSelectedChannel(on?null:ch)}
+                  style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, padding:'3px 9px', border:`1px solid ${on?col:T.borderStrong}`, color:on?col:T.textSubtle, letterSpacing:'0.14em', background:on?`${col}14`:'transparent', cursor:'pointer', transition:'all 100ms'}}>
+                  {ch}
+                </button>
+              );
+            })}
+            {selectedChannel && <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:9, color:CHANNEL_COLORS[selectedChannel], letterSpacing:'0.12em', marginLeft:4}}>✓ {selectedChannel}</span>}
           </div>
-        ) : (
-          <div style={{display:'flex', gap:12, alignItems:'center', cursor:'text'}} onClick={()=>setComposing(true)}>
-            <img src="https://agents-assets.nyc3.cdn.digitaloceanspaces.com/sky-avatar.png" alt="Sky Lima" style={{width:28,height:28,borderRadius:'50%',objectFit:'cover',flexShrink:0}} />
-            <div style={{flex:1, fontSize:13, color:T.textFaint, fontStyle:'italic'}}>Add a note about this account…</div>
-            <div style={{display:'flex', gap:6}}>
-              {['CALL','TEXT','EMAIL','VISIT'].map(t=>{
-                const on = selectedChannel===t;
-                return (
-                  <button key={t} type="button" onClick={e=>{e.stopPropagation();setSelectedChannel(on?null:t);setComposing(true);}}
-                    style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, padding:'3px 7px', border:`1px solid ${on?T.yellow:T.borderStrong}`, color:on?T.yellow:T.textSubtle, letterSpacing:'0.14em', background:on?'rgba(255,213,0,0.08)':'transparent', cursor:'pointer'}}>
-                    {t}
-                  </button>
-                );
-              })}
-            </div>
+          <textarea value={draft} onChange={e=>setDraft(e.target.value)} autoFocus rows={3} placeholder="Add a note about this account…"
+            onKeyDown={e=>{if((e.metaKey||e.ctrlKey)&&e.key==='Enter')submit(); if(e.key==='Escape'){setComposing(false);setDraft('');setSelectedChannel(null);}}}
+            style={{background:T.bg, border:`1px solid ${T.borderStrong}`, color:T.text, fontSize:13, padding:'10px 12px', resize:'vertical', outline:'none', fontFamily:'inherit', lineHeight:1.5}} />
+          <div style={{display:'flex', gap:8, alignItems:'center'}}>
+            <button onClick={submit} style={{height:32, padding:'0 14px', background:T.yellow, border:'none', color:'#000', fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.18em', textTransform:'uppercase', cursor:'pointer'}}>Save</button>
+            <button onClick={()=>{setComposing(false);setDraft('');setSelectedChannel(null);}} style={{height:32, padding:'0 12px', background:'transparent', border:`1px solid ${T.borderStrong}`, color:T.textFaint, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.14em', cursor:'pointer'}}>Cancel</button>
+            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textFaint, letterSpacing:'0.10em'}}>⌘↵ to save</span>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Click-to-compose placeholder when not open */}
+      {!composing && (
+        <div style={{padding:'10px 16px', borderBottom:`1px solid ${T.border}`, background:T.surfaceElev, display:'flex', gap:10, alignItems:'center', cursor:'text'}} onClick={()=>setComposing(true)}>
+          <img src="https://agents-assets.nyc3.cdn.digitaloceanspaces.com/sky-avatar.png" alt="Sky Lima" style={{width:26,height:26,borderRadius:'50%',objectFit:'cover',flexShrink:0}} />
+          <div style={{flex:1, fontSize:12, color:T.textFaint, fontStyle:'italic'}}>Add a note…</div>
+          <div style={{display:'flex', gap:5}}>
+            {CHANNELS.map(ch => (
+              <button key={ch} type="button" onClick={e=>{e.stopPropagation();setSelectedChannel(ch);setComposing(true);}}
+                style={{fontFamily:'JetBrains Mono,monospace', fontSize:9, padding:'2px 6px', border:`1px solid ${T.borderStrong}`, color:T.textSubtle, letterSpacing:'0.12em', background:'transparent', cursor:'pointer'}}>
+                {ch}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Note list */}
       {notes.length === 0 && <div style={{padding:'20px 16px', fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint, letterSpacing:'0.10em'}}>No notes yet</div>}
       {notes.map((n:any, i:number) => {
+        const {channel, text} = parseNote(n.body);
+        const chColor = channel ? CHANNEL_COLORS[channel] : null;
         const initials = (n.author_name||'').split(/\s+/).slice(0,2).map((w:string)=>w[0]?.toUpperCase()||'').join('')||'?';
         const isSky = (n.author_name||'').toLowerCase().includes('sky');
         return (
-          <div key={n.id} style={{padding:'14px 16px', display:'flex', gap:12, borderTop:i===0?'none':`1px solid ${T.border}`}}>
-            <div style={{width:28, height:28, borderRadius:'50%', background:isSky?`linear-gradient(135deg,${T.yellow},${T.yellowWarm})`:'#1A1A1A', border:isSky?'none':`1px solid ${T.borderStrong}`, display:'flex', alignItems:'center', justifyContent:'center', color:isSky?'#000':T.textMuted, fontFamily:'Teko,sans-serif', fontSize:13, fontWeight:500, flexShrink:0}}>{initials}</div>
+          <div key={n.id} style={{padding:'12px 16px', display:'flex', gap:10, borderTop:`1px solid ${T.border}`}}>
+            <div style={{width:26, height:26, borderRadius:'50%', background:isSky?`linear-gradient(135deg,${T.yellow},${T.yellowWarm})`:'#1A1A1A', border:isSky?'none':`1px solid ${T.borderStrong}`, display:'flex', alignItems:'center', justifyContent:'center', color:isSky?'#000':T.textMuted, fontFamily:'Teko,sans-serif', fontSize:12, fontWeight:500, flexShrink:0, marginTop:1}}>{initials}</div>
             <div style={{flex:1, minWidth:0}}>
-              <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between', gap:8}}>
-                <div style={{display:'flex', alignItems:'baseline', gap:10}}>
-                  <span style={{fontFamily:'Teko,sans-serif', fontSize:15, letterSpacing:'0.10em', color:T.text, fontWeight:500}}>{(n.author_name||'').toUpperCase()}</span>
+              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:5}}>
+                <div style={{display:'flex', alignItems:'center', gap:8}}>
+                  <span style={{fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.10em', color:T.text, fontWeight:500}}>{(n.author_name||'').toUpperCase()}</span>
+                  {channel && (
+                    <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:9, padding:'1px 6px', border:`1px solid ${chColor}`, color:chColor, letterSpacing:'0.16em'}}>
+                      {channel}
+                    </span>
+                  )}
+                  {n.pinned && <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:9, color:T.yellow, letterSpacing:'0.12em'}}>📌</span>}
                 </div>
                 <div style={{display:'flex', alignItems:'center', gap:8, flexShrink:0}}>
                   <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textFaint, letterSpacing:'0.10em'}}>
-                    {new Date(n.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
+                    {new Date(n.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'})}
                   </span>
-                  <button onClick={()=>deleteNote(n.id)} style={{background:'none', border:'none', color:T.textFaint, cursor:'pointer', display:'flex', alignItems:'center', padding:2}}><DeleteIcon /></button>
+                  {confirmingNoteId === n.id ? (
+                    <div style={{display:'flex', alignItems:'center', gap:5}}>
+                      <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, color:T.redSystems, letterSpacing:'0.08em'}}>Delete?</span>
+                      <button onClick={()=>executeDelete(n.id)} style={{background:T.redSystems, border:'none', color:'#000', fontFamily:'JetBrains Mono,monospace', fontSize:9.5, padding:'2px 7px', cursor:'pointer', letterSpacing:'0.08em'}}>YES</button>
+                      <button onClick={cancelDelete} style={{background:'none', border:`1px solid ${T.borderStrong}`, color:T.textFaint, fontFamily:'JetBrains Mono,monospace', fontSize:9.5, padding:'2px 5px', cursor:'pointer'}}>NO</button>
+                    </div>
+                  ) : (
+                    <button onClick={()=>confirmDelete(n.id)} style={{background:'none', border:'none', color:T.textFaint, cursor:'pointer', display:'flex', alignItems:'center', padding:2}}><DeleteIcon /></button>
+                  )}
                 </div>
               </div>
-              {n.pinned && <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9, color:T.yellow, letterSpacing:'0.16em', marginBottom:4}}>📌 PINNED</div>}
-              <div style={{fontSize:13, color:T.textMuted, marginTop:4, lineHeight:1.55, whiteSpace:'pre-wrap'}}>{n.body}</div>
+              <div style={{fontSize:13, color:T.textMuted, lineHeight:1.55, whiteSpace:'pre-wrap'}}>{text}</div>
             </div>
           </div>
         );
