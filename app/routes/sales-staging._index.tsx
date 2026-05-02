@@ -266,7 +266,7 @@ function NewAccountModal({onClose}:{onClose:()=>void}) {
     clearTimeout(debounceRef.current);
     debounceRef.current=setTimeout(async()=>{
       try{
-        const r=await fetch(`/api/places?q=${encodeURIComponent(query)}`);
+        const r=await fetch(`/api/places?q=${encodeURIComponent(query)}&type=business`);
         const d=await r.json();
         setPredictions(d.predictions||[]);
       }catch{setPredictions([]);}

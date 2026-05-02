@@ -80,6 +80,10 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   }
 
   // ── Autocomplete ──────────────────────────────────────────────────────
+  // type=business → search dispensary/business names, no location bias
+  // default       → street address lookup with NJ bias (existing delivery behavior)
+  const isBusiness = url.searchParams.get('type') === 'business';
+
   if (query.length < 3) {
     return json({predictions: []}, {
       headers: {'Cache-Control': 'no-store'},
@@ -93,18 +97,27 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey,
       },
-      body: JSON.stringify({
-        input: query,
-        includedPrimaryTypes: ['street_address', 'premise', 'subpremise', 'route'],
-        includedRegionCodes: ['us'],
-        locationBias: {
-          rectangle: {
-            // Bounding box roughly covering New Jersey
-            low: {latitude: 38.9, longitude: -75.6},
-            high: {latitude: 41.4, longitude: -73.9},
-          },
-        },
-      }),
+      body: JSON.stringify(
+        isBusiness
+          ? {
+              // Business search: find dispensaries by name anywhere in the US
+              input: query,
+              includedPrimaryTypes: ['establishment'],
+              includedRegionCodes: ['us'],
+            }
+          : {
+              // Address search: street addresses with NJ bias (delivery/retail use)
+              input: query,
+              includedPrimaryTypes: ['street_address', 'premise', 'subpremise', 'route'],
+              includedRegionCodes: ['us'],
+              locationBias: {
+                rectangle: {
+                  low: {latitude: 38.9, longitude: -75.6},
+                  high: {latitude: 41.4, longitude: -73.9},
+                },
+              },
+            }
+      ),
     });
 
     if (!res.ok) {
