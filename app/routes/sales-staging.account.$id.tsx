@@ -159,35 +159,6 @@ export default function AccountDetail() {
                 </div>
               </div>
 
-              {/* Action stack — matches list page buttons */}
-              <div style={{display:'flex', flexDirection:'column', gap:6, minWidth:240}}>
-                <ActionRow primary label={`CALL ${org.name.split(' ')[0].toUpperCase()}`} sub={org.phone||'no phone'} icon="phone" href={org.phone?`tel:${org.phone}`:'#'} disabled={!org.phone}/>
-                <ActionRow label={`TEXT ${org.name.split(' ')[0].toUpperCase()}`} sub="iMessage" icon="text" href={org.phone?`sms:${org.phone}`:'#'} disabled={!org.phone}/>
-                <ActionRow label={`EMAIL ${primaryContact?.first_name?.toUpperCase()||'CONTACT'}`} sub={primaryContact?.email||'no email'} icon="mail" href={primaryContact?.email?`mailto:${primaryContact.email}`:'#'} disabled={!primaryContact?.email}/>
-                <DetailActionBtn label="BRIEF" sub="AI pre-call brief" icon="brief" onClick={()=>{
-                  fetch('/api/brief',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lead:{First_Name:primaryContact?.first_name||'',Last_Name:primaryContact?.last_name||'',_fullName:primaryContact?.full_name||org.name,Company:org.name,Phone:org.phone||primaryContact?.phone||'',Email:primaryContact?.email||'',_status:'active'}})}).catch(()=>{});
-                  window.open('/sales-floor/app?brief=1','_brief','width=720,height=620');
-                }}/>
-                <DetailActionBtn label="TRAINING" sub="Book Vibes training" icon="star" onClick={()=>{
-                  const id=(org.zoho_account_id||'').replace('zcrm_','');
-                  if(id) fetch('/api/sales-floor-vibes-training',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({zohoAccountId:id,customerName:org.name})}).catch(()=>{});
-                }} disabled={!org.zoho_account_id}/>
-                <DetailActionBtn label="SEND MENU" sub="NJ menu via email" icon="send" onClick={()=>{
-                  const e=primaryContact?.email;
-                  if(!e){alert('No email on file.');return;}
-                  const subj=`Highsman NJ Wholesale Menu`;
-                  const body=`Hi ${primaryContact?.first_name||'there'},\n\nHere's our NJ wholesale menu:\n\nhttps://highsman.com/njmenu\n\nBest,\nSky Lima\nHighsman`;
-                  window.open(`mailto:${e}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`);
-                }} disabled={!primaryContact?.email}/>
-                <DetailActionBtn label="NEW PRODUCT" sub="Product onboarding" icon="box" onClick={()=>{
-                  const id=(org.zoho_account_id||'').replace('zcrm_','');
-                  if(id) fetch('/api/sales-floor-vibes-product-onboard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({zohoAccountId:id,customerName:org.name})}).catch(()=>{});
-                }} disabled={!org.zoho_account_id}/>
-                <DetailActionBtn label="FLAG PETE" sub={isFlagged?'Currently flagged':'Flag for follow-up'} icon="flag" onClick={()=>{
-                  const fd=new FormData();fd.set('intent','flag_pete');fd.set('org_id',org.id);
-                  document.dispatchEvent(new CustomEvent('stagingAction',{detail:{fd}}));
-                }} flagged={isFlagged}/>
-              </div>
             </div>
 
             {/* Quick stats strip — data we actually have */}
@@ -197,11 +168,11 @@ export default function AccountDetail() {
               const onboardingTotal = 4;
               const onboardingPct = onboardingTotal > 0 ? Math.round((onboardingDone/onboardingTotal)*100) : 0;
               const statCells = [
-                {l:'Days since order', v:days===null?'—':String(days), sub:days===null?'no orders':'d', accent:daysColor},
-                {l:'Last order date',  v:org.last_order_date?new Date(org.last_order_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}):'—', sub:'', accent:T.text},
-                {l:'Contacts',         v:String(contacts?.length||0), sub:contacts?.length===1?'contact':'contacts', accent:T.text},
-                {l:'Budtenders',       v:org.budtender_count?String(org.budtender_count):'—', sub:'on floor', accent:T.text},
-                {l:'Onboarding',       v:onboardingDone?`${onboardingDone}/${onboardingTotal}`:'—', sub:`${onboardingPct}%`, accent:onboardingPct===100?T.green:T.yellow},
+                {l:'Days since order',  v:days===null?'—':String(days), sub:days===null?'no orders':'d', accent:daysColor},
+                {l:'Last order date',   v:org.last_order_date?new Date(org.last_order_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}):'—', sub:'', accent:T.text},
+                {l:'Orders all time',   v:'—', sub:'pending inv. sync', accent:T.textFaint, note:true},
+                {l:'YTD revenue',       v:'—', sub:'pending inv. sync', accent:T.textFaint, note:true},
+                {l:'State rank',        v:'—', sub:`${org.market_state||'?'} · pending`, accent:T.textFaint, note:true},
               ];
               return (
                 <div style={{marginTop:26, display:'grid', gridTemplateColumns:'repeat(5,1fr)', background:T.border, gap:1, border:`1px solid ${T.border}`}}>
@@ -219,6 +190,33 @@ export default function AccountDetail() {
             })()}
           </div>
 
+          {/* ── Action strip — full-width horizontal row below stats ── */}
+          <div style={{borderBottom:`1px solid ${T.border}`, padding:'12px 32px', display:'flex', alignItems:'center', gap:8, overflowX:'auto', background:`rgba(0,0,0,0.2)`, flexWrap:'nowrap'}}>
+            <HorizActionBtn href={phone?`tel:${phone}`:undefined} color={T.yellow} label="CALL" primary disabled={!phone}
+              icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>}/>
+            <HorizActionBtn href={phone?`sms:${phone}`:undefined} color={T.textMuted} label="TEXT" disabled={!phone}
+              icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M3 5h18v12h-8l-5 4v-4H3z"/></svg>}/>
+            <HorizActionBtn href={primaryContact?.email?`mailto:${primaryContact.email}`:undefined} color={T.textMuted} label="EMAIL" disabled={!primaryContact?.email}
+              icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M3 6h18v12H3zM3 6l9 7 9-7"/></svg>}/>
+            <HorizActionBtn color={T.cyan} label="BRIEF" disabled={false}
+              icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5V4a1 1 0 0 1 1-1h15v18H6.5A2.5 2.5 0 0 1 4 19.5z"/></svg>}
+              onClick={()=>{fetch('/api/brief',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lead:{First_Name:primaryContact?.first_name||'',Last_Name:primaryContact?.last_name||'',_fullName:primaryContact?.full_name||org.name,Company:org.name,Phone:phone||'',Email:primaryContact?.email||'',_status:'active'}})}).catch(()=>{});window.open('/sales-floor/app?brief=1','_brief','width=720,height=620');}}/>
+            <div style={{width:1, height:24, background:T.borderStrong, flexShrink:0}}/>
+            <HorizActionBtn color={T.textMuted} label="TRAINING" disabled={!org.zoho_account_id}
+              icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>}
+              onClick={()=>{const id=(org.zoho_account_id||'').replace('zcrm_','');if(id)fetch('/api/sales-floor-vibes-training',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({zohoAccountId:id,customerName:org.name})}).catch(()=>{});}}/>
+            <HorizActionBtn color={T.textMuted} label="SEND MENU" disabled={!primaryContact?.email}
+              icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>}
+              onClick={()=>{const e=primaryContact?.email;if(!e)return;const subj='Highsman NJ Wholesale Menu';const body=`Hi ${primaryContact?.first_name||'there'},\n\nNJ menu:\nhttps://highsman.com/njmenu\n\nBest,\nSky`;window.open(`mailto:${e}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`);}}/>
+            <HorizActionBtn color={T.textMuted} label="NEW PRODUCT" disabled={!org.zoho_account_id}
+              icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>}
+              onClick={()=>{const id=(org.zoho_account_id||'').replace('zcrm_','');if(id)fetch('/api/sales-floor-vibes-product-onboard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({zohoAccountId:id,customerName:org.name})}).catch(()=>{});}}/>
+            <div style={{flex:1}}/>
+            <HorizActionBtn color={T.redSystems} label="FLAG PETE" filled={isFlagged}
+              icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M5 3v18M5 4h12l-2 4 2 4H5"/></svg>}
+              onClick={()=>{const fd=new FormData();fd.set('intent','flag_pete');fd.set('org_id',org.id);fetch('/api/org-update',{method:'POST',body:fd}).then(()=>refresh());}}/>
+          </div>
+
           {/* Body grid */}
           <div style={{padding:'24px 32px 40px', display:'grid', gridTemplateColumns:'minmax(0,1.6fr) minmax(0,1fr)', gap:24}}>
             {/* Left: Fields panel */}
@@ -227,7 +225,7 @@ export default function AccountDetail() {
             {/* Right: Onboarding + Contacts + Notes */}
             <div style={{display:'flex', flexDirection:'column', gap:24}}>
               <OnboardingPanel orgId={org.id} steps={steps} refresh={refresh} />
-              <ContactsPanel contacts={contacts} />
+              <ContactsPanel contacts={contacts} orgId={org.id} refresh={refresh} />
               <NotesPanel orgId={org.id} notes={notes} refresh={refresh} />
             </div>
           </div>
@@ -265,6 +263,22 @@ function ActionRow({primary, label, sub, icon, href, disabled}: {primary?: boole
       {!disabled&&<span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:primary?'rgba(255,213,0,0.6)':T.textFaint, letterSpacing:'0.14em'}}>↵</span>}
     </a>
   );
+}
+
+// ─── Horizontal action button (action strip) ─────────────────────────────────
+function HorizActionBtn({href, onClick, color, label, icon, primary, disabled, filled}: {href?:string; onClick?:()=>void; color:string; label:string; icon:React.ReactNode; primary?:boolean; disabled?:boolean; filled?:boolean}) {
+  const style: React.CSSProperties = {
+    height: 36, padding: '0 14px', flexShrink: 0,
+    background: primary&&!disabled ? 'rgba(255,213,0,0.08)' : filled ? `rgba(255,51,85,0.12)` : 'transparent',
+    border: `1px solid ${disabled ? T.borderStrong : filled ? color : primary ? color : color+'77'}`,
+    color: disabled ? T.borderStrong : color,
+    fontFamily: 'Teko,sans-serif', fontSize: 13, letterSpacing: '0.18em', textTransform: 'uppercase' as const,
+    display: 'inline-flex', alignItems: 'center', gap: 7,
+    cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1,
+    textDecoration: 'none',
+  };
+  if (href && !disabled) return <a href={href} style={style}>{icon}{label}</a>;
+  return <button type="button" onClick={disabled ? undefined : onClick} style={style}>{icon}{label}</button>;
 }
 
 // ─── Delete Account Button ────────────────────────────────────────────────────
@@ -414,11 +428,13 @@ function ReadOnlyField({label, value, note}: {label:string; value:string; note?:
 }
 
 // ─── Online menus checkbox multi-select ──────────────────────────────────────
-const MENU_OPTIONS = ['AIQ','Dutchie','Weedmaps','Jane','LeafLink','Leafly','Nabis'];
+// Full Zoho picklist options for Online Menus
+const MENU_OPTIONS = ['AIQ','Blaze','Cova','Dispense','Dutchie','Jane','Leafly','Mosaic','Nabis','Self Administrator','Sweed','Treez','Weedmaps'];
 
 function OnlineMenusField({orgId, value}: {orgId:string; value:string[]}) {
   const fetcher = useFetcher();
   const [selected, setSelected] = useState<string[]>(Array.isArray(value)?value:[]);
+  const [open, setOpen] = useState(false);
 
   const toggle = (opt: string) => {
     const next = selected.includes(opt) ? selected.filter(s=>s!==opt) : [...selected, opt];
@@ -429,19 +445,33 @@ function OnlineMenusField({orgId, value}: {orgId:string; value:string[]}) {
   };
 
   return (
-    <div style={{borderBottom:`1px solid ${T.border}`}}>
-      <div style={{padding:'14px 16px 8px', fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.30em', color:T.textFaint, textTransform:'uppercase'}}>Online Menus</div>
-      <div style={{padding:'0 16px 14px', display:'flex', flexWrap:'wrap', gap:8}}>
-        {MENU_OPTIONS.map(opt => {
-          const on = selected.includes(opt);
-          return (
-            <button key={opt} type="button" onClick={()=>toggle(opt)}
-              style={{height:30, padding:'0 12px', background:on?`rgba(0,212,255,0.1)`:'transparent', border:`1px solid ${on?T.cyan:T.borderStrong}`, color:on?T.cyan:T.textSubtle, fontFamily:'JetBrains Mono,monospace', fontSize:11, letterSpacing:'0.10em', cursor:'pointer'}}>
-              {opt}
-            </button>
-          );
-        })}
-      </div>
+    <div style={{padding:'14px 16px', borderBottom:`1px solid ${T.border}`, position:'relative'}}>
+      <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.30em', color:T.textFaint, textTransform:'uppercase', marginBottom:6}}>Online Menus</div>
+      {/* Trigger showing selected values */}
+      <button type="button" onClick={()=>setOpen(o=>!o)}
+        style={{width:'100%', padding:'8px 12px', background:T.surfaceElev, border:`1px solid ${open?T.yellow:T.borderStrong}`, color:T.text, fontFamily:'Inter,sans-serif', fontSize:13, textAlign:'left', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+        <span>{selected.length>0?selected.join(', '):<span style={{color:T.textFaint}}>—</span>}</span>
+        <span style={{color:T.textFaint, fontSize:11}}>{open?'▲':'▼'}</span>
+      </button>
+      {/* Dropdown */}
+      {open && (
+        <div style={{position:'absolute', top:'100%', left:16, right:16, zIndex:100, background:T.surfaceElev, border:`1px solid ${T.borderStrong}`, maxHeight:220, overflowY:'auto', boxShadow:'0 8px 24px rgba(0,0,0,0.5)'}}>
+          {MENU_OPTIONS.map(opt => {
+            const on = selected.includes(opt);
+            return (
+              <button key={opt} type="button" onClick={()=>toggle(opt)}
+                style={{display:'flex', alignItems:'center', gap:10, width:'100%', padding:'9px 14px', background:on?`rgba(0,212,255,0.06)`:'transparent', border:'none', borderBottom:`1px solid ${T.border}`, color:on?T.cyan:T.textMuted, fontFamily:'Inter,sans-serif', fontSize:13, cursor:'pointer', textAlign:'left'}}
+                onMouseEnter={e=>(e.currentTarget.style.background=on?'rgba(0,212,255,0.10)':T.bg)}
+                onMouseLeave={e=>(e.currentTarget.style.background=on?'rgba(0,212,255,0.06)':'transparent')}>
+                <span style={{width:14, height:14, border:`1px solid ${on?T.cyan:T.borderStrong}`, background:on?T.cyan:'transparent', flexShrink:0, display:'inline-flex', alignItems:'center', justifyContent:'center'}}>
+                  {on&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3"><path d="M5 12l4 4 10-10"/></svg>}
+                </span>
+                {opt}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -490,7 +520,7 @@ function FieldsPanel({org}: {org: any}) {
         <ReadOnlyField label="Reorder Cadence" value={org.reorder_cadence_days?`${org.reorder_cadence_days} days avg`:'—'} note="auto-calculated" />
         <EditableField label="Tags" field="tags" value={(org.tags||[]).join(', ')} orgId={org.id} hint="Comma-separated" />
         <SelectField label="Allow Split Promos" field="allow_split_promos" value={org.allow_split_promos?'Yes':'No'} orgId={org.id} options={['Yes','No']} />
-        <EditableField label="Sparkplug" field="sparkplug_enabled" value={org.sparkplug_enabled?'Yes':'No'} orgId={org.id} />
+        <SelectField label="Sparkplug" field="sparkplug_enabled" value={org.sparkplug_enabled?'Yes':'No'} orgId={org.id} options={['Yes','No']} />
       </TwoCol>
 
       <GroupLabel>Pop-ups & Training</GroupLabel>
@@ -560,10 +590,55 @@ function OnboardingPanel({orgId, steps, refresh}: {orgId:string; steps:any[]; re
 }
 
 // ─── Contacts Panel ───────────────────────────────────────────────────────────
-function ContactsPanel({contacts}: {contacts: any[]}) {
+function ContactsPanel({contacts, orgId, refresh}: {contacts: any[]; orgId: string; refresh: ()=>void}) {
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({first_name:'', last_name:'', email:'', phone:'', job_role:'', is_primary:'false'});
+  const fetcher = useFetcher();
+
+  useEffect(()=>{
+    if (fetcher.state==='idle'&&(fetcher.data as any)?.ok) { setAdding(false); setForm({first_name:'',last_name:'',email:'',phone:'',job_role:'',is_primary:'false'}); refresh(); }
+  },[fetcher.data, fetcher.state, refresh]);
+
   return (
     <div style={{background:T.surface, border:`1px solid ${T.border}`}}>
-      <SectionHead title="Contacts" count={`(${contacts.length})`} source="+ add" />
+      <SectionHead title="Contacts" count={`(${contacts.length})`} source={
+        <button type="button" onClick={()=>setAdding(a=>!a)}
+          style={{background:'none',border:`1px solid ${T.borderStrong}`,color:T.yellow,fontFamily:'Teko,sans-serif',fontSize:12,letterSpacing:'0.18em',padding:'3px 10px',cursor:'pointer'}}>
+          {adding?'CANCEL':'+ ADD'}
+        </button>
+      }/>
+
+      {/* Add contact form */}
+      {adding && (
+        <fetcher.Form method="post" action="/api/contact-create" style={{padding:'14px 16px',borderBottom:`1px solid ${T.border}`,background:T.surfaceElev}}>
+          <input type="hidden" name="org_id" value={orgId}/>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
+            {[
+              {name:'first_name',label:'First Name *'},
+              {name:'last_name',label:'Last Name'},
+              {name:'email',label:'Email'},
+              {name:'phone',label:'Phone'},
+              {name:'job_role',label:'Role / Title'},
+            ].map(f=>(
+              <div key={f.name} style={{gridColumn:f.name==='job_role'?'1/-1':'auto'}}>
+                <div style={{fontFamily:'Teko,sans-serif',fontSize:10,letterSpacing:'0.28em',color:T.textFaint,textTransform:'uppercase',marginBottom:4}}>{f.label}</div>
+                <input name={f.name} value={(form as any)[f.name]} onChange={e=>setForm(p=>({...p,[f.name]:e.target.value}))}
+                  style={{width:'100%',padding:'7px 10px',background:T.bg,border:`1px solid ${T.borderStrong}`,color:T.text,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+              </div>
+            ))}
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:10}}>
+            <label style={{display:'flex',alignItems:'center',gap:6,fontFamily:'JetBrains Mono,monospace',fontSize:11,color:T.textMuted,cursor:'pointer'}}>
+              <input type="checkbox" name="is_primary" value="true" checked={form.is_primary==='true'} onChange={e=>setForm(p=>({...p,is_primary:e.target.checked?'true':'false'}))}/>
+              Primary buyer
+            </label>
+          </div>
+          <button type="submit" disabled={!form.first_name.trim()||fetcher.state!=='idle'}
+            style={{height:32,padding:'0 16px',background:T.yellow,border:'none',color:'#000',fontFamily:'Teko,sans-serif',fontSize:13,fontWeight:600,letterSpacing:'0.18em',textTransform:'uppercase',cursor:'pointer'}}>
+            {fetcher.state!=='idle'?'Saving…':'Save Contact'}
+          </button>
+        </fetcher.Form>
+      )}
       {contacts.length === 0 && <div style={{padding:'20px 16px', fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint, letterSpacing:'0.10em'}}>No contacts</div>}
       {contacts.map((c:any, i:number) => {
         const initials = `${(c.first_name||'')[0]||''}${(c.last_name||'')[0]||''}`.toUpperCase() || '?';
@@ -657,12 +732,31 @@ function NotesPanel({orgId, notes, refresh}: {orgId:string; notes:any[]; refresh
       <div style={{padding:'14px 16px', borderBottom:`1px solid ${T.border}`, background:T.surfaceElev}}>
         {composing ? (
           <div style={{display:'flex', flexDirection:'column', gap:8}}>
-            <textarea value={draft} onChange={e=>setDraft(e.target.value)} autoFocus rows={3} placeholder="Add a note about this account…"
+            {/* Channel selector — shown above textarea when composing */}
+            <div style={{display:'flex', gap:6, alignItems:'center'}}>
+              <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textFaint, letterSpacing:'0.14em'}}>LOG AS:</span>
+              {['CALL','TEXT','EMAIL','VISIT'].map(t=>{
+                const on = selectedChannel===t;
+                return (
+                  <button key={t} type="button" onClick={()=>setSelectedChannel(on?null:t)}
+                    style={{height:26, padding:'0 10px', background:on?`rgba(255,213,0,0.12)`:'transparent', border:`1px solid ${on?T.yellow:T.borderStrong}`, color:on?T.yellow:T.textSubtle, fontFamily:'Teko,sans-serif', fontSize:12, letterSpacing:'0.18em', cursor:'pointer', fontWeight:on?600:400}}>
+                    {t}
+                  </button>
+                );
+              })}
+              {selectedChannel && (
+                <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.yellow, letterSpacing:'0.14em', marginLeft:4}}>
+                  ↑ will tag as [{selectedChannel}]
+                </span>
+              )}
+            </div>
+            <textarea value={draft} onChange={e=>setDraft(e.target.value)} autoFocus rows={3}
+              placeholder={selectedChannel ? `Add a ${selectedChannel.toLowerCase()} note…` : 'Add a note about this account…'}
               onKeyDown={e=>{if((e.metaKey||e.ctrlKey)&&e.key==='Enter')submit(); if(e.key==='Escape'){setComposing(false);setDraft('');}}}
-              style={{background:T.bg, border:`1px solid ${T.borderStrong}`, color:T.text, fontSize:13, padding:'10px 12px', resize:'vertical', outline:'none', fontFamily:'inherit', lineHeight:1.5}} />
+              style={{background:T.bg, border:`1px solid ${selectedChannel?T.yellow:T.borderStrong}`, color:T.text, fontSize:13, padding:'10px 12px', resize:'vertical', outline:'none', fontFamily:'inherit', lineHeight:1.5}} />
             <div style={{display:'flex', gap:8, alignItems:'center'}}>
               <button onClick={submit} style={{height:32, padding:'0 14px', background:T.yellow, border:'none', color:'#000', fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.18em', textTransform:'uppercase', cursor:'pointer'}}>Save</button>
-              <button onClick={()=>{setComposing(false);setDraft('');}} style={{height:32, padding:'0 12px', background:'transparent', border:`1px solid ${T.borderStrong}`, color:T.textFaint, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.14em', cursor:'pointer'}}>Cancel</button>
+              <button onClick={()=>{setComposing(false);setDraft('');setSelectedChannel(null);}} style={{height:32, padding:'0 12px', background:'transparent', border:`1px solid ${T.borderStrong}`, color:T.textFaint, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.14em', cursor:'pointer'}}>Cancel</button>
               <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textFaint, letterSpacing:'0.10em'}}>⌘↵ to save</span>
             </div>
           </div>
