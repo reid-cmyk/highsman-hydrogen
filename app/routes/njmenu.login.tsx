@@ -300,6 +300,26 @@ export default function NJMenuLogin() {
             NJ Wholesale Menu
           </p>
 
+          {/* Sub-headline — only shown on initial email step */}
+          {step === 'email' && (
+            <p
+              style={{
+                fontFamily: "'Teko', 'Oswald', 'Helvetica Neue', Arial, sans-serif",
+                fontSize: 22,
+                fontWeight: 600,
+                lineHeight: 1.15,
+                letterSpacing: '0.02em',
+                textTransform: 'uppercase',
+                textAlign: 'center',
+                color: BRAND.white,
+                margin: '0 0 28px 0',
+              }}
+            >
+              We&rsquo;ll send a sign-in link to your inbox.{' '}
+              <span style={{color: BRAND.gold}}>No password.</span>
+            </p>
+          )}
+
           {/* Error banner */}
           {error && (
             <div
@@ -339,16 +359,6 @@ export default function NJMenuLogin() {
               <button type="submit" disabled={busy} style={buttonStyle}>
                 {busy ? 'One sec…' : 'Continue'}
               </button>
-              <p
-                style={{
-                  marginTop: 18,
-                  textAlign: 'center',
-                  fontSize: 13,
-                  color: BRAND.textMuted,
-                }}
-              >
-                We'll send a sign-in link to your inbox. No password.
-              </p>
             </form>
           )}
 
