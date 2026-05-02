@@ -39,7 +39,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     try {
       const res = await fetch(`${LIT_API}/retailers?states=${state}`, {
         headers: {Authorization: `Bearer ${token}`, Accept: 'application/json'},
-        signal: AbortSignal.timeout(5000),
+        signal: new AbortController().signal,
       });
       if (res.ok) {
         const data: any = await res.json();
@@ -48,7 +48,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         // Get products for this brand in this state to see SKU counts per retailer
         const prodRes = await fetch(
           `${LIT_API}/brands/${BRAND_ID}/products?state=${state}&includeOOS=true`,
-          {headers: {Authorization: `Bearer ${token}`, Accept: 'application/json'}, signal: AbortSignal.timeout(8000)},
+          {headers: {Authorization: `Bearer ${token}`, Accept: 'application/json'}, signal: new AbortController().signal},
         );
 
         let skuCounts: Record<string, number> = {};
