@@ -227,7 +227,7 @@ export default function AccountDetail() {
             {/* Right: Onboarding + Contacts + Notes */}
             <div style={{display:'flex', flexDirection:'column', gap:24}}>
               <OnboardingPanel orgId={org.id} steps={steps} refresh={refresh} />
-              <ContactsPanel contacts={contacts} orgId={org.id} refresh={refresh} />
+              <ContactsPanel contacts={contacts} />
               <NotesPanel orgId={org.id} notes={notes} refresh={refresh} />
             </div>
           </div>
@@ -299,7 +299,7 @@ function DeleteAccountBtn({orgId}: {orgId: string}) {
 }
 
 // ─── Section Head ─────────────────────────────────────────────────────────────
-function SectionHead({title, source, count}: {title:string; source?:React.ReactNode; count?:string|number}) {
+function SectionHead({title, source, count}: {title:string; source?:string; count?:string|number}) {
   return (
     <div className="hs-sweep" style={{padding:'18px 16px 12px', borderBottom:`1px solid ${T.border}`, display:'flex', alignItems:'baseline', justifyContent:'space-between'}}>
       <div style={{fontFamily:'Teko,sans-serif', fontSize:18, letterSpacing:'0.28em', fontWeight:500, color:T.text, textTransform:'uppercase'}}>
@@ -490,7 +490,7 @@ function FieldsPanel({org}: {org: any}) {
         <ReadOnlyField label="Reorder Cadence" value={org.reorder_cadence_days?`${org.reorder_cadence_days} days avg`:'—'} note="auto-calculated" />
         <EditableField label="Tags" field="tags" value={(org.tags||[]).join(', ')} orgId={org.id} hint="Comma-separated" />
         <SelectField label="Allow Split Promos" field="allow_split_promos" value={org.allow_split_promos?'Yes':'No'} orgId={org.id} options={['Yes','No']} />
-        <SelectField label="Sparkplug" field="sparkplug_enabled" value={org.sparkplug_enabled?'Yes':'No'} orgId={org.id} />
+        <EditableField label="Sparkplug" field="sparkplug_enabled" value={org.sparkplug_enabled?'Yes':'No'} orgId={org.id} />
       </TwoCol>
 
       <GroupLabel>Pop-ups & Training</GroupLabel>
@@ -560,53 +560,10 @@ function OnboardingPanel({orgId, steps, refresh}: {orgId:string; steps:any[]; re
 }
 
 // ─── Contacts Panel ───────────────────────────────────────────────────────────
-function ContactsPanel({contacts, orgId, refresh}: {contacts: any[]; orgId: string; refresh: ()=>void}) {
-  const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({first_name:'',last_name:'',email:'',phone:'',job_role:'',is_primary:'false'});
-  const fetcher = useFetcher();
-
-  useEffect(()=>{
-    if (fetcher.state==='idle' && (fetcher.data as any)?.ok) {
-      setAdding(false);
-      setForm({first_name:'',last_name:'',email:'',phone:'',job_role:'',is_primary:'false'});
-      refresh();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[fetcher.state, fetcher.data]);
-
+function ContactsPanel({contacts}: {contacts: any[]}) {
   return (
     <div style={{background:T.surface, border:`1px solid ${T.border}`}}>
-      <SectionHead title="Contacts" count={`(${contacts.length})`} source={
-        <button type="button" onClick={()=>setAdding(a=>!a)}
-          style={{background:'none',border:`1px solid ${T.borderStrong}`,color:T.yellow,fontFamily:'Teko,sans-serif',fontSize:12,letterSpacing:'0.18em',padding:'3px 10px',cursor:'pointer'}}>
-          {adding?'CANCEL':'+ ADD'}
-        </button>
-      }/>
-      {adding && (
-        <form onSubmit={e=>{e.preventDefault();const fd=new FormData(e.currentTarget);fetcher.submit(fd,{method:'post',action:'/api/contact-create'});}}
-          style={{padding:'14px 16px',borderBottom:`1px solid ${T.border}`,background:T.surfaceElev}}>
-          <input type="hidden" name="org_id" value={orgId}/>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
-            {([{n:'first_name',l:'First Name *'},{n:'last_name',l:'Last Name'},{n:'email',l:'Email'},{n:'phone',l:'Phone'},{n:'job_role',l:'Role / Title'}] as any[]).map((f:any)=>(
-              <div key={f.n} style={{gridColumn:f.n==='job_role'?'1/-1':'auto'}}>
-                <div style={{fontFamily:'Teko,sans-serif',fontSize:10,letterSpacing:'0.28em',color:T.textFaint,textTransform:'uppercase',marginBottom:4}}>{f.l}</div>
-                <input name={f.n} value={(form as any)[f.n]} onChange={e=>setForm(p=>({...p,[f.n]:e.target.value}))}
-                  style={{width:'100%',padding:'7px 10px',background:T.bg,border:`1px solid ${T.borderStrong}`,color:T.text,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
-              </div>
-            ))}
-          </div>
-          <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:10}}>
-            <label style={{display:'flex',alignItems:'center',gap:6,fontFamily:'JetBrains Mono,monospace',fontSize:11,color:T.textMuted,cursor:'pointer'}}>
-              <input type="checkbox" name="is_primary" value="true" checked={form.is_primary==='true'} onChange={e=>setForm(p=>({...p,is_primary:e.target.checked?'true':'false'}))}/>
-              Primary buyer
-            </label>
-          </div>
-          <button type="submit" disabled={!form.first_name.trim()||fetcher.state!=='idle'}
-            style={{height:32,padding:'0 16px',background:T.yellow,border:'none',color:'#000',fontFamily:'Teko,sans-serif',fontSize:13,fontWeight:600,letterSpacing:'0.18em',textTransform:'uppercase',cursor:'pointer'}}>
-            {fetcher.state!=='idle'?'Saving…':'Save Contact'}
-          </button>
-        </form>
-      )}
+      <SectionHead title="Contacts" count={`(${contacts.length})`} source="+ add" />
       {contacts.length === 0 && <div style={{padding:'20px 16px', fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint, letterSpacing:'0.10em'}}>No contacts</div>}
       {contacts.map((c:any, i:number) => {
         const initials = `${(c.first_name||'')[0]||''}${(c.last_name||'')[0]||''}`.toUpperCase() || '?';
@@ -700,24 +657,9 @@ function NotesPanel({orgId, notes, refresh}: {orgId:string; notes:any[]; refresh
       <div style={{padding:'14px 16px', borderBottom:`1px solid ${T.border}`, background:T.surfaceElev}}>
         {composing ? (
           <div style={{display:'flex', flexDirection:'column', gap:8}}>
-            {/* Channel selector */}
-            <div style={{display:'flex', gap:6, alignItems:'center'}}>
-              <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textFaint, letterSpacing:'0.14em'}}>LOG AS:</span>
-              {['CALL','TEXT','EMAIL','VISIT'].map(t=>{
-                const on = selectedChannel===t;
-                return (
-                  <button key={t} type="button" onClick={()=>setSelectedChannel(on?null:t)}
-                    style={{height:24, padding:'0 8px', background:on?`rgba(255,213,0,0.12)`:'transparent', border:`1px solid ${on?T.yellow:T.borderStrong}`, color:on?T.yellow:T.textSubtle, fontFamily:'Teko,sans-serif', fontSize:12, letterSpacing:'0.16em', cursor:'pointer'}}>
-                    {t}
-                  </button>
-                );
-              })}
-              {selectedChannel && <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.yellow, letterSpacing:'0.12em'}}>↑ tags as [{selectedChannel}]</span>}
-            </div>
-            <textarea value={draft} onChange={e=>setDraft(e.target.value)} autoFocus rows={3}
-              placeholder={selectedChannel ? `Add a ${selectedChannel.toLowerCase()} note…` : 'Add a note about this account…'}
+            <textarea value={draft} onChange={e=>setDraft(e.target.value)} autoFocus rows={3} placeholder="Add a note about this account…"
               onKeyDown={e=>{if((e.metaKey||e.ctrlKey)&&e.key==='Enter')submit(); if(e.key==='Escape'){setComposing(false);setDraft('');}}}
-              style={{background:T.bg, border:`1px solid ${selectedChannel?T.yellow:T.borderStrong}`, color:T.text, fontSize:13, padding:'10px 12px', resize:'vertical', outline:'none', fontFamily:'inherit', lineHeight:1.5}} />
+              style={{background:T.bg, border:`1px solid ${T.borderStrong}`, color:T.text, fontSize:13, padding:'10px 12px', resize:'vertical', outline:'none', fontFamily:'inherit', lineHeight:1.5}} />
             <div style={{display:'flex', gap:8, alignItems:'center'}}>
               <button onClick={submit} style={{height:32, padding:'0 14px', background:T.yellow, border:'none', color:'#000', fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.18em', textTransform:'uppercase', cursor:'pointer'}}>Save</button>
               <button onClick={()=>{setComposing(false);setDraft('');}} style={{height:32, padding:'0 12px', background:'transparent', border:`1px solid ${T.borderStrong}`, color:T.textFaint, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.14em', cursor:'pointer'}}>Cancel</button>
