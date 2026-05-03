@@ -46,11 +46,16 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const headers = {Authorization: `Bearer ${token}`, Accept: 'application/json'};
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000); // 10s max
+    const sig = controller.signal;
+
     // Fetch brands + categories at this retailer in parallel
     const [brandsRes, catsRes] = await Promise.all([
-      fetch(`${LIT_API}/v1/retailer/${litId}/brands?beginDate=${begin}&endDate=${end}&returnDollarValues=true`, {headers}),
-      fetch(`${LIT_API}/v1/retailer/${litId}/categories?beginDate=${begin}&endDate=${end}&returnDollarValues=true`, {headers}),
+      fetch(`${LIT_API}/v1/retailer/${litId}/brands?beginDate=${begin}&endDate=${end}&returnDollarValues=true`, {headers, signal: sig}),
+      fetch(`${LIT_API}/v1/retailer/${litId}/categories?beginDate=${begin}&endDate=${end}&returnDollarValues=true`, {headers, signal: sig}),
     ]);
+    clearTimeout(timeout);
 
     const [brandsData, catsData] = await Promise.all([
       brandsRes.ok ? brandsRes.json() : null,

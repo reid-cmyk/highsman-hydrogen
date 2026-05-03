@@ -154,6 +154,9 @@ export default function AccountDetail() {
         }
       })
       .catch(() => setStateRank({rank:null, total:null, revenue:null, litRetailerId:null, loading:false}));
+    // Safety: clear loading after 12s regardless
+    const t = setTimeout(() => setStateRank(s => s.loading ? {...s, loading:false} : s), 12000);
+    return () => clearTimeout(t);
   }, [org?.id]);
 
   if (!authenticated) return <div style={{minHeight:'100vh',background:T.bg,display:'flex',alignItems:'center',justifyContent:'center'}}><Link to="/sales-staging" style={{color:T.yellow,fontFamily:'Teko,sans-serif',fontSize:18,letterSpacing:'0.18em',textDecoration:'none'}}>← BACK TO LOGIN</Link></div>;

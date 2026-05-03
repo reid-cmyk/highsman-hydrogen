@@ -47,10 +47,13 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       const endDate   = new Date();
       const beginDate = new Date(endDate.getTime() - 90 * 24 * 60 * 60 * 1000);
 
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000); // 8s max
       const res = await fetch(
         `${LIT_API}/v1/market/retailers?state=${state}&beginDate=${fmtDate(beginDate)}&endDate=${fmtDate(endDate)}&returnDollarValues=true`,
-        {headers: {Authorization: `Bearer ${token}`, Accept: 'application/json'}},
+        {headers: {Authorization: `Bearer ${token}`, Accept: 'application/json'}, signal: controller.signal},
       );
+      clearTimeout(timeout);
 
       if (res.ok) {
         const data: any    = await res.json();
