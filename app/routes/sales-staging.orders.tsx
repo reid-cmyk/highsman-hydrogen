@@ -41,7 +41,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const state        = url.searchParams.get('state')  || 'ALL';
   const statusFilter = url.searchParams.get('status') || 'All';
-  const period       = url.searchParams.get('period') || 'all'; // all | ytd | mtd
+  const period       = url.searchParams.get('period') || 'mtd'; // all | ytd | mtd — defaults to This Month
+  const search       = (url.searchParams.get('search') || '').trim();
 
   const h = {apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`};
   const base = env.SUPABASE_URL;
@@ -56,9 +57,14 @@ export async function loader({request, context}: LoaderFunctionArgs) {
                 : period === 'mtd' ? `&order_date=gte.${mtdStart}`
                 : '';
 
+  // When search is active, override all other filters and search full DB by customer name
+  const searchQ = search ? `&leaflink_customer_name=ilike.*${encodeURIComponent(search)}*` : '';
+  const ordersUrl = search
+    ? `${base}/rest/v1/leaflink_orders?select=*,organizations(name)${searchQ}&is_sample_order=eq.false&order=order_date.desc.nullslast&limit=500`
+    : `${base}/rest/v1/leaflink_orders?select=*,organizations(name)${stateQ}${statusQ}${periodQ}&is_sample_order=eq.false&order=order_date.desc.nullslast&limit=500`;
+
   const [ordersRes, periodStatsRes, pendingRes, completeRes] = await Promise.all([
-    // Orders list filtered by all active params
-    fetch(`${base}/rest/v1/leaflink_orders?select=*,organizations(name)${stateQ}${statusQ}${periodQ}&is_sample_order=eq.false&order=order_date.desc.nullslast&limit=500`, {headers: h}),
+    fetch(ordersUrl, {headers: h}),
     // Stats for the selected period + state (for stat bar)
     fetch(`${base}/rest/v1/leaflink_orders?select=total_amount,order_date${stateQ}${periodQ}&is_sample_order=eq.false&status=not.in.(Cancelled,Rejected)`, {headers: h}),
     // Pending (not period-filtered — always current)
@@ -87,7 +93,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     authenticated: true,
     orders: Array.isArray(orders) ? orders : [],
     stats: {ytdRevenue, mtdRevenue, mtdOrders, mtdAov, periodRevenue, periodCount, periodAov, pendingCount, completeCount},
-    state, statusFilter, period,
+    state, statusFilter, period, search,
   });
 }
 
@@ -304,30 +310,33 @@ function NewOrderModal({onClose}: {onClose:()=>void}) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function SalesOrders() {
-  const {authenticated, orders, stats, state, statusFilter, period} = useLoaderData<typeof loader>() as any;
+  const {authenticated, orders, stats, state, statusFilter, period, search} = useLoaderData<typeof loader>() as any;
   const [searchParams, setSearchParams] = useSearchParams();
   const [showModal, setShowModal] = useState(false);
-  const [search, setSearch] = useState('');
+  const [searchDraft, setSearchDraft] = useState(search || '');
 
   if (!authenticated) return <div style={{minHeight:'100vh',background:T.bg,display:'flex',alignItems:'center',justifyContent:'center'}}><Link to="/sales-staging" style={{color:T.yellow,fontFamily:'Teko,sans-serif',fontSize:18,letterSpacing:'0.18em',textDecoration:'none'}}>← BACK TO LOGIN</Link></div>;
 
   const setFilter = (key: string, val: string) => {
     const p = new URLSearchParams(searchParams);
-    if ((key === 'state' && val === 'ALL') || (key === 'status' && val === 'All') || (key === 'period' && val === 'all')) p.delete(key);
+    if ((key === 'state' && val === 'ALL') || (key === 'status' && val === 'All') || (key === 'period' && val === 'mtd')) p.delete(key);
     else p.set(key, val);
+    p.delete('search'); // clear search when changing filters
+    setSearchDraft('');
     setSearchParams(p);
   };
 
-  // Client-side dispensary search
-  const filteredOrders = search.trim().length > 0
-    ? orders.filter((o:any) => {
-        const name = (o.organizations?.name || o.leaflink_customer_name || '').toLowerCase();
-        return name.includes(search.trim().toLowerCase());
-      })
-    : orders;
+  const submitSearch = (q: string) => {
+    const p = new URLSearchParams();
+    if (q.trim()) p.set('search', q.trim());
+    setSearchParams(p);
+  };
+
+  // Orders are already server-filtered; no client-side filter needed
+  const filteredOrders = orders;
 
   // Stat bar labels based on period
-  const periodLabel = period === 'mtd' ? 'MTD' : period === 'ytd' ? 'YTD' : 'All Time';
+  const periodLabel = period === 'mtd' ? 'This Month' : period === 'ytd' ? 'YTD' : 'All Time';
 
   return (
     <div style={{minHeight:'100vh', background:T.bg, color:T.text, fontFamily:'Inter,sans-serif', display:'flex', flexDirection:'column',
@@ -371,7 +380,7 @@ export default function SalesOrders() {
               <div>
                 <h1 style={{margin:0, fontFamily:'Teko,sans-serif', fontSize:36, fontWeight:500, letterSpacing:'0.06em', textTransform:'uppercase', lineHeight:1}}>Sales Orders</h1>
                 <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:10.5, color:T.textFaint, marginTop:4, letterSpacing:'0.12em'}}>
-                  {filteredOrders.length}{orders.length !== filteredOrders.length ? ` of ${orders.length}` : ''} orders · {state !== 'ALL' ? state : 'all markets'} · {periodLabel}
+                  {filteredOrders.length} orders{search ? ` matching "${search}"` : ` · ${state !== 'ALL' ? state : 'all markets'} · ${periodLabel}`}
                 </div>
               </div>
               <div style={{display:'flex', gap:8}}>
@@ -395,17 +404,15 @@ export default function SalesOrders() {
               </div>
             </div>
 
-            {/* Period + State filters + Search */}
-            <div style={{display:'flex', alignItems:'center', gap:16, flexWrap:'wrap'}}>
-              {/* Period */}
-              <div style={{display:'flex', gap:1}}>
-                {[['all','All Time'],['ytd','YTD'],['mtd','This Month']].map(([val,label]) => (
-                  <button key={val} onClick={()=>setFilter('period',val)}
-                    style={{height:32, padding:'0 14px', background:period===val?`rgba(255,213,0,0.08)`:'transparent', border:'none', borderBottom:`2px solid ${period===val?T.yellow:'transparent'}`, color:period===val?T.yellow:T.textSubtle, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.14em', cursor:'pointer', whiteSpace:'nowrap'}}>
-                    {label}
-                  </button>
-                ))}
-              </div>
+            {/* Filters row: period dropdown + state pills + search */}
+            <div style={{display:'flex', alignItems:'center', gap:12, flexWrap:'wrap'}}>
+              {/* Period dropdown */}
+              <select value={period} onChange={e=>setFilter('period',e.target.value)}
+                style={{height:32, padding:'0 10px', background:T.surfaceElev, border:`1px solid ${T.borderStrong}`, color:T.text, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.14em', cursor:'pointer', outline:'none'}}>
+                <option value="mtd">This Month</option>
+                <option value="ytd">YTD</option>
+                <option value="all">All Time</option>
+              </select>
               <div style={{width:1, height:20, background:T.borderStrong}} />
               {/* State */}
               <div style={{display:'flex', gap:1}}>
@@ -416,14 +423,22 @@ export default function SalesOrders() {
                 </button>
               ))}
               </div>
-              <div style={{width:1, height:20, background:T.borderStrong}} />
-              {/* Dispensary search */}
-              <input
-                value={search}
-                onChange={e=>setSearch(e.target.value)}
-                placeholder="Search dispensary…"
-                style={{height:32, padding:'0 12px', background:T.surfaceElev, border:`1px solid ${T.borderStrong}`, color:T.text, fontFamily:'Inter,sans-serif', fontSize:12, outline:'none', width:200, letterSpacing:'0.02em'}}
-              />
+              <div style={{flex:1}} />
+              {/* Search — server-side, overrides all filters */}
+              <form onSubmit={e=>{e.preventDefault();submitSearch(searchDraft);}} style={{display:'flex', alignItems:'center', gap:0}}>
+                <input
+                  value={searchDraft}
+                  onChange={e=>setSearchDraft(e.target.value)}
+                  onKeyDown={e=>e.key==='Escape'&&(setSearchDraft(''),submitSearch(''))}
+                  placeholder="Search by dispensary…"
+                  style={{height:32, padding:'0 12px', background:T.surfaceElev, border:`1px solid ${T.borderStrong}`, borderRight:'none', color:T.text, fontFamily:'Inter,sans-serif', fontSize:12, outline:'none', width:220, letterSpacing:'0.02em'}}
+                />
+                <button type={search?'button':'submit'} onClick={search?()=>{setSearchDraft('');submitSearch('');}:undefined}
+                  style={{height:32, padding:'0 10px', background:search?T.yellow:T.surfaceElev, border:`1px solid ${T.borderStrong}`, color:search?'#000':T.textFaint, cursor:'pointer', fontFamily:'JetBrains Mono,monospace', fontSize:10, letterSpacing:'0.10em'}}>
+                  {search ? '✕' : '⌕'}
+                </button>
+              </form>
+              </div>
             </div>
           </div>
 
