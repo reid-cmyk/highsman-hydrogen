@@ -617,23 +617,32 @@ function MarketIntelBar({intel, stateRank}: {intel: any; stateRank: any}) {
           )}
         </div>
 
-        {/* 4. Shelf competition — how many brands does this store carry */}
-        <div style={{background:T.surfaceElev, padding:'12px 16px'}}>
-          <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase', marginBottom:3}}>Shelf Competition</div>
-          {hs?.totalBrands ? (
-            <>
-              <div style={{display:'flex', alignItems:'baseline', gap:6}}>
-                <span style={{fontFamily:'Teko,sans-serif', fontSize:30, fontWeight:600, color:T.text, lineHeight:1}}>{hs.totalBrands}</span>
-                <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle}}>brands</span>
-              </div>
-              <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, color:T.textFaint, marginTop:3, letterSpacing:'0.08em'}}>
-                {hs.totalBrands > 100 ? 'highly competitive shelf' : hs.totalBrands > 60 ? 'competitive shelf' : 'focused shelf'}
-              </div>
-            </>
-          ) : (
-            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint}}>—</span>
-          )}
-        </div>
+        {/* 4. Market Tier — auto-assigned from revenue percentile */}
+        {(() => {
+          // Compute tier from stateRank (same logic as sync script)
+          const rank = stateRank?.rank, total = stateRank?.total;
+          const pct = rank && total ? rank / total : null;
+          const tier = pct !== null ? (pct <= 0.20 ? 'A' : pct <= 0.50 ? 'B' : 'C') : null;
+          const tierColor = tier === 'A' ? T.yellow : tier === 'B' ? T.cyan : T.textMuted;
+          const tierLabel = tier === 'A' ? `top ${Math.round(pct!*100)}% of ${stateRank.total}` : tier === 'B' ? `top ${Math.round(pct!*100)}% of ${stateRank.total}` : `bottom 50% of ${stateRank?.total}`;
+          const shelfNote = hs?.totalBrands ? `${hs.totalBrands} brands on shelf` : null;
+          return (
+            <div style={{background:T.surfaceElev, padding:'12px 16px'}}>
+              <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase', marginBottom:3}}>Market Tier</div>
+              {tier ? (
+                <>
+                  <div style={{display:'flex', alignItems:'baseline', gap:8}}>
+                    <span style={{fontFamily:'Teko,sans-serif', fontSize:38, fontWeight:600, color:tierColor, lineHeight:1}}>Tier {tier}</span>
+                  </div>
+                  <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, color:T.textFaint, marginTop:3, letterSpacing:'0.08em'}}>{tierLabel}</div>
+                  {shelfNote && <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9, color:T.textFaint, marginTop:2, letterSpacing:'0.06em'}}>{shelfNote}</div>}
+                </>
+              ) : (
+                <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint}}>—</span>
+              )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
