@@ -10,6 +10,7 @@ import {useLoaderData, useActionData, Form, useFetcher, useSearchParams, useNavi
 import {useMemo, useState, useEffect, useRef, useCallback} from 'react';
 import {isStagingAuthed, buildStagingLoginCookie, buildStagingLogoutCookie, checkStagingPassword} from '~/lib/staging-auth';
 import type {OrgRow} from '~/lib/supabase-orgs';
+import {SalesFloorLayout} from '~/components/SalesFloorLayout';
 
 export const handle = {hideHeader: true, hideFooter: true};
 export const meta: MetaFunction = () => [
@@ -528,28 +529,7 @@ function Dashboard({data}:{data:any}) {
   const flagged=orgs.filter(o=>(o.tags as any)?.includes('pete-followup')).length;
 
   return (
-    <div style={{minHeight:'100vh',background:T.bg,color:T.text,fontFamily:'Inter,sans-serif',display:'flex',flexDirection:'column',backgroundImage:`radial-gradient(ellipse at top,rgba(255,213,0,0.04) 0%,transparent 55%),radial-gradient(ellipse at bottom right,rgba(255,51,85,0.025) 0%,transparent 55%)`}}>
-      <style>{`
-        @media(max-width:768px){
-          .hs-topbar-right span,.hs-topbar-divider{display:none!important}
-          .hs-sidenav{display:none!important}
-          .hs-main{padding:0!important}
-          .hs-page-header{padding:12px 16px!important}
-          .hs-stats-strip{grid-template-columns:repeat(2,1fr)!important}
-          .hs-filter-row{flex-wrap:wrap!important}
-          .hs-state-pills{flex-wrap:wrap!important;border:none!important;gap:6px!important}
-          .hs-state-pill{border:1px solid var(--bs,#2F2F2F)!important}
-          .hs-search{width:100%!important;max-width:none!important}
-          .hs-card-grid{grid-template-columns:4px 48px 1fr!important}
-          .hs-card-days,.hs-card-contact{display:none!important}
-          .hs-card-actions{grid-column:2/-1!important;padding:8px 12px 12px!important;border-left:none!important}
-        }
-      `}</style>
-
-      <TopBar />
-      <div style={{display:'flex',flex:1}}>
-        <SideNav className="hs-sidenav" stageCounts={stageCounts} />
-        <div className="hs-main" style={{flex:1,minWidth:0,display:'flex',flexDirection:'column'}}>
+    <SalesFloorLayout current="Accounts" stageCounts={stageCounts}>
           {/* Page header */}
           <div className="hs-page-header" style={{padding:'24px 28px 20px',borderBottom:`1px solid ${T.border}`,display:'flex',alignItems:'flex-end',justifyContent:'space-between',position:'relative',overflow:'hidden'}}>
             <SweepLine/>
@@ -645,9 +625,7 @@ function Dashboard({data}:{data:any}) {
             <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:10.5,color:T.textFaint,letterSpacing:'0.14em'}}>END OF LIST · {filtered.length} ACCOUNTS</div>
             <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:10.5,color:T.textFaint,letterSpacing:'0.14em'}}>↑↓ navigate · ↵ open</div>
           </div>
-        </div>
-      </div>
-    </div>
+    </SalesFloorLayout>
   );
 }
 

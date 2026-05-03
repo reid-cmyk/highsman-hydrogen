@@ -8,7 +8,7 @@ import {json} from '@shopify/remix-oxygen';
 import {useLoaderData, useFetcher, Link, useSearchParams, useNavigate} from '@remix-run/react';
 import {useState, useEffect, useRef} from 'react';
 import {isStagingAuthed} from '~/lib/staging-auth';
-import {SalesFloorNav} from '~/components/SalesFloorNav';
+import {SalesFloorLayout} from '~/components/SalesFloorLayout';
 
 export const handle = {hideHeader: true, hideFooter: true};
 export const meta: MetaFunction = () => [{title: 'Sales Orders | Sales Floor'}, {name: 'robots', content: 'noindex'}];
@@ -342,41 +342,7 @@ export default function SalesOrders() {
   const periodLabel = period === 'mtd' ? 'This Month' : period === 'ytd' ? 'YTD' : 'All Time';
 
   return (
-    <div style={{minHeight:'100vh', background:T.bg, color:T.text, fontFamily:'Inter,sans-serif', display:'flex', flexDirection:'column',
-      backgroundImage:`radial-gradient(ellipse at top, rgba(255,213,0,0.04) 0%, transparent 55%)`}}>
-
-      <style>{`
-        @keyframes pulse-ring{0%{box-shadow:0 0 0 0 rgba(0,230,118,.7)}70%{box-shadow:0 0 0 8px rgba(0,230,118,0)}100%{box-shadow:0 0 0 0 rgba(0,230,118,0)}}
-        @keyframes sweep{0%{left:-25%}100%{left:125%}}
-        .hs-sweep{position:relative;overflow:hidden}
-        .hs-sweep::after{content:'';position:absolute;bottom:0;left:-25%;height:2px;width:25%;background:linear-gradient(90deg,transparent,#FFD500,transparent);opacity:.75;animation:sweep 14s linear infinite;pointer-events:none}
-        .order-row:hover{background:#141414 !important}
-      `}</style>
-
-      {/* Top bar */}
-      <div style={{height:64, background:T.bg, borderBottom:`1px solid ${T.border}`, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 28px', flexShrink:0}}>
-        <div style={{display:'flex', alignItems:'center', gap:20}}>
-          <img src="https://agents-assets.nyc3.cdn.digitaloceanspaces.com/Highsman%20logo%20(2).png" alt="Highsman" style={{height:'28px'}} />
-          <div style={{width:1, height:24, background:T.borderStrong}} />
-          <div style={{fontFamily:'Teko,sans-serif', fontSize:20, fontWeight:500, letterSpacing:'0.28em', color:T.textFaint, textTransform:'uppercase'}}>SALES FLOOR</div>
-        </div>
-        <div style={{display:'flex', alignItems:'center', gap:16}}>
-          <div style={{display:'flex', alignItems:'center', gap:6}}>
-            <div style={{width:7, height:7, borderRadius:'50%', background:T.green, animation:'pulse-ring 2.4s infinite'}} />
-            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle, letterSpacing:'0.14em'}}>LIVE</span>
-          </div>
-          <div style={{width:1, height:20, background:T.border}} />
-          <div style={{display:'flex', alignItems:'center', gap:8}}>
-            <div style={{width:28, height:28, borderRadius:'50%', background:`linear-gradient(135deg,${T.yellow},${T.yellowWarm})`, display:'flex', alignItems:'center', justifyContent:'center', color:'#000', fontWeight:700, fontSize:11, fontFamily:'Teko,sans-serif'}}>SL</div>
-            <span style={{fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.14em', color:T.textMuted}}>SKY LIMA</span>
-          </div>
-        </div>
-      </div>
-
-      <div style={{display:'flex', flex:1}}>
-        <SalesFloorNav current="Sales Orders" />
-
-        <div style={{flex:1, minWidth:0, display:'flex', flexDirection:'column'}}>
+    <SalesFloorLayout current="Sales Orders">
           {/* Header row */}
           <div className="hs-sweep" style={{padding:'20px 28px 0', borderBottom:`1px solid ${T.borderStrong}`, background:`linear-gradient(180deg,rgba(255,213,0,0.03) 0%,transparent 100%)`}}>
             <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16}}>
@@ -522,10 +488,8 @@ export default function SalesOrders() {
               </table>
             )}
           </div>
-        </div>
-      </div>
 
       {showModal && <NewOrderModal onClose={()=>setShowModal(false)} />}
-    </div>
+    </SalesFloorLayout>
   );
 }
