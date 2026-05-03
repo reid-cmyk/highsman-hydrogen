@@ -2,21 +2,28 @@
  * app/routes/api.state-rank.tsx
  *
  * GET /api/state-rank?state=NJ&name=Premo
- * Returns the rank of a dispensary among all Lit Alerts retailers in its state.
- * Ranking is by number of Highsman SKUs carried (from the partner API).
+ * Returns the rank of a dispensary among ALL retailers in its state
+ * by total cannabis revenue (all brands, not just Highsman).
+ * Also returns litRetailerId for use in analytics calls.
  *
- * Falls back to Supabase-based rank (by last_order_date) if Lit token missing.
+ * Source: Lit Alerts /v1/market/retailers?returnDollarValues=true (90-day rolling)
+ * Falls back to Supabase last_order_date ranking if Lit token missing.
  */
 
 import type {LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {isStagingAuthed} from '~/lib/staging-auth';
 
-const BRAND_ID = 9027;
 const LIT_API = 'https://partnerapi.litalerts.com';
 
 function normalize(s: string): string {
   return (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function fmtDate(d: Date): string {
+  const m   = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${m}-${day}-${d.getFullYear()}`;
 }
 
 export async function loader({request, context}: LoaderFunctionArgs) {
@@ -24,83 +31,74 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     return json({rank: null, total: null, error: 'unauthorized'}, {status: 401});
   }
 
-  const env = (context as any).env;
-  const url = new URL(request.url);
-  const state = url.searchParams.get('state') || '';
-  const orgName = url.searchParams.get('name') || '';
-  const leaflinkId = url.searchParams.get('leaflink_id') || '';
+  const env  = (context as any).env;
+  const url  = new URL(request.url);
+  const state   = url.searchParams.get('state')  || '';
+  const orgName = url.searchParams.get('name')   || '';
+  const litId   = url.searchParams.get('lit_id') || ''; // skip name match if ID already known
 
   if (!state) return json({rank: null, total: null, error: 'state required'});
 
   const token = env.LIT_ALERTS_TOKEN;
 
-  // ── Strategy A: Lit Alerts partner API (real state ranking by SKU presence) ──
   if (token) {
     try {
-      const res = await fetch(`${LIT_API}/retailers?states=${state}`, {
-        headers: {Authorization: `Bearer ${token}`, Accept: 'application/json'},
-        signal: new AbortController().signal,
-      });
+      // Rolling 90-day window — most current market picture
+      const endDate   = new Date();
+      const beginDate = new Date(endDate.getTime() - 90 * 24 * 60 * 60 * 1000);
+
+      const res = await fetch(
+        `${LIT_API}/v1/market/retailers?state=${state}&beginDate=${fmtDate(beginDate)}&endDate=${fmtDate(endDate)}&returnDollarValues=true`,
+        {headers: {Authorization: `Bearer ${token}`, Accept: 'application/json'}},
+      );
+
       if (res.ok) {
-        const data: any = await res.json();
-        const retailers: any[] = data?.data || [];
+        const data: any    = await res.json();
+        // results = [{name, id, estimatedAmount}] sorted by estimatedAmount DESC (rank 1 = highest revenue)
+        const retailers: any[] = data?.results || [];
+        const total = retailers.length;
 
-        // Get products for this brand in this state to see SKU counts per retailer
-        const prodRes = await fetch(
-          `${LIT_API}/brands/${BRAND_ID}/products?state=${state}&includeOOS=true`,
-          {headers: {Authorization: `Bearer ${token}`, Accept: 'application/json'}, signal: new AbortController().signal},
-        );
-
-        let skuCounts: Record<string, number> = {};
-        if (prodRes.ok) {
-          const prodData: any = await prodRes.json();
-          const products: any[] = prodData?.data || [];
-          for (const product of products) {
-            const configs: any[] = product.configs || [];
-            for (const cfg of configs) {
-              const rid = String(cfg.retailerId || '');
-              if (rid) skuCounts[rid] = (skuCounts[rid] || 0) + 1;
-            }
-          }
+        if (total === 0) {
+          return json({rank: null, total: 0, source: 'lit-market', note: 'no market data'});
         }
 
-        // Score each retailer by Highsman SKU count
-        const scored = retailers.map((r: any) => ({
-          id: String(r.id),
-          name: r.name || '',
-          skuCount: skuCounts[String(r.id)] || 0,
-        })).sort((a, b) => b.skuCount - a.skuCount);
-
-        const total = scored.length;
-
-        // Find this dispensary by leaflink_id first, then by name fuzzy match
-        let idx = leaflinkId ? scored.findIndex(r => r.id === leaflinkId) : -1;
+        // Match by Lit ID first (exact), then name fuzzy
+        let idx = litId ? retailers.findIndex(r => String(r.id) === litId) : -1;
         if (idx === -1 && orgName) {
           const normTarget = normalize(orgName);
-          idx = scored.findIndex(r => {
-            const n = normalize(r.name);
+          idx = retailers.findIndex(r => {
+            const n = normalize(r.name || '');
             return n === normTarget || n.includes(normTarget) || normTarget.includes(n);
           });
         }
 
         if (idx >= 0) {
-          return json({rank: idx + 1, total, skuCount: scored[idx].skuCount, source: 'lit'});
+          const r = retailers[idx];
+          return json({
+            rank:          idx + 1,
+            total,
+            revenue:       r.estimatedAmount,
+            litRetailerId: r.id,
+            retailerName:  r.name,
+            source:        'lit-market',
+          });
         }
-        return json({rank: null, total, skuCount: 0, source: 'lit', note: 'not found in Lit roster'});
+
+        return json({rank: null, total, source: 'lit-market', note: 'not found in market data'});
       }
     } catch (err: any) {
       console.warn('[api/state-rank] Lit API error:', err.message);
     }
   }
 
-  // ── Strategy B: Supabase fallback — rank by last_order_date among our accounts ──
+  // ── Fallback: Supabase rank by last_order_date ────────────────────────────
   try {
     const sbH = {apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`};
-    const res = await fetch(
+    const sbRes = await fetch(
       `${env.SUPABASE_URL}/rest/v1/organizations?select=id,name,last_order_date&market_state=eq.${state}&lifecycle_stage=in.(active,dormant)&order=last_order_date.desc.nullslast&limit=500`,
       {headers: sbH},
     );
-    const orgs: any[] = await res.json();
+    const orgs: any[] = await sbRes.json();
     const total = orgs.length;
     const normTarget = normalize(orgName);
     const idx = orgs.findIndex(o => {
