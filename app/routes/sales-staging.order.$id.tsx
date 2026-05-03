@@ -8,7 +8,7 @@ import {json} from '@shopify/remix-oxygen';
 import {useLoaderData, useFetcher, Link} from '@remix-run/react';
 import {useState} from 'react';
 import {isStagingAuthed} from '~/lib/staging-auth';
-import {SalesFloorNav} from '~/components/SalesFloorNav';
+import {SalesFloorLayout} from '~/components/SalesFloorLayout';
 
 export const handle = {hideHeader: true, hideFooter: true};
 export const meta: MetaFunction<typeof loader> = ({data}) => {
@@ -108,28 +108,8 @@ export default function OrderDetail() {
   };
 
   return (
-    <div style={{minHeight:'100vh', background:T.bg, color:T.text, fontFamily:'Inter,sans-serif', display:'flex', flexDirection:'column',
-      backgroundImage:`radial-gradient(ellipse at top, rgba(255,213,0,0.04) 0%, transparent 55%)`}}>
-
-      <style>{`@keyframes pulse-ring{0%{box-shadow:0 0 0 0 rgba(0,230,118,.7)}70%{box-shadow:0 0 0 8px rgba(0,230,118,0)}100%{box-shadow:0 0 0 0 rgba(0,230,118,0)}}`}</style>
-
-      {/* Top bar */}
-      <div style={{height:64, background:T.bg, borderBottom:`1px solid ${T.border}`, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 28px', flexShrink:0}}>
-        <div style={{display:'flex', alignItems:'center', gap:20}}>
-          <img src="https://agents-assets.nyc3.cdn.digitaloceanspaces.com/Highsman%20logo%20(2).png" alt="Highsman" style={{height:'28px'}} />
-          <div style={{width:1, height:24, background:T.borderStrong}} />
-          <div style={{fontFamily:'Teko,sans-serif', fontSize:20, fontWeight:500, letterSpacing:'0.28em', color:T.textFaint, textTransform:'uppercase'}}>SALES FLOOR</div>
-        </div>
-        <div style={{display:'flex', alignItems:'center', gap:8}}>
-          <div style={{width:28, height:28, borderRadius:'50%', background:`linear-gradient(135deg,${T.yellow},${T.yellowWarm})`, display:'flex', alignItems:'center', justifyContent:'center', color:'#000', fontWeight:700, fontSize:11, fontFamily:'Teko,sans-serif'}}>SL</div>
-          <span style={{fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.14em', color:T.text}}>SKY LIMA</span>
-        </div>
-      </div>
-
-      <div style={{display:'flex', flex:1}}>
-        <SalesFloorNav current="Sales Orders" />
-
-        <div style={{flex:1, minWidth:0}}>
+    <SalesFloorLayout current="Sales Orders">
+      <div style={{flex:1, minWidth:0}}>
           {/* Breadcrumb */}
           <div style={{padding:'16px 32px 0', display:'flex', alignItems:'center', gap:10}}>
             <Link to="/sales-staging/orders" style={{fontFamily:'Teko,sans-serif', fontSize:12, letterSpacing:'0.24em', color:T.textSubtle, textDecoration:'none', textTransform:'uppercase'}}>← Orders</Link>
@@ -242,6 +222,6 @@ export default function OrderDetail() {
           </div>
         </div>
       </div>
-    </div>
+    </SalesFloorLayout>
   );
 }
