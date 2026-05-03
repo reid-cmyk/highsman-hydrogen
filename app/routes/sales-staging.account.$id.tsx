@@ -518,6 +518,122 @@ function FieldsPanel({org}: {org: any}) {
         <EditableField label="Training link" field="staff_training_link" value={org.staff_training_link} orgId={org.id} link mono />
         <EditableField label="Last training date" field="last_staff_training_date" value={org.last_staff_training_date} orgId={org.id} mono hint="YYYY-MM-DD" />
       </TwoCol>
+
+      <GroupLabel>Orders</GroupLabel>
+      <OrgOrdersPanel orgId={org.id} orgName={org.name} marketState={org.market_state} />
+    </div>
+  );
+}
+
+// ─── Org Orders Panel ─────────────────────────────────────────────────────────
+function OrgOrdersPanel({orgId, orgName, marketState}: {orgId:string; orgName:string; marketState:string}) {
+  const [orders, setOrders] = useState<any[]|null>(null);
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({status:'Submitted', order_date:new Date().toISOString().split('T')[0], total_amount:'', payment_terms:'Net 30'});
+  const [saving, setSaving] = useState(false);
+  const createFetcher = useFetcher();
+
+  useEffect(() => {
+    fetch(`/api/org-search?org_id=${orgId}&orders=1`)
+      .catch(() => null);
+    // Load orders directly via a targeted fetch
+    fetch(`/sales-staging/api/org-orders?org_id=${orgId}`)
+      .then(r => r.json())
+      .then(d => setOrders(d.orders || []))
+      .catch(() => setOrders([]));
+  }, [orgId]);
+
+  useEffect(() => {
+    const d = createFetcher.data as any;
+    if (d?.ok) { setAdding(false); setForm({status:'Submitted', order_date:new Date().toISOString().split('T')[0], total_amount:'', payment_terms:'Net 30'}); setSaving(false);
+      // Reload orders
+      fetch(`/sales-staging/api/org-orders?org_id=${orgId}`).then(r=>r.json()).then(d=>setOrders(d.orders||[])).catch(()=>{});
+    } else if (d && !d.ok) setSaving(false);
+  }, [createFetcher.data]);
+
+  const STATUS_COLOR_LOCAL: Record<string,string> = {Submitted:T.cyan,Accepted:T.yellow,Fulfilled:T.statusWarn,Shipped:T.statusWarn,Complete:T.green,Cancelled:T.textFaint,Rejected:T.redSystems};
+  const fmt$ = (n:number) => `$${n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const parseMoney = (s:any) => parseFloat(String(s||0).replace(/[$,]/g,''))||0;
+
+  const fieldStyle = {background:T.bg, border:`1px solid ${T.borderStrong}`, color:T.text, fontSize:12, fontFamily:'Inter,sans-serif', padding:'5px 8px', outline:'none', width:'100%', boxSizing:'border-box' as const};
+  const labelStyle = {fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase' as const, marginBottom:3};
+
+  return (
+    <div>
+      {/* Header with + New Order */}
+      <div style={{padding:'10px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:`1px solid ${T.border}`}}>
+        <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textFaint, letterSpacing:'0.12em'}}>
+          {orders === null ? 'loading…' : `${orders.length} order${orders.length!==1?'s':''}`}
+        </span>
+        <div style={{display:'flex', gap:8}}>
+          <a href={`/sales-staging/orders?account=${orgId}`} style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle, letterSpacing:'0.12em', textDecoration:'none'}}>VIEW ALL →</a>
+          <button type="button" onClick={()=>setAdding(a=>!a)}
+            style={{background:'none', border:'none', color:adding?T.textFaint:T.yellow, fontFamily:'JetBrains Mono,monospace', fontSize:10, letterSpacing:'0.14em', cursor:'pointer', padding:0}}>
+            {adding ? 'CANCEL' : '+ NEW ORDER'}
+          </button>
+        </div>
+      </div>
+
+      {/* New order form */}
+      {adding && (
+        <createFetcher.Form method="post" action="/api/order-create"
+          onSubmit={()=>setSaving(true)}
+          style={{padding:'12px 16px', background:T.surfaceElev, borderBottom:`1px solid ${T.border}`, display:'flex', flexDirection:'column', gap:10}}>
+          <input type="hidden" name="org_id" value={orgId} />
+          <input type="hidden" name="leaflink_customer_name" value={orgName} />
+          <input type="hidden" name="market_state" value={marketState||'NJ'} />
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+            <div>
+              <div style={labelStyle}>Order Date</div>
+              <input type="date" name="order_date" value={form.order_date} onChange={e=>setForm(f=>({...f,order_date:e.target.value}))} style={fieldStyle} />
+            </div>
+            <div>
+              <div style={labelStyle}>Status</div>
+              <select name="status" value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))} style={fieldStyle}>
+                {['Submitted','Accepted','Fulfilled','Shipped','Complete','Cancelled','Rejected'].map(s=><option key={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+            <div>
+              <div style={labelStyle}>Total Amount ($)</div>
+              <input type="number" name="total_amount" step="0.01" value={form.total_amount} onChange={e=>setForm(f=>({...f,total_amount:e.target.value}))} placeholder="0.00" style={fieldStyle} />
+            </div>
+            <div>
+              <div style={labelStyle}>Payment Terms</div>
+              <select name="payment_terms" value={form.payment_terms} onChange={e=>setForm(f=>({...f,payment_terms:e.target.value}))} style={fieldStyle}>
+                {['Net 30','Net 15','Net 7','Due on receipt','COD','Prepaid'].map(s=><option key={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{display:'flex', gap:8}}>
+            <button type="submit" disabled={saving||!form.total_amount}
+              style={{height:30, padding:'0 14px', background:T.yellow, border:'none', color:'#000', fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.18em', cursor:saving?'not-allowed':'pointer', opacity:saving?0.6:1}}>
+              {saving ? 'SAVING…' : 'CREATE'}
+            </button>
+          </div>
+          {(createFetcher.data as any)?.error && <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.redSystems}}>{(createFetcher.data as any).error}</div>}
+        </createFetcher.Form>
+      )}
+
+      {/* Orders list */}
+      {orders === null && <div style={{padding:'16px', fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint}}>Loading orders…</div>}
+      {orders !== null && orders.length === 0 && <div style={{padding:'16px', fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint, letterSpacing:'0.10em'}}>No orders on record</div>}
+      {orders !== null && orders.map((o:any, i:number) => {
+        const sc = STATUS_COLOR_LOCAL[o.status] || T.textFaint;
+        const date = o.order_date ? new Date(o.order_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}) : '—';
+        return (
+          <a key={o.id} href={`/sales-staging/orders/${o.id}`}
+            style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'11px 16px', borderTop:`1px solid ${T.border}`, textDecoration:'none', gap:12}}>
+            <div style={{flex:1, minWidth:0}}>
+              <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textSubtle, letterSpacing:'0.06em', marginBottom:2}}>{o.leaflink_order_id}</div>
+              <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textFaint, letterSpacing:'0.08em'}}>{date} · {o.market_state}</div>
+            </div>
+            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, padding:'2px 7px', border:`1px solid ${sc}`, color:sc, letterSpacing:'0.12em', flexShrink:0}}>{o.status}</span>
+            <span style={{fontFamily:'Teko,sans-serif', fontSize:18, color:T.text, flexShrink:0}}>{fmt$(parseMoney(o.total_amount))}</span>
+          </a>
+        );
+      })}
     </div>
   );
 }
