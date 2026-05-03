@@ -265,7 +265,7 @@ export default function AccountDetail() {
           {/* Body grid */}
           <div style={{padding:'24px 32px 40px', display:'grid', gridTemplateColumns:'minmax(0,1.6fr) minmax(0,1fr)', gap:24}}>
             {/* Left: Fields panel */}
-            <FieldsPanel org={org} marketIntel={undefined} />
+            <FieldsPanel org={org} />
 
             {/* Right: Onboarding + Contacts + Notes */}
             <div style={{display:'flex', flexDirection:'column', gap:24}}>
@@ -673,80 +673,6 @@ function FieldsPanel({org}: {org: any}) {
 
       <GroupLabel>Orders</GroupLabel>
       <OrgOrdersPanel orgId={org.id} orgName={org.name} marketState={org.market_state} />
-
-      {/* Market Intelligence — only shown when Lit Alerts data is available */}
-      {marketIntel && (
-        <>
-          <GroupLabel>Market Intelligence · 90 days</GroupLabel>
-          <div style={{padding:'14px 16px', borderBottom:`1px solid ${T.border}`}}>
-            {/* Highsman position */}
-            {marketIntel.highsman ? (
-              <div style={{marginBottom:14}}>
-                <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.30em', color:T.textFaint, textTransform:'uppercase', marginBottom:6}}>Highsman Position</div>
-                <div style={{display:'flex', alignItems:'baseline', gap:10}}>
-                  <span style={{fontFamily:'Teko,sans-serif', fontSize:32, fontWeight:600, color:T.yellow, lineHeight:1}}>
-                    #{marketIntel.highsman.rank}
-                  </span>
-                  <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textSubtle}}>
-                    of {marketIntel.highsman.totalBrands} brands · {marketIntel.highsman.sharePercent}% share
-                  </span>
-                </div>
-                <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:10.5, color:T.textFaint, marginTop:3, letterSpacing:'0.08em'}}>
-                  ${(marketIntel.highsman.revenue||0).toLocaleString('en-US',{maximumFractionDigits:0})} est. revenue at this account
-                </div>
-              </div>
-            ) : (
-              <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint, marginBottom:14}}>Highsman not found in this account's brand data</div>
-            )}
-
-            {/* Account total revenue */}
-            <div style={{marginBottom:14}}>
-              <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.30em', color:T.textFaint, textTransform:'uppercase', marginBottom:4}}>Account Total Revenue</div>
-              <span style={{fontFamily:'Teko,sans-serif', fontSize:22, fontWeight:600, color:T.cyan}}>
-                ${(marketIntel.totalRevenue||0).toLocaleString('en-US',{maximumFractionDigits:0})}
-              </span>
-              <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle, marginLeft:8}}>est. all cannabis</span>
-            </div>
-
-            {/* Top brands */}
-            {marketIntel.brands?.length > 0 && (
-              <div style={{marginBottom:14}}>
-                <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.30em', color:T.textFaint, textTransform:'uppercase', marginBottom:8}}>Top Brands</div>
-                {marketIntel.brands.slice(0, 8).map((b:any) => (
-                  <div key={b.id} style={{display:'flex', alignItems:'center', gap:8, marginBottom:5}}>
-                    <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, color:T.textFaint, width:16, textAlign:'right', flexShrink:0}}>{b.rank}</span>
-                    <div style={{flex:1, minWidth:0}}>
-                      <div style={{height:4, background:T.surfaceElev, borderRadius:2, overflow:'hidden'}}>
-                        <div style={{height:'100%', width:`${Math.min(b.sharePercent * 2, 100)}%`, background:b.isHighsman?T.yellow:T.borderStrong, borderRadius:2}} />
-                      </div>
-                    </div>
-                    <span style={{fontFamily:'Inter,sans-serif', fontSize:11, color:b.isHighsman?T.yellow:T.textMuted, flexShrink:0, minWidth:0, maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{b.name}</span>
-                    <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textFaint, flexShrink:0}}>{b.sharePercent}%</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Category mix */}
-            {marketIntel.categories?.length > 0 && (
-              <div>
-                <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.30em', color:T.textFaint, textTransform:'uppercase', marginBottom:8}}>Category Mix</div>
-                <div style={{display:'flex', flexWrap:'wrap', gap:6}}>
-                  {marketIntel.categories.slice(0,6).map((c:any) => (
-                    <span key={c.name} style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, padding:'2px 8px', border:`1px solid ${T.borderStrong}`, color:T.textSubtle, letterSpacing:'0.08em'}}>
-                      {c.name} {c.sharePercent}%
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9, color:T.textFaint, marginTop:12, letterSpacing:'0.08em'}}>
-              Source: Lit Alerts · {marketIntel.period?.beginDate} – {marketIntel.period?.endDate}
-            </div>
-          </div>
-        </>
-      )}
     </div>
   );
 }
