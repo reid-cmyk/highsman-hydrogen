@@ -259,10 +259,13 @@ export default function AccountDetail() {
             })()}
           </div>
 
+          {/* Market Intelligence bar — full width, between stat bar and body */}
+          <MarketIntelBar intel={marketIntel} stateRank={stateRank} />
+
           {/* Body grid */}
           <div style={{padding:'24px 32px 40px', display:'grid', gridTemplateColumns:'minmax(0,1.6fr) minmax(0,1fr)', gap:24}}>
             {/* Left: Fields panel */}
-            <FieldsPanel org={org} marketIntel={marketIntel} />
+            <FieldsPanel org={org} marketIntel={undefined} />
 
             {/* Right: Onboarding + Contacts + Notes */}
             <div style={{display:'flex', flexDirection:'column', gap:24}}>
@@ -518,7 +521,101 @@ function ReadOnlyField({label, value, note}: {label:string; value:string; note?:
 const MENU_OPTIONS = ['','AIQ','Blaze','Cova','Dispense','Dutchie','Jane','Leafly','Mosaic','Nabis','Self Administrator','Sweed','Treez','Weedmaps'];
 
 // ─── Fields Panel ─────────────────────────────────────────────────────────────
-function FieldsPanel({org, marketIntel}: {org: any; marketIntel?: any}) {
+// ─── Market Intelligence Bar ──────────────────────────────────────────────────
+function MarketIntelBar({intel, stateRank}: {intel: any; stateRank: any}) {
+  const fmt$ = (n: number) => `$${(n||0).toLocaleString('en-US',{maximumFractionDigits:0})}`;
+
+  // Show loading state while state rank is still fetching
+  if (stateRank?.loading) {
+    return (
+      <div style={{borderTop:`1px solid ${T.border}`, borderBottom:`1px solid ${T.border}`, padding:'12px 32px', background:T.surfaceElev, display:'flex', alignItems:'center', gap:8}}>
+        <div style={{width:8, height:8, borderRadius:'50%', background:T.textFaint, animation:'pulse-ring 1.4s infinite'}} />
+        <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textFaint, letterSpacing:'0.12em'}}>Loading market intelligence…</span>
+      </div>
+    );
+  }
+
+  // No data (token not set, account not in Lit data, or API error)
+  if (!intel) {
+    return (
+      <div style={{borderTop:`1px solid ${T.border}`, borderBottom:`1px solid ${T.border}`, padding:'10px 32px', background:T.surfaceElev}}>
+        <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textFaint, letterSpacing:'0.10em'}}>
+          {stateRank?.rank ? 'Market intelligence loading…' : 'Market intelligence unavailable — account not found in Lit Alerts data'}
+        </span>
+      </div>
+    );
+  }
+
+  const hs = intel.highsman;
+
+  return (
+    <div style={{borderTop:`1px solid ${T.borderStrong}`, borderBottom:`1px solid ${T.borderStrong}`, background:T.surfaceElev}}>
+      {/* Header */}
+      <div style={{padding:'10px 32px 0', display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+        <span style={{fontFamily:'Teko,sans-serif', fontSize:11, letterSpacing:'0.28em', color:T.textFaint, textTransform:'uppercase'}}>Market Intelligence · 90 days</span>
+        <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:9, color:T.textFaint, letterSpacing:'0.08em'}}>Lit Alerts · {intel.period?.beginDate} – {intel.period?.endDate}</span>
+      </div>
+
+      {/* Metrics strip */}
+      <div style={{display:'grid', gridTemplateColumns:'auto auto auto 1fr', gap:0, padding:'10px 32px 14px'}}>
+        {/* Highsman rank */}
+        <div style={{paddingRight:28, borderRight:`1px solid ${T.border}`, marginRight:28}}>
+          <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase', marginBottom:3}}>Highsman Brand Rank</div>
+          {hs ? (
+            <div style={{display:'flex', alignItems:'baseline', gap:8}}>
+              <span style={{fontFamily:'Teko,sans-serif', fontSize:30, fontWeight:600, color:T.yellow, lineHeight:1}}>#{hs.rank}</span>
+              <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle}}>of {hs.totalBrands} · {hs.sharePercent}% share</span>
+            </div>
+          ) : (
+            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint}}>not in top brands</span>
+          )}
+        </div>
+
+        {/* Account total revenue */}
+        <div style={{paddingRight:28, borderRight:`1px solid ${T.border}`, marginRight:28}}>
+          <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase', marginBottom:3}}>Account Cannabis Revenue</div>
+          <div style={{display:'flex', alignItems:'baseline', gap:6}}>
+            <span style={{fontFamily:'Teko,sans-serif', fontSize:30, fontWeight:600, color:T.cyan, lineHeight:1}}>{fmt$(intel.totalRevenue)}</span>
+            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle}}>est. all brands</span>
+          </div>
+        </div>
+
+        {/* Highsman revenue at this account */}
+        {hs && (
+          <div style={{paddingRight:28, borderRight:`1px solid ${T.border}`, marginRight:28}}>
+            <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase', marginBottom:3}}>Highsman Revenue Here</div>
+            <div style={{display:'flex', alignItems:'baseline', gap:6}}>
+              <span style={{fontFamily:'Teko,sans-serif', fontSize:30, fontWeight:600, color:T.yellow, lineHeight:1}}>{fmt$(hs.revenue)}</span>
+              <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle}}>est.</span>
+            </div>
+          </div>
+        )}
+
+        {/* Top brands mini-list */}
+        <div>
+          <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase', marginBottom:5}}>Top Brands at This Account</div>
+          <div style={{display:'flex', flexWrap:'wrap', gap:'3px 12px'}}>
+            {(intel.brands||[]).slice(0,6).map((b:any) => (
+              <span key={b.id} style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:b.isHighsman?T.yellow:T.textSubtle, letterSpacing:'0.06em', whiteSpace:'nowrap'}}>
+                {b.rank}. {b.name} <span style={{color:T.textFaint}}>{b.sharePercent}%</span>
+              </span>
+            ))}
+          </div>
+          {(intel.categories||[]).length > 0 && (
+            <div style={{marginTop:5, display:'flex', flexWrap:'wrap', gap:'2px 8px'}}>
+              {(intel.categories||[]).slice(0,5).map((c:any) => (
+                <span key={c.name} style={{fontFamily:'JetBrains Mono,monospace', fontSize:9, color:T.textFaint, letterSpacing:'0.06em'}}>{c.name} {c.sharePercent}%</span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Fields Panel ─────────────────────────────────────────────────────────────
+function FieldsPanel({org}: {org: any}) {
   return (
     <div style={{background:T.surface, border:`1px solid ${T.border}`}}>
       <SectionHead title="Account Fields" source="click to edit" />
