@@ -74,7 +74,7 @@ export async function loader({request, context, params}: LoaderFunctionArgs) {
     }
     computedCadence = Math.round(gaps.reduce((s,g)=>s+g,0) / gaps.length);
   }
-  return json({authenticated: true, org, contacts: org?.contacts || [], notes: Array.isArray(notes)?notes:[], steps: Array.isArray(steps)?steps:[], totalOrderRevenue});
+  return json({authenticated: true, org, contacts: org?.contacts || [], notes: Array.isArray(notes)?notes:[], steps: Array.isArray(steps)?steps:[], totalOrderRevenue, computedCadence});
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -133,7 +133,7 @@ function AccountStatBar({days, daysColor, lastOrderDate, ordersCount, stateRank,
 }
 
 export default function AccountDetail() {
-  const {authenticated, org, contacts, notes, steps, totalOrderRevenue} = useLoaderData<typeof loader>() as any;
+  const {authenticated, org, contacts, notes, steps, totalOrderRevenue, computedCadence} = useLoaderData<typeof loader>() as any;
   const [, rerender] = useState(0);
   const refresh = () => rerender(n => n + 1);
   const [stateRank, setStateRank] = useState<{rank:number|null; total:number|null; loading:boolean}>({rank:null, total:null, loading:true});
@@ -244,7 +244,7 @@ export default function AccountDetail() {
                 stateRank={stateRank} marketState={org.market_state}
                 totalRevenue={totalOrderRevenue||0}
                 budtenders={org.budtender_count||0}
-                reorderCadence={org.reorder_cadence_days||0}
+                reorderCadence={computedCadence || org.reorder_cadence_days || 0}
               />;
             })()}
           </div>

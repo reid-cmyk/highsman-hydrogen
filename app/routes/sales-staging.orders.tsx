@@ -63,36 +63,31 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     ? `${base}/rest/v1/leaflink_orders?select=*,organizations(name)${searchQ}&is_sample_order=eq.false&order=order_date.desc.nullslast&limit=500`
     : `${base}/rest/v1/leaflink_orders?select=*,organizations(name)${stateQ}${statusQ}${periodQ}&is_sample_order=eq.false&order=order_date.desc.nullslast&limit=500`;
 
-  const [ordersRes, periodStatsRes, pendingRes, completeRes] = await Promise.all([
+  const [ordersRes, periodStatsRes, ytdStatsRes, pendingRes, completeRes] = await Promise.all([
     fetch(ordersUrl, {headers: h}),
-    // Stats for the selected period + state (for stat bar)
+    // Stats for the selected period + state
     fetch(`${base}/rest/v1/leaflink_orders?select=total_amount,order_date${stateQ}${periodQ}&is_sample_order=eq.false&status=not.in.(Cancelled,Rejected)`, {headers: h}),
-    // Pending (not period-filtered — always current)
+    // YTD always — never filtered by period, only by state
+    fetch(`${base}/rest/v1/leaflink_orders?select=total_amount${stateQ}&is_sample_order=eq.false&status=not.in.(Cancelled,Rejected)&order_date=gte.${ytdStart}`, {headers: h}),
+    // Pending (not period-filtered)
     fetch(`${base}/rest/v1/leaflink_orders?select=id${stateQ}&is_sample_order=eq.false&status=in.(Submitted,Accepted,Fulfilled,Shipped)`, {headers: {...h, Prefer: 'count=exact'}}),
-    // Complete (same)
+    // Complete (not period-filtered)
     fetch(`${base}/rest/v1/leaflink_orders?select=id${stateQ}&is_sample_order=eq.false&status=eq.Complete`, {headers: {...h, Prefer: 'count=exact'}}),
   ]);
 
-  const [orders, periodRows] = await Promise.all([ordersRes.json(), periodStatsRes.json()]);
+  const [orders, periodRows, ytdRows] = await Promise.all([ordersRes.json(), periodStatsRes.json(), ytdStatsRes.json()]);
   const pendingCount  = parseInt(pendingRes.headers.get('content-range')?.split('/')[1] || '0');
   const completeCount = parseInt(completeRes.headers.get('content-range')?.split('/')[1] || '0');
 
   const rows = Array.isArray(periodRows) ? periodRows : [];
-  // YTD always computed from all rows with year filter
-  const ytdRows = rows.filter((r:any) => r.order_date && r.order_date >= ytdStart);
-  const mtdRows = rows.filter((r:any) => r.order_date && r.order_date >= mtdStart);
-  const periodRevenue = rows.reduce((s:number,r:any)=>s+parseMoney(r.total_amount),0);
+  const ytdRevenue = Array.isArray(ytdRows) ? ytdRows.reduce((s:number,r:any)=>s+parseMoney(r.total_amount),0) : 0;
   const periodCount   = rows.length;
   const periodAov     = periodCount > 0 ? periodRevenue / periodCount : 0;
-  const ytdRevenue    = ytdRows.reduce((s:number,r:any)=>s+parseMoney(r.total_amount),0);
-  const mtdRevenue    = mtdRows.reduce((s:number,r:any)=>s+parseMoney(r.total_amount),0);
-  const mtdOrders     = mtdRows.length;
-  const mtdAov        = mtdOrders > 0 ? mtdRevenue / mtdOrders : 0;
 
   return json({
     authenticated: true,
     orders: Array.isArray(orders) ? orders : [],
-    stats: {ytdRevenue, mtdRevenue, mtdOrders, mtdAov, periodRevenue, periodCount, periodAov, pendingCount, completeCount},
+    stats: {ytdRevenue, periodRevenue, periodCount, periodAov, pendingCount, completeCount},
     state, statusFilter, period, search,
   });
 }
@@ -315,6 +310,18 @@ export default function SalesOrders() {
   const [showModal, setShowModal] = useState(false);
   const [searchDraft, setSearchDraft] = useState(search || '');
 
+  const submitSearch = (q: string) => {
+    const p = new URLSearchParams();
+    if (q.trim()) p.set('search', q.trim());
+    setSearchParams(p);
+  };
+
+  // Debounced live search — fires 350ms after user stops typing
+  useEffect(() => {
+    const t = setTimeout(() => { submitSearch(searchDraft); }, 350);
+    return () => clearTimeout(t);
+  }, [searchDraft]);
+
   if (!authenticated) return <div style={{minHeight:'100vh',background:T.bg,display:'flex',alignItems:'center',justifyContent:'center'}}><Link to="/sales-staging" style={{color:T.yellow,fontFamily:'Teko,sans-serif',fontSize:18,letterSpacing:'0.18em',textDecoration:'none'}}>← BACK TO LOGIN</Link></div>;
 
   const setFilter = (key: string, val: string) => {
@@ -323,12 +330,6 @@ export default function SalesOrders() {
     else p.set(key, val);
     p.delete('search'); // clear search when changing filters
     setSearchDraft('');
-    setSearchParams(p);
-  };
-
-  const submitSearch = (q: string) => {
-    const p = new URLSearchParams();
-    if (q.trim()) p.set('search', q.trim());
     setSearchParams(p);
   };
 
