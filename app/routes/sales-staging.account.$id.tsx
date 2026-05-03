@@ -676,7 +676,7 @@ function FieldsPanel({org}: {org: any}) {
       <TwoCol>
         <EditableField label="Street Address" field="street_address" value={org.street_address} orgId={org.id} />
         <EditableField label="City" field="city" value={org.city} orgId={org.id} />
-        <SelectField label="State" field="market_state" value={org.market_state||''} orgId={org.id} options={['','NJ','MA','NY','RI','MO','Multi-State']} />
+        <SelectField label="State" field="market_state" value={org.market_state||''} orgId={org.id} options={['','AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','Multi-State']} />
         <EditableField label="ZIP" field="zip" value={org.zip} orgId={org.id} mono />
       </TwoCol>
 

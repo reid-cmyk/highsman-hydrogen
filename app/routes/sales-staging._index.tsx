@@ -312,8 +312,10 @@ function NewAccountModal({onClose}:{onClose:()=>void}) {
 
       if (placesResult.status==='fulfilled') {
         const d = placesResult.value;
-        if (d.error?.includes('not set')||d.error?.includes('not configured')) {
-          setApiError('Google Places API key not set in Oxygen env vars — add GOOGLE_PLACES_API_KEY.');
+        if (d.error?.includes('not set') || d.error?.includes('not configured')) {
+          setApiError('Google Places API key not set — add GOOGLE_PLACES_API_KEY to Oxygen env vars.');
+        } else if (d.error) {
+          setApiError('Google Places unavailable — check API key and billing in Google Cloud Console.');
         } else { setApiError(null); }
         setPredictions(d.predictions||[]);
       }
@@ -413,6 +415,7 @@ function NewAccountModal({onClose}:{onClose:()=>void}) {
                       </a>
                     ))}
                     {predictions.length > 0 && <div style={{padding:'6px 16px 4px',fontFamily:'JetBrains Mono,monospace',fontSize:9.5,color:T.textFaint,letterSpacing:'0.18em',textTransform:'uppercase',borderBottom:`1px solid ${T.border}`}}>Google Places results</div>}
+                    {apiError && predictions.length === 0 && <div style={{padding:'8px 16px',background:'rgba(255,51,85,0.06)',borderTop:`1px solid ${T.border}`}}><span style={{fontFamily:'JetBrains Mono,monospace',fontSize:10,color:'#ff6b6b',letterSpacing:'0.08em'}}>⚠ {apiError}</span></div>}
                   </>
                 )}
                 {predictions.map((p:any, i:number) => (
