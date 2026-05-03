@@ -9,6 +9,7 @@ import {json} from '@shopify/remix-oxygen';
 import {useLoaderData, useFetcher, Link, useNavigate} from '@remix-run/react';
 import {useState, useRef, useEffect} from 'react';
 import {isStagingAuthed} from '~/lib/staging-auth';
+import {SalesFloorNav} from '~/components/SalesFloorNav';
 
 export const handle = {hideHeader: true, hideFooter: true};
 export const meta: MetaFunction<typeof loader> = ({data}) => [
@@ -52,19 +53,87 @@ export async function loader({request, context, params}: LoaderFunctionArgs) {
   const id = params.id!;
   const h = {apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`};
   const base = env.SUPABASE_URL;
-  const [orgRes, notesRes, stepsRes] = await Promise.all([
+  const [orgRes, notesRes, stepsRes, ordersRes] = await Promise.all([
     fetch(`${base}/rest/v1/organizations?id=eq.${id}&select=*,contacts(*)`, {headers: h}),
     fetch(`${base}/rest/v1/org_notes?organization_id=eq.${id}&order=created_at.desc&limit=100`, {headers: h}),
     fetch(`${base}/rest/v1/onboarding_steps?organization_id=eq.${id}&order=step_key.asc`, {headers: h}),
+    fetch(`${base}/rest/v1/leaflink_orders?organization_id=eq.${id}&is_sample_order=eq.false&status=not.in.(Cancelled,Rejected)&select=total_amount,order_date&order=order_date.asc`, {headers: h}),
   ]);
-  const [orgRows, notes, steps] = await Promise.all([orgRes.json(), notesRes.json(), stepsRes.json()]);
+  const [orgRows, notes, steps, orderData] = await Promise.all([orgRes.json(), notesRes.json(), stepsRes.json(), ordersRes.json()]);
   const org = orgRows?.[0] || null;
-  return json({authenticated: true, org, contacts: org?.contacts || [], notes: Array.isArray(notes)?notes:[], steps: Array.isArray(steps)?steps:[]});
+  const orderRows = Array.isArray(orderData) ? orderData : [];
+  const totalOrderRevenue = orderRows.reduce((s:number,o:any)=>s+(parseFloat(String(o.total_amount||0).replace(/[$,]/g,''))||0),0);
+
+  // Compute reorder cadence from actual order dates (avg days between orders)
+  let computedCadence: number | null = null;
+  const datedOrders = orderRows.filter((o:any) => o.order_date).map((o:any) => new Date(o.order_date).getTime()).sort((a:number,b:number)=>a-b);
+  if (datedOrders.length >= 2) {
+    const gaps: number[] = [];
+    for (let i = 1; i < datedOrders.length; i++) {
+      gaps.push((datedOrders[i] - datedOrders[i-1]) / 86400000);
+    }
+    computedCadence = Math.round(gaps.reduce((s,g)=>s+g,0) / gaps.length);
+  }
+  return json({authenticated: true, org, contacts: org?.contacts || [], notes: Array.isArray(notes)?notes:[], steps: Array.isArray(steps)?steps:[], totalOrderRevenue, computedCadence});
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
+// ─── Count-up hook ────────────────────────────────────────────────────────────
+function useCountUp(target: number, duration = 1400) {
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    const start = Date.now();
+    const tick = () => {
+      const p = Math.min((Date.now() - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - p, 3);
+      setVal(target * ease);
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, [target]);
+  return val;
+}
+
+// ─── Account stat bar ─────────────────────────────────────────────────────────
+function AccountStatBar({days, daysColor, lastOrderDate, ordersCount, stateRank, marketState, totalRevenue, budtenders, reorderCadence}: any) {
+  const animDays     = useCountUp(days ?? 0);
+  const animOrders   = useCountUp(ordersCount);
+  const animRevenue  = useCountUp(totalRevenue);
+  const animBudts    = useCountUp(budtenders);
+  const animCadence  = useCountUp(reorderCadence ?? 0);
+
+  const fmt$ = (n: number) => `$${n.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}`;
+  const lastDate = lastOrderDate
+    ? new Date(lastOrderDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+    : '—';
+
+  const cells = [
+    {l:'Days since order', v:days===null?'—':String(Math.round(animDays)),  sub:days===null?'no orders':'d',   accent:daysColor},
+    {l:'Last order date',  v:lastDate, sub:'',                                                                    accent:T.text},
+    {l:'Orders (all time)',v:String(Math.round(animOrders)),               sub:ordersCount===1?'order':'orders', accent:ordersCount>0?T.text:T.textFaint},
+    {l:'Total revenue',    v:fmt$(animRevenue),                            sub:'all time',                        accent:T.yellow},
+    {l:'State rank',       v:stateRank.loading?'…':stateRank.rank?`#${stateRank.rank}`:'—', sub:stateRank.total?`of ${stateRank.total} in ${marketState}`:'vs. roster', accent:stateRank.rank?T.cyan:T.textFaint},
+    {l:'Budtenders',       v:budtenders?String(Math.round(animBudts)):'—', sub:'on floor',                       accent:T.text},
+    {l:'Reorder Cadence',  v:reorderCadence?String(Math.round(animCadence)):'—', sub:reorderCadence?'day avg':'not set', accent:reorderCadence?T.cyan:T.textFaint},
+  ];
+
+  return (
+    <div style={{marginTop:26, display:'grid', gridTemplateColumns:'repeat(7,1fr)', background:T.border, gap:1, border:`1px solid ${T.border}`}}>
+      {cells.map((s,i) => (
+        <div key={i} style={{background:T.bg, padding:'16px 18px'}}>
+          <div style={{fontFamily:'Teko,sans-serif', fontSize:10.5, letterSpacing:'0.30em', color:T.textFaint, textTransform:'uppercase', marginBottom:4}}>{s.l}</div>
+          <div style={{display:'flex', alignItems:'baseline', gap:6}}>
+            <span style={{fontFamily:'Teko,sans-serif', fontSize:s.l==='Last order date'?22:38, fontWeight:600, color:s.accent, lineHeight:0.9, textShadow:s.accent===T.yellow?'0 0 24px rgba(255,213,0,0.18)':'none'}}>{s.v}</span>
+            {s.sub && <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle, letterSpacing:'0.10em'}}>{s.sub}</span>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function AccountDetail() {
-  const {authenticated, org, contacts, notes, steps} = useLoaderData<typeof loader>() as any;
+  const {authenticated, org, contacts, notes, steps, totalOrderRevenue, computedCadence} = useLoaderData<typeof loader>() as any;
   const [, rerender] = useState(0);
   const refresh = () => rerender(n => n + 1);
   const [stateRank, setStateRank] = useState<{rank:number|null; total:number|null; loading:boolean}>({rank:null, total:null, loading:true});
@@ -120,15 +189,7 @@ export default function AccountDetail() {
       </div>
 
       <div style={{display:'flex', flex:1}}>
-        {/* Side nav stub */}
-        <div style={{width:200, flexShrink:0, background:T.bg, borderRight:`1px solid ${T.border}`, paddingTop:8}}>
-          {['Accounts','Dashboard','Leads','Reorders Due','New Customers','Funnel','Email','Text','Issues','Vibes'].map(item => (
-            <a key={item} href={item==='Accounts'?'/sales-staging':'/sales-floor/app'}
-              style={{display:'block', padding:'9px 16px', fontFamily:'Teko,sans-serif', fontSize:15, letterSpacing:'0.10em', color:item==='Accounts'?T.yellow:T.textSubtle, borderLeft:item==='Accounts'?`2px solid ${T.yellow}`:'2px solid transparent', textTransform:'uppercase', textDecoration:'none', background:item==='Accounts'?`rgba(255,213,0,0.05)`:'transparent'}}>
-              {item}
-            </a>
-          ))}
-        </div>
+        <SalesFloorNav current="Accounts" />
 
         <div style={{flex:1, minWidth:0}}>
           {/* Hero */}
@@ -176,31 +237,15 @@ export default function AccountDetail() {
             {/* Quick stats strip — data we actually have */}
             {(() => {
               const daysColor = days===null?T.cyan:days<=14?T.green:days<=30?T.statusWarn:T.redSystems;
-              const onboardingDone = (steps||[]).filter((s:any)=>s.status==='complete').length;
-              const onboardingTotal = 4;
-              const onboardingPct = onboardingTotal > 0 ? Math.round((onboardingDone/onboardingTotal)*100) : 0;
-              const statCells = [
-                {l:'Days since order', v:days===null?'—':String(days), sub:days===null?'no orders':'d', accent:daysColor},
-                {l:'Last order date',  v:org.last_order_date?new Date(org.last_order_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}):'—', sub:'', accent:T.text},
-                {l:'Orders (all time)', v:org.orders_count>0?String(org.orders_count):'0', sub:org.orders_count===1?'order':'orders', accent:org.orders_count>0?T.text:T.textFaint},
-                {l:'State rank', v:stateRank.loading?'…':stateRank.rank?`#${stateRank.rank}`:'—', sub:stateRank.total?`of ${stateRank.total} in ${org.market_state}`:'vs. roster', accent:stateRank.rank?T.cyan:T.textFaint},
-                {l:'Contacts',         v:String(contacts?.length||0), sub:contacts?.length===1?'contact':'contacts', accent:T.text},
-                {l:'Budtenders',       v:org.budtender_count?String(org.budtender_count):'—', sub:'on floor', accent:T.text},
-                {l:'Onboarding',       v:onboardingDone?`${onboardingDone}/${onboardingTotal}`:'—', sub:`${onboardingPct}%`, accent:onboardingPct===100?T.green:T.yellow},
-              ];
-              return (
-                <div style={{marginTop:26, display:'grid', gridTemplateColumns:'repeat(7,1fr)', background:T.border, gap:1, border:`1px solid ${T.border}`}}>
-                  {statCells.map((s,i) => (
-                    <div key={i} style={{background:T.bg, padding:'16px 18px'}}>
-                      <div style={{fontFamily:'Teko,sans-serif', fontSize:10.5, letterSpacing:'0.30em', color:T.textFaint, textTransform:'uppercase', marginBottom:4}}>{s.l}</div>
-                      <div style={{display:'flex', alignItems:'baseline', gap:6}}>
-                        <span style={{fontFamily:'Teko,sans-serif', fontSize:38, fontWeight:600, color:s.accent, lineHeight:0.9, textShadow:s.accent===T.yellow?'0 0 24px rgba(255,213,0,0.18)':'none'}}>{s.v}</span>
-                        <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle, letterSpacing:'0.10em'}}>{s.sub}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              );
+              return <AccountStatBar
+                days={days} daysColor={daysColor}
+                lastOrderDate={org.last_order_date}
+                ordersCount={org.orders_count||0}
+                stateRank={stateRank} marketState={org.market_state}
+                totalRevenue={totalOrderRevenue||0}
+                budtenders={org.budtender_count||0}
+                reorderCadence={computedCadence || org.reorder_cadence_days || 0}
+              />;
             })()}
           </div>
 
@@ -518,6 +563,121 @@ function FieldsPanel({org}: {org: any}) {
         <EditableField label="Training link" field="staff_training_link" value={org.staff_training_link} orgId={org.id} link mono />
         <EditableField label="Last training date" field="last_staff_training_date" value={org.last_staff_training_date} orgId={org.id} mono hint="YYYY-MM-DD" />
       </TwoCol>
+
+      <GroupLabel>Orders</GroupLabel>
+      <OrgOrdersPanel orgId={org.id} orgName={org.name} marketState={org.market_state} />
+    </div>
+  );
+}
+
+// ─── Org Orders Panel ─────────────────────────────────────────────────────────
+function OrgOrdersPanel({orgId, orgName, marketState}: {orgId:string; orgName:string; marketState:string}) {
+  const [orders, setOrders] = useState<any[]|null>(null);
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({status:'Submitted', order_date:new Date().toISOString().split('T')[0], total_amount:'', payment_terms:'Net 30'});
+  const [saving, setSaving] = useState(false);
+  const createFetcher = useFetcher();
+
+  useEffect(() => {
+    fetch(`/sales-staging/api/org-orders?org_id=${orgId}`)
+      .then(r => r.json())
+      .then(d => setOrders(d.orders || []))
+      .catch(() => setOrders([]));
+  }, [orgId]);
+
+  useEffect(() => {
+    const d = createFetcher.data as any;
+    if (d?.ok) { setAdding(false); setForm({status:'Submitted', order_date:new Date().toISOString().split('T')[0], total_amount:'', payment_terms:'Net 30'}); setSaving(false);
+      // Reload orders
+      fetch(`/sales-staging/api/org-orders?org_id=${orgId}`).then(r=>r.json()).then(d=>setOrders(d.orders||[])).catch(()=>{});
+    } else if (d && !d.ok) setSaving(false);
+  }, [createFetcher.data]);
+
+  const STATUS_COLOR_LOCAL: Record<string,string> = {Submitted:T.cyan,Accepted:T.yellow,Fulfilled:T.statusWarn,Shipped:T.statusWarn,Complete:T.green,Cancelled:T.textFaint,Rejected:T.redSystems};
+  const fmt$ = (n:number) => `$${n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const parseMoney = (s:any) => parseFloat(String(s||0).replace(/[$,]/g,''))||0;
+
+  const fieldStyle = {background:T.bg, border:`1px solid ${T.borderStrong}`, color:T.text, fontSize:12, fontFamily:'Inter,sans-serif', padding:'5px 8px', outline:'none', width:'100%', boxSizing:'border-box' as const};
+  const labelStyle = {fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase' as const, marginBottom:3};
+
+  return (
+    <div>
+      {/* Header with + New Order */}
+      <div style={{padding:'10px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:`1px solid ${T.border}`}}>
+        <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textFaint, letterSpacing:'0.12em'}}>
+          {orders === null ? 'loading…' : `${orders.length} order${orders.length!==1?'s':''}`}
+        </span>
+        <div style={{display:'flex', gap:8}}>
+          <a href={`/sales-staging/orders?account=${orgId}`} style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle, letterSpacing:'0.12em', textDecoration:'none'}}>VIEW ALL →</a>
+          <button type="button" onClick={()=>setAdding(a=>!a)}
+            style={{background:'none', border:'none', color:adding?T.textFaint:T.yellow, fontFamily:'JetBrains Mono,monospace', fontSize:10, letterSpacing:'0.14em', cursor:'pointer', padding:0}}>
+            {adding ? 'CANCEL' : '+ NEW ORDER'}
+          </button>
+        </div>
+      </div>
+
+      {/* New order form */}
+      {adding && (
+        <createFetcher.Form method="post" action="/api/order-create"
+          onSubmit={()=>setSaving(true)}
+          style={{padding:'12px 16px', background:T.surfaceElev, borderBottom:`1px solid ${T.border}`, display:'flex', flexDirection:'column', gap:10}}>
+          <input type="hidden" name="org_id" value={orgId} />
+          <input type="hidden" name="leaflink_customer_name" value={orgName} />
+          <input type="hidden" name="market_state" value={marketState||'NJ'} />
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+            <div>
+              <div style={labelStyle}>Order Date</div>
+              <input type="date" name="order_date" value={form.order_date} onChange={e=>setForm(f=>({...f,order_date:e.target.value}))} style={fieldStyle} />
+            </div>
+            <div>
+              <div style={labelStyle}>Status</div>
+              <select name="status" value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))} style={fieldStyle}>
+                {['Submitted','Accepted','Fulfilled','Shipped','Complete','Cancelled','Rejected'].map(s=><option key={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+            <div>
+              <div style={labelStyle}>Total Amount ($)</div>
+              <input type="number" name="total_amount" step="0.01" value={form.total_amount} onChange={e=>setForm(f=>({...f,total_amount:e.target.value}))} placeholder="0.00" style={fieldStyle} />
+            </div>
+            <div>
+              <div style={labelStyle}>Payment Terms</div>
+              <select name="payment_terms" value={form.payment_terms} onChange={e=>setForm(f=>({...f,payment_terms:e.target.value}))} style={fieldStyle}>
+                {['Net 30','Net 15','Net 7','Due on receipt','COD','Prepaid'].map(s=><option key={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{display:'flex', gap:8}}>
+            <button type="submit" disabled={saving||!form.total_amount}
+              style={{height:30, padding:'0 14px', background:T.yellow, border:'none', color:'#000', fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.18em', cursor:saving?'not-allowed':'pointer', opacity:saving?0.6:1}}>
+              {saving ? 'SAVING…' : 'CREATE'}
+            </button>
+          </div>
+          {(createFetcher.data as any)?.error && <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.redSystems}}>{(createFetcher.data as any).error}</div>}
+        </createFetcher.Form>
+      )}
+
+      {/* Orders list */}
+      {orders === null && <div style={{padding:'16px', fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint}}>Loading orders…</div>}
+      {orders !== null && orders.length === 0 && <div style={{padding:'16px', fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint, letterSpacing:'0.10em'}}>No orders on record</div>}
+      {orders !== null && orders.map((o:any, i:number) => {
+        const sc = STATUS_COLOR_LOCAL[o.status] || T.textFaint;
+        const date = o.order_date ? new Date(o.order_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
+        return (
+          <a key={o.id} href={`/sales-staging/order/${o.id}`}
+            style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:`1px solid ${T.border}`, textDecoration:'none', gap:12, transition:'background 80ms'}}
+            onMouseEnter={e=>(e.currentTarget.style.background=T.surfaceElev)}
+            onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
+            <div style={{flex:1, minWidth:0}}>
+              <span style={{fontFamily:'Inter,sans-serif', fontSize:13, color:T.text, fontWeight:500}}>{date}</span>
+              <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textFaint, letterSpacing:'0.08em', marginLeft:10}}>{o.market_state}</span>
+            </div>
+            <span style={{fontFamily:'Teko,sans-serif', fontSize:20, color:T.text, flexShrink:0, marginRight:12}}>{fmt$(parseMoney(o.total_amount))}</span>
+            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, padding:'2px 8px', border:`1px solid ${sc}`, color:sc, letterSpacing:'0.12em', flexShrink:0, minWidth:70, textAlign:'center'}}>{o.status}</span>
+          </a>
+        );
+      })}
     </div>
   );
 }
