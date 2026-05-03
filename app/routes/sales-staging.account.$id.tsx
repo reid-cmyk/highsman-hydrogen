@@ -57,13 +57,23 @@ export async function loader({request, context, params}: LoaderFunctionArgs) {
     fetch(`${base}/rest/v1/organizations?id=eq.${id}&select=*,contacts(*)`, {headers: h}),
     fetch(`${base}/rest/v1/org_notes?organization_id=eq.${id}&order=created_at.desc&limit=100`, {headers: h}),
     fetch(`${base}/rest/v1/onboarding_steps?organization_id=eq.${id}&order=step_key.asc`, {headers: h}),
-    fetch(`${base}/rest/v1/leaflink_orders?organization_id=eq.${id}&is_sample_order=eq.false&status=not.in.(Cancelled,Rejected)&select=total_amount`, {headers: h}),
+    fetch(`${base}/rest/v1/leaflink_orders?organization_id=eq.${id}&is_sample_order=eq.false&status=not.in.(Cancelled,Rejected)&select=total_amount,order_date&order=order_date.asc`, {headers: h}),
   ]);
-  const [orgRows, notes, steps, orderAmounts] = await Promise.all([orgRes.json(), notesRes.json(), stepsRes.json(), ordersRes.json()]);
+  const [orgRows, notes, steps, orderData] = await Promise.all([orgRes.json(), notesRes.json(), stepsRes.json(), ordersRes.json()]);
   const org = orgRows?.[0] || null;
-  const totalOrderRevenue = Array.isArray(orderAmounts)
-    ? orderAmounts.reduce((s:number,o:any)=>s+(parseFloat(String(o.total_amount||0).replace(/[$,]/g,''))||0),0)
-    : 0;
+  const orderRows = Array.isArray(orderData) ? orderData : [];
+  const totalOrderRevenue = orderRows.reduce((s:number,o:any)=>s+(parseFloat(String(o.total_amount||0).replace(/[$,]/g,''))||0),0);
+
+  // Compute reorder cadence from actual order dates (avg days between orders)
+  let computedCadence: number | null = null;
+  const datedOrders = orderRows.filter((o:any) => o.order_date).map((o:any) => new Date(o.order_date).getTime()).sort((a:number,b:number)=>a-b);
+  if (datedOrders.length >= 2) {
+    const gaps: number[] = [];
+    for (let i = 1; i < datedOrders.length; i++) {
+      gaps.push((datedOrders[i] - datedOrders[i-1]) / 86400000);
+    }
+    computedCadence = Math.round(gaps.reduce((s,g)=>s+g,0) / gaps.length);
+  }
   return json({authenticated: true, org, contacts: org?.contacts || [], notes: Array.isArray(notes)?notes:[], steps: Array.isArray(steps)?steps:[], totalOrderRevenue});
 }
 

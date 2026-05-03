@@ -438,7 +438,6 @@ export default function SalesOrders() {
                   {search ? '✕' : '⌕'}
                 </button>
               </form>
-              </div>
             </div>
           </div>
 
