@@ -112,6 +112,21 @@ export function SalesFloorLayout({
           100% { box-shadow: 0 0 0 0 rgba(0,232,122,0) }
         }
         .sf-nav-item:hover { background: rgba(255,255,255,0.03) !important; }
+        @keyframes sweep { 0%{left:-25%} 100%{left:125%} }
+        .hs-sweep { position:relative; overflow:hidden; }
+        .hs-sweep::after { content:''; position:absolute; bottom:0; left:-25%; height:2px; width:25%; background:linear-gradient(90deg,transparent,#FFD500,transparent); opacity:.75; animation:sweep 14s linear infinite; pointer-events:none; }
+        .order-row:hover { background:#141414 !important; }
+        @media (max-width:768px) {
+          .hs-page-header{padding:12px 16px!important}
+          .hs-stats-strip{grid-template-columns:repeat(2,1fr)!important}
+          .hs-filter-row{flex-wrap:wrap!important}
+          .hs-state-pills{flex-wrap:wrap!important;border:none!important;gap:6px!important}
+          .hs-state-pill{border:1px solid var(--bs,#2F2F2F)!important}
+          .hs-search{width:100%!important;max-width:none!important}
+          .hs-card-grid{grid-template-columns:4px 48px 1fr!important}
+          .hs-card-days,.hs-card-contact{display:none!important}
+          .hs-card-actions{grid-column:2/-1!important;padding:8px 12px 12px!important;border-left:none!important}
+        }
         @media (max-width: 768px) {
           .sf-sidenav        { display: none !important; }
           .sf-topbar-extras  { display: none !important; }

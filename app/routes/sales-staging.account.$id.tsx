@@ -172,12 +172,6 @@ export default function AccountDetail() {
 
   return (
     <SalesFloorLayout current="Accounts">
-      <style>{`
-        @keyframes sweep { 0%{left:-25%} 100%{left:125%} }
-        .hs-sweep { position:relative; overflow:hidden; }
-        .hs-sweep::after { content:''; position:absolute; bottom:0; left:-25%; height:2px; width:25%; background:linear-gradient(90deg,transparent,#FFD500,transparent); opacity:.75; animation:sweep 14s linear infinite; pointer-events:none; }
-      `}</style>
-      <div style={{flex:1, minWidth:0}}>
           {/* Hero */}
           <div style={{borderBottom:`1px solid ${T.borderStrong}`, background:`linear-gradient(180deg,rgba(255,213,0,0.03) 0%,transparent 100%)`, padding:'32px 32px 28px'}}>
             {/* Breadcrumb */}
@@ -250,10 +244,7 @@ export default function AccountDetail() {
               <NotesPanel orgId={org.id} notes={notes} refresh={refresh} />
             </div>
           </div>
-        </div>
-      </div>
-    </div>
-  </SalesFloorLayout>
+    </SalesFloorLayout>
   );
 }
 

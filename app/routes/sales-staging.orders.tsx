@@ -343,13 +343,6 @@ export default function SalesOrders() {
 
   return (
     <SalesFloorLayout current="Sales Orders">
-      <style>{`
-        @keyframes sweep{0%{left:-25%}100%{left:125%}}
-        .hs-sweep{position:relative;overflow:hidden}
-        .hs-sweep::after{content:'';position:absolute;bottom:0;left:-25%;height:2px;width:25%;background:linear-gradient(90deg,transparent,#FFD500,transparent);opacity:.75;animation:sweep 14s linear infinite;pointer-events:none}
-        .order-row:hover{background:#141414 !important}
-      `}</style>
-      <div style={{flex:1, minWidth:0, display:'flex', flexDirection:'column'}}>
           {/* Header row */}
           <div className="hs-sweep" style={{padding:'20px 28px 0', borderBottom:`1px solid ${T.borderStrong}`, background:`linear-gradient(180deg,rgba(255,213,0,0.03) 0%,transparent 100%)`}}>
             <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16}}>
@@ -495,11 +488,8 @@ export default function SalesOrders() {
               </table>
             )}
           </div>
-        </div>
-      </div>
 
       {showModal && <NewOrderModal onClose={()=>setShowModal(false)} />}
-      </div>
     </SalesFloorLayout>
   );
 }

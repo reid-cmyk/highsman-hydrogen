@@ -109,7 +109,6 @@ export default function OrderDetail() {
 
   return (
     <SalesFloorLayout current="Sales Orders">
-      <div style={{flex:1, minWidth:0}}>
           {/* Breadcrumb */}
           <div style={{padding:'16px 32px 0', display:'flex', alignItems:'center', gap:10}}>
             <Link to="/sales-staging/orders" style={{fontFamily:'Teko,sans-serif', fontSize:12, letterSpacing:'0.24em', color:T.textSubtle, textDecoration:'none', textTransform:'uppercase'}}>← Orders</Link>
@@ -220,8 +219,6 @@ export default function OrderDetail() {
               )}
             </div>
           </div>
-        </div>
-      </div>
     </SalesFloorLayout>
   );
 }

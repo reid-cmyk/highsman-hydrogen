@@ -530,20 +530,6 @@ function Dashboard({data}:{data:any}) {
 
   return (
     <SalesFloorLayout current="Accounts" stageCounts={stageCounts}>
-      <style>{`
-        @media(max-width:768px){
-          .hs-page-header{padding:12px 16px!important}
-          .hs-stats-strip{grid-template-columns:repeat(2,1fr)!important}
-          .hs-filter-row{flex-wrap:wrap!important}
-          .hs-state-pills{flex-wrap:wrap!important;border:none!important;gap:6px!important}
-          .hs-state-pill{border:1px solid var(--bs,#2F2F2F)!important}
-          .hs-search{width:100%!important;max-width:none!important}
-          .hs-card-grid{grid-template-columns:4px 48px 1fr!important}
-          .hs-card-days,.hs-card-contact{display:none!important}
-          .hs-card-actions{grid-column:2/-1!important;padding:8px 12px 12px!important;border-left:none!important}
-        }
-      `}</style>
-      <div style={{flex:1,minWidth:0,display:'flex',flexDirection:'column'}}>
           {/* Page header */}
           <div className="hs-page-header" style={{padding:'24px 28px 20px',borderBottom:`1px solid ${T.border}`,display:'flex',alignItems:'flex-end',justifyContent:'space-between',position:'relative',overflow:'hidden'}}>
             <SweepLine/>
@@ -639,8 +625,6 @@ function Dashboard({data}:{data:any}) {
             <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:10.5,color:T.textFaint,letterSpacing:'0.14em'}}>END OF LIST · {filtered.length} ACCOUNTS</div>
             <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:10.5,color:T.textFaint,letterSpacing:'0.14em'}}>↑↓ navigate · ↵ open</div>
           </div>
-        </div>
-      </div>
     </SalesFloorLayout>
   );
 }
