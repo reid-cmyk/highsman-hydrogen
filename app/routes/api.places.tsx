@@ -15,7 +15,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const placeId = (url.searchParams.get('placeId') || '').trim();
 
   const env = context.env as any;
-  const apiKey = env.GOOGLE_PLACES_API_KEY;
+  const apiKey = env.GOOGLE_PLACES_NEW_API_KEY || env.GOOGLE_PLACES_API_KEY;
 
   if (!apiKey) {
     console.warn('[api/places] GOOGLE_PLACES_API_KEY not configured — set this in Oxygen env vars');
