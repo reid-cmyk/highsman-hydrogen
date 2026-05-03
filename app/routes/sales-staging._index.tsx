@@ -663,11 +663,12 @@ function TopBar() {
 // ─── SideNav ──────────────────────────────────────────────────────────────────
 function SideNav({className,stageCounts}:{className?:string;stageCounts:Record<string,number>}) {
   const items=[
-    {label:'Accounts',count:(Object.values(stageCounts) as number[]).reduce((a,b)=>a+b,0),href:'/sales-staging',active:true},
     {label:'Dashboard',href:'/sales-staging?dash=1'},
-    {label:'Leads',count:stageCounts['prospect'],href:'/sales-staging?stage=prospect'},
-    {label:'Reorders Due',count:stageCounts['reorder_due'],dot:(stageCounts['reorder_due']||0)>0,href:'/sales-staging?stage=reorder_due'},
     {label:'New Customers',count:stageCounts['first_order_pending'],href:'/sales-staging?stage=first_order_pending'},
+    {label:'Reorders Due',count:stageCounts['reorder_due'],dot:(stageCounts['reorder_due']||0)>0,href:'/sales-staging?stage=reorder_due'},
+    {label:'Leads',count:stageCounts['prospect'],href:'/sales-staging?stage=prospect'},
+    {label:'Sales Orders',href:'/sales-staging/orders'},
+    {label:'Accounts',count:(Object.values(stageCounts) as number[]).reduce((a,b)=>a+b,0),href:'/sales-staging',active:true},
     {label:'Funnel',href:'/sales'},
     {label:'Email',href:'/sales-floor/app'},
     {label:'Text',href:'/sales-floor/app'},

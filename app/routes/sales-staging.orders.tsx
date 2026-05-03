@@ -39,50 +39,55 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     return json({authenticated: false, orders:[], stats:null});
 
   const url = new URL(request.url);
-  const state = url.searchParams.get('state') || 'ALL';
+  const state        = url.searchParams.get('state')  || 'ALL';
   const statusFilter = url.searchParams.get('status') || 'All';
+  const period       = url.searchParams.get('period') || 'all'; // all | ytd | mtd
 
   const h = {apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`};
   const base = env.SUPABASE_URL;
-
-  const stateQ = state !== 'ALL' ? `&market_state=eq.${state}` : '';
-  const statusQ = statusFilter !== 'All' ? `&status=eq.${statusFilter}` : '';
 
   const now = new Date();
   const ytdStart = `${now.getFullYear()}-01-01`;
   const mtdStart = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
 
-  const [ordersRes, ytdRes, mtdRes, pendingRes, completeRes] = await Promise.all([
-    // Orders list (most recent first, limit 200)
-    fetch(`${base}/rest/v1/leaflink_orders?select=*,organizations(name)${stateQ}${statusQ}&is_sample_order=eq.false&order=order_date.desc.nullslast&limit=200`, {headers: h}),
-    // YTD revenue
-    fetch(`${base}/rest/v1/leaflink_orders?select=total_amount${stateQ}&is_sample_order=eq.false&status=not.in.(Cancelled,Rejected)&order_date=gte.${ytdStart}`, {headers: h}),
-    // MTD orders + revenue
-    fetch(`${base}/rest/v1/leaflink_orders?select=total_amount${stateQ}&is_sample_order=eq.false&status=not.in.(Cancelled,Rejected)&order_date=gte.${mtdStart}`, {headers: h}),
-    // Pending count
-    fetch(`${base}/rest/v1/leaflink_orders?select=id${stateQ}&is_sample_order=eq.false&status=in.(Submitted,Accepted,Fulfilled,Shipped)`, {headers: h, ...{headers: {...h, Prefer: 'count=exact'}} as any}),
-    // Complete count
+  const stateQ  = state !== 'ALL' ? `&market_state=eq.${state}` : '';
+  const statusQ = statusFilter !== 'All' ? `&status=eq.${statusFilter}` : '';
+  const periodQ = period === 'ytd' ? `&order_date=gte.${ytdStart}`
+                : period === 'mtd' ? `&order_date=gte.${mtdStart}`
+                : '';
+
+  const [ordersRes, periodStatsRes, pendingRes, completeRes] = await Promise.all([
+    // Orders list filtered by all active params
+    fetch(`${base}/rest/v1/leaflink_orders?select=*,organizations(name)${stateQ}${statusQ}${periodQ}&is_sample_order=eq.false&order=order_date.desc.nullslast&limit=500`, {headers: h}),
+    // Stats for the selected period + state (for stat bar)
+    fetch(`${base}/rest/v1/leaflink_orders?select=total_amount,order_date${stateQ}${periodQ}&is_sample_order=eq.false&status=not.in.(Cancelled,Rejected)`, {headers: h}),
+    // Pending (not period-filtered — always current)
+    fetch(`${base}/rest/v1/leaflink_orders?select=id${stateQ}&is_sample_order=eq.false&status=in.(Submitted,Accepted,Fulfilled,Shipped)`, {headers: {...h, Prefer: 'count=exact'}}),
+    // Complete (same)
     fetch(`${base}/rest/v1/leaflink_orders?select=id${stateQ}&is_sample_order=eq.false&status=eq.Complete`, {headers: {...h, Prefer: 'count=exact'}}),
   ]);
 
-  const [orders, ytdRows, mtdRows] = await Promise.all([
-    ordersRes.json(), ytdRes.json(), mtdRes.json(),
-  ]);
-
-  const pendingCount = parseInt(pendingRes.headers.get('content-range')?.split('/')[1] || '0');
+  const [orders, periodRows] = await Promise.all([ordersRes.json(), periodStatsRes.json()]);
+  const pendingCount  = parseInt(pendingRes.headers.get('content-range')?.split('/')[1] || '0');
   const completeCount = parseInt(completeRes.headers.get('content-range')?.split('/')[1] || '0');
 
-  const ytdRevenue = Array.isArray(ytdRows) ? ytdRows.reduce((s:number,r:any)=>s+parseMoney(r.total_amount),0) : 0;
-  const mtdRows2 = Array.isArray(mtdRows) ? mtdRows : [];
-  const mtdRevenue = mtdRows2.reduce((s:number,r:any)=>s+parseMoney(r.total_amount),0);
-  const mtdOrders = mtdRows2.length;
-  const mtdAov = mtdOrders > 0 ? mtdRevenue / mtdOrders : 0;
+  const rows = Array.isArray(periodRows) ? periodRows : [];
+  // YTD always computed from all rows with year filter
+  const ytdRows = rows.filter((r:any) => r.order_date && r.order_date >= ytdStart);
+  const mtdRows = rows.filter((r:any) => r.order_date && r.order_date >= mtdStart);
+  const periodRevenue = rows.reduce((s:number,r:any)=>s+parseMoney(r.total_amount),0);
+  const periodCount   = rows.length;
+  const periodAov     = periodCount > 0 ? periodRevenue / periodCount : 0;
+  const ytdRevenue    = ytdRows.reduce((s:number,r:any)=>s+parseMoney(r.total_amount),0);
+  const mtdRevenue    = mtdRows.reduce((s:number,r:any)=>s+parseMoney(r.total_amount),0);
+  const mtdOrders     = mtdRows.length;
+  const mtdAov        = mtdOrders > 0 ? mtdRevenue / mtdOrders : 0;
 
   return json({
     authenticated: true,
     orders: Array.isArray(orders) ? orders : [],
-    stats: {ytdRevenue, mtdRevenue, mtdOrders, mtdAov, pendingCount, completeCount},
-    state, statusFilter,
+    stats: {ytdRevenue, mtdRevenue, mtdOrders, mtdAov, periodRevenue, periodCount, periodAov, pendingCount, completeCount},
+    state, statusFilter, period,
   });
 }
 
@@ -118,6 +123,56 @@ function StatCell({label, value, format, accent}: {label:string; value:number; f
 }
 
 // ── New Order Modal ───────────────────────────────────────────────────────────
+// ── Line item row with product search ────────────────────────────────────────
+function LineItemRow({item, index, onUpdate, onRemove, fieldStyle}: {item:any; index:number; onUpdate:(i:number,f:string,v:string)=>void; onRemove:(i:number)=>void; fieldStyle:any}) {
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [open, setOpen] = useState(false);
+
+  const search = async (q: string) => {
+    onUpdate(index, 'product_name', q);
+    if (q.length < 2) { setSuggestions([]); setOpen(false); return; }
+    const res = await fetch(`/api/product-search?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    const prods = data.products || [];
+    setSuggestions(prods);
+    setOpen(prods.length > 0);
+  };
+
+  const select = (p: any) => {
+    onUpdate(index, 'product_name', p.name);
+    onUpdate(index, 'leaflink_sku', p.leaflink_sku || '');
+    if (p.wholesale_price) onUpdate(index, 'unit_price', String(parseFloat(p.wholesale_price)||0));
+    setSuggestions([]); setOpen(false);
+  };
+
+  return (
+    <div style={{marginBottom:8}}>
+      <div style={{display:'grid', gridTemplateColumns:'1fr 70px 90px 24px', gap:6, alignItems:'start'}}>
+        <div style={{position:'relative'}}>
+          <input value={item.product_name} onChange={e=>search(e.target.value)}
+            onBlur={()=>setTimeout(()=>setOpen(false),150)}
+            onFocus={()=>item.product_name.length>=2&&setSuggestions(s=>s)}
+            placeholder="Search products…" style={fieldStyle} />
+          {open && suggestions.length > 0 && (
+            <div style={{position:'absolute', top:'100%', left:0, right:0, background:'#1A1A1A', border:`1px solid #2F2F2F`, zIndex:20, maxHeight:140, overflowY:'auto'}}>
+              {suggestions.map((p:any,si:number) => (
+                <div key={si} onMouseDown={()=>select(p)}
+                  style={{padding:'7px 10px', cursor:'pointer', borderBottom:`1px solid #1F1F1F`}}>
+                  <div style={{fontFamily:'Inter,sans-serif', fontSize:12, color:'#F5F5F5', lineHeight:1.3}}>{p.name}</div>
+                  <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, color:'#6A6A6A', marginTop:2}}>{p.leaflink_sku} · ${parseFloat(p.wholesale_price||'0').toFixed(2)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <input type="number" value={item.quantity} onChange={e=>onUpdate(index,'quantity',e.target.value)} placeholder="Qty" style={fieldStyle} min="0" />
+        <input type="number" value={item.unit_price} onChange={e=>onUpdate(index,'unit_price',e.target.value)} placeholder="Unit $" style={fieldStyle} step="0.01" min="0" />
+        <button type="button" onClick={()=>onRemove(index)} style={{background:'none',border:'none',color:'#6A6A6A',cursor:'pointer',fontSize:14,lineHeight:1,paddingTop:6}}>✕</button>
+      </div>
+    </div>
+  );
+}
+
 function NewOrderModal({onClose}: {onClose:()=>void}) {
   const fetcher = useFetcher();
   const navigate = useNavigate();
@@ -126,11 +181,11 @@ function NewOrderModal({onClose}: {onClose:()=>void}) {
     order_date: new Date().toISOString().split('T')[0],
     total_amount:'', market_state:'NJ', payment_terms:'Net 30',
   });
-  const [lineItems, setLineItems] = useState<{product_name:string; quantity:string; unit_price:string}[]>([]);
+  const [lineItems, setLineItems] = useState<{product_name:string; quantity:string; unit_price:string; leaflink_sku?:string}[]>([]);
   const [orgSearch, setOrgSearch] = useState('');
   const [orgResults, setOrgResults] = useState<any[]>([]);
 
-  const addLineItem = () => setLineItems(l=>[...l,{product_name:'',quantity:'1',unit_price:''}]);
+  const addLineItem = () => setLineItems(l=>[...l,{product_name:'',quantity:'1',unit_price:'',leaflink_sku:''}]);
   const removeLineItem = (i:number) => setLineItems(l=>l.filter((_,idx)=>idx!==i));
   const updateLineItem = (i:number, field:string, val:string) => setLineItems(l=>l.map((item,idx)=>idx===i?{...item,[field]:val}:item));
   const computedTotal = lineItems.length > 0
@@ -222,12 +277,7 @@ function NewOrderModal({onClose}: {onClose:()=>void}) {
               <button type="button" onClick={addLineItem} style={{background:'none', border:'none', color:T.yellow, fontFamily:'JetBrains Mono,monospace', fontSize:10, letterSpacing:'0.14em', cursor:'pointer', padding:0}}>+ ADD SKU</button>
             </div>
             {lineItems.map((l,i)=>(
-              <div key={i} style={{display:'grid', gridTemplateColumns:'1fr 80px 100px 24px', gap:6, marginBottom:6, alignItems:'center'}}>
-                <input value={l.product_name} onChange={e=>updateLineItem(i,'product_name',e.target.value)} placeholder="Product name" style={{...fieldStyle}} />
-                <input type="number" value={l.quantity} onChange={e=>updateLineItem(i,'quantity',e.target.value)} placeholder="Qty" style={{...fieldStyle}} min="0" />
-                <input type="number" value={l.unit_price} onChange={e=>updateLineItem(i,'unit_price',e.target.value)} placeholder="Unit $" style={{...fieldStyle}} step="0.01" min="0" />
-                <button type="button" onClick={()=>removeLineItem(i)} style={{background:'none', border:'none', color:T.textFaint, cursor:'pointer', fontSize:14, lineHeight:1}}>✕</button>
-              </div>
+              <LineItemRow key={i} item={l} index={i} onUpdate={updateLineItem} onRemove={removeLineItem} fieldStyle={fieldStyle} />
             ))}
             {lineItems.length > 0 && (
               <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle, textAlign:'right', letterSpacing:'0.10em'}}>
@@ -254,18 +304,30 @@ function NewOrderModal({onClose}: {onClose:()=>void}) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function SalesOrders() {
-  const {authenticated, orders, stats, state, statusFilter} = useLoaderData<typeof loader>() as any;
+  const {authenticated, orders, stats, state, statusFilter, period} = useLoaderData<typeof loader>() as any;
   const [searchParams, setSearchParams] = useSearchParams();
   const [showModal, setShowModal] = useState(false);
+  const [search, setSearch] = useState('');
 
   if (!authenticated) return <div style={{minHeight:'100vh',background:T.bg,display:'flex',alignItems:'center',justifyContent:'center'}}><Link to="/sales-staging" style={{color:T.yellow,fontFamily:'Teko,sans-serif',fontSize:18,letterSpacing:'0.18em',textDecoration:'none'}}>← BACK TO LOGIN</Link></div>;
 
   const setFilter = (key: string, val: string) => {
     const p = new URLSearchParams(searchParams);
-    if ((key === 'state' && val === 'ALL') || (key === 'status' && val === 'All')) p.delete(key);
+    if ((key === 'state' && val === 'ALL') || (key === 'status' && val === 'All') || (key === 'period' && val === 'all')) p.delete(key);
     else p.set(key, val);
     setSearchParams(p);
   };
+
+  // Client-side dispensary search
+  const filteredOrders = search.trim().length > 0
+    ? orders.filter((o:any) => {
+        const name = (o.organizations?.name || o.leaflink_customer_name || '').toLowerCase();
+        return name.includes(search.trim().toLowerCase());
+      })
+    : orders;
+
+  // Stat bar labels based on period
+  const periodLabel = period === 'mtd' ? 'MTD' : period === 'ytd' ? 'YTD' : 'All Time';
 
   return (
     <div style={{minHeight:'100vh', background:T.bg, color:T.text, fontFamily:'Inter,sans-serif', display:'flex', flexDirection:'column',
@@ -309,7 +371,7 @@ export default function SalesOrders() {
               <div>
                 <h1 style={{margin:0, fontFamily:'Teko,sans-serif', fontSize:36, fontWeight:500, letterSpacing:'0.06em', textTransform:'uppercase', lineHeight:1}}>Sales Orders</h1>
                 <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:10.5, color:T.textFaint, marginTop:4, letterSpacing:'0.12em'}}>
-                  {orders.length} orders{state !== 'ALL' ? ` · ${state}` : ' · all markets'}
+                  {filteredOrders.length}{orders.length !== filteredOrders.length ? ` of ${orders.length}` : ''} orders · {state !== 'ALL' ? state : 'all markets'} · {periodLabel}
                 </div>
               </div>
               <div style={{display:'flex', gap:8}}>
@@ -333,25 +395,46 @@ export default function SalesOrders() {
               </div>
             </div>
 
-            {/* State filter */}
-            <div style={{display:'flex', gap:1, marginBottom:0}}>
-              {STATES.map(s => (
+            {/* Period + State filters + Search */}
+            <div style={{display:'flex', alignItems:'center', gap:16, flexWrap:'wrap'}}>
+              {/* Period */}
+              <div style={{display:'flex', gap:1}}>
+                {[['all','All Time'],['ytd','YTD'],['mtd','This Month']].map(([val,label]) => (
+                  <button key={val} onClick={()=>setFilter('period',val)}
+                    style={{height:32, padding:'0 14px', background:period===val?`rgba(255,213,0,0.08)`:'transparent', border:'none', borderBottom:`2px solid ${period===val?T.yellow:'transparent'}`, color:period===val?T.yellow:T.textSubtle, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.14em', cursor:'pointer', whiteSpace:'nowrap'}}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div style={{width:1, height:20, background:T.borderStrong}} />
+              {/* State */}
+              <div style={{display:'flex', gap:1}}>
+                {STATES.map(s => (
                 <button key={s} onClick={()=>setFilter('state',s)}
                   style={{height:32, padding:'0 14px', background:state===s?`rgba(255,213,0,0.08)`:'transparent', border:'none', borderBottom:`2px solid ${state===s?T.yellow:'transparent'}`, color:state===s?T.yellow:T.textSubtle, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.14em', cursor:'pointer'}}>
                   {s}
                 </button>
               ))}
+              </div>
+              <div style={{width:1, height:20, background:T.borderStrong}} />
+              {/* Dispensary search */}
+              <input
+                value={search}
+                onChange={e=>setSearch(e.target.value)}
+                placeholder="Search dispensary…"
+                style={{height:32, padding:'0 12px', background:T.surfaceElev, border:`1px solid ${T.borderStrong}`, color:T.text, fontFamily:'Inter,sans-serif', fontSize:12, outline:'none', width:200, letterSpacing:'0.02em'}}
+              />
             </div>
           </div>
 
-          {/* Stat bar */}
+          {/* Stat bar — reflects selected period + state */}
           <div style={{display:'grid', gridTemplateColumns:'repeat(6,1fr)', background:T.border, gap:1, borderBottom:`1px solid ${T.border}`, flexShrink:0}}>
-            <StatCell label="YTD Revenue"   value={stats?.ytdRevenue||0}  format="money"  accent={T.yellow} />
-            <StatCell label="MTD Revenue"   value={stats?.mtdRevenue||0}  format="money"  accent={T.text} />
-            <StatCell label="MTD Avg Order" value={stats?.mtdAov||0}      format="money"  accent={T.text} />
-            <StatCell label="MTD Orders"    value={stats?.mtdOrders||0}   format="number" accent={T.text} />
-            <StatCell label="Pending"       value={stats?.pendingCount||0} format="number" accent={T.statusWarn} />
-            <StatCell label="Complete"      value={stats?.completeCount||0} format="number" accent={T.green} />
+            <StatCell label="YTD Revenue"                    value={stats?.ytdRevenue||0}     format="money"  accent={T.yellow} />
+            <StatCell label={`${periodLabel} Revenue`}       value={stats?.periodRevenue||0}  format="money"  accent={T.text} />
+            <StatCell label={`${periodLabel} Avg Order`}     value={stats?.periodAov||0}      format="money"  accent={T.text} />
+            <StatCell label={`${periodLabel} Orders`}        value={stats?.periodCount||0}    format="number" accent={T.text} />
+            <StatCell label="Pending"                        value={stats?.pendingCount||0}   format="number" accent={T.statusWarn} />
+            <StatCell label="Complete"                       value={stats?.completeCount||0}  format="number" accent={T.green} />
           </div>
 
           {/* Status filter */}
@@ -370,7 +453,7 @@ export default function SalesOrders() {
 
           {/* Orders table */}
           <div style={{flex:1, overflowY:'auto'}}>
-            {orders.length === 0 ? (
+            {filteredOrders.length === 0 ? (
               <div style={{padding:'48px 28px', fontFamily:'JetBrains Mono,monospace', fontSize:12, color:T.textFaint, textAlign:'center'}}>No orders found</div>
             ) : (
               <table style={{width:'100%', borderCollapse:'collapse'}}>
@@ -384,10 +467,10 @@ export default function SalesOrders() {
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.map((o:any) => {
+                  {filteredOrders.map((o:any) => {
                     const orgName = o.organizations?.name || o.leaflink_customer_name;
                     const sc = STATUS_COLOR[o.status] || T.textFaint;
-                    const date = o.order_date ? new Date(o.order_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}) : '—';
+                    const date = o.order_date ? new Date(o.order_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
                     const isManual = o.source === 'manual';
                     return (
                       <tr key={o.id} className="order-row"
