@@ -528,9 +528,11 @@ const MENU_OPTIONS = ['','AIQ','Blaze','Cova','Dispense','Dutchie','Jane','Leafl
 function MarketIntelBar({intel, stateRank}: {intel: any; stateRank: any}) {
   const fmt$ = (n: number) => `$${(n||0).toLocaleString('en-US',{maximumFractionDigits:0})}`;
 
-  // Build a quick-display object from cached Supabase data while live intel loads
-  const cached = stateRank?.hsBrandRank ? {
-    highsman: {rank: stateRank.hsBrandRank, totalBrands: stateRank.hsBrandTotal, sharePercent: stateRank.hsSharePct, revenue: null},
+  // Build a quick-display object from cached Supabase data.
+  // Render the bar whenever we have a rank — even if brand intel is missing yet.
+  // Highsman cell shows "not tracked here" when hsBrandRank is null.
+  const cached = stateRank?.rank != null ? {
+    highsman: stateRank.hsBrandRank ? {rank: stateRank.hsBrandRank, totalBrands: stateRank.hsBrandTotal, sharePercent: stateRank.hsSharePct, revenue: null} : null,
     totalRevenue: stateRank.revenue,
     brands: null,
     categories: null,
