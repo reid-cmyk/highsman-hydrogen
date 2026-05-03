@@ -80,7 +80,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const completeCount = parseInt(completeRes.headers.get('content-range')?.split('/')[1] || '0');
 
   const rows = Array.isArray(periodRows) ? periodRows : [];
-  const ytdRevenue = Array.isArray(ytdRows) ? ytdRows.reduce((s:number,r:any)=>s+parseMoney(r.total_amount),0) : 0;
+  const ytdRevenue    = Array.isArray(ytdRows) ? ytdRows.reduce((s:number,r:any)=>s+parseMoney(r.total_amount),0) : 0;
+  const periodRevenue = rows.reduce((s:number,r:any)=>s+parseMoney(r.total_amount),0);
   const periodCount   = rows.length;
   const periodAov     = periodCount > 0 ? periodRevenue / periodCount : 0;
 
