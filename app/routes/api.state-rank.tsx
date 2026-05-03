@@ -14,6 +14,12 @@ import type {LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {isStagingAuthed} from '~/lib/staging-auth';
 
+// Simple in-memory cache — keyed by state, refreshes after 1 hour
+// Cloudflare Workers: each worker instance has its own memory, so this is
+// per-instance (not global), but dramatically reduces API load in practice.
+const marketCache = new Map<string, {data: any[]; cachedAt: number}>();
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
 const LIT_API = 'https://partnerapi.litalerts.com';
 
 function normalize(s: string): string {
@@ -39,6 +45,34 @@ export async function loader({request, context}: LoaderFunctionArgs) {
 
   if (!state) return json({rank: null, total: null, error: 'state required'});
 
+  // ── Fast path: read pre-computed market intel from Supabase (updated nightly) ──
+  // Accept org_id param for direct lookup (fastest)
+  const orgId = url.searchParams.get('org_id') || '';
+  if (orgId) {
+    try {
+      const sbH = {apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`};
+      const res = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/organizations?id=eq.${orgId}&select=market_rank,market_total,market_revenue_90d,lit_retailer_id,hs_brand_rank,hs_brand_total,hs_share_pct,market_intel_updated_at`,
+        {headers: sbH},
+      );
+      const rows = await res.json().catch(() => []);
+      const org = Array.isArray(rows) ? rows[0] : null;
+      if (org?.market_rank) {
+        return json({
+          rank:          org.market_rank,
+          total:         org.market_total,
+          revenue:       org.market_revenue_90d,
+          litRetailerId: org.lit_retailer_id,
+          hsBrandRank:   org.hs_brand_rank,
+          hsBrandTotal:  org.hs_brand_total,
+          hsSharePct:    org.hs_share_pct,
+          updatedAt:     org.market_intel_updated_at,
+          source:        'supabase-cached',
+        });
+      }
+    } catch { /* fall through to live API */ }
+  }
+
   const token = env.LIT_ALERTS_TOKEN;
 
   if (token) {
@@ -47,18 +81,33 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       const endDate   = new Date();
       const beginDate = new Date(endDate.getTime() - 90 * 24 * 60 * 60 * 1000);
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8000); // 8s max
-      const res = await fetch(
-        `${LIT_API}/v1/market/retailers?state=${state}&beginDate=${fmtDate(beginDate)}&endDate=${fmtDate(endDate)}&returnDollarValues=true`,
-        {headers: {Authorization: `Bearer ${token}`, Accept: 'application/json'}, signal: controller.signal},
-      );
-      clearTimeout(timeout);
+      // Check cache first
+      const cacheKey = state;
+      const cached = marketCache.get(cacheKey);
+      let retailers: any[] = [];
 
-      if (res.ok) {
-        const data: any    = await res.json();
-        // results = [{name, id, estimatedAmount}] sorted by estimatedAmount DESC (rank 1 = highest revenue)
-        const retailers: any[] = data?.results || [];
+      if (cached && (Date.now() - cached.cachedAt) < CACHE_TTL_MS) {
+        retailers = cached.data;
+      } else {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000); // 8s max
+        const res = await fetch(
+          `${LIT_API}/v1/market/retailers?state=${state}&beginDate=${fmtDate(beginDate)}&endDate=${fmtDate(endDate)}&returnDollarValues=true`,
+          {headers: {Authorization: `Bearer ${token}`, Accept: 'application/json'}, signal: controller.signal},
+        );
+        clearTimeout(timeout);
+
+        if (res.ok) {
+          const data: any = await res.json();
+          retailers = data?.results || [];
+          if (retailers.length > 0) {
+            marketCache.set(cacheKey, {data: retailers, cachedAt: Date.now()});
+          }
+        }
+      }
+
+      // results = [{name, id, estimatedAmount}] sorted by estimatedAmount DESC
+      {
         const total = retailers.length;
 
         if (total === 0) {

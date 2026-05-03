@@ -136,15 +136,15 @@ export default function AccountDetail() {
   const {authenticated, org, contacts, notes, steps, totalOrderRevenue, computedCadence} = useLoaderData<typeof loader>() as any;
   const [, rerender] = useState(0);
   const refresh = () => rerender(n => n + 1);
-  const [stateRank, setStateRank] = useState<{rank:number|null; total:number|null; revenue:number|null; litRetailerId:number|null; loading:boolean}>({rank:null, total:null, revenue:null, litRetailerId:null, loading:true});
+  const [stateRank, setStateRank] = useState<{rank:number|null; total:number|null; revenue:number|null; litRetailerId:number|null; hsBrandRank:number|null; hsBrandTotal:number|null; hsSharePct:number|null; updatedAt:string|null; loading:boolean}>({rank:null, total:null, revenue:null, litRetailerId:null, hsBrandRank:null, hsBrandTotal:null, hsSharePct:null, updatedAt:null, loading:true});
   const [marketIntel, setMarketIntel] = useState<any>(null);
 
   useEffect(() => {
     if (!org?.market_state) { setStateRank({rank:null, total:null, revenue:null, litRetailerId:null, loading:false}); return; }
-    fetch(`/api/state-rank?state=${encodeURIComponent(org.market_state)}&name=${encodeURIComponent(org.name||'')}`)
+    fetch(`/api/state-rank?state=${encodeURIComponent(org.market_state)}&name=${encodeURIComponent(org.name||'')}&org_id=${org.id}`)
       .then(r => r.json())
       .then(d => {
-        setStateRank({rank:d.rank||null, total:d.total||null, revenue:d.revenue||null, litRetailerId:d.litRetailerId||null, loading:false});
+        setStateRank({rank:d.rank||null, total:d.total||null, revenue:d.revenue||null, litRetailerId:d.litRetailerId||null, hsBrandRank:d.hsBrandRank||null, hsBrandTotal:d.hsBrandTotal||null, hsSharePct:d.hsSharePct||null, updatedAt:d.updatedAt||null, loading:false});
         // Once we have litRetailerId, fetch account-level market intelligence
         if (d.litRetailerId) {
           fetch(`/api/lit-retailer-analytics?lit_retailer_id=${d.litRetailerId}&state=${encodeURIComponent(org.market_state)}`)
@@ -153,9 +153,9 @@ export default function AccountDetail() {
             .catch(() => {});
         }
       })
-      .catch(() => setStateRank({rank:null, total:null, revenue:null, litRetailerId:null, loading:false}));
+      .catch(() => setStateRank({rank:null, total:null, revenue:null, litRetailerId:null, hsBrandRank:null, hsBrandTotal:null, hsSharePct:null, updatedAt:null, loading:false}));
     // Safety: clear loading after 12s regardless
-    const t = setTimeout(() => setStateRank(s => s.loading ? {...s, loading:false} : s), 12000);
+    const t = setTimeout(() => setStateRank(s => s.loading ? {...s, hsBrandRank:null, hsBrandTotal:null, hsSharePct:null, updatedAt:null, loading:false} : s), 12000);
     return () => clearTimeout(t);
   }, [org?.id]);
 
@@ -528,6 +528,18 @@ const MENU_OPTIONS = ['','AIQ','Blaze','Cova','Dispense','Dutchie','Jane','Leafl
 function MarketIntelBar({intel, stateRank}: {intel: any; stateRank: any}) {
   const fmt$ = (n: number) => `$${(n||0).toLocaleString('en-US',{maximumFractionDigits:0})}`;
 
+  // Build a quick-display object from cached Supabase data while live intel loads
+  const cached = stateRank?.hsBrandRank ? {
+    highsman: {rank: stateRank.hsBrandRank, totalBrands: stateRank.hsBrandTotal, sharePercent: stateRank.hsSharePct, revenue: null},
+    totalRevenue: stateRank.revenue,
+    brands: null,
+    categories: null,
+    period: null,
+    updatedAt: stateRank.updatedAt,
+  } : null;
+
+  const display = intel || cached;
+
   // Show loading state while state rank is still fetching
   if (stateRank?.loading) {
     return (
@@ -539,7 +551,7 @@ function MarketIntelBar({intel, stateRank}: {intel: any; stateRank: any}) {
   }
 
   // No data (token not set, account not in Lit data, or API error)
-  if (!intel) {
+  if (!display) {
     return (
       <div style={{borderTop:`1px solid ${T.border}`, borderBottom:`1px solid ${T.border}`, padding:'10px 32px', background:T.surfaceElev}}>
         <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textFaint, letterSpacing:'0.10em'}}>
@@ -549,14 +561,16 @@ function MarketIntelBar({intel, stateRank}: {intel: any; stateRank: any}) {
     );
   }
 
-  const hs = intel.highsman;
+  const hs = display.highsman;
 
   return (
     <div style={{borderTop:`1px solid ${T.borderStrong}`, borderBottom:`1px solid ${T.borderStrong}`, background:T.surfaceElev}}>
       {/* Header */}
       <div style={{padding:'10px 32px 0', display:'flex', alignItems:'center', justifyContent:'space-between'}}>
         <span style={{fontFamily:'Teko,sans-serif', fontSize:11, letterSpacing:'0.28em', color:T.textFaint, textTransform:'uppercase'}}>Market Intelligence · 90 days</span>
-        <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:9, color:T.textFaint, letterSpacing:'0.08em'}}>Lit Alerts · {intel.period?.beginDate} – {intel.period?.endDate}</span>
+        <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:9, color:T.textFaint, letterSpacing:'0.08em'}}>
+          {display.period ? `Lit Alerts · ${display.period.beginDate} – ${display.period.endDate}` : display.updatedAt ? `Cached · ${new Date(display.updatedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'})}` : 'Lit Alerts · 90 days'}
+        </span>
       </div>
 
       {/* Metrics strip */}
@@ -578,7 +592,7 @@ function MarketIntelBar({intel, stateRank}: {intel: any; stateRank: any}) {
         <div style={{paddingRight:28, borderRight:`1px solid ${T.border}`, marginRight:28}}>
           <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase', marginBottom:3}}>Account Cannabis Revenue</div>
           <div style={{display:'flex', alignItems:'baseline', gap:6}}>
-            <span style={{fontFamily:'Teko,sans-serif', fontSize:30, fontWeight:600, color:T.cyan, lineHeight:1}}>{fmt$(intel.totalRevenue)}</span>
+            <span style={{fontFamily:'Teko,sans-serif', fontSize:30, fontWeight:600, color:T.cyan, lineHeight:1}}>{fmt$(display.totalRevenue)}</span>
             <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle}}>est. all brands</span>
           </div>
         </div>
@@ -598,15 +612,15 @@ function MarketIntelBar({intel, stateRank}: {intel: any; stateRank: any}) {
         <div>
           <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase', marginBottom:5}}>Top Brands at This Account</div>
           <div style={{display:'flex', flexWrap:'wrap', gap:'3px 12px'}}>
-            {(intel.brands||[]).slice(0,6).map((b:any) => (
+            {(display.brands||[]).slice(0,6).map((b:any) => (
               <span key={b.id} style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:b.isHighsman?T.yellow:T.textSubtle, letterSpacing:'0.06em', whiteSpace:'nowrap'}}>
                 {b.rank}. {b.name} <span style={{color:T.textFaint}}>{b.sharePercent}%</span>
               </span>
             ))}
           </div>
-          {(intel.categories||[]).length > 0 && (
+          {(display.categories||[]).length > 0 && (
             <div style={{marginTop:5, display:'flex', flexWrap:'wrap', gap:'2px 8px'}}>
-              {(intel.categories||[]).slice(0,5).map((c:any) => (
+              {(display.categories||[]).slice(0,5).map((c:any) => (
                 <span key={c.name} style={{fontFamily:'JetBrains Mono,monospace', fontSize:9, color:T.textFaint, letterSpacing:'0.06em'}}>{c.name} {c.sharePercent}%</span>
               ))}
             </div>
