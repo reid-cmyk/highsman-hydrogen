@@ -573,57 +573,65 @@ function MarketIntelBar({intel, stateRank}: {intel: any; stateRank: any}) {
         </span>
       </div>
 
-      {/* Metrics strip */}
-      <div style={{display:'grid', gridTemplateColumns:'auto auto auto 1fr', gap:0, padding:'10px 32px 14px'}}>
-        {/* Highsman rank */}
-        <div style={{paddingRight:28, borderRight:`1px solid ${T.border}`, marginRight:28}}>
-          <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase', marginBottom:3}}>Highsman Brand Rank</div>
+      {/* Metrics strip — 4 columns */}
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:1, background:T.border, margin:'10px 32px 14px'}}>
+
+        {/* 1. Highsman brand rank AT THIS ACCOUNT */}
+        <div style={{background:T.surfaceElev, padding:'12px 16px'}}>
+          <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase', marginBottom:3}}>Highsman Rank Here</div>
           {hs ? (
-            <div style={{display:'flex', alignItems:'baseline', gap:8}}>
-              <span style={{fontFamily:'Teko,sans-serif', fontSize:30, fontWeight:600, color:T.yellow, lineHeight:1}}>#{hs.rank}</span>
-              <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle}}>of {hs.totalBrands} · {hs.sharePercent}% share</span>
-            </div>
+            <>
+              <div style={{display:'flex', alignItems:'baseline', gap:6}}>
+                <span style={{fontFamily:'Teko,sans-serif', fontSize:30, fontWeight:600, color:T.yellow, lineHeight:1}}>#{hs.rank}</span>
+                <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle}}>of {hs.totalBrands} brands</span>
+              </div>
+              <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, color:T.textFaint, marginTop:3, letterSpacing:'0.08em'}}>{hs.sharePercent}% of their cannabis revenue</div>
+            </>
           ) : (
-            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint}}>not in top brands</span>
+            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint}}>not tracked here</span>
           )}
         </div>
 
-        {/* Account total revenue */}
-        <div style={{paddingRight:28, borderRight:`1px solid ${T.border}`, marginRight:28}}>
-          <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase', marginBottom:3}}>Account Cannabis Revenue</div>
+        {/* 2. Account total cannabis revenue — 90 days */}
+        <div style={{background:T.surfaceElev, padding:'12px 16px'}}>
+          <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase', marginBottom:3}}>Account Revenue · 90 Days</div>
           <div style={{display:'flex', alignItems:'baseline', gap:6}}>
             <span style={{fontFamily:'Teko,sans-serif', fontSize:30, fontWeight:600, color:T.cyan, lineHeight:1}}>{fmt$(display.totalRevenue)}</span>
-            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle}}>est. all brands</span>
           </div>
+          <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, color:T.textFaint, marginTop:3, letterSpacing:'0.08em'}}>est. all cannabis brands</div>
         </div>
 
-        {/* Highsman revenue at this account */}
-        {hs && (
-          <div style={{paddingRight:28, borderRight:`1px solid ${T.border}`, marginRight:28}}>
-            <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase', marginBottom:3}}>Highsman Revenue Here</div>
-            <div style={{display:'flex', alignItems:'baseline', gap:6}}>
-              <span style={{fontFamily:'Teko,sans-serif', fontSize:30, fontWeight:600, color:T.yellow, lineHeight:1}}>{fmt$(hs.revenue)}</span>
-              <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle}}>est.</span>
-            </div>
-          </div>
-        )}
+        {/* 3. State market share — how important is this account */}
+        <div style={{background:T.surfaceElev, padding:'12px 16px'}}>
+          <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase', marginBottom:3}}>NJ Market Share</div>
+          {stateRank?.rank && stateRank?.total ? (
+            <>
+              <div style={{display:'flex', alignItems:'baseline', gap:6}}>
+                <span style={{fontFamily:'Teko,sans-serif', fontSize:30, fontWeight:600, color:T.cyan, lineHeight:1}}>#{stateRank.rank}</span>
+                <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle}}>of {stateRank.total}</span>
+              </div>
+              <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, color:T.textFaint, marginTop:3, letterSpacing:'0.08em'}}>by revenue in NJ · 90 days</div>
+            </>
+          ) : (
+            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint}}>—</span>
+          )}
+        </div>
 
-        {/* Top brands mini-list */}
-        <div>
-          <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase', marginBottom:5}}>Top Brands at This Account</div>
-          <div style={{display:'flex', flexWrap:'wrap', gap:'3px 12px'}}>
-            {(display.brands||[]).slice(0,6).map((b:any) => (
-              <span key={b.id} style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:b.isHighsman?T.yellow:T.textSubtle, letterSpacing:'0.06em', whiteSpace:'nowrap'}}>
-                {b.rank}. {b.name} <span style={{color:T.textFaint}}>{b.sharePercent}%</span>
-              </span>
-            ))}
-          </div>
-          {(display.categories||[]).length > 0 && (
-            <div style={{marginTop:5, display:'flex', flexWrap:'wrap', gap:'2px 8px'}}>
-              {(display.categories||[]).slice(0,5).map((c:any) => (
-                <span key={c.name} style={{fontFamily:'JetBrains Mono,monospace', fontSize:9, color:T.textFaint, letterSpacing:'0.06em'}}>{c.name} {c.sharePercent}%</span>
-              ))}
-            </div>
+        {/* 4. Shelf competition — how many brands does this store carry */}
+        <div style={{background:T.surfaceElev, padding:'12px 16px'}}>
+          <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase', marginBottom:3}}>Shelf Competition</div>
+          {hs?.totalBrands ? (
+            <>
+              <div style={{display:'flex', alignItems:'baseline', gap:6}}>
+                <span style={{fontFamily:'Teko,sans-serif', fontSize:30, fontWeight:600, color:T.text, lineHeight:1}}>{hs.totalBrands}</span>
+                <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle}}>brands</span>
+              </div>
+              <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, color:T.textFaint, marginTop:3, letterSpacing:'0.08em'}}>
+                {hs.totalBrands > 100 ? 'highly competitive shelf' : hs.totalBrands > 60 ? 'competitive shelf' : 'focused shelf'}
+              </div>
+            </>
+          ) : (
+            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint}}>—</span>
           )}
         </div>
       </div>

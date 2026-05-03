@@ -127,12 +127,15 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const url=new URL(request.url);
   const stateFilter=url.searchParams.get('state')||'ALL';
   const stageFilter=url.searchParams.get('stage')||'active';
+  const sortBy=url.searchParams.get('sort')||'risk'; // risk | rank | last_order | name
   const base=env.SUPABASE_URL;
   const headers={apikey:env.SUPABASE_SERVICE_KEY,Authorization:`Bearer ${env.SUPABASE_SERVICE_KEY}`};
 
   // Fetch the filtered account list
-  const select=['id','name','market_state','city','phone','lifecycle_stage','tier','last_order_date','tags','online_menus','do_not_contact','risk_of_loss','reorder_status','zoho_account_id','website','contacts(id,email,phone,mobile,full_name,first_name,last_name,is_primary_buyer,job_role)'].join(',');
-  const params=new URLSearchParams({select,order:'name.asc',limit:'2000'});
+  const select=['id','name','market_state','city','phone','lifecycle_stage','tier','last_order_date','tags','online_menus','do_not_contact','risk_of_loss','reorder_status','zoho_account_id','website','market_rank','market_total','market_revenue_90d','contacts(id,email,phone,mobile,full_name,first_name,last_name,is_primary_buyer,job_role)'].join(',');
+  // Sort order: rank sorts by market_rank asc (best = lowest number), others client-side
+  const supabaseOrder = sortBy==='rank' ? 'market_rank.asc.nullslast' : 'name.asc';
+  const params=new URLSearchParams({select,order:supabaseOrder,limit:'2000'});
   if (stateFilter!=='ALL') params.set('market_state',`eq.${stateFilter}`);
   if (stageFilter!=='all') params.set('lifecycle_stage',`eq.${stageFilter}`);
   let orgs:OrgRow[]=[];
@@ -166,7 +169,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     for (const row of rows){const s=row.market_state||'OTHER';counts[s]=(counts[s]||0)+1;}
   } catch {}
 
-  return json({authenticated:true,orgs,counts,stageCounts,stateFilter,stageFilter});
+  return json({authenticated:true,orgs,counts,stageCounts,stateFilter,stageFilter,sortBy});
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -497,6 +500,7 @@ function Dashboard({data}:{data:any}) {
   const searchRef=useRef<HTMLInputElement>(null);
   const stateFilter:string=data.stateFilter||'ALL';
   const stageFilter:string=data.stageFilter||'active';
+  const sortBy:string=data.sortBy||'risk';
   const orgs:OrgRow[]=data.orgs||[];
   const counts:Record<string,number>=data.counts||{};
   const stageCounts:Record<string,number>=data.stageCounts||{};
@@ -550,7 +554,19 @@ function Dashboard({data}:{data:any}) {
               <div style={{fontFamily:'Teko,sans-serif',fontSize:11,letterSpacing:'0.32em',color:T.textFaint,textTransform:'uppercase'}}>Sales Floor / Workspace</div>
               <div style={{display:'flex',alignItems:'baseline',gap:14,marginTop:4}}>
                 <h1 style={{margin:0,fontFamily:'Teko,sans-serif',fontSize:38,fontWeight:500,letterSpacing:'0.18em',color:T.text,textTransform:'uppercase'}}>Accounts</h1>
-                <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:12,color:T.textSubtle,letterSpacing:'0.10em'}}>showing {filtered.length} · sorted by RISK ↓</span>
+                <div style={{display:'flex',alignItems:'center',gap:12}}>
+                  <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:12,color:T.textSubtle,letterSpacing:'0.10em'}}>
+                    showing {filtered.length} · sorted by {sortBy==='rank'?'MARKET RANK ↑':sortBy==='last_order'?'LAST ORDER ↓':sortBy==='name'?'NAME ↑':'RISK ↓'}
+                  </span>
+                  <div style={{display:'flex',gap:4}}>
+                    {[['risk','RISK'],['rank','RANK'],['last_order','LAST ORDER'],['name','NAME']].map(([v,l])=>(
+                      <button key={v} onClick={()=>setFilter('sort',v)}
+                        style={{height:22,padding:'0 8px',background:sortBy===v?'rgba(255,213,0,0.12)':'transparent',border:`1px solid ${sortBy===v?T.yellow:T.borderStrong}`,color:sortBy===v?T.yellow:T.textFaint,fontFamily:'Teko,sans-serif',fontSize:11,letterSpacing:'0.14em',cursor:'pointer'}}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
             <div style={{display:'flex',alignItems:'center',gap:10}}>
@@ -764,6 +780,7 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
             <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
               <a href={`/sales-staging/account/${org.id}`} style={{fontFamily:'Teko,sans-serif',fontSize:22,letterSpacing:'0.06em',fontWeight:500,color:T.text,textTransform:'uppercase',lineHeight:1,textDecoration:'none'}}>{org.name}</a>
               {org.tier&&<span style={{padding:'2px 6px',border:`1px solid ${T.textSubtle}`,color:T.textSubtle,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.16em',textTransform:'uppercase'}}>TIER {org.tier}</span>}
+              {org.market_rank&&<span style={{padding:'2px 6px',border:`1px solid ${T.cyan}`,color:T.cyan,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.14em'}}>#{org.market_rank} {org.market_state}</span>}
               {isFlagged&&<span style={{display:'inline-flex',alignItems:'center',gap:4,padding:'2px 6px',border:`1px solid ${T.magenta}`,color:T.magenta,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.14em',textTransform:'uppercase'}}><FlagI s={9}/> PETE</span>}
               {isProspecting&&<span style={{padding:'2px 6px',border:`1px solid ${T.cyan}`,color:T.cyan,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.14em'}}>→ PROSPECTING</span>}
             </div>
