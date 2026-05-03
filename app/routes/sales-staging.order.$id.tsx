@@ -64,13 +64,20 @@ export async function loader({request, context, params}: LoaderFunctionArgs) {
   const base = env.SUPABASE_URL;
 
   const [orderRes, linesRes] = await Promise.all([
-    fetch(`${base}/rest/v1/leaflink_orders?id=eq.${id}&select=*,organizations(id,name,market_state)`, {headers: h}),
+    fetch(`${base}/rest/v1/leaflink_orders?id=eq.${id}&select=*`, {headers: h}),
     fetch(`${base}/rest/v1/leaflink_order_lines?order_id=eq.${id}&order=product_name.asc`, {headers: h}),
   ]);
 
   const [orderRows, lines] = await Promise.all([orderRes.json(), linesRes.json()]);
-  const order = orderRows?.[0] || null;
-  const org = order?.organizations || null;
+  const order = Array.isArray(orderRows) ? (orderRows[0] || null) : null;
+
+  // Fetch org separately to avoid PostgREST join issues
+  let org = null;
+  if (order?.organization_id) {
+    const orgRes = await fetch(`${base}/rest/v1/organizations?id=eq.${order.organization_id}&select=id,name,market_state`, {headers: h});
+    const orgRows = await orgRes.json().catch(() => []);
+    org = Array.isArray(orgRows) ? (orgRows[0] || null) : null;
+  }
 
   return json({authenticated: true, order, org, lines: Array.isArray(lines) ? lines : []});
 }

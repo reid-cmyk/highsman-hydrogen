@@ -307,6 +307,7 @@ function NewOrderModal({onClose}: {onClose:()=>void}) {
 export default function SalesOrders() {
   const {authenticated, orders, stats, state, statusFilter, period, search} = useLoaderData<typeof loader>() as any;
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
   const [searchDraft, setSearchDraft] = useState(search || '');
 
@@ -490,7 +491,7 @@ export default function SalesOrders() {
                     return (
                       <tr key={o.id} className="order-row"
                         style={{borderBottom:`1px solid ${T.border}`, cursor:'pointer', transition:'background 80ms'}}
-                        onClick={()=>window.location.href=`/sales-staging/order/${o.id}`}>
+                        onClick={()=>navigate(`/sales-staging/order/${o.id}`)}>
                         <td style={{padding:'12px 16px', fontFamily:'Inter,sans-serif', fontSize:13, color:T.text, maxWidth:220}}>
                           {o.organization_id
                             ? <a href={`/sales-staging/account/${o.organization_id}`} onClick={e=>e.stopPropagation()} style={{color:T.text, textDecoration:'none', fontWeight:500}}>{orgName}</a>
