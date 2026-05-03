@@ -8,6 +8,7 @@ import {json} from '@shopify/remix-oxygen';
 import {useLoaderData, useFetcher, Link, useSearchParams, useNavigate} from '@remix-run/react';
 import {useState, useEffect, useRef} from 'react';
 import {isStagingAuthed} from '~/lib/staging-auth';
+import {SalesFloorNav} from '~/components/SalesFloorNav';
 
 export const handle = {hideHeader: true, hideFooter: true};
 export const meta: MetaFunction = () => [{title: 'Sales Orders | Sales Floor'}, {name: 'robots', content: 'noindex'}];
@@ -125,8 +126,16 @@ function NewOrderModal({onClose}: {onClose:()=>void}) {
     order_date: new Date().toISOString().split('T')[0],
     total_amount:'', market_state:'NJ', payment_terms:'Net 30',
   });
+  const [lineItems, setLineItems] = useState<{product_name:string; quantity:string; unit_price:string}[]>([]);
   const [orgSearch, setOrgSearch] = useState('');
   const [orgResults, setOrgResults] = useState<any[]>([]);
+
+  const addLineItem = () => setLineItems(l=>[...l,{product_name:'',quantity:'1',unit_price:''}]);
+  const removeLineItem = (i:number) => setLineItems(l=>l.filter((_,idx)=>idx!==i));
+  const updateLineItem = (i:number, field:string, val:string) => setLineItems(l=>l.map((item,idx)=>idx===i?{...item,[field]:val}:item));
+  const computedTotal = lineItems.length > 0
+    ? lineItems.reduce((s,l)=>s+(parseFloat(l.quantity||'0')||0)*(parseFloat(l.unit_price||'0')||0),0).toFixed(2)
+    : form.total_amount;
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -137,9 +146,9 @@ function NewOrderModal({onClose}: {onClose:()=>void}) {
 
   const searchOrgs = async (q: string) => {
     if (q.length < 2) { setOrgResults([]); return; }
-    const res = await fetch(`/api/org-search?q=${encodeURIComponent(q)}&limit=8`);
+    const res = await fetch(`/api/org-search?q=${encodeURIComponent(q)}`);
     const data = await res.json();
-    setOrgResults(data.orgs || []);
+    setOrgResults(data.results || []);
   };
 
   const fieldStyle = {background:T.bg, border:`1px solid ${T.borderStrong}`, color:T.text, fontSize:12, fontFamily:'Inter,sans-serif', padding:'6px 8px', outline:'none', width:'100%', boxSizing:'border-box' as const};
@@ -189,7 +198,7 @@ function NewOrderModal({onClose}: {onClose:()=>void}) {
           <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12}}>
             <div>
               <div style={labelStyle}>Total Amount ($)</div>
-              <input type="number" name="total_amount" step="0.01" value={form.total_amount} onChange={e=>setForm(f=>({...f,total_amount:e.target.value}))} placeholder="0.00" style={fieldStyle} />
+              <input type="number" step="0.01" value={form.total_amount} onChange={e=>setForm(f=>({...f,total_amount:e.target.value}))} placeholder="0.00 (or add SKUs below)" style={fieldStyle} />
             </div>
             <div>
               <div style={labelStyle}>Market State</div>
@@ -204,6 +213,29 @@ function NewOrderModal({onClose}: {onClose:()=>void}) {
             <select name="payment_terms" value={form.payment_terms} onChange={e=>setForm(f=>({...f,payment_terms:e.target.value}))} style={fieldStyle}>
               {['Net 30','Net 15','Net 7','Due on receipt','COD','Prepaid'].map(s=><option key={s}>{s}</option>)}
             </select>
+          </div>
+
+          {/* Line items */}
+          <div>
+            <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8}}>
+              <div style={labelStyle}>Line Items (optional)</div>
+              <button type="button" onClick={addLineItem} style={{background:'none', border:'none', color:T.yellow, fontFamily:'JetBrains Mono,monospace', fontSize:10, letterSpacing:'0.14em', cursor:'pointer', padding:0}}>+ ADD SKU</button>
+            </div>
+            {lineItems.map((l,i)=>(
+              <div key={i} style={{display:'grid', gridTemplateColumns:'1fr 80px 100px 24px', gap:6, marginBottom:6, alignItems:'center'}}>
+                <input value={l.product_name} onChange={e=>updateLineItem(i,'product_name',e.target.value)} placeholder="Product name" style={{...fieldStyle}} />
+                <input type="number" value={l.quantity} onChange={e=>updateLineItem(i,'quantity',e.target.value)} placeholder="Qty" style={{...fieldStyle}} min="0" />
+                <input type="number" value={l.unit_price} onChange={e=>updateLineItem(i,'unit_price',e.target.value)} placeholder="Unit $" style={{...fieldStyle}} step="0.01" min="0" />
+                <button type="button" onClick={()=>removeLineItem(i)} style={{background:'none', border:'none', color:T.textFaint, cursor:'pointer', fontSize:14, lineHeight:1}}>✕</button>
+              </div>
+            ))}
+            {lineItems.length > 0 && (
+              <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle, textAlign:'right', letterSpacing:'0.10em'}}>
+                Computed total: ${computedTotal}
+              </div>
+            )}
+            <input type="hidden" name="line_items_json" value={JSON.stringify(lineItems)} />
+            <input type="hidden" name="total_amount" value={computedTotal || form.total_amount} />
           </div>
 
           {(fetcher.data as any)?.error && <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.redSystems}}>{(fetcher.data as any).error}</div>}
@@ -268,15 +300,7 @@ export default function SalesOrders() {
       </div>
 
       <div style={{display:'flex', flex:1}}>
-        {/* Side nav */}
-        <div style={{width:200, flexShrink:0, background:T.bg, borderRight:`1px solid ${T.border}`, paddingTop:8}}>
-          {[['Accounts','/sales-staging'],['Sales Orders','/sales-staging/orders'],['Dashboard','/sales-floor/app'],['Leads','/sales-floor/app'],['Reorders Due','/sales-floor/app'],['New Customers','/sales-floor/app'],['Funnel','/sales-floor/app'],['Email','/sales-floor/app'],['Text','/sales-floor/app'],['Issues','/sales-floor/app'],['Vibes','/sales-floor/app']].map(([item,href]) => (
-            <a key={item} href={href}
-              style={{display:'block', padding:'9px 16px', fontFamily:'Teko,sans-serif', fontSize:15, letterSpacing:'0.10em', color:item==='Sales Orders'?T.yellow:T.textSubtle, borderLeft:item==='Sales Orders'?`2px solid ${T.yellow}`:'2px solid transparent', textTransform:'uppercase', textDecoration:'none', background:item==='Sales Orders'?`rgba(255,213,0,0.05)`:'transparent'}}>
-              {item}
-            </a>
-          ))}
-        </div>
+        <SalesFloorNav current="Sales Orders" />
 
         <div style={{flex:1, minWidth:0, display:'flex', flexDirection:'column'}}>
           {/* Header row */}
@@ -288,10 +312,25 @@ export default function SalesOrders() {
                   {orders.length} orders{state !== 'ALL' ? ` · ${state}` : ' · all markets'}
                 </div>
               </div>
-              <button onClick={()=>setShowModal(true)}
-                style={{height:38, padding:'0 18px', background:T.yellow, border:'none', color:'#000', fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.20em', cursor:'pointer'}}>
-                + NEW ORDER
-              </button>
+              <div style={{display:'flex', gap:8}}>
+                <button onClick={()=>{
+                  const rows = [['Account','Date','Status','Amount','State','Source'],...orders.map((o:any)=>[
+                    o.organizations?.name||o.leaflink_customer_name,
+                    o.order_date?new Date(o.order_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'',
+                    o.status, parseMoney(o.total_amount).toFixed(2), o.market_state, o.source
+                  ])];
+                  const csv = rows.map(r=>r.map((c:any)=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+                  const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+                  a.download = `sales-orders-${new Date().toISOString().split('T')[0]}.csv`; a.click();
+                }}
+                  style={{height:38, padding:'0 14px', background:'transparent', border:`1px solid ${T.borderStrong}`, color:T.textSubtle, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.18em', cursor:'pointer'}}>
+                  EXPORT CSV
+                </button>
+                <button onClick={()=>setShowModal(true)}
+                  style={{height:38, padding:'0 18px', background:T.yellow, border:'none', color:'#000', fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.20em', cursor:'pointer'}}>
+                  + NEW ORDER
+                </button>
+              </div>
             </div>
 
             {/* State filter */}
@@ -337,7 +376,7 @@ export default function SalesOrders() {
               <table style={{width:'100%', borderCollapse:'collapse'}}>
                 <thead>
                   <tr style={{borderBottom:`1px solid ${T.borderStrong}`}}>
-                    {['Order','Account','Date','Status','Amount','State','Source'].map(h => (
+                    {['Account','Date','Status','Amount','State','Source'].map(h => (
                       <th key={h} style={{padding:'10px 16px', fontFamily:'Teko,sans-serif', fontSize:10.5, letterSpacing:'0.28em', color:T.textFaint, textTransform:'uppercase', textAlign:'left', fontWeight:400, background:T.surface}}>
                         {h}
                       </th>
@@ -353,16 +392,13 @@ export default function SalesOrders() {
                     return (
                       <tr key={o.id} className="order-row"
                         style={{borderBottom:`1px solid ${T.border}`, cursor:'pointer', transition:'background 80ms'}}
-                        onClick={()=>window.location.href=`/sales-staging/orders/${o.id}`}>
-                        <td style={{padding:'12px 16px', fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textSubtle, letterSpacing:'0.06em', whiteSpace:'nowrap'}}>
-                          {o.leaflink_order_id?.length > 16 ? o.leaflink_order_id.slice(0,8)+'…' : o.leaflink_order_id}
-                        </td>
+                        onClick={()=>window.location.href=`/sales-staging/order/${o.id}`}>
                         <td style={{padding:'12px 16px', fontFamily:'Inter,sans-serif', fontSize:13, color:T.text, maxWidth:220}}>
                           {o.organization_id
                             ? <a href={`/sales-staging/account/${o.organization_id}`} onClick={e=>e.stopPropagation()} style={{color:T.text, textDecoration:'none', fontWeight:500}}>{orgName}</a>
                             : <span style={{color:T.textSubtle}}>{orgName}</span>}
                         </td>
-                        <td style={{padding:'12px 16px', fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textSubtle, whiteSpace:'nowrap'}}>{date}</td>
+                        <td style={{padding:'12px 16px', fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textSubtle, whiteSpace:'nowrap'}}>{o.order_date ? new Date(o.order_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—'}</td>
                         <td style={{padding:'12px 16px'}}>
                           <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, padding:'2px 8px', border:`1px solid ${sc}`, color:sc, letterSpacing:'0.14em', whiteSpace:'nowrap'}}>
                             {o.status}

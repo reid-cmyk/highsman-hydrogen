@@ -35,6 +35,10 @@ export async function action({request, context}: ActionFunctionArgs) {
     Prefer: 'return=representation',
   };
 
+  const lineItemsRaw = String(fd.get('line_items_json') || '[]');
+  let lineItems: any[] = [];
+  try { lineItems = JSON.parse(lineItemsRaw).filter((l:any)=>l.product_name?.trim()); } catch {}
+
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1/leaflink_orders`, {
     method: 'POST',
     headers: h,
@@ -60,6 +64,26 @@ export async function action({request, context}: ActionFunctionArgs) {
   }
 
   const order = await res.json();
+  const newOrder = Array.isArray(order) ? order[0] : order;
+
+  // Insert line items if provided
+  if (lineItems.length > 0 && newOrder?.id) {
+    const lines = lineItems.map((l:any) => {
+      const qty = parseFloat(l.quantity)||0;
+      const price = parseFloat(l.unit_price)||0;
+      return {
+        order_id: newOrder.id,
+        leaflink_line_id: `${newOrder.id}-${l.product_name?.slice(0,20)}-${Date.now()}`,
+        product_name: l.product_name?.trim()||null,
+        quantity: qty, unit_price: price, line_total: qty*price, is_sample: false,
+      };
+    });
+    await fetch(`${env.SUPABASE_URL}/rest/v1/leaflink_order_lines`, {
+      method: 'POST',
+      headers: {...h, Prefer: 'return=minimal'},
+      body: JSON.stringify(lines),
+    }).catch(()=>{});
+  }
 
   // Bump org orders_count if org linked
   if (org_id && total_amount >= 5 && !['Cancelled','Rejected'].includes(status)) {
@@ -70,7 +94,7 @@ export async function action({request, context}: ActionFunctionArgs) {
     }).catch(() => {});
   }
 
-  return json({ok: true, order: Array.isArray(order) ? order[0] : order});
+  return json({ok: true, order: newOrder});
 }
 
 export async function loader() {
