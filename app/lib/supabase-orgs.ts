@@ -22,6 +22,9 @@ export type OrgRow = {
   do_not_contact: boolean;
   risk_of_loss: boolean;
   reorder_status: string;
+  market_rank: number | null;
+  market_total: number | null;
+  market_revenue_90d: number | null;
   contacts: ContactRow[];
 };
 

@@ -136,14 +136,27 @@ export default function AccountDetail() {
   const {authenticated, org, contacts, notes, steps, totalOrderRevenue, computedCadence} = useLoaderData<typeof loader>() as any;
   const [, rerender] = useState(0);
   const refresh = () => rerender(n => n + 1);
-  const [stateRank, setStateRank] = useState<{rank:number|null; total:number|null; loading:boolean}>({rank:null, total:null, loading:true});
+  const [stateRank, setStateRank] = useState<{rank:number|null; total:number|null; revenue:number|null; litRetailerId:number|null; hsBrandRank:number|null; hsBrandTotal:number|null; hsSharePct:number|null; updatedAt:string|null; loading:boolean}>({rank:null, total:null, revenue:null, litRetailerId:null, hsBrandRank:null, hsBrandTotal:null, hsSharePct:null, updatedAt:null, loading:true});
+  const [marketIntel, setMarketIntel] = useState<any>(null);
 
   useEffect(() => {
-    if (!org?.market_state) { setStateRank({rank:null, total:null, loading:false}); return; }
-    fetch(`/api/state-rank?state=${encodeURIComponent(org.market_state)}&name=${encodeURIComponent(org.name||'')}`)
+    if (!org?.market_state) { setStateRank({rank:null, total:null, revenue:null, litRetailerId:null, loading:false}); return; }
+    fetch(`/api/state-rank?state=${encodeURIComponent(org.market_state)}&name=${encodeURIComponent(org.name||'')}&org_id=${org.id}`)
       .then(r => r.json())
-      .then(d => setStateRank({rank:d.rank||null, total:d.total||null, loading:false}))
-      .catch(() => setStateRank({rank:null, total:null, loading:false}));
+      .then(d => {
+        setStateRank({rank:d.rank||null, total:d.total||null, revenue:d.revenue||null, litRetailerId:d.litRetailerId||null, hsBrandRank:d.hsBrandRank||null, hsBrandTotal:d.hsBrandTotal||null, hsSharePct:d.hsSharePct||null, updatedAt:d.updatedAt||null, loading:false});
+        // Once we have litRetailerId, fetch account-level market intelligence
+        if (d.litRetailerId) {
+          fetch(`/api/lit-retailer-analytics?lit_retailer_id=${d.litRetailerId}&state=${encodeURIComponent(org.market_state)}`)
+            .then(r => r.json())
+            .then(intel => { if (intel.ok) setMarketIntel(intel); })
+            .catch(() => {});
+        }
+      })
+      .catch(() => setStateRank({rank:null, total:null, revenue:null, litRetailerId:null, hsBrandRank:null, hsBrandTotal:null, hsSharePct:null, updatedAt:null, loading:false}));
+    // Safety: clear loading after 12s regardless
+    const t = setTimeout(() => setStateRank(s => s.loading ? {...s, hsBrandRank:null, hsBrandTotal:null, hsSharePct:null, updatedAt:null, loading:false} : s), 12000);
+    return () => clearTimeout(t);
   }, [org?.id]);
 
   if (!authenticated) return <div style={{minHeight:'100vh',background:T.bg,display:'flex',alignItems:'center',justifyContent:'center'}}><Link to="/sales-staging" style={{color:T.yellow,fontFamily:'Teko,sans-serif',fontSize:18,letterSpacing:'0.18em',textDecoration:'none'}}>← BACK TO LOGIN</Link></div>;
@@ -248,6 +261,9 @@ export default function AccountDetail() {
               />;
             })()}
           </div>
+
+          {/* Market Intelligence bar — full width, between stat bar and body */}
+          <MarketIntelBar intel={marketIntel} stateRank={stateRank} />
 
           {/* Body grid */}
           <div style={{padding:'24px 32px 40px', display:'grid', gridTemplateColumns:'minmax(0,1.6fr) minmax(0,1fr)', gap:24}}>
@@ -506,6 +522,122 @@ function ReadOnlyField({label, value, note}: {label:string; value:string; note?:
 
 // ─── Online menu constants ────────────────────────────────────────────────────
 const MENU_OPTIONS = ['','AIQ','Blaze','Cova','Dispense','Dutchie','Jane','Leafly','Mosaic','Nabis','Self Administrator','Sweed','Treez','Weedmaps'];
+
+// ─── Fields Panel ─────────────────────────────────────────────────────────────
+// ─── Market Intelligence Bar ──────────────────────────────────────────────────
+function MarketIntelBar({intel, stateRank}: {intel: any; stateRank: any}) {
+  const fmt$ = (n: number) => `$${(n||0).toLocaleString('en-US',{maximumFractionDigits:0})}`;
+
+  // Build a quick-display object from cached Supabase data while live intel loads
+  const cached = stateRank?.hsBrandRank ? {
+    highsman: {rank: stateRank.hsBrandRank, totalBrands: stateRank.hsBrandTotal, sharePercent: stateRank.hsSharePct, revenue: null},
+    totalRevenue: stateRank.revenue,
+    brands: null,
+    categories: null,
+    period: null,
+    updatedAt: stateRank.updatedAt,
+  } : null;
+
+  const display = intel || cached;
+
+  // Show loading state while state rank is still fetching
+  if (stateRank?.loading) {
+    return (
+      <div style={{borderTop:`1px solid ${T.border}`, borderBottom:`1px solid ${T.border}`, padding:'12px 32px', background:T.surfaceElev, display:'flex', alignItems:'center', gap:8}}>
+        <div style={{width:8, height:8, borderRadius:'50%', background:T.textFaint, animation:'pulse-ring 1.4s infinite'}} />
+        <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textFaint, letterSpacing:'0.12em'}}>Loading market intelligence…</span>
+      </div>
+    );
+  }
+
+  // No data (token not set, account not in Lit data, or API error)
+  if (!display) {
+    return (
+      <div style={{borderTop:`1px solid ${T.border}`, borderBottom:`1px solid ${T.border}`, padding:'10px 32px', background:T.surfaceElev}}>
+        <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textFaint, letterSpacing:'0.10em'}}>
+          {stateRank?.rank ? 'Market intelligence loading…' : 'Market intelligence unavailable — account not found in Lit Alerts data'}
+        </span>
+      </div>
+    );
+  }
+
+  const hs = display.highsman;
+
+  return (
+    <div style={{borderTop:`1px solid ${T.borderStrong}`, borderBottom:`1px solid ${T.borderStrong}`, background:T.surfaceElev}}>
+      {/* Header */}
+      <div style={{padding:'10px 32px 0', display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+        <span style={{fontFamily:'Teko,sans-serif', fontSize:11, letterSpacing:'0.28em', color:T.textFaint, textTransform:'uppercase'}}>Market Intelligence · 90 days</span>
+        <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:9, color:T.textFaint, letterSpacing:'0.08em'}}>
+          {display.period ? `Lit Alerts · ${display.period.beginDate} – ${display.period.endDate}` : display.updatedAt ? `Cached · ${new Date(display.updatedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'})}` : 'Lit Alerts · 90 days'}
+        </span>
+      </div>
+
+      {/* Metrics strip — 4 columns */}
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:1, background:T.border, margin:'10px 32px 14px'}}>
+
+        {/* 1. Highsman brand rank AT THIS ACCOUNT */}
+        <div style={{background:T.surfaceElev, padding:'12px 16px'}}>
+          <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase', marginBottom:3}}>Highsman Rank Here</div>
+          {hs ? (
+            <>
+              <div style={{display:'flex', alignItems:'baseline', gap:6}}>
+                <span style={{fontFamily:'Teko,sans-serif', fontSize:30, fontWeight:600, color:T.yellow, lineHeight:1}}>#{hs.rank}</span>
+                <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle}}>of {hs.totalBrands} brands</span>
+              </div>
+              <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, color:T.textFaint, marginTop:3, letterSpacing:'0.08em'}}>{hs.sharePercent}% of their cannabis revenue</div>
+            </>
+          ) : (
+            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint}}>not tracked here</span>
+          )}
+        </div>
+
+        {/* 2. Account total cannabis revenue — 90 days */}
+        <div style={{background:T.surfaceElev, padding:'12px 16px'}}>
+          <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase', marginBottom:3}}>Account Revenue · 90 Days</div>
+          <div style={{display:'flex', alignItems:'baseline', gap:6}}>
+            <span style={{fontFamily:'Teko,sans-serif', fontSize:30, fontWeight:600, color:T.cyan, lineHeight:1}}>{fmt$(display.totalRevenue)}</span>
+          </div>
+          <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, color:T.textFaint, marginTop:3, letterSpacing:'0.08em'}}>est. all cannabis brands</div>
+        </div>
+
+        {/* 3. State market share — how important is this account */}
+        <div style={{background:T.surfaceElev, padding:'12px 16px'}}>
+          <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase', marginBottom:3}}>NJ Market Share</div>
+          {stateRank?.rank && stateRank?.total ? (
+            <>
+              <div style={{display:'flex', alignItems:'baseline', gap:6}}>
+                <span style={{fontFamily:'Teko,sans-serif', fontSize:30, fontWeight:600, color:T.cyan, lineHeight:1}}>#{stateRank.rank}</span>
+                <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle}}>of {stateRank.total}</span>
+              </div>
+              <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, color:T.textFaint, marginTop:3, letterSpacing:'0.08em'}}>by revenue in NJ · 90 days</div>
+            </>
+          ) : (
+            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint}}>—</span>
+          )}
+        </div>
+
+        {/* 4. Shelf competition — how many brands does this store carry */}
+        <div style={{background:T.surfaceElev, padding:'12px 16px'}}>
+          <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase', marginBottom:3}}>Shelf Competition</div>
+          {hs?.totalBrands ? (
+            <>
+              <div style={{display:'flex', alignItems:'baseline', gap:6}}>
+                <span style={{fontFamily:'Teko,sans-serif', fontSize:30, fontWeight:600, color:T.text, lineHeight:1}}>{hs.totalBrands}</span>
+                <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle}}>brands</span>
+              </div>
+              <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, color:T.textFaint, marginTop:3, letterSpacing:'0.08em'}}>
+                {hs.totalBrands > 100 ? 'highly competitive shelf' : hs.totalBrands > 60 ? 'competitive shelf' : 'focused shelf'}
+              </div>
+            </>
+          ) : (
+            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint}}>—</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Fields Panel ─────────────────────────────────────────────────────────────
 function FieldsPanel({org}: {org: any}) {
