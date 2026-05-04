@@ -27,6 +27,7 @@ const ALLOWED_FIELDS = new Set([
   'billing_street','billing_city','billing_state','billing_zip',
   'street_address','city','zip','market_state',
   'legal_name','preferred_contact_channel','reorder_cadence_days','reorder_suppressed',
+  'lead_stage','lead_stage_updated_at',
   'pop_up_email','pop_up_link','last_pop_up_date',
   'staff_training_email','staff_training_link','last_staff_training_date','allow_split_promos',
 ]);
@@ -68,9 +69,18 @@ export async function action({request, context}: ActionFunctionArgs) {
       value = null;
     }
 
+    // When lead_stage changes, stamp the timestamp (drives bump-to-top sort on Leads page)
+    const extraFields: Record<string,any> = {updated_at: new Date().toISOString()};
+    if (field === 'lead_stage') extraFields.lead_stage_updated_at = new Date().toISOString();
+    // When lifecycle_stage is set to 'prospect', default lead_stage to 'new' and stamp timestamp
+    if (field === 'lifecycle_stage' && value === 'prospect') {
+      extraFields.lead_stage = 'new';
+      extraFields.lead_stage_updated_at = new Date().toISOString();
+    }
+
     const res = await fetch(
       `${env.SUPABASE_URL}/rest/v1/organizations?id=eq.${org_id}`,
-      {method: 'PATCH', headers: sbHeaders, body: JSON.stringify({[field]: value, updated_at: new Date().toISOString()})},
+      {method: 'PATCH', headers: sbHeaders, body: JSON.stringify({[field]: value, ...extraFields})},
     );
     if (!res.ok) {
       const txt = await res.text().catch(() => '');

@@ -54,25 +54,45 @@ export async function recalcOrgAfterOrder(env: any, org_id: string): Promise<voi
     }
   }
 
+  // Check if this org is a prospect converting on their first order
+  const orgRes = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/organizations?id=eq.${org_id}&select=lifecycle_stage,tags`,
+    {headers: h},
+  );
+  const orgData = await orgRes.json().catch(() => []);
+  const currentOrg = Array.isArray(orgData) ? orgData[0] : null;
+  const isProspect = currentOrg?.lifecycle_stage === 'prospect';
+  const currentTags: string[] = currentOrg?.tags || [];
+
+  const patch: Record<string, any> = {
+    orders_count:              ordersCount,
+    last_order_date:           lastOrderDate,
+    last_order_amount:         lastOrderAmount,
+    reorder_cadence_days:      cadence,
+    reorder_status:            'healthy',
+    reorder_flag_aging_at:     null,
+    reorder_flag_past_cadence_at: null,
+    reorder_flag_low_inv_at:   null,
+    reorder_flag_out_of_stock_at: null,
+    reorder_suppressed:        false,
+    updated_at:                new Date().toISOString(),
+  };
+
+  // Prospect places first order → graduate to active + tag as closed-lead
+  if (isProspect && ordersCount === 1) {
+    patch.lifecycle_stage = 'active';
+    if (!currentTags.includes('closed-lead')) {
+      patch.tags = [...currentTags, 'closed-lead'];
+    }
+  }
+
   // Patch org — clear all flags, update all order stats
   await fetch(
     `${env.SUPABASE_URL}/rest/v1/organizations?id=eq.${org_id}`,
     {
       method: 'PATCH',
       headers: {...h, 'Content-Type': 'application/json', Prefer: 'return=minimal'},
-      body: JSON.stringify({
-        orders_count:              ordersCount,
-        last_order_date:           lastOrderDate,
-        last_order_amount:         lastOrderAmount,
-        reorder_cadence_days:      cadence,
-        reorder_status:            'healthy',
-        reorder_flag_aging_at:     null,
-        reorder_flag_past_cadence_at: null,
-        reorder_flag_low_inv_at:   null,
-        reorder_flag_out_of_stock_at: null,
-        reorder_suppressed:        false,  // new order unsuppresses the account
-        updated_at:                new Date().toISOString(),
-      }),
+      body: JSON.stringify(patch),
     },
   ).catch(() => {});
 }
