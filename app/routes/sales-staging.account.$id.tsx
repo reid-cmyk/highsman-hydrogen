@@ -466,7 +466,7 @@ function EditableField({label, field, value, orgId, mono, link, locked, hint}: {
 }
 
 // ─── SelectField ──────────────────────────────────────────────────────────────
-function SelectField({label, field, value, orgId, options}: {label:string; field:string; value:string; orgId:string; options:string[]}) {
+function SelectField({label, field, value, orgId, options, labels}: {label:string; field:string; value:string; orgId:string; options:string[]; labels?: Record<string,string>}) {
   const fetcher = useFetcher();
   const save = (v: string) => {
     if (v===value) return;
@@ -478,7 +478,7 @@ function SelectField({label, field, value, orgId, options}: {label:string; field
       <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.30em', color:T.textFaint, textTransform:'uppercase', marginBottom:5}}>{label}</div>
       <select value={value||''} onChange={e=>save(e.target.value)}
         style={{width:'100%', background:T.surfaceElev, border:`1px solid ${T.borderStrong}`, color:T.text, fontSize:13, fontFamily:'inherit', padding:'4px 6px', outline:'none', cursor:'pointer'}}>
-        {options.map(o => <option key={o} value={o}>{o||'—'}</option>)}
+        {options.map(o => <option key={o} value={o}>{(labels&&labels[o]) || o || '—'}</option>)}
       </select>
     </div>
   );
@@ -636,7 +636,9 @@ function FieldsPanel({org}: {org: any}) {
       <TwoCol>
         <SelectField label="Lifecycle" field="lifecycle_stage" value={org.lifecycle_stage} orgId={org.id} options={['active','untargeted','churned','dormant','prospect','contacted','qualified','sample_sent','first_order_pending','reorder_due']} />
         <SelectField label="Tier" field="tier" value={org.tier||''} orgId={org.id} options={['','A','B','C']} />
-        {/* Reorder status is system-managed — shown as read-only badge in hero */}
+        <SelectField label="Reorder Status" field="reorder_status" value={org.reorder_status||''} orgId={org.id}
+          options={['','healthy','aging','past_cadence','low_inv','out_of_stock']}
+          labels={{'':'—', healthy:'Healthy', aging:'Aging', past_cadence:'Past Cadence', low_inv:'Low Inventory', out_of_stock:'Out of Stock'}} />
         <EditableField label="Last order date" field="last_order_date" value={org.last_order_date} orgId={org.id} mono hint="YYYY-MM-DD" />
       </TwoCol>
 

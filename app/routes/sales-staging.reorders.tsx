@@ -16,7 +16,7 @@
 
 import type {LoaderFunctionArgs, ActionFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
-import {useLoaderData, useFetcher, useRevalidator} from '@remix-run/react';
+import {useLoaderData, useFetcher} from '@remix-run/react';
 import {useState, useEffect, useCallback} from 'react';
 import {CardActions} from '~/components/SalesFloorCardActions';
 import {isStagingAuthed} from '~/lib/staging-auth';
@@ -60,6 +60,30 @@ function fmt$(n: number | null): string {
   return '$' + n.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0});
 }
 
+function useCountUp(target: number, duration = 900) {
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    const start = Date.now();
+    const tick = () => {
+      const p = Math.min((Date.now() - start) / duration, 1);
+      setVal(Math.round(target * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, [target]);
+  return val;
+}
+
+function StatCell({label, value, accent}: {label:string; value:number; accent:string}) {
+  const n = useCountUp(value);
+  return (
+    <div style={{background:T.bg, padding:'16px 18px'}}>
+      <div style={{fontFamily:'Teko,sans-serif', fontSize:10.5, letterSpacing:'0.30em', color:T.textFaint, textTransform:'uppercase', marginBottom:4}}>{label}</div>
+      <span style={{fontFamily:'Teko,sans-serif', fontSize:34, fontWeight:600, color:accent, lineHeight:0.9}}>{n}</span>
+    </div>
+  );
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 type FeedItem = {
   id: string;
@@ -72,6 +96,7 @@ type FeedItem = {
   market_rank: number | null;
   market_total: number | null;
   zoho_account_id: string | null;
+  tags: string[];
   orders_count: number;
   last_order_date: string | null;
   last_order_amount: number | null;
@@ -115,6 +140,19 @@ export async function action({request, context}: ActionFunctionArgs) {
     return json({ok: true, suppressed: true});
   }
 
+  if (intent === 'flag_pete') {
+    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/organizations?id=eq.${org_id}&select=tags`, {headers: h});
+    const rows = await res.json().catch(() => []);
+    const tags: string[] = rows?.[0]?.tags || [];
+    const hasPete = tags.includes('pete-followup');
+    const newTags = hasPete ? tags.filter((t: string) => t !== 'pete-followup') : [...tags, 'pete-followup'];
+    await fetch(`${env.SUPABASE_URL}/rest/v1/organizations?id=eq.${org_id}`, {
+      method: 'PATCH', headers: h,
+      body: JSON.stringify({tags: newTags, updated_at: new Date().toISOString()}),
+    });
+    return json({ok: true, flagged: !hasPete});
+  }
+
   if (intent === 'churn') {
     await fetch(`${env.SUPABASE_URL}/rest/v1/organizations?id=eq.${org_id}`, {
       method: 'PATCH', headers: h,
@@ -148,7 +186,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     'id','name','market_state','city','phone','website',
     'tier','market_rank','market_total','zoho_account_id',
     'orders_count','last_order_date','last_order_amount',
-    'reorder_cadence_days','reorder_status','reorder_suppressed',
+    'tags','reorder_cadence_days','reorder_status','reorder_suppressed',
     'reorder_flag_aging_at','reorder_flag_past_cadence_at',
     'reorder_flag_low_inv_at','reorder_flag_out_of_stock_at',
     'contacts(id,first_name,last_name,full_name,email,phone,mobile,is_primary_buyer)',
@@ -254,6 +292,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       phone: org.phone || null, website: org.website || null,
       tier: org.tier || null, market_rank: org.market_rank ?? null,
       market_total: org.market_total ?? null, zoho_account_id: zohoId,
+      tags: Array.isArray(org.tags) ? org.tags : [],
       orders_count: org.orders_count ?? 0,
       last_order_date: org.last_order_date || null,
       last_order_amount: org.last_order_amount != null ? parseFloat(String(org.last_order_amount)) : null,
@@ -337,99 +376,93 @@ export default function ReordersPage() {
     return true;
   });
 
+  // State counts for tab badges
   const stateCounts: Record<string, number> = {ALL: items.length};
   for (const s of STATES.slice(1)) stateCounts[s] = items.filter(i => i.market_state === s).length;
 
-  const flagCounts: Record<string, number> = {all: items.length};
-  for (const f of FLAG_FILTERS.slice(1)) flagCounts[f] = items.filter(i => i.active_flag === f).length;
+  // Stats reactive to state filter — compute client-side so stat bar updates when state tab changes
+  const stateItems = stateFilter === 'ALL' ? items : items.filter(i => i.market_state === stateFilter);
+  const liveStats = {
+    total:       stateItems.length,
+    out_of_stock: stateItems.filter(f => f.active_flag === 'out_of_stock').length,
+    low_inv:      stateItems.filter(f => f.active_flag === 'low_inv').length,
+    past_cadence: stateItems.filter(f => f.active_flag === 'past_cadence').length,
+    aging:        stateItems.filter(f => f.active_flag === 'aging').length,
+  };
 
-  const s: any = stats || {};
+  // Flag counts respect state filter
+  const flagCounts: Record<string, number> = {all: stateItems.length};
+  for (const f of FLAG_FILTERS.slice(1)) flagCounts[f] = stateItems.filter(i => i.active_flag === f).length;
 
   return (
     <SalesFloorLayout current="Reorders Due">
 
       {/* ── Page header ──────────────────────────────────────────────────── */}
-      <div style={{padding:'24px 28px 20px', borderBottom:`1px solid ${T.border}`, position:'relative', overflow:'hidden', display:'flex', alignItems:'flex-end', justifyContent:'space-between'}}>
-        <div style={{position:'absolute',bottom:0,left:0,right:0,height:1,background:T.border}} className="hs-sweep" />
-        <div>
-          <div style={{fontFamily:'Teko,sans-serif',fontSize:11,letterSpacing:'0.32em',color:T.textFaint,textTransform:'uppercase'}}>Sales Floor / Workspace</div>
-          <div style={{display:'flex',alignItems:'baseline',gap:14,marginTop:4}}>
-            <h1 style={{margin:0,fontFamily:'Teko,sans-serif',fontSize:38,fontWeight:500,letterSpacing:'0.18em',color:T.text,textTransform:'uppercase'}}>Reorders Due</h1>
-            <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:12,color:T.textSubtle,letterSpacing:'0.10em'}}>
+      <div className="hs-sweep" style={{padding:'20px 28px 0', borderBottom:`1px solid ${T.borderStrong}`, background:`linear-gradient(180deg,rgba(255,213,0,0.03) 0%,transparent 100%)`}}>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16}}>
+          <div>
+            <h1 style={{margin:0, fontFamily:'Teko,sans-serif', fontSize:36, fontWeight:500, letterSpacing:'0.06em', textTransform:'uppercase', lineHeight:1}}>Reorders Due</h1>
+            <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:10.5, color:T.textFaint, marginTop:4, letterSpacing:'0.12em'}}>
               {filtered.length} account{filtered.length !== 1 ? 's' : ''} · sorted by most recently flagged
-            </span>
+              {litError && <span style={{marginLeft:12, color:T.statusWarn}}>· Lit: {litError === 'lit_not_configured' ? 'not configured' : 'unavailable'}</span>}
+            </div>
           </div>
         </div>
-        {litError && (
-          <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:10,color:T.statusWarn,letterSpacing:'0.12em',padding:'4px 8px',border:`1px solid ${T.statusWarn}33`}}>
-            LIT ALERTS: {litError === 'lit_not_configured' ? 'NOT CONFIGURED' : 'UNAVAILABLE'}
-          </div>
-        )}
-      </div>
 
-      {/* ── Stat bar ─────────────────────────────────────────────────────── */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',background:T.border,gap:1,borderBottom:`1px solid ${T.border}`}}>
-        {[
-          {label:'Total flagged',   val:s.total         || 0, accent:T.text},
-          {label:'Out of stock',    val:s.out_of_stock  || 0, accent:T.redSystems},
-          {label:'Low inventory',   val:s.low_inv       || 0, accent:'#FF8A00'},
-          {label:'Past cadence',    val:s.past_cadence  || 0, accent:T.yellow},
-          {label:'Aging (45d+)',    val:s.aging         || 0, accent:T.statusWarn},
-        ].map(cell => (
-          <div key={cell.label} style={{background:T.bg,padding:'16px 18px'}}>
-            <div style={{fontFamily:'Teko,sans-serif',fontSize:10.5,letterSpacing:'0.30em',color:T.textFaint,textTransform:'uppercase',marginBottom:4}}>{cell.label}</div>
-            <span style={{fontFamily:'Teko,sans-serif',fontSize:34,fontWeight:600,color:cell.accent,lineHeight:0.9}}>{cell.val}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Filter bar ───────────────────────────────────────────────────── */}
-      <div style={{borderBottom:`1px solid ${T.border}`,padding:'14px 28px',background:T.bg}}>
-
-        {/* Row 1: State + Search */}
-        <div style={{display:'flex',alignItems:'center',gap:22,marginBottom:12}}>
-          <div style={{fontFamily:'Teko,sans-serif',fontSize:11,letterSpacing:'0.30em',color:T.textFaint,textTransform:'uppercase',minWidth:50}}>State</div>
-          <div style={{display:'flex',gap:0,border:`1px solid ${T.borderStrong}`}}>
+        {/* State tabs + search — matches Sales Orders style */}
+        <div style={{display:'flex', alignItems:'center', gap:12}}>
+          <div style={{display:'flex', gap:1}}>
             {STATES.map(s => {
               const active = stateFilter === s;
               const n = stateCounts[s] || 0;
               return (
                 <button key={s} onClick={() => setStateFilter(s)}
-                  style={{padding:'7px 12px',background:active?T.yellow:'transparent',color:active?'#000':T.textMuted,fontFamily:'JetBrains Mono,monospace',fontSize:11,letterSpacing:'0.10em',cursor:'pointer',border:'none',borderRight:`1px solid ${T.borderStrong}`}}>
-                  <span style={{fontWeight:active?700:500}}>{s}</span>
-                  {n > 0 && <span style={{opacity:active?0.7:0.6,fontSize:10,marginLeft:4}}>{n}</span>}
+                  style={{height:32, padding:'0 14px', background:active?`rgba(255,213,0,0.08)`:'transparent', border:'none', borderBottom:`2px solid ${active?T.yellow:'transparent'}`, color:active?T.yellow:T.textSubtle, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.14em', cursor:'pointer'}}>
+                  {s}{n > 0 ? ` ${n}` : ''}
                 </button>
               );
             })}
           </div>
           <div style={{flex:1}} />
-          <div style={{display:'flex',alignItems:'center',border:`1px solid ${T.borderStrong}`,padding:'0 12px',height:36,width:280,background:T.surface,gap:10}}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.textFaint} strokeWidth="1.8"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
-            <input id="reorders-search" placeholder="Search by name or city" value={search} onChange={e => setSearch(e.target.value)}
-              style={{flex:1,background:'transparent',border:'none',outline:'none',color:T.text,fontSize:13,fontFamily:'inherit'}} />
-            {search && <button onClick={() => setSearch('')} style={{background:'none',border:'none',color:T.textFaint,cursor:'pointer',padding:0}}>✕</button>}
-            {!search && <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:9.5,color:T.textFaint,border:`1px solid ${T.borderStrong}`,padding:'1px 5px',letterSpacing:'0.12em'}}>⌘K</span>}
+          {/* Search */}
+          <div style={{display:'flex', alignItems:'center', gap:0}}>
+            <input
+              id="reorders-search"
+              placeholder="Search by name or city…"
+              value={search} onChange={e => setSearch(e.target.value)}
+              style={{height:32, padding:'0 12px', background:T.surfaceElev, border:`1px solid ${T.borderStrong}`, borderRight:'none', color:T.text, fontFamily:'Inter,sans-serif', fontSize:12, outline:'none', width:220, letterSpacing:'0.02em'}}
+            />
+            <button type="button" onClick={search ? () => setSearch('') : undefined}
+              style={{height:32, padding:'0 10px', background:search?T.yellow:T.surfaceElev, border:`1px solid ${T.borderStrong}`, color:search?'#000':T.textFaint, cursor:'pointer', fontFamily:'JetBrains Mono,monospace', fontSize:10, letterSpacing:'0.10em'}}>
+              {search ? '✕' : '⌕'}
+            </button>
           </div>
         </div>
+      </div>
 
-        {/* Row 2: Flag type filter */}
-        <div style={{display:'flex',alignItems:'center',gap:22}}>
-          <div style={{fontFamily:'Teko,sans-serif',fontSize:11,letterSpacing:'0.30em',color:T.textFaint,textTransform:'uppercase',minWidth:50}}>Flag</div>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-            {FLAG_FILTERS.map(f => {
-              const active = flagFilter === f;
-              const meta   = f === 'all' ? {color:T.yellow, label:'ALL'} : FLAG_META[f];
-              const n      = flagCounts[f] || 0;
-              return (
-                <button key={f} onClick={() => setFlagFilter(f)}
-                  style={{padding:'6px 11px',border:`1px solid ${active?meta.color:T.borderStrong}`,color:active?meta.color:T.textSubtle,fontFamily:'Teko,sans-serif',fontSize:14,letterSpacing:'0.18em',textTransform:'uppercase',background:active?`${meta.color}18`:'transparent',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:7}}>
-                  <span>{meta.label}</span>
-                  <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:10,color:T.textFaint}}>{n}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+      {/* ── Stat bar — reactive to state filter, counts up from zero ─────── */}
+      <div style={{display:'grid', gridTemplateColumns:'repeat(5,1fr)', background:T.border, gap:1, borderBottom:`1px solid ${T.border}`, flexShrink:0}}>
+        <StatCell label="Total Flagged"   value={liveStats.total}       accent={T.text} />
+        <StatCell label="Out of Stock"    value={liveStats.out_of_stock} accent={T.redSystems} />
+        <StatCell label="Low Inventory"   value={liveStats.low_inv}      accent='#FF8A00' />
+        <StatCell label="Past Cadence"    value={liveStats.past_cadence} accent={T.yellow} />
+        <StatCell label="Aging (45d+)"    value={liveStats.aging}        accent={T.statusWarn} />
+      </div>
+
+      {/* ── Flag filter — below stat bar ─────────────────────────────────── */}
+      <div style={{borderBottom:`1px solid ${T.border}`, padding:'10px 28px', background:T.bg, display:'flex', alignItems:'center', gap:8}}>
+        {FLAG_FILTERS.map(f => {
+          const active = flagFilter === f;
+          const meta   = f === 'all' ? {color: T.yellow, label: 'ALL'} : FLAG_META[f];
+          const n      = flagCounts[f] || 0;
+          return (
+            <button key={f} onClick={() => setFlagFilter(f)}
+              style={{height:30, padding:'0 12px', border:`1px solid ${active ? meta.color : T.borderStrong}`, color:active ? meta.color : T.textSubtle, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.18em', textTransform:'uppercase', background:active ? `${meta.color}18` : 'transparent', cursor:'pointer', display:'inline-flex', alignItems:'center', gap:8}}>
+              <span>{meta.label}</span>
+              <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textFaint}}>{n}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* ── Feed ─────────────────────────────────────────────────────────── */}
@@ -481,6 +514,9 @@ function ReorderCard({item, onRemove}: {item: FeedItem; onRemove: (id: string) =
     ? new Date(item.last_flagged_at).toLocaleDateString('en-US', {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'})
     : null;
 
+  const isFlagged = (item.tags || []).includes('pete-followup');
+  const zohoIdNumeric = (item.zoho_account_id || '').replace('zcrm_', '');
+
   const submitIntent = useCallback((intent: string) => {
     onRemove(item.id);
     const fd = new FormData();
@@ -488,6 +524,36 @@ function ReorderCard({item, onRemove}: {item: FeedItem; onRemove: (id: string) =
     fd.set('org_id', item.id);
     fetcher.submit(fd, {method: 'post'});
   }, [item.id, onRemove, fetcher]);
+
+  const actionPost = useCallback(async (apiUrl: string, body: Record<string, any>) => {
+    try { await fetch(apiUrl, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}); } catch {}
+  }, []);
+
+  const flagFetcher = useFetcher();
+  const toggleFlag = useCallback(() => {
+    const fd = new FormData();
+    fd.set('intent', 'flag_pete');
+    fd.set('org_id', item.id);
+    flagFetcher.submit(fd, {method: 'post'});
+  }, [item.id, flagFetcher]);
+
+  const openBrief = useCallback(() => {
+    if (!phone && !email) { alert('No contact info on file.'); return; }
+    const w = window.open('', '_brief', 'width=700,height=600');
+    if (w) {
+      w.document.write('<html><body style="background:#0a0a0a;color:#fff;font-family:sans-serif;padding:24px"><h2>Loading brief…</h2></body></html>');
+      actionPost('/api/brief', {lead: {First_Name: item.primary_contact_name?.split(' ')[0] || '', Last_Name: item.primary_contact_name?.split(' ').slice(1).join(' ') || '', _fullName: item.primary_contact_name || item.name, Company: item.name, Phone: phone || '', Email: email || '', _status: 'active'}}).then(() => { w.location.href = '/sales-floor/app?brief=1'; });
+    }
+  }, [phone, email, item, actionPost]);
+
+  const onTraining   = useCallback(() => actionPost('/api/sales-floor-vibes-training', {zohoAccountId: zohoIdNumeric, customerName: item.name, trainingFocus: ''}), [zohoIdNumeric, item.name, actionPost]);
+  const onNewProduct = useCallback(() => actionPost('/api/sales-floor-vibes-product-onboard', {zohoAccountId: zohoIdNumeric, customerName: item.name}), [zohoIdNumeric, item.name, actionPost]);
+  const onSendMenu   = useCallback(() => {
+    if (!email) { alert('No email on file.'); return; }
+    const subject = 'Highsman Wholesale Menu';
+    const body2   = `Hi there,\n\nHere's our wholesale menu:\n\nhttps://highsman.com/wholesale\n\nBest,\nSky Lima\nHighsman`;
+    window.open(`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body2)}`);
+  }, [email]);
 
   return (
     <div
@@ -573,12 +639,17 @@ function ReorderCard({item, onRemove}: {item: FeedItem; onRemove: (id: string) =
         </div>
       </div>
 
-      {/* Shared CardActions — same as Accounts page + Suppress + Churn */}
+      {/* Shared CardActions — exact same buttons as Accounts + Suppress + Churn */}
       <CardActions
         phone={phone}
         email={email}
-        isFlagged={false}
+        isFlagged={isFlagged}
         orgId={item.id}
+        onBrief={openBrief}
+        onFlag={toggleFlag}
+        onTraining={onTraining}
+        onSendMenu={onSendMenu}
+        onNewProduct={onNewProduct}
         onSuppress={() => submitIntent('suppress')}
         onChurn={() => submitIntent('churn')}
       />
