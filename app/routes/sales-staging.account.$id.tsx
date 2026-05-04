@@ -250,7 +250,7 @@ export default function AccountDetail() {
 
             {/* Right: Onboarding + Contacts + Notes */}
             <div style={{display:'flex', flexDirection:'column', gap:24}}>
-              <OnboardingPanel orgId={org.id} steps={steps} refresh={refresh} />
+              <OnboardingPanel orgId={org.id} steps={steps} refresh={refresh} marketState={org.market_state} />
               <ContactsPanel orgId={org.id} contacts={contacts} refresh={refresh} />
               <NotesPanel orgId={org.id} notes={notes} refresh={refresh} />
             </div>
@@ -804,17 +804,27 @@ function OrgOrdersPanel({orgId, orgName, marketState}: {orgId:string; orgName:st
 }
 
 // ─── Onboarding Panel ─────────────────────────────────────────────────────────
-const ONBOARDING_LABELS: Record<string, string> = {
-  visual_merch_shipped: 'Visual merch shipped',
-  menu_accuracy_confirmed: 'Menu accuracy confirmed',
-  store_locator_confirmed: 'Store locator confirmed',
-  digital_assets_sent: 'Digital assets sent',
-};
+// Canonical 12-step onboarding sequence. popup_booked is NJ-only.
+export const ONBOARDING_STEPS: {key:string; label:string; njOnly?:boolean}[] = [
+  {key:'contacts_added',          label:'Contacts added to CRM'},
+  {key:'digital_assets_sent',     label:'Digital assets sent'},
+  {key:'social_story_graphic',    label:'Social story graphic created'},
+  {key:'samples_sent',            label:'Samples sent with order'},
+  {key:'promo_scheduled',         label:'Launch promo scheduled'},
+  {key:'merchandised',            label:'Merchandised'},
+  {key:'budtenders_trained',      label:'Budtenders trained'},
+  {key:'popup_booked',            label:'Pop-up booked', njOnly:true},
+  {key:'store_locator_confirmed', label:'Store locator confirmed'},
+  {key:'menu_accurate',           label:'Menu accuracy confirmed'},
+  {key:'social_story_posted',     label:'Social story posted'},
+  {key:'feedback_obtained',       label:'Initial feedback obtained'},
+];
 
-function OnboardingPanel({orgId, steps, refresh}: {orgId:string; steps:any[]; refresh:()=>void}) {
+function OnboardingPanel({orgId, steps, refresh, marketState}: {orgId:string; steps:any[]; refresh:()=>void; marketState?:string}) {
   const fetcher = useFetcher();
   const stepsMap = new Map(steps.map((s:any) => [s.step_key, s]));
-  const allKeys = Object.keys(ONBOARDING_LABELS);
+  const isNJ = marketState === 'NJ';
+  const allKeys = ONBOARDING_STEPS.filter(s => !s.njOnly || isNJ).map(s => s.key);
   const doneCount = allKeys.filter(k => stepsMap.get(k)?.status === 'complete').length;
   const pct = allKeys.length > 0 ? (doneCount / allKeys.length) * 100 : 0;
 
@@ -834,17 +844,17 @@ function OnboardingPanel({orgId, steps, refresh}: {orgId:string; steps:any[]; re
           <div style={{position:'absolute', left:0, top:0, bottom:0, width:`${pct}%`, background:T.green, transition:'width 300ms'}} />
         </div>
       </div>
-      {allKeys.map((key, i) => {
-        const step = stepsMap.get(key);
+      {ONBOARDING_STEPS.filter(s => !s.njOnly || isNJ).map((stepDef) => {
+        const step = stepsMap.get(stepDef.key);
         const done = step?.status === 'complete';
         return (
-          <button key={key} onClick={()=>toggle(key)}
+          <button key={stepDef.key} onClick={()=>toggle(stepDef.key)}
             style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'11px 16px', borderTop:`1px solid ${T.border}`, width:'100%', background:'transparent', cursor:'pointer', textAlign:'left', gap:12}}>
             <div style={{display:'flex', alignItems:'center', gap:12}}>
               <span style={{width:14, height:14, border:`1px solid ${done?T.green:T.textFaint}`, background:done?T.green:'transparent', display:'inline-flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
                 {done && <CheckIcon />}
               </span>
-              <span style={{color:done?T.textMuted:T.text, fontSize:13.5, textDecoration:done?'line-through':'none', textDecorationColor:T.textFaint}}>{ONBOARDING_LABELS[key]||key}</span>
+              <span style={{color:done?T.textMuted:T.text, fontSize:13.5, textDecoration:done?'line-through':'none', textDecorationColor:T.textFaint}}>{stepDef.label}</span>
             </div>
             <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10.5, color:done?T.textFaint:T.yellow, letterSpacing:'0.10em', flexShrink:0}}>
               {done&&step?.completed_at ? new Date(step.completed_at).toLocaleDateString('en-US',{month:'numeric',day:'numeric'}) : 'open'}
