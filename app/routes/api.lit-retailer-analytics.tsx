@@ -14,6 +14,7 @@
 import type {LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {isStagingAuthed} from '~/lib/staging-auth';
+import {getSFToken} from '~/lib/sf-auth.server';
 
 const LIT_API = 'https://partnerapi.litalerts.com';
 const HIGHSMAN_BRAND_ID = 9027;
@@ -25,7 +26,7 @@ function fmtDate(d: Date): string {
 }
 
 export async function loader({request, context}: LoaderFunctionArgs) {
-  if (!isStagingAuthed(request.headers.get('Cookie') || '')) {
+  const _sfCk = request.headers.get('Cookie')||''; if (!isStagingAuthed(_sfCk) && !getSFToken(_sfCk)) {
     return json({ok: false, error: 'unauthorized'}, {status: 401});
   }
 

@@ -7,9 +7,10 @@
 import type {LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {isStagingAuthed} from '~/lib/staging-auth';
+import {getSFToken} from '~/lib/sf-auth.server';
 
 export async function loader({request, context}: LoaderFunctionArgs) {
-  if (!isStagingAuthed(request.headers.get('Cookie') || '')) {
+  const _sfCk = request.headers.get('Cookie')||''; if (!isStagingAuthed(_sfCk) && !getSFToken(_sfCk)) {
     return json({results: []}, {status: 401});
   }
   const env = (context as any).env;

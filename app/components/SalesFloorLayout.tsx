@@ -13,6 +13,7 @@
 
 import { useState, useEffect } from 'react';
 import { Form } from '@remix-run/react';
+import type { SFUser } from '~/lib/sf-auth.server';
 
 const T = {
   bg:           '#0A0A0A',
@@ -51,6 +52,7 @@ const ICONS: Record<string, React.ReactNode> = {
   Text:             <Ico><path d="M2 2h12a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H5l-4 3V3a1 1 0 0 1 1-1z"/></Ico>,
   Issues:           <Ico><path d="M8 1L1 14h14z"/><path d="M8 6v3"/><circle cx="8" cy="11.5" r="0.5" fill="currentColor"/></Ico>,
   Vibes:            <Ico><path d="M1 8c1.5-3 3-3 4.5 0s3 3 4.5 0 3-3 4.5 0"/></Ico>,
+  Admin:            <Ico><circle cx="8" cy="6" r="3"/><path d="M2 14c0-3 2.7-5 6-5s6 2 6 5"/><path d="M12 10l2 2 3-3"/></Ico>,
 };
 
 // ─── Nav items ────────────────────────────────────────────────────────────────
@@ -72,6 +74,7 @@ const NAV_ITEMS: {
   { label: 'Text',           href: '/sales-floor/app' },
   { label: 'Issues',         href: '/sales-floor/app' },
   { label: 'Vibes',          href: '/vibes' },
+  { label: 'Admin',          href: '/sales-staging/admin' },
 ];
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
@@ -80,10 +83,12 @@ export function SalesFloorLayout({
   current,
   children,
   stageCounts = {},
+  sfUser,
 }: {
   current: string;
   children: React.ReactNode;
   stageCounts?: Record<string, number>;
+  sfUser?: SFUser | null;
 }) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -162,14 +167,18 @@ export function SalesFloorLayout({
           </div>
           <div style={{ width: 1, height: 20, background: T.border }} />
 
-          {/* User avatar */}
+          {/* User avatar — dynamic based on sfUser */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <img
-              src="https://agents-assets.nyc3.cdn.digitaloceanspaces.com/sky-avatar.png"
-              alt="Sky Lima"
-              style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }}
-            />
-            <span style={{ fontFamily: 'Teko,sans-serif', fontSize: 14, letterSpacing: '0.14em', color: T.textMuted }}>SKY LIMA</span>
+            {sfUser?.permissions.avatar_url ? (
+              <img src={sfUser.permissions.avatar_url} alt={sfUser.permissions.display_name} style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} />
+            ) : (
+              <div style={{ width: 28, height: 28, borderRadius: '50%', background: `linear-gradient(135deg,${T.yellow},#FFB800)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000', fontWeight: 700, fontSize: 11, fontFamily: 'Teko,sans-serif', flexShrink: 0 }}>
+                {(sfUser?.permissions.display_name || 'SF').split(' ').map((w:string) => w[0]).slice(0,2).join('').toUpperCase()}
+              </div>
+            )}
+            <span style={{ fontFamily: 'Teko,sans-serif', fontSize: 14, letterSpacing: '0.14em', color: T.textMuted }}>
+              {sfUser?.permissions.display_name?.toUpperCase() || 'SALES FLOOR'}
+            </span>
           </div>
           <div style={{ width: 1, height: 20, background: T.border }} />
 
@@ -177,12 +186,9 @@ export function SalesFloorLayout({
           <a href="/sales" style={{ fontFamily: 'JetBrains Mono,monospace', fontSize: 10, color: T.textFaint, letterSpacing: '0.14em', textDecoration: 'none' }}>
             ← Live /sales
           </a>
-          <Form method="post" action="/sales-staging">
-            <input type="hidden" name="intent" value="logout" />
-            <button type="submit" style={{ background: 'none', border: 'none', fontFamily: 'JetBrains Mono,monospace', fontSize: 10, color: T.textFaint, letterSpacing: '0.14em', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>
-              sign out
-            </button>
-          </Form>
+          <a href="/sales-staging/login" onClick={(e) => { e.preventDefault(); fetch('/sales-staging', {method:'POST', body: new URLSearchParams({intent:'logout'})}); window.location.href='/sales-staging/login'; }} style={{ fontFamily: 'JetBrains Mono,monospace', fontSize: 10, color: T.textFaint, letterSpacing: '0.14em', textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}>
+            sign out
+          </a>
         </div>
       </div>
 
@@ -226,8 +232,21 @@ export function SalesFloorLayout({
             </div>
           )}
 
-          {/* Nav items */}
-          {NAV_ITEMS.map(item => {
+          {/* Nav items — filtered by sfUser.modules when present */}
+          {NAV_ITEMS.filter(item => {
+            if (!sfUser) return true; // legacy auth: show all
+            const mods = sfUser.permissions.modules;
+            if (mods.includes('*')) return true;
+            // Map nav label → module key used in permissions
+            const MAP: Record<string,string> = {
+              'Dashboard': 'dashboard', 'Onboarding': 'onboarding',
+              'Reorders Due': 'reorders', 'Leads': 'leads',
+              'Sales Orders': 'orders', 'Accounts': 'accounts',
+              'Funnel': 'funnel', 'Email': 'email', 'Text': 'text',
+              'Issues': 'issues', 'Vibes': 'vibes', 'Admin': 'admin',
+            };
+            return mods.includes(MAP[item.label] || item.label.toLowerCase());
+          }).map(item => {
             const active  = item.label === current;
             const count   = item.countKey ? (stageCounts[item.countKey] || 0) : null;
             const showDot = item.dot && count && count > 0;

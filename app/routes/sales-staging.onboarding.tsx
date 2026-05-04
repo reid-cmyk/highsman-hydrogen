@@ -12,6 +12,7 @@ import {json} from '@shopify/remix-oxygen';
 import {useLoaderData, useFetcher} from '@remix-run/react';
 import {useState, useEffect} from 'react';
 import {isStagingAuthed} from '~/lib/staging-auth';
+import {getSFToken, getSFUser} from '~/lib/sf-auth.server';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
 import {CardActions} from '~/components/SalesFloorCardActions';
 import {ONBOARDING_STEPS, stepsForMarket} from '~/lib/onboarding-steps';
@@ -91,8 +92,12 @@ type OnboardingOrg = {
 // ─── Loader ───────────────────────────────────────────────────────────────────
 export async function loader({request, context}: LoaderFunctionArgs) {
   const env = (context as any).env;
-  if (!isStagingAuthed(request.headers.get('Cookie')||''))
-    return json({authenticated:false, orgs:[], completedCount:0});
+  const cookie = request.headers.get('Cookie')||'';
+  const sfUser = await getSFUser(cookie, env);
+  if (!sfUser && !isStagingAuthed(cookie)) {
+    const {redirect: redir} = await import('@shopify/remix-oxygen');
+    return redir('/sales-staging/login');
+  }
 
   const h = {apikey:env.SUPABASE_SERVICE_KEY, Authorization:`Bearer ${env.SUPABASE_SERVICE_KEY}`};
   const sbCountH = {...h, 'Prefer':'count=exact', 'Range':'0-0'};
@@ -158,12 +163,12 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     };
   });
 
-  return json({authenticated:true, orgs, completedCount});
+  return json({authenticated:true, sfUser, orgs, completedCount});
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function OnboardingPage() {
-  const {authenticated, orgs, completedCount} = useLoaderData<typeof loader>() as any;
+  const {authenticated, sfUser, orgs, completedCount} = useLoaderData<typeof loader>() as any;
   const [stateFilter, setStateFilter] = useState('ALL');
   const [stageFilter, setStageFilter] = useState<'all'|'not_started'|'in_progress'|'complete'>('all');
   const [sort, setSort] = useState<'newest'|'oldest'>('newest');
@@ -204,7 +209,7 @@ export default function OnboardingPage() {
   });
 
   return (
-    <SalesFloorLayout current="Onboarding">
+    <SalesFloorLayout current="Onboarding" sfUser={sfUser}>
 
       {/* ── Header ────────────────────────────────────────────────────── */}
       <div className="hs-sweep" style={{padding:'20px 28px 0',borderBottom:`1px solid ${T.borderStrong}`,background:`linear-gradient(180deg,rgba(255,213,0,0.03) 0%,transparent 100%)`}}>

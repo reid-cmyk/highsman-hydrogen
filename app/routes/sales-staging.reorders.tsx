@@ -20,6 +20,7 @@ import {useLoaderData, useFetcher} from '@remix-run/react';
 import {useState, useEffect, useCallback} from 'react';
 import {CardActions} from '~/components/SalesFloorCardActions';
 import {isStagingAuthed} from '~/lib/staging-auth';
+import {getSFToken, getSFUser} from '~/lib/sf-auth.server';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
 
 export const handle = {hideHeader: true, hideFooter: true};
@@ -175,8 +176,12 @@ export async function action({request, context}: ActionFunctionArgs) {
 // ─── Loader ───────────────────────────────────────────────────────────────────
 export async function loader({request, context}: LoaderFunctionArgs) {
   const env = (context as any).env;
-  if (!isStagingAuthed(request.headers.get('Cookie') || ''))
-    return json({authenticated: false, feed: [], stats: null, litError: null});
+  const cookie = request.headers.get('Cookie') || '';
+  const sfUser = await getSFUser(cookie, env);
+  if (!sfUser && !isStagingAuthed(cookie)) {
+    const {redirect: redir} = await import('@shopify/remix-oxygen');
+    return redir('/sales-staging/login');
+  }
 
   const h = {apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`};
   const base = env.SUPABASE_URL;
@@ -244,8 +249,16 @@ export async function loader({request, context}: LoaderFunctionArgs) {
 
     const timeActive    = cadence === null && days >= 45;
     const cadenceActive = cadence !== null && days >= cadence;
-    const lowInvActive  = zohoId ? litLowInvSet.has(zohoId) : false;
-    const oosActive     = zohoId ? litOosSet.has(zohoId) : false;
+
+    // Lit flags: skip if account placed an order within the last 10 days —
+    // they've already reordered and delivery is likely pending.
+    // recalcOrgAfterOrder clears flags on new order, but Lit may still show OOS
+    // until the delivery resolves. 10 days covers typical fulfillment windows.
+    const orderedWithin10Days = org.last_order_date
+      ? daysSince(org.last_order_date) !== null && (daysSince(org.last_order_date) as number) <= 10
+      : false;
+    const lowInvActive  = !orderedWithin10Days && (zohoId ? litLowInvSet.has(zohoId) : false);
+    const oosActive     = !orderedWithin10Days && (zohoId ? litOosSet.has(zohoId) : false);
 
     if (!timeActive && !cadenceActive && !lowInvActive && !oosActive) continue;
 
@@ -339,12 +352,12 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     aging:        feed.filter(f => f.active_flag === 'aging').length,
   };
 
-  return json({authenticated: true, feed, stats, litError});
+  return json({authenticated: true, sfUser, feed, stats, litError});
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function ReordersPage() {
-  const {authenticated, feed, stats, litError} = useLoaderData<typeof loader>() as any;
+  const {authenticated, sfUser, feed, stats, litError} = useLoaderData<typeof loader>() as any;
   const [stateFilter, setStateFilter] = useState('ALL');
   const [flagFilter,  setFlagFilter]  = useState<string>('all');
   const [search, setSearch] = useState('');
@@ -396,7 +409,7 @@ export default function ReordersPage() {
   for (const f of FLAG_FILTERS.slice(1)) flagCounts[f] = stateItems.filter(i => i.active_flag === f).length;
 
   return (
-    <SalesFloorLayout current="Reorders Due">
+    <SalesFloorLayout current="Reorders Due" sfUser={sfUser}>
 
       {/* ── Page header ──────────────────────────────────────────────────── */}
       <div className="hs-sweep" style={{padding:'20px 28px 0', borderBottom:`1px solid ${T.borderStrong}`, background:`linear-gradient(180deg,rgba(255,213,0,0.03) 0%,transparent 100%)`}}>

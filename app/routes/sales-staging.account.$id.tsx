@@ -9,6 +9,7 @@ import {json} from '@shopify/remix-oxygen';
 import {useLoaderData, useFetcher, Link, useNavigate} from '@remix-run/react';
 import {useState, useRef, useEffect} from 'react';
 import {isStagingAuthed} from '~/lib/staging-auth';
+import {getSFToken, getSFUser} from '~/lib/sf-auth.server';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
 import {ONBOARDING_STEPS, stepsForMarket} from '~/lib/onboarding-steps';
 
@@ -48,8 +49,11 @@ const DeleteIcon = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="n
 // ─── Loader ───────────────────────────────────────────────────────────────────
 export async function loader({request, context, params}: LoaderFunctionArgs) {
   const env = (context as any).env;
-  if (!isStagingAuthed(request.headers.get('Cookie') || '')) {
-    return json({authenticated: false, org: null, contacts: [], notes: [], steps: []});
+  const cookie = request.headers.get('Cookie') || '';
+  const sfUser = await getSFUser(cookie, env);
+  if (!sfUser && !isStagingAuthed(cookie)) {
+    const {redirect: redir} = await import('@shopify/remix-oxygen');
+    return redir('/sales-staging/login');
   }
   const id = params.id!;
   const h = {apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`};
@@ -112,7 +116,7 @@ export async function loader({request, context, params}: LoaderFunctionArgs) {
     }
   }
 
-  return json({authenticated: true, org, contacts: org?.contacts || [], notes: Array.isArray(notes)?notes:[], steps, totalOrderRevenue, computedCadence});
+  return json({authenticated: true, sfUser, org, contacts: org?.contacts || [], notes: Array.isArray(notes)?notes:[], steps, totalOrderRevenue, computedCadence});
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -171,7 +175,7 @@ function AccountStatBar({days, daysColor, lastOrderDate, ordersCount, stateRank,
 }
 
 export default function AccountDetail() {
-  const {authenticated, org, contacts, notes, steps, totalOrderRevenue, computedCadence} = useLoaderData<typeof loader>() as any;
+  const {authenticated, sfUser, org, contacts, notes, steps, totalOrderRevenue, computedCadence} = useLoaderData<typeof loader>() as any;
   const [, rerender] = useState(0);
   const refresh = () => rerender(n => n + 1);
   const [stateRank, setStateRank] = useState<{rank:number|null; total:number|null; revenue:number|null; litRetailerId:number|null; hsBrandRank:number|null; hsBrandTotal:number|null; hsSharePct:number|null; updatedAt:string|null; loading:boolean}>({rank:null, total:null, revenue:null, litRetailerId:null, hsBrandRank:null, hsBrandTotal:null, hsSharePct:null, updatedAt:null, loading:true});
@@ -197,7 +201,7 @@ export default function AccountDetail() {
     return () => clearTimeout(t);
   }, [org?.id]);
 
-  if (!authenticated) return <div style={{minHeight:'100vh',background:T.bg,display:'flex',alignItems:'center',justifyContent:'center'}}><Link to="/sales-staging" style={{color:T.yellow,fontFamily:'Teko,sans-serif',fontSize:18,letterSpacing:'0.18em',textDecoration:'none'}}>← BACK TO LOGIN</Link></div>;
+  if (!authenticated) return <div style={{minHeight:'100vh',background:T.bg,display:'flex',alignItems:'center',justifyContent:'center'}}><Link to="/sales-staging/login" style={{color:T.yellow,fontFamily:'Teko,sans-serif',fontSize:18,letterSpacing:'0.18em',textDecoration:'none'}}>← SIGN IN</Link></div>;
   if (!org) return <div style={{minHeight:'100vh',background:T.bg,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:16}}><div style={{fontFamily:'Teko,sans-serif',fontSize:24,letterSpacing:'0.20em',color:T.textFaint,textTransform:'uppercase'}}>Account not found</div><Link to="/sales-staging" style={{color:T.yellow,fontFamily:'JetBrains Mono,monospace',fontSize:12,textDecoration:'none'}}>← back to list</Link></div>;
 
   const days = daysSince(org.last_order_date);
@@ -224,7 +228,7 @@ export default function AccountDetail() {
   const domain = org.website ? (() => { try { return new URL(org.website.startsWith('http')?org.website:`https://${org.website}`).hostname.replace(/^www\./,''); } catch { return null; } })() : null;
 
   return (
-    <SalesFloorLayout current="Accounts">
+    <SalesFloorLayout current="Accounts" sfUser={sfUser}>
           {/* Hero */}
           <div style={{borderBottom:`1px solid ${T.borderStrong}`, background:`linear-gradient(180deg,rgba(255,213,0,0.03) 0%,transparent 100%)`, padding:'32px 32px 28px'}}>
             {/* Breadcrumb */}

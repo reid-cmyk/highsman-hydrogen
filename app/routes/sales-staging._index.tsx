@@ -8,7 +8,9 @@ import type {LoaderFunctionArgs, ActionFunctionArgs, MetaFunction} from '@shopif
 import {json} from '@shopify/remix-oxygen';
 import {useLoaderData, useActionData, Form, useFetcher, useSearchParams, useNavigate} from '@remix-run/react';
 import {useMemo, useState, useEffect, useRef, useCallback} from 'react';
-import {isStagingAuthed, buildStagingLoginCookie, buildStagingLogoutCookie, checkStagingPassword} from '~/lib/staging-auth';
+import {isStagingAuthed, buildStagingLoginCookie, checkStagingPassword, buildFullLogoutHeaders} from '~/lib/staging-auth';
+import {getSFToken, getSFUser} from '~/lib/sf-auth.server';
+import type {SFUser} from '~/lib/sf-auth.server';
 import type {OrgRow} from '~/lib/supabase-orgs';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
 import {CardActions, CardBtn, PhoneI, TextI, MailI, FlagI, BookI, StarI, SendI, BoxI} from '~/components/SalesFloorCardActions';
@@ -69,8 +71,12 @@ export async function action({request, context}: ActionFunctionArgs) {
     if (checkStagingPassword(pw, env)) return json({ok:true,error:null},{headers:{'Set-Cookie':buildStagingLoginCookie()}});
     return json({ok:false,error:'Incorrect password'});
   }
-  if (!isStagingAuthed(request.headers.get('Cookie')||'')) return json({ok:false,error:'unauthorized'},{status:401});
-  if (intent==='logout') return json({ok:true,error:null},{headers:{'Set-Cookie':buildStagingLogoutCookie()}});
+  const cookie = request.headers.get('Cookie')||'';
+  if (!isStagingAuthed(cookie) && !getSFToken(cookie)) return json({ok:false,error:'unauthorized'},{status:401});
+  if (intent==='logout') {
+    const {redirect: redir} = await import('@shopify/remix-oxygen');
+    return redir('/sales-staging/login', {headers: buildFullLogoutHeaders()});
+  }
 
   if (intent==='prospect'||intent==='flag_pete') {
     const org_id=String(fd.get('org_id')||'');
@@ -115,8 +121,11 @@ export async function action({request, context}: ActionFunctionArgs) {
 // ─── Loader ───────────────────────────────────────────────────────────────────
 export async function loader({request, context}: LoaderFunctionArgs) {
   const env=(context as any).env;
-  if (!isStagingAuthed(request.headers.get('Cookie')||'')) {
-    return json({authenticated:false,orgs:[],counts:null,stageCounts:null,stateFilter:'ALL',stageFilter:'active'});
+  const cookie = request.headers.get('Cookie')||'';
+  const sfUser = await getSFUser(cookie, env);
+  if (!sfUser && !isStagingAuthed(cookie)) {
+    const {redirect: redir} = await import('@shopify/remix-oxygen');
+    return redir('/sales-staging/login');
   }
   const url=new URL(request.url);
   const stateFilter=url.searchParams.get('state')||'ALL';
@@ -193,7 +202,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     tierATotal  = (filteredStageCounts['_tierATotal']  as number)||0;
   } catch {}
 
-  return json({authenticated:true,orgs,counts,stageCounts,filteredStageCounts,stateFilter,stageFilter,sortBy,tierAActive,tierATotal});
+  return json({authenticated:true,sfUser,orgs,counts,stageCounts,filteredStageCounts,stateFilter,stageFilter,sortBy,tierAActive,tierATotal});
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -209,7 +218,6 @@ export default function SalesStaging() {
     }
   },[actionData,navigate]);
 
-  if (!data.authenticated) return <LoginScreen error={actionData?.error}/>;
   return <Dashboard data={data}/>;
 }
 
@@ -558,7 +566,7 @@ function Dashboard({data}:{data:any}) {
   const retentionPct=(statActive+statChurned)>0?Math.round((statActive/(statActive+statChurned))*100):0;
 
   return (
-    <SalesFloorLayout current="Accounts" stageCounts={stageCounts}>
+    <SalesFloorLayout current="Accounts" stageCounts={stageCounts} sfUser={data.sfUser}>
 
           {/* ── Page header — sweep + title + state tabs + search ────────── */}
           <div className="hs-sweep" style={{padding:'20px 28px 0',borderBottom:`1px solid ${T.borderStrong}`,background:`linear-gradient(180deg,rgba(255,213,0,0.03) 0%,transparent 100%)`}}>

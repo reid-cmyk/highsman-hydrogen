@@ -8,6 +8,7 @@ import {json} from '@shopify/remix-oxygen';
 import {useLoaderData, useFetcher, Link, useSearchParams, useNavigate} from '@remix-run/react';
 import {useState, useEffect, useRef} from 'react';
 import {isStagingAuthed} from '~/lib/staging-auth';
+import {getSFToken, getSFUser} from '~/lib/sf-auth.server';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
 
 export const handle = {hideHeader: true, hideFooter: true};
@@ -35,8 +36,12 @@ function fmt$(n: number) { return `$${n.toLocaleString('en-US',{minimumFractionD
 // ── Loader ────────────────────────────────────────────────────────────────────
 export async function loader({request, context}: LoaderFunctionArgs) {
   const env = (context as any).env;
-  if (!isStagingAuthed(request.headers.get('Cookie') || ''))
-    return json({authenticated: false, orders:[], stats:null});
+  const cookie = request.headers.get('Cookie') || '';
+  const sfUser = await getSFUser(cookie, env);
+  if (!sfUser && !isStagingAuthed(cookie)) {
+    const {redirect: redir} = await import('@shopify/remix-oxygen');
+    return redir('/sales-staging/login');
+  }
 
   const url = new URL(request.url);
   const state        = url.searchParams.get('state')  || 'ALL';
@@ -86,7 +91,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const periodAov     = periodCount > 0 ? periodRevenue / periodCount : 0;
 
   return json({
-    authenticated: true,
+    authenticated: true, sfUser,
     orders: Array.isArray(orders) ? orders : [],
     stats: {ytdRevenue, periodRevenue, periodCount, periodAov, pendingCount, completeCount},
     state, statusFilter, period, search,
@@ -306,7 +311,7 @@ function NewOrderModal({onClose}: {onClose:()=>void}) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function SalesOrders() {
-  const {authenticated, orders, stats, state, statusFilter, period, search} = useLoaderData<typeof loader>() as any;
+  const {authenticated, sfUser, orders, stats, state, statusFilter, period, search} = useLoaderData<typeof loader>() as any;
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
@@ -342,7 +347,7 @@ export default function SalesOrders() {
   const periodLabel = period === 'mtd' ? 'This Month' : period === 'ytd' ? 'YTD' : 'All Time';
 
   return (
-    <SalesFloorLayout current="Sales Orders">
+    <SalesFloorLayout current="Sales Orders" sfUser={sfUser}>
           {/* Header row */}
           <div className="hs-sweep" style={{padding:'20px 28px 0', borderBottom:`1px solid ${T.borderStrong}`, background:`linear-gradient(180deg,rgba(255,213,0,0.03) 0%,transparent 100%)`}}>
             <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16}}>
