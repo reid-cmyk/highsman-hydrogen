@@ -11,7 +11,7 @@
  */
 
 import type {LoaderFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
-import {json} from '@shopify/remix-oxygen';
+import {json, redirect} from '@shopify/remix-oxygen';
 import {useLoaderData, useFetcher} from '@remix-run/react';
 import {useState, useEffect, useCallback, useRef} from 'react';
 import {isStagingAuthed} from '~/lib/staging-auth';
@@ -74,8 +74,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const cookie = request.headers.get('Cookie')||'';
   const sfUser = await getSFUser(cookie, env);
   if (!sfUser && !isStagingAuthed(cookie)) {
-    const {redirect: redir} = await import('@shopify/remix-oxygen');
-    return redir('/sales-staging/login');
+    return redirect('/sales-staging/login');
   }
 
   const h = {apikey:env.SUPABASE_SERVICE_KEY, Authorization:`Bearer ${env.SUPABASE_SERVICE_KEY}`};

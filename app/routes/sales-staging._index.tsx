@@ -5,7 +5,7 @@
  */
 
 import type {LoaderFunctionArgs, ActionFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
-import {json} from '@shopify/remix-oxygen';
+import {json, redirect} from '@shopify/remix-oxygen';
 import {useLoaderData, useActionData, Form, useFetcher, useSearchParams, useNavigate} from '@remix-run/react';
 import {useMemo, useState, useEffect, useRef, useCallback} from 'react';
 import {isStagingAuthed, buildStagingLoginCookie, checkStagingPassword, buildFullLogoutHeaders} from '~/lib/staging-auth';
@@ -74,8 +74,7 @@ export async function action({request, context}: ActionFunctionArgs) {
   const cookie = request.headers.get('Cookie')||'';
   if (!isStagingAuthed(cookie) && !getSFToken(cookie)) return json({ok:false,error:'unauthorized'},{status:401});
   if (intent==='logout') {
-    const {redirect: redir} = await import('@shopify/remix-oxygen');
-    return redir('/sales-staging/login', {headers: buildFullLogoutHeaders()});
+    return redirect('/sales-staging/login', {headers: buildFullLogoutHeaders()});
   }
 
   if (intent==='prospect'||intent==='flag_pete') {
@@ -124,8 +123,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const cookie = request.headers.get('Cookie')||'';
   const sfUser = await getSFUser(cookie, env);
   if (!sfUser && !isStagingAuthed(cookie)) {
-    const {redirect: redir} = await import('@shopify/remix-oxygen');
-    return redir('/sales-staging/login');
+    return redirect('/sales-staging/login');
   }
   const url=new URL(request.url);
   const stateFilter=url.searchParams.get('state')||'ALL';
