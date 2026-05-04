@@ -41,6 +41,7 @@ function Ico({ children }: { children: React.ReactNode }) {
 const ICONS: Record<string, React.ReactNode> = {
   Dashboard:        <Ico><rect x="2" y="2" width="5" height="5" rx="0.5"/><rect x="9" y="2" width="5" height="5" rx="0.5"/><rect x="2" y="9" width="5" height="5" rx="0.5"/><rect x="9" y="9" width="5" height="5" rx="0.5"/></Ico>,
   'New Customers':  <Ico><path d="M11 14v-1.5A2.5 2.5 0 0 0 8.5 10h-5A2.5 2.5 0 0 0 1 12.5V14"/><circle cx="6" cy="6" r="2.5"/><path d="M13 5v4m-2-2h4"/></Ico>,
+  Onboarding:       <Ico><rect x="2" y="1" width="12" height="14" rx="1"/><path d="M5 5h6M5 8h6M5 11h3"/><path d="M10 10l1.5 1.5L14 9"/></Ico>,
   'Reorders Due':   <Ico><path d="M15 8A7 7 0 1 1 8 1"/><path d="M15 1v5h-5"/></Ico>,
   Leads:            <Ico><path d="M2 2h12L10 9v5l-4-2V9z"/></Ico>,
   'Sales Orders':   <Ico><rect x="3" y="1" width="10" height="14" rx="1"/><path d="M6 5h4M6 8h4M6 11h2"/></Ico>,

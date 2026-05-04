@@ -92,12 +92,13 @@ type OnboardingOrg = {
 export async function loader({request, context}: LoaderFunctionArgs) {
   const env = (context as any).env;
   if (!isStagingAuthed(request.headers.get('Cookie')||''))
-    return json({authenticated:false, orgs:[]});
+    return json({authenticated:false, orgs:[], completedCount:0});
 
   const h = {apikey:env.SUPABASE_SERVICE_KEY, Authorization:`Bearer ${env.SUPABASE_SERVICE_KEY}`};
+  const sbCountH = {...h, 'Prefer':'count=exact', 'Range':'0-0'};
   const base = env.SUPABASE_URL;
 
-  // Fetch 1-order accounts with their onboarding steps + contacts
+  // Fetch active onboarding accounts: has orders, not churned, onboarding not yet complete
   const select = [
     'id','name','market_state','city','phone','website','tier',
     'market_rank','market_total','zoho_account_id','tags',
@@ -106,12 +107,17 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     'contacts(id,first_name,last_name,full_name,email,phone,mobile,is_primary_buyer)',
   ].join(',');
 
-  const res = await fetch(
-    `${base}/rest/v1/organizations?orders_count=eq.1&lifecycle_stage=not.in.(churned,untargeted)&select=${encodeURIComponent(select)}&order=last_order_date.desc&limit=500`,
-    {headers: h},
-  );
+  const [res, completedRes] = await Promise.all([
+    fetch(
+      `${base}/rest/v1/organizations?orders_count=gte.1&lifecycle_stage=not.in.(churned,untargeted)&onboarding_completed_at=is.null&select=${encodeURIComponent(select)}&order=last_order_date.desc&limit=500`,
+      {headers: h},
+    ),
+    // Separate count of all-time completed onboarding (persisted regardless of orders_count)
+    fetch(`${base}/rest/v1/organizations?onboarding_completed_at=not.is.null&select=id`, {headers:sbCountH}),
+  ]);
   const raw: any[] = await res.json().catch(()=>[]);
-  if (!Array.isArray(raw)) return json({authenticated:true, orgs:[]});
+  const completedCount = parseInt(completedRes.headers.get('Content-Range')?.split('/')[1]||'0',10)||0;
+  if (!Array.isArray(raw)) return json({authenticated:true, orgs:[], completedCount});
 
   const orgs: OnboardingOrg[] = raw.map(org => {
     const relevantSteps = stepsForMarket(org.market_state);
@@ -144,12 +150,12 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     };
   });
 
-  return json({authenticated:true, orgs});
+  return json({authenticated:true, orgs, completedCount});
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function OnboardingPage() {
-  const {authenticated, orgs} = useLoaderData<typeof loader>() as any;
+  const {authenticated, orgs, completedCount} = useLoaderData<typeof loader>() as any;
   const [stateFilter, setStateFilter] = useState('ALL');
   const [stageFilter, setStageFilter] = useState<'all'|'not_started'|'in_progress'|'complete'>('all');
   const [sort, setSort] = useState<'newest'|'oldest'>('newest');
@@ -230,11 +236,12 @@ export default function OnboardingPage() {
       </div>
 
       {/* ── Stat bar ──────────────────────────────────────────────────── */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',background:T.border,gap:1,borderBottom:`1px solid ${T.border}`}}>
-        <StatCell label="Total"       value={statTotal}      accent={T.text}/>
-        <StatCell label="Not Started" value={statNotStarted} accent={T.textSubtle}/>
-        <StatCell label="In Progress" value={statInProgress} accent={T.yellow}/>
-        <StatCell label="Complete"    value={statComplete}   accent={T.green}/>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',background:T.border,gap:1,borderBottom:`1px solid ${T.border}`}}>
+        <StatCell label="Total"            value={statTotal}            accent={T.text}/>
+        <StatCell label="Not Started"      value={statNotStarted}       accent={T.textSubtle}/>
+        <StatCell label="In Progress"      value={statInProgress}       accent={T.yellow}/>
+        <StatCell label="Active Complete"  value={statComplete}         accent={T.green}/>
+        <StatCell label="All-Time Grads"   value={completedCount||0}    accent={T.cyan}/>
       </div>
 
       {/* ── Stage filter + Sort ────────────────────────────────────────── */}
