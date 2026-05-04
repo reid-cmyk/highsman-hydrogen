@@ -10,6 +10,7 @@ import {useLoaderData, useFetcher, Link, useNavigate} from '@remix-run/react';
 import {useState, useRef, useEffect} from 'react';
 import {isStagingAuthed} from '~/lib/staging-auth';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
+import {ONBOARDING_STEPS, stepsForMarket} from '~/lib/onboarding-steps';
 
 export const handle = {hideHeader: true, hideFooter: true};
 export const meta: MetaFunction<typeof loader> = ({data}) => [
@@ -52,20 +53,66 @@ export async function loader({request, context, params}: LoaderFunctionArgs) {
   }
   const id = params.id!;
   const h = {apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`};
+  const patchH = {...h, 'Content-Type': 'application/json', Prefer: 'return=minimal'};
   const base = env.SUPABASE_URL;
-  const [orgRes, notesRes, stepsRes, ordersRes] = await Promise.all([
+  const [orgRes, notesRes, stepsRes, ordersRes, sampleRes] = await Promise.all([
     fetch(`${base}/rest/v1/organizations?id=eq.${id}&select=*,contacts(*)`, {headers: h}),
     fetch(`${base}/rest/v1/org_notes?organization_id=eq.${id}&order=created_at.desc&limit=100`, {headers: h}),
     fetch(`${base}/rest/v1/onboarding_steps?organization_id=eq.${id}&order=step_key.asc`, {headers: h}),
     fetch(`${base}/rest/v1/sales_orders?organization_id=eq.${id}&is_sample_order=eq.false&status=not.in.(Cancelled,Rejected)&select=total_amount,order_date&order=order_date.asc`, {headers: h}),
+    fetch(`${base}/rest/v1/sales_orders?organization_id=eq.${id}&is_sample_order=eq.true&select=id&limit=1`, {headers: h}),
   ]);
-  const [orgRows, notes, steps, orderData] = await Promise.all([orgRes.json(), notesRes.json(), stepsRes.json(), ordersRes.json()]);
+  const [orgRows, notes, rawSteps, orderData, sampleData] = await Promise.all([orgRes.json(), notesRes.json(), stepsRes.json(), ordersRes.json(), sampleRes.json()]);
   const org = orgRows?.[0] || null;
   const orderRows = Array.isArray(orderData) ? orderData : [];
   const totalOrderRevenue = orderRows.reduce((s:number,o:any)=>s+(parseFloat(String(o.total_amount||0).replace(/[$,]/g,''))||0),0);
-  // Use stored reorder_cadence_days from org (kept fresh by recalcOrgAfterOrder on every order change)
   const computedCadence: number | null = org?.reorder_cadence_days ?? null;
-  return json({authenticated: true, org, contacts: org?.contacts || [], notes: Array.isArray(notes)?notes:[], steps: Array.isArray(steps)?steps:[], totalOrderRevenue, computedCadence});
+
+  // ── Auto-check onboarding steps ──────────────────────────────────────────
+  let steps: any[] = Array.isArray(rawSteps) ? rawSteps : [];
+  if (org) {
+    const stepsMap = new Map(steps.map((s:any) => [s.step_key, s]));
+    const now = new Date().toISOString();
+    const autoComplete: string[] = [];
+
+    // a) contacts_added — auto if any primary buyer contact exists
+    const contacts: any[] = org.contacts || [];
+    if (contacts.some((c:any) => c.is_primary_buyer) && stepsMap.get('contacts_added')?.status !== 'complete') {
+      autoComplete.push('contacts_added');
+    }
+    // d) samples_sent — auto if any sample order exists for this org
+    const hasSamples = Array.isArray(sampleData) && sampleData.length > 0;
+    if (hasSamples && stepsMap.get('samples_sent')?.status !== 'complete') {
+      autoComplete.push('samples_sent');
+    }
+
+    if (autoComplete.length > 0) {
+      await Promise.all(autoComplete.map(async (step_key) => {
+        const existing = stepsMap.get(step_key);
+        if (existing?.id) {
+          await fetch(`${base}/rest/v1/onboarding_steps?id=eq.${existing.id}`,
+            {method:'PATCH', headers:patchH, body:JSON.stringify({status:'complete', completed_at:now, completed_by_name:'Auto'})}).catch(()=>{});
+        } else {
+          await fetch(`${base}/rest/v1/onboarding_steps`,
+            {method:'POST', headers:{...patchH, Prefer:'return=minimal'}, body:JSON.stringify({organization_id:id, step_key, status:'complete', completed_at:now, completed_by_name:'Auto'})}).catch(()=>{});
+        }
+        stepsMap.set(step_key, {step_key, status:'complete', completed_at:now, completed_by_name:'Auto', id: existing?.id});
+      }));
+      steps = Array.from(stepsMap.values());
+    }
+
+    // Stamp onboarding_completed_at if all steps done and not yet stamped
+    if (!org.onboarding_completed_at) {
+      const relevant = stepsForMarket(org.market_state);
+      if (relevant.every(s => stepsMap.get(s.key)?.status === 'complete')) {
+        await fetch(`${base}/rest/v1/organizations?id=eq.${id}`,
+          {method:'PATCH', headers:patchH, body:JSON.stringify({onboarding_completed_at:now, updated_at:now})}).catch(()=>{});
+        org.onboarding_completed_at = now;
+      }
+    }
+  }
+
+  return json({authenticated: true, org, contacts: org?.contacts || [], notes: Array.isArray(notes)?notes:[], steps, totalOrderRevenue, computedCadence});
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -250,7 +297,7 @@ export default function AccountDetail() {
 
             {/* Right: Onboarding + Contacts + Notes */}
             <div style={{display:'flex', flexDirection:'column', gap:24}}>
-              <OnboardingPanel orgId={org.id} steps={steps} refresh={refresh} />
+              <OnboardingPanel orgId={org.id} steps={steps} refresh={refresh} marketState={org.market_state} />
               <ContactsPanel orgId={org.id} contacts={contacts} refresh={refresh} />
               <NotesPanel orgId={org.id} notes={notes} refresh={refresh} />
             </div>
@@ -275,7 +322,17 @@ function HeroLogo({name, initials, domain, tc}: {name:string; initials:string; d
 
 // ─── Action Strip ─────────────────────────────────────────────────────────────
 function ActionStrip({org, primaryContact, isFlagged}: {org:any; primaryContact:any; isFlagged:boolean}) {
-  const flagFetcher = useFetcher();
+  const flagFetcher   = useFetcher();
+  const assetsFetcher = useFetcher();
+  const sendAssets = () => {
+    // Mark digital_assets_sent step complete
+    const fd = new FormData();
+    fd.set('intent','toggle_onboarding'); fd.set('org_id', org.id);
+    fd.set('step_key','digital_assets_sent'); fd.set('status','complete');
+    assetsFetcher.submit(fd, {method:'post', action:'/api/org-update'});
+    // TODO: trigger digital assets email template
+    alert('Assets step marked complete. Email template will be wired in a future update.');
+  };
   const flagPete = () => {
     const fd = new FormData(); fd.set('intent','flag_pete'); fd.set('org_id', org.id);
     flagFetcher.submit(fd, {method:'post', action:'/api/org-update'});
@@ -318,6 +375,12 @@ function ActionStrip({org, primaryContact, isFlagged}: {org:any; primaryContact:
       <button type="button" onClick={sendBrief} style={btnBase}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5V4a1 1 0 0 1 1-1h15v18H6.5A2.5 2.5 0 0 1 4 19.5z"/></svg>
         BRIEF
+      </button>
+      {/* SEND ASSETS */}
+      <button type="button" onClick={sendAssets}
+        style={{...btnBase, color:T.cyan, opacity:1}}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+        SEND ASSETS
       </button>
       {/* TRAINING */}
       <button type="button" disabled={!org.zoho_account_id} onClick={()=>{const id=(org.zoho_account_id||'').replace('zcrm_','');if(id)fetch('/api/sales-floor-vibes-training',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({zohoAccountId:id,customerName:org.name})}).catch(()=>{});}}
@@ -804,17 +867,13 @@ function OrgOrdersPanel({orgId, orgName, marketState}: {orgId:string; orgName:st
 }
 
 // ─── Onboarding Panel ─────────────────────────────────────────────────────────
-const ONBOARDING_LABELS: Record<string, string> = {
-  visual_merch_shipped: 'Visual merch shipped',
-  menu_accuracy_confirmed: 'Menu accuracy confirmed',
-  store_locator_confirmed: 'Store locator confirmed',
-  digital_assets_sent: 'Digital assets sent',
-};
+// ONBOARDING_STEPS and stepsForMarket imported at top of file from ~/lib/onboarding-steps
 
-function OnboardingPanel({orgId, steps, refresh}: {orgId:string; steps:any[]; refresh:()=>void}) {
+function OnboardingPanel({orgId, steps, refresh, marketState}: {orgId:string; steps:any[]; refresh:()=>void; marketState?:string}) {
   const fetcher = useFetcher();
   const stepsMap = new Map(steps.map((s:any) => [s.step_key, s]));
-  const allKeys = Object.keys(ONBOARDING_LABELS);
+  const relevantSteps = stepsForMarket(marketState||null);
+  const allKeys = relevantSteps.map(s => s.key);
   const doneCount = allKeys.filter(k => stepsMap.get(k)?.status === 'complete').length;
   const pct = allKeys.length > 0 ? (doneCount / allKeys.length) * 100 : 0;
 
@@ -827,24 +886,24 @@ function OnboardingPanel({orgId, steps, refresh}: {orgId:string; steps:any[]; re
   };
 
   return (
-    <div style={{background:T.surface, border:`1px solid ${T.border}`}}>
+    <div id="onboarding" style={{background:T.surface, border:`1px solid ${T.border}`}}>
       <SectionHead title="Onboarding" source={`${doneCount}/${allKeys.length} steps · ${Math.round(pct)}%`} />
       <div style={{padding:'14px 16px 6px'}}>
         <div style={{height:4, background:T.surfaceElev, position:'relative'}}>
           <div style={{position:'absolute', left:0, top:0, bottom:0, width:`${pct}%`, background:T.green, transition:'width 300ms'}} />
         </div>
       </div>
-      {allKeys.map((key, i) => {
-        const step = stepsMap.get(key);
+      {relevantSteps.map((stepDef) => {
+        const step = stepsMap.get(stepDef.key);
         const done = step?.status === 'complete';
         return (
-          <button key={key} onClick={()=>toggle(key)}
+          <button key={stepDef.key} onClick={()=>toggle(stepDef.key)}
             style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'11px 16px', borderTop:`1px solid ${T.border}`, width:'100%', background:'transparent', cursor:'pointer', textAlign:'left', gap:12}}>
             <div style={{display:'flex', alignItems:'center', gap:12}}>
               <span style={{width:14, height:14, border:`1px solid ${done?T.green:T.textFaint}`, background:done?T.green:'transparent', display:'inline-flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
                 {done && <CheckIcon />}
               </span>
-              <span style={{color:done?T.textMuted:T.text, fontSize:13.5, textDecoration:done?'line-through':'none', textDecorationColor:T.textFaint}}>{ONBOARDING_LABELS[key]||key}</span>
+              <span style={{color:done?T.textMuted:T.text, fontSize:13.5, textDecoration:done?'line-through':'none', textDecorationColor:T.textFaint}}>{stepDef.label}</span>
             </div>
             <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10.5, color:done?T.textFaint:T.yellow, letterSpacing:'0.10em', flexShrink:0}}>
               {done&&step?.completed_at ? new Date(step.completed_at).toLocaleDateString('en-US',{month:'numeric',day:'numeric'}) : 'open'}
