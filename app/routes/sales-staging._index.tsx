@@ -121,7 +121,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const url=new URL(request.url);
   const stateFilter=url.searchParams.get('state')||'ALL';
   const stageFilter=url.searchParams.get('stage')||'active';
-  const sortBy=url.searchParams.get('sort')||'risk'; // risk | rank | last_order | name
+  const sortBy=url.searchParams.get('sort')||'rank'; // rank | last_order | name
   const base=env.SUPABASE_URL;
   const headers={apikey:env.SUPABASE_SERVICE_KEY,Authorization:`Bearer ${env.SUPABASE_SERVICE_KEY}`};
 
@@ -163,7 +163,37 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     for (const row of rows){const s=row.market_state||'OTHER';counts[s]=(counts[s]||0)+1;}
   } catch {}
 
-  return json({authenticated:true,orgs,counts,stageCounts,stateFilter,stageFilter,sortBy});
+  // State-filtered stage counts + Tier A — used for the stat bar, reactive to state filter
+  const stateQ = stateFilter!=='ALL' ? `&market_state=eq.${stateFilter}` : '';
+  let filteredStageCounts:Record<string,number>={};
+  let tierAActive=0, tierATotal=0;
+  try {
+    const statStages=['active','churned','prospect','untargeted'];
+    const statResults = await Promise.all([
+      ...statStages.map(s =>
+        fetch(`${base}/rest/v1/organizations?lifecycle_stage=eq.${s}${stateQ}&select=id`,{method:'GET',headers:sbCountH})
+          .then(r=>[s, parseInt(r.headers.get('Content-Range')?.split('/')[1]||'0',10)||0] as [string,number])
+          .catch(()=>[s,0] as [string,number])
+      ),
+      // all orgs in state (any stage)
+      fetch(`${base}/rest/v1/organizations?select=id${stateQ}`,{method:'GET',headers:sbCountH})
+        .then(r=>['all', parseInt(r.headers.get('Content-Range')?.split('/')[1]||'0',10)||0] as [string,number])
+        .catch(()=>['all',0] as [string,number]),
+      // Tier A active in state
+      fetch(`${base}/rest/v1/organizations?tier=eq.A&lifecycle_stage=eq.active${stateQ}&select=id`,{method:'GET',headers:sbCountH})
+        .then(r=>['_tierAActive', parseInt(r.headers.get('Content-Range')?.split('/')[1]||'0',10)||0] as [string,number])
+        .catch(()=>['_tierAActive',0] as [string,number]),
+      // Tier A total in state
+      fetch(`${base}/rest/v1/organizations?tier=eq.A${stateQ}&select=id`,{method:'GET',headers:sbCountH})
+        .then(r=>['_tierATotal', parseInt(r.headers.get('Content-Range')?.split('/')[1]||'0',10)||0] as [string,number])
+        .catch(()=>['_tierATotal',0] as [string,number]),
+    ]);
+    filteredStageCounts = Object.fromEntries(statResults.map(([k,v])=>[k,isNaN(v as number)?0:v]));
+    tierAActive = (filteredStageCounts['_tierAActive'] as number)||0;
+    tierATotal  = (filteredStageCounts['_tierATotal']  as number)||0;
+  } catch {}
+
+  return json({authenticated:true,orgs,counts,stageCounts,filteredStageCounts,stateFilter,stageFilter,sortBy,tierAActive,tierATotal});
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -497,10 +527,14 @@ function Dashboard({data}:{data:any}) {
   const searchRef=useRef<HTMLInputElement>(null);
   const stateFilter:string=data.stateFilter||'ALL';
   const stageFilter:string=data.stageFilter||'active';
-  const sortBy:string=data.sortBy||'risk';
+  const sortBy:string=data.sortBy||'rank';
   const orgs:OrgRow[]=data.orgs||[];
   const counts:Record<string,number>=data.counts||{};
   const stageCounts:Record<string,number>=data.stageCounts||{};
+  const tierAActive:number=data.tierAActive||0;
+  const tierATotal:number=data.tierATotal||0;
+  const tierAPct:number=tierATotal>0?Math.round((tierAActive/tierATotal)*100):0;
+  const fsc:Record<string,number>=data.filteredStageCounts||{};
 
   useEffect(()=>{
     const h=(e:KeyboardEvent)=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();searchRef.current?.focus();}};
@@ -515,98 +549,108 @@ function Dashboard({data}:{data:any}) {
     return orgs.filter(o=>o.name.toLowerCase().includes(q)||(o.city||'').toLowerCase().includes(q));
   },[orgs,search]);
 
-  const activeCount=stageCounts['active']||0;
-  const reorderDue=orgs.filter(o=>o.reorder_status&&o.reorder_status!=='healthy').length;
-  const slipping=orgs.filter(o=>{const d=daysSince(o.last_order_date);return d!==null&&d>30&&d<=60;}).length;
-  const atRisk=orgs.filter(o=>{const d=daysSince(o.last_order_date);return d!==null&&d>60;}).length;
-  const flagged=orgs.filter(o=>(o.tags as any)?.includes('pete-followup')).length;
+  // Stat bar counts — state-filtered (reactive to state tab selection)
+  const statAll=(fsc['all'] as number)||0;
+  const statActive=(fsc['active'] as number)||0;
+  const statChurned=(fsc['churned'] as number)||0;
+  const statProspects=(fsc['prospect'] as number)||0;
+  const statUntargeted=(fsc['untargeted'] as number)||0;
+  const retentionPct=(statActive+statChurned)>0?Math.round((statActive/(statActive+statChurned))*100):0;
 
   return (
     <SalesFloorLayout current="Accounts" stageCounts={stageCounts}>
-          {/* Page header */}
-          <div className="hs-page-header" style={{padding:'24px 28px 20px',borderBottom:`1px solid ${T.border}`,display:'flex',alignItems:'flex-end',justifyContent:'space-between',position:'relative',overflow:'hidden'}}>
-            <SweepLine/>
-            <div>
-              <div style={{fontFamily:'Teko,sans-serif',fontSize:11,letterSpacing:'0.32em',color:T.textFaint,textTransform:'uppercase'}}>Sales Floor / Workspace</div>
-              <div style={{display:'flex',alignItems:'baseline',gap:14,marginTop:4}}>
-                <h1 style={{margin:0,fontFamily:'Teko,sans-serif',fontSize:38,fontWeight:500,letterSpacing:'0.18em',color:T.text,textTransform:'uppercase'}}>Accounts</h1>
-                <div style={{display:'flex',alignItems:'center',gap:12}}>
-                  <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:12,color:T.textSubtle,letterSpacing:'0.10em'}}>
-                    showing {filtered.length} · sorted by {sortBy==='rank'?'MARKET RANK ↑':sortBy==='last_order'?'LAST ORDER ↓':sortBy==='name'?'NAME ↑':'RISK ↓'}
-                  </span>
-                  <div style={{display:'flex',gap:4}}>
-                    {[['risk','RISK'],['rank','RANK'],['last_order','LAST ORDER'],['name','NAME']].map(([v,l])=>(
-                      <button key={v} onClick={()=>setFilter('sort',v)}
-                        style={{height:22,padding:'0 8px',background:sortBy===v?'rgba(255,213,0,0.12)':'transparent',border:`1px solid ${sortBy===v?T.yellow:T.borderStrong}`,color:sortBy===v?T.yellow:T.textFaint,fontFamily:'Teko,sans-serif',fontSize:11,letterSpacing:'0.14em',cursor:'pointer'}}>
-                        {l}
-                      </button>
-                    ))}
-                  </div>
+
+          {/* ── Page header — sweep + title + state tabs + search ────────── */}
+          <div className="hs-sweep" style={{padding:'20px 28px 0',borderBottom:`1px solid ${T.borderStrong}`,background:`linear-gradient(180deg,rgba(255,213,0,0.03) 0%,transparent 100%)`}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+              <div>
+                <h1 style={{margin:0,fontFamily:'Teko,sans-serif',fontSize:36,fontWeight:500,letterSpacing:'0.06em',textTransform:'uppercase',lineHeight:1}}>Accounts</h1>
+                <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:10.5,color:T.textFaint,marginTop:4,letterSpacing:'0.12em'}}>
+                  showing {filtered.length} · {stateFilter!=='ALL'?stateFilter:'all markets'} · {STAGE_LABELS[stageFilter]||stageFilter}
                 </div>
               </div>
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <button onClick={()=>downloadCSV(filtered,stateFilter)} style={{height:36,padding:'0 14px',background:'transparent',border:`1px solid ${T.borderStrong}`,color:T.textSubtle,fontFamily:'Teko,sans-serif',fontSize:13,letterSpacing:'0.18em',cursor:'pointer'}}>EXPORT CSV</button>
+                <button onClick={()=>setShowNewAccount(true)} style={{height:36,padding:'0 18px',background:T.yellow,border:'none',color:'#000',fontFamily:'Teko,sans-serif',fontWeight:600,fontSize:14,letterSpacing:'0.20em',cursor:'pointer'}}>+ NEW ACCOUNT</button>
+              </div>
             </div>
-            <div style={{display:'flex',alignItems:'center',gap:10}}>
-              <button onClick={()=>downloadCSV(filtered,stateFilter)} style={{height:36,padding:'0 14px',background:'transparent',border:`1px solid ${T.borderStrong}`,color:T.textMuted,fontFamily:'Teko,sans-serif',fontSize:14,letterSpacing:'0.20em',textTransform:'uppercase',cursor:'pointer'}}>Export CSV</button>
-              <button onClick={()=>setShowNewAccount(true)} style={{height:36,padding:'0 16px',background:T.yellow,border:`1px solid ${T.yellow}`,color:'#000',fontFamily:'Teko,sans-serif',fontWeight:600,fontSize:14,letterSpacing:'0.20em',textTransform:'uppercase',cursor:'pointer'}}>+ New Account</button>
-            </div>
-            {showNewAccount&&<NewAccountModal onClose={()=>setShowNewAccount(false)}/>}
-          </div>
 
-          {/* Stats strip */}
-          <div className="hs-stats-strip" style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',background:T.border,gap:1,borderBottom:`1px solid ${T.border}`}}>
-            <AnimatedStat target={activeCount} label="Active accounts"   src="live"        accent={T.text}/>
-            <AnimatedStat target={reorderDue}  label="Reorders due ≤ 7d" src="ops/cadence" accent={T.yellow}/>
-            <AnimatedStat target={slipping}    label="Slipping (30–60d)" src="/cadence"    accent={T.statusWarn}/>
-            <AnimatedStat target={atRisk}      label="At risk (>60d)"    src="/cadence"    accent={T.redSystems}/>
-            <AnimatedStat target={flagged}     label="Pete's desk"       src="flags"       accent={T.magenta}/>
-          </div>
-
-          {/* Filter bar */}
-          <div style={{borderBottom:`1px solid ${T.border}`,padding:'20px 28px 18px',background:T.bg}}>
-            <div className="hs-filter-row" style={{display:'flex',alignItems:'center',gap:22}}>
-              <div style={{fontFamily:'Teko,sans-serif',fontSize:11,letterSpacing:'0.30em',color:T.textFaint,textTransform:'uppercase',minWidth:50}}>State</div>
-              <div className="hs-state-pills" style={{display:'flex',gap:0,border:`1px solid ${T.borderStrong}`}}>
+            {/* State tabs (underline style) + search */}
+            <div style={{display:'flex',alignItems:'center',gap:12}}>
+              <div style={{display:'flex',gap:1}}>
                 {STATES.map(s=>{
                   const n=s==='ALL'?counts['ALL']:counts[s];
                   const active=stateFilter===s;
                   return (
                     <button key={s} onClick={()=>setFilter('state',s)}
-                      className="hs-state-pill"
-                      style={{padding:'7px 12px',background:active?T.yellow:'transparent',color:active?'#000':T.textMuted,fontFamily:'JetBrains Mono,monospace',fontSize:11,letterSpacing:'0.10em',cursor:'pointer',borderRight:`1px solid ${T.borderStrong}`,border:'none',borderRight:`1px solid ${T.borderStrong}`}}>
-                      <span style={{fontWeight:active?700:500}}>{s}</span>
-                      {n!=null&&<span style={{opacity:active?0.7:0.6,fontSize:10,marginLeft:4}}>{n}</span>}
+                      style={{height:32,padding:'0 14px',background:active?`rgba(255,213,0,0.08)`:'transparent',border:'none',borderBottom:`2px solid ${active?T.yellow:'transparent'}`,color:active?T.yellow:T.textSubtle,fontFamily:'Teko,sans-serif',fontSize:13,letterSpacing:'0.14em',cursor:'pointer'}}>
+                      {s}{n!=null?' '+n:''}
                     </button>
                   );
                 })}
               </div>
               <div style={{flex:1}}/>
-              <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:10,color:T.textFaint,letterSpacing:'0.14em'}}>/api/accounts · live</div>
-            </div>
-            <div className="hs-filter-row" style={{display:'flex',alignItems:'center',gap:22,marginTop:14}}>
-              <div style={{fontFamily:'Teko,sans-serif',fontSize:11,letterSpacing:'0.30em',color:T.textFaint,textTransform:'uppercase',minWidth:50}}>Stage</div>
-              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                {ALL_STAGES.filter(s=>s==='all'||(stageCounts[s]??0)>0).map(s=>{
-                  const active=stageFilter===s;
-                  const n=s==='all'?(Object.values(stageCounts) as number[]).reduce((a,b)=>a+b,0):(stageCounts[s]??0);
-                  return (
-                    <button key={s} onClick={()=>setFilter('stage',s)}
-                      style={{padding:'6px 11px',border:`1px solid ${active?T.textMuted:T.borderStrong}`,color:active?T.text:T.textSubtle,fontFamily:'Teko,sans-serif',fontSize:14,letterSpacing:'0.18em',textTransform:'uppercase',background:'transparent',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:7}}>
-                      <span>{STAGE_LABELS[s]||s}</span>
-                      <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:10,color:T.textFaint}}>{n}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <div style={{flex:1}}/>
-              <div className="hs-search" style={{display:'flex',alignItems:'center',border:`1px solid ${T.borderStrong}`,padding:'0 12px',height:36,width:320,background:T.surface,gap:10}}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.textFaint} strokeWidth="1.8"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
-                <input ref={searchRef} placeholder="Search by name or city" value={search} onChange={e=>setSearch(e.target.value)}
-                  style={{flex:1,background:'transparent',border:'none',outline:'none',color:T.text,fontSize:13,fontFamily:'inherit'}}/>
-                {!search&&<span style={{fontFamily:'JetBrains Mono,monospace',fontSize:9.5,color:T.textFaint,border:`1px solid ${T.borderStrong}`,padding:'1px 5px',letterSpacing:'0.12em'}}>⌘K</span>}
-                {search&&<button onClick={()=>setSearch('')} style={{background:'none',border:'none',color:T.textFaint,cursor:'pointer',fontSize:14,padding:0}}>✕</button>}
+              {/* Search */}
+              <div style={{display:'flex',alignItems:'center',gap:0}}>
+                <input ref={searchRef} placeholder="Search by name or city…" value={search} onChange={e=>setSearch(e.target.value)}
+                  style={{height:32,padding:'0 12px',background:T.surfaceElev,border:`1px solid ${T.borderStrong}`,borderRight:'none',color:T.text,fontFamily:'Inter,sans-serif',fontSize:12,outline:'none',width:240,letterSpacing:'0.02em'}}/>
+                <button type="button" onClick={search?()=>setSearch(''):undefined}
+                  style={{height:32,padding:'0 10px',background:search?T.yellow:T.surfaceElev,border:`1px solid ${T.borderStrong}`,color:search?'#000':T.textFaint,cursor:'pointer',fontFamily:'JetBrains Mono,monospace',fontSize:10,letterSpacing:'0.10em'}}>
+                  {search?'✕':'⌕'}
+                </button>
               </div>
             </div>
           </div>
+
+          {/* ── Stat bar — reacts to state filter ───────────────────────── */}
+          <div className="hs-stats-strip" style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',background:T.border,gap:1,borderBottom:`1px solid ${T.border}`}}>
+            <AnimatedStat target={statAll}        label="All"        src="accounts"  accent={T.text}/>
+            <AnimatedStat target={statActive}     label="Active"     src="live"       accent={T.green}/>
+            <AnimatedStat target={statChurned}    label="Churned"    src="inactive"   accent={T.textFaint}/>
+            <AnimatedStat target={statProspects}  label="Prospects"  src="pipeline"   accent={T.cyan}/>
+            <AnimatedStat target={statUntargeted} label="Untargeted" src="cold"       accent={T.textSubtle}/>
+            {/* Retention rate: active / (active + churned) */}
+            <div style={{background:T.bg,padding:'18px 24px'}}>
+              <div style={{fontFamily:'Teko,sans-serif',fontSize:11,letterSpacing:'0.30em',color:T.textFaint,textTransform:'uppercase',marginBottom:6}}>Retention</div>
+              <div style={{display:'flex',alignItems:'baseline',gap:8}}>
+                <span style={{fontFamily:'Teko,sans-serif',fontSize:44,fontWeight:600,color:T.green,lineHeight:0.9}}>{retentionPct}%</span>
+                <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:9.5,color:T.textFaint,letterSpacing:'0.14em'}}>active/total</span>
+              </div>
+            </div>
+            {/* Tier A penetration: active Tier A / total Tier A (state-filtered) */}
+            <div style={{background:T.bg,padding:'18px 24px'}}>
+              <div style={{fontFamily:'Teko,sans-serif',fontSize:11,letterSpacing:'0.30em',color:T.textFaint,textTransform:'uppercase',marginBottom:6}}>Tier A</div>
+              <div style={{display:'flex',alignItems:'baseline',gap:8}}>
+                <span style={{fontFamily:'Teko,sans-serif',fontSize:44,fontWeight:600,color:T.yellow,lineHeight:0.9,textShadow:'0 0 30px rgba(255,213,0,0.18)'}}>{tierAPct}%</span>
+                <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:9.5,color:T.textFaint,letterSpacing:'0.14em'}}>{tierAActive}/{tierATotal}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Stage filter + sort — below stat bar ─────────────────────── */}
+          <div style={{borderBottom:`1px solid ${T.border}`,padding:'10px 28px',background:T.bg,display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+            {ALL_STAGES.filter(s=>s==='all'||(stageCounts[s]??0)>0).map(s=>{
+              const active=stageFilter===s;
+              const n=s==='all'?(Object.values(stageCounts) as number[]).reduce((a,b)=>a+b,0):(stageCounts[s]??0);
+              return (
+                <button key={s} onClick={()=>setFilter('stage',s)}
+                  style={{height:30,padding:'0 12px',border:`1px solid ${active?T.textMuted:T.borderStrong}`,color:active?T.text:T.textSubtle,fontFamily:'Teko,sans-serif',fontSize:13,letterSpacing:'0.18em',textTransform:'uppercase',background:'transparent',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:7}}>
+                  <span>{STAGE_LABELS[s]||s}</span>
+                  <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:10,color:T.textFaint}}>{n}</span>
+                </button>
+              );
+            })}
+            {/* Sort dropdown — right-aligned in stage row */}
+            <div style={{marginLeft:'auto'}}>
+              <select value={sortBy} onChange={e=>setFilter('sort',e.target.value)}
+                style={{height:30,padding:'0 10px',background:T.surfaceElev,border:`1px solid ${T.borderStrong}`,color:T.text,fontFamily:'Teko,sans-serif',fontSize:13,letterSpacing:'0.14em',cursor:'pointer',outline:'none'}}>
+                <option value="rank">Sort: Market Rank</option>
+                <option value="last_order">Sort: Last Order</option>
+                <option value="name">Sort: Name</option>
+              </select>
+            </div>
+          </div>
+          {showNewAccount&&<NewAccountModal onClose={()=>setShowNewAccount(false)}/>}
 
           {/* Account list */}
           <div style={{background:T.bg,flex:1}}>
@@ -687,8 +731,7 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
   const fetcher=useFetcher();
   const [hovered,setHovered]=useState(false);
   const days=daysSince(org.last_order_date);
-  const statusKey=getStatusKey(days);
-  const status=STATUS[statusKey];
+  // statusKey / STATUS removed — reorder flag system replaces time-based status labels
   const tc=tierColor(org.tier);
   const primaryContact=org.contacts?.find(c=>c.is_primary_buyer)||org.contacts?.[0];
   const phone=org.phone||primaryContact?.phone||primaryContact?.mobile;
@@ -749,8 +792,8 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
 
         {/* Main info row */}
         <div className="hs-card-grid" style={{display:'grid',gridTemplateColumns:'4px 56px 1fr 200px 200px',alignItems:'center',gap:0,minHeight:72}}>
-          {/* Status rail */}
-          <div style={{alignSelf:'stretch',background:status.color,opacity:statusKey==='good'?0.5:0.85}}/>
+          {/* Flag rail — color reflects reorder flag; subtle green when healthy */}
+          {(()=>{const FC:Record<string,string>={out_of_stock:T.redSystems,low_inv:'#FF8A00',past_cadence:T.yellow,aging:T.statusWarn};const railColor=computedFlag?FC[computedFlag]||T.yellow:T.green;return <div style={{alignSelf:'stretch',background:railColor,opacity:computedFlag?0.85:0.2}}/>;})()}
 
           {/* Logo */}
           <div style={{padding:'12px 0 12px 16px'}}>
@@ -780,8 +823,6 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
               <span style={{color:T.textMuted}}>{org.market_state}{org.city?` · ${org.city}`:''}</span>
               {org.tier&&<><span style={{color:T.borderStrong}}>·</span><span style={{color:tierColor(org.tier),letterSpacing:'0.12em'}}>Tier {org.tier}</span></>}
               {org.market_rank&&<><span style={{color:T.borderStrong}}>·</span><span style={{color:T.cyan,letterSpacing:'0.10em'}}>#{org.market_rank} {org.market_state}</span></>}
-              <span style={{color:T.borderStrong}}>·</span>
-              <span style={{color:status.color,letterSpacing:'0.14em'}}>● {status.label}</span>
             </div>
           </div>
 
