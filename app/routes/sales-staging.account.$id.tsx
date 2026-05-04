@@ -57,23 +57,14 @@ export async function loader({request, context, params}: LoaderFunctionArgs) {
     fetch(`${base}/rest/v1/organizations?id=eq.${id}&select=*,contacts(*)`, {headers: h}),
     fetch(`${base}/rest/v1/org_notes?organization_id=eq.${id}&order=created_at.desc&limit=100`, {headers: h}),
     fetch(`${base}/rest/v1/onboarding_steps?organization_id=eq.${id}&order=step_key.asc`, {headers: h}),
-    fetch(`${base}/rest/v1/leaflink_orders?organization_id=eq.${id}&is_sample_order=eq.false&status=not.in.(Cancelled,Rejected)&select=total_amount,order_date&order=order_date.asc`, {headers: h}),
+    fetch(`${base}/rest/v1/sales_orders?organization_id=eq.${id}&is_sample_order=eq.false&status=not.in.(Cancelled,Rejected)&select=total_amount,order_date&order=order_date.asc`, {headers: h}),
   ]);
   const [orgRows, notes, steps, orderData] = await Promise.all([orgRes.json(), notesRes.json(), stepsRes.json(), ordersRes.json()]);
   const org = orgRows?.[0] || null;
   const orderRows = Array.isArray(orderData) ? orderData : [];
   const totalOrderRevenue = orderRows.reduce((s:number,o:any)=>s+(parseFloat(String(o.total_amount||0).replace(/[$,]/g,''))||0),0);
-
-  // Compute reorder cadence from actual order dates (avg days between orders)
-  let computedCadence: number | null = null;
-  const datedOrders = orderRows.filter((o:any) => o.order_date).map((o:any) => new Date(o.order_date).getTime()).sort((a:number,b:number)=>a-b);
-  if (datedOrders.length >= 2) {
-    const gaps: number[] = [];
-    for (let i = 1; i < datedOrders.length; i++) {
-      gaps.push((datedOrders[i] - datedOrders[i-1]) / 86400000);
-    }
-    computedCadence = Math.round(gaps.reduce((s,g)=>s+g,0) / gaps.length);
-  }
+  // Use stored reorder_cadence_days from org (kept fresh by recalcOrgAfterOrder on every order change)
+  const computedCadence: number | null = org?.reorder_cadence_days ?? null;
   return json({authenticated: true, org, contacts: org?.contacts || [], notes: Array.isArray(notes)?notes:[], steps: Array.isArray(steps)?steps:[], totalOrderRevenue, computedCadence});
 }
 
@@ -199,7 +190,14 @@ export default function AccountDetail() {
                     {org.lifecycle_stage}
                   </span>
                   {org.tier && <span style={{padding:'5px 10px', border:`1px solid ${tc}`, color:tc, fontFamily:'JetBrains Mono,monospace', fontSize:11, letterSpacing:'0.18em', textTransform:'uppercase'}}>Tier {org.tier}</span>}
-                  {org.reorder_status && org.reorder_status !== 'ok' && <span style={{padding:'5px 10px', background:'#000', border:`1px solid ${T.borderStrong}`, color:T.statusWarn, fontFamily:'JetBrains Mono,monospace', fontSize:11, letterSpacing:'0.16em', textTransform:'uppercase'}}>Reorder {org.reorder_status}</span>}
+                  {(()=>{
+                    const rs=org.reorder_status;
+                    if (!rs||rs==='healthy') return null;
+                    const FC:Record<string,string>={out_of_stock:T.redSystems,low_inv:'#FF8A00',past_cadence:T.yellow,aging:T.statusWarn};
+                    const FL:Record<string,string>={out_of_stock:'OUT OF STOCK',low_inv:'LOW INVENTORY',past_cadence:'PAST CADENCE',aging:'AGING'};
+                    const fc=FC[rs]||T.statusWarn; const fl=FL[rs]||rs.toUpperCase();
+                    return <span style={{display:'inline-flex',alignItems:'center',gap:7,padding:'5px 10px',border:`1px solid ${fc}`,color:fc,fontFamily:'JetBrains Mono,monospace',fontSize:11,letterSpacing:'0.18em',textTransform:'uppercase',background:`${fc}12`}}><span style={{width:6,height:6,borderRadius:'50%',background:fc,flexShrink:0}}/>{fl}</span>;
+                  })()}
                 </div>
                 <div style={{marginTop:10, fontSize:12, color:T.textSubtle, letterSpacing:'0.04em', display:'flex', gap:18, flexWrap:'wrap', fontFamily:'JetBrains Mono,monospace'}}>
                   {org.street_address && <span>{org.street_address}{org.city?`, ${org.city}`:''} {org.market_state||''} {org.zip||''}</span>}

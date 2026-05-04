@@ -19,7 +19,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
 
   const h = {apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`};
   const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/leaflink_orders?organization_id=eq.${org_id}&is_sample_order=eq.false&order=order_date.desc.nullslast&limit=50`,
+    `${env.SUPABASE_URL}/rest/v1/sales_orders?organization_id=eq.${org_id}&is_sample_order=eq.false&order=order_date.desc.nullslast&limit=50`,
     {headers: h},
   );
   const orders = await res.json().catch(() => []);

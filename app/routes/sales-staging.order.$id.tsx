@@ -64,7 +64,7 @@ export async function loader({request, context, params}: LoaderFunctionArgs) {
   const base = env.SUPABASE_URL;
 
   const [orderRes, linesRes] = await Promise.all([
-    fetch(`${base}/rest/v1/leaflink_orders?id=eq.${id}&select=*`, {headers: h}),
+    fetch(`${base}/rest/v1/sales_orders?id=eq.${id}&select=*`, {headers: h}),
     fetch(`${base}/rest/v1/leaflink_order_lines?order_id=eq.${id}&order=product_name.asc`, {headers: h}),
   ]);
 

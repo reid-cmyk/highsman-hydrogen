@@ -15,13 +15,21 @@ export type OrgRow = {
   lifecycle_stage: string;
   tier: string | null;
   last_order_date: string | null;
+  last_order_amount: number | null;
+  orders_count: number;
+  reorder_cadence_days: number | null;
   tags: string[];
   online_menus: string[];
   license_number: string | null;
   zoho_account_id: string | null;
   do_not_contact: boolean;
   risk_of_loss: boolean;
+  // 'healthy' | 'aging' | 'past_cadence' | 'low_inv' | 'out_of_stock'
   reorder_status: string;
+  reorder_flag_aging_at: string | null;
+  reorder_flag_past_cadence_at: string | null;
+  reorder_flag_low_inv_at: string | null;
+  reorder_flag_out_of_stock_at: string | null;
   market_rank: number | null;
   market_total: number | null;
   market_revenue_90d: number | null;
@@ -72,8 +80,12 @@ export async function fetchOrgs(
   const base = `${env.SUPABASE_URL}/rest/v1/organizations`;
   const select = [
     'id','name','market_state','city','phone','website',
-    'lifecycle_stage','tier','last_order_date','tags','online_menus',
-    'license_number','zoho_account_id','do_not_contact','risk_of_loss','reorder_status',
+    'lifecycle_stage','tier','last_order_date','last_order_amount','orders_count',
+    'reorder_cadence_days','tags','online_menus',
+    'license_number','zoho_account_id','do_not_contact','risk_of_loss',
+    'reorder_status','reorder_flag_aging_at','reorder_flag_past_cadence_at',
+    'reorder_flag_low_inv_at','reorder_flag_out_of_stock_at',
+    'market_rank','market_total','market_revenue_90d',
     'contacts(id,first_name,last_name,full_name,email,phone,mobile,job_role,is_primary_buyer)',
   ].join(',');
 

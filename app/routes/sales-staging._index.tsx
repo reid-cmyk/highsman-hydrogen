@@ -104,7 +104,7 @@ export async function action({request, context}: ActionFunctionArgs) {
     const website=String(fd.get('website')||'');
     if (!name) return json({ok:false,error:'name required'},{status:400});
     const sbH={apikey:env.SUPABASE_SERVICE_KEY,Authorization:`Bearer ${env.SUPABASE_SERVICE_KEY}`,'Content-Type':'application/json',Prefer:'return=representation'};
-    const body:any={name,market_state:state,source:'manual',lifecycle_stage:'untargeted',is_multi_state:false,do_not_contact:false,risk_of_loss:false,risk_of_loss_threshold_days:60,sparkplug_enabled:false,online_menus:[],tags:[],allow_split_promos:false,reorder_status:'ok'};
+    const body:any={name,market_state:state,source:'manual',lifecycle_stage:'untargeted',is_multi_state:false,do_not_contact:false,risk_of_loss:false,risk_of_loss_threshold_days:60,sparkplug_enabled:false,online_menus:[],tags:[],allow_split_promos:false};
     if (city) body.city=city;
     if (street) body.street_address=street;
     if (zip) body.zip=zip;
@@ -523,7 +523,7 @@ function Dashboard({data}:{data:any}) {
   },[orgs,search]);
 
   const activeCount=stageCounts['active']||0;
-  const reorderDue=orgs.filter(o=>o.reorder_status==='due').length;
+  const reorderDue=orgs.filter(o=>o.reorder_status&&o.reorder_status!=='healthy').length;
   const slipping=orgs.filter(o=>{const d=daysSince(o.last_order_date);return d!==null&&d>30&&d<=60;}).length;
   const atRisk=orgs.filter(o=>{const d=daysSince(o.last_order_date);return d!==null&&d>60;}).length;
   const flagged=orgs.filter(o=>(o.tags as any)?.includes('pete-followup')).length;
@@ -764,6 +764,14 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
               {org.market_rank&&<span style={{padding:'2px 6px',border:`1px solid ${T.cyan}`,color:T.cyan,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.14em'}}>#{org.market_rank} {org.market_state}</span>}
               {isFlagged&&<span style={{display:'inline-flex',alignItems:'center',gap:4,padding:'2px 6px',border:`1px solid ${T.magenta}`,color:T.magenta,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.14em',textTransform:'uppercase'}}><FlagI s={9}/> PETE</span>}
               {isProspecting&&<span style={{padding:'2px 6px',border:`1px solid ${T.cyan}`,color:T.cyan,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.14em'}}>→ PROSPECTING</span>}
+              {(()=>{
+                const rs=org.reorder_status;
+                if (!rs||rs==='healthy') return null;
+                const FC:Record<string,string>={out_of_stock:T.redSystems,low_inv:'#FF8A00',past_cadence:T.yellow,aging:T.statusWarn};
+                const FL:Record<string,string>={out_of_stock:'OUT OF STOCK',low_inv:'LOW INV',past_cadence:'PAST CADENCE',aging:'AGING'};
+                const fc=FC[rs]||T.textFaint; const fl=FL[rs]||rs.toUpperCase();
+                return <span style={{display:'inline-flex',alignItems:'center',gap:4,padding:'2px 7px',border:`1px solid ${fc}`,color:fc,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.14em',textTransform:'uppercase',background:`${fc}15`}}><span style={{width:4,height:4,borderRadius:'50%',background:fc,flexShrink:0}}/>{fl}</span>;
+              })()}
             </div>
             <div style={{display:'flex',alignItems:'center',gap:12,marginTop:6,fontFamily:'JetBrains Mono,monospace',fontSize:11,letterSpacing:'0.04em'}}>
               <span style={{color:T.textMuted}}>{org.market_state}{org.city?` · ${org.city}`:''}</span>
