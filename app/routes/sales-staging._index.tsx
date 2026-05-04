@@ -45,7 +45,8 @@ const STATUS: Record<string, {color:string; label:string}> = {
   cold:{color:T.redAlert,   label:'COLD'},
   new: {color:T.cyan,       label:'ONBOARDING'},
 };
-function tierColor(_t: string|null) { return T.textSubtle; }
+const TIER_COLOR: Record<string,string> = {A: T.yellow, B: T.cyan, C: T.magenta};
+function tierColor(t: string|null) { return (t && TIER_COLOR[t]) || T.textFaint; }
 function daysSince(d: string|null): number|null {
   if (!d) return null;
   return Math.floor((Date.now()-new Date(d).getTime())/86400000);
@@ -760,7 +761,7 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
           <div style={{padding:'12px 20px 12px 14px',minWidth:0}}>
             <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
               <a href={`/sales-staging/account/${org.id}`} style={{fontFamily:'Teko,sans-serif',fontSize:22,letterSpacing:'0.06em',fontWeight:500,color:T.text,textTransform:'uppercase',lineHeight:1,textDecoration:'none'}}>{org.name}</a>
-              {org.tier&&<span style={{padding:'2px 6px',border:`1px solid ${T.textSubtle}`,color:T.textSubtle,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.16em',textTransform:'uppercase'}}>TIER {org.tier}</span>}
+              {org.tier&&(()=>{const tc=tierColor(org.tier);return <span style={{padding:'2px 6px',border:`1px solid ${tc}`,color:tc,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.16em',textTransform:'uppercase',background:`${tc}12`}}>TIER {org.tier}</span>;})()}
               {org.market_rank&&<span style={{padding:'2px 6px',border:`1px solid ${T.cyan}`,color:T.cyan,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.14em'}}>#{org.market_rank} {org.market_state}</span>}
               {isFlagged&&<span style={{display:'inline-flex',alignItems:'center',gap:4,padding:'2px 6px',border:`1px solid ${T.magenta}`,color:T.magenta,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.14em',textTransform:'uppercase'}}><FlagI s={9}/> PETE</span>}
               {isProspecting&&<span style={{padding:'2px 6px',border:`1px solid ${T.cyan}`,color:T.cyan,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.14em'}}>→ PROSPECTING</span>}

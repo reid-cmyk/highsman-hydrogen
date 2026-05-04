@@ -70,6 +70,7 @@ export async function recalcOrgAfterOrder(env: any, org_id: string): Promise<voi
         reorder_flag_past_cadence_at: null,
         reorder_flag_low_inv_at:   null,
         reorder_flag_out_of_stock_at: null,
+        reorder_suppressed:        false,  // new order unsuppresses the account
         updated_at:                new Date().toISOString(),
       }),
     },

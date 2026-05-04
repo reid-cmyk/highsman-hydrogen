@@ -30,6 +30,7 @@ export type OrgRow = {
   reorder_flag_past_cadence_at: string | null;
   reorder_flag_low_inv_at: string | null;
   reorder_flag_out_of_stock_at: string | null;
+  reorder_suppressed: boolean;
   market_rank: number | null;
   market_total: number | null;
   market_revenue_90d: number | null;
@@ -84,7 +85,7 @@ export async function fetchOrgs(
     'reorder_cadence_days','tags','online_menus',
     'license_number','zoho_account_id','do_not_contact','risk_of_loss',
     'reorder_status','reorder_flag_aging_at','reorder_flag_past_cadence_at',
-    'reorder_flag_low_inv_at','reorder_flag_out_of_stock_at',
+    'reorder_flag_low_inv_at','reorder_flag_out_of_stock_at','reorder_suppressed',
     'market_rank','market_total','market_revenue_90d',
     'contacts(id,first_name,last_name,full_name,email,phone,mobile,job_role,is_primary_buyer)',
   ].join(',');

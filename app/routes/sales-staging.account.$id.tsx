@@ -623,7 +623,7 @@ function FieldsPanel({org}: {org: any}) {
       <TwoCol>
         <SelectField label="Lifecycle" field="lifecycle_stage" value={org.lifecycle_stage} orgId={org.id} options={['active','untargeted','churned','dormant','prospect','contacted','qualified','sample_sent','first_order_pending','reorder_due']} />
         <SelectField label="Tier" field="tier" value={org.tier||''} orgId={org.id} options={['','A','B','C']} />
-        <SelectField label="Reorder status" field="reorder_status" value={org.reorder_status||'ok'} orgId={org.id} options={['ok','due','overdue']} />
+        {/* Reorder status is system-managed — shown as read-only badge in hero */}
         <EditableField label="Last order date" field="last_order_date" value={org.last_order_date} orgId={org.id} mono hint="YYYY-MM-DD" />
       </TwoCol>
 
