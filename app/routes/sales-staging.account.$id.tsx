@@ -886,7 +886,7 @@ function OnboardingPanel({orgId, steps, refresh, marketState}: {orgId:string; st
   };
 
   return (
-    <div style={{background:T.surface, border:`1px solid ${T.border}`}}>
+    <div id="onboarding" style={{background:T.surface, border:`1px solid ${T.border}`}}>
       <SectionHead title="Onboarding" source={`${doneCount}/${allKeys.length} steps · ${Math.round(pct)}%`} />
       <div style={{padding:'14px 16px 6px'}}>
         <div style={{height:4, background:T.surfaceElev, position:'relative'}}>

@@ -376,13 +376,6 @@ function OnboardingCard({org}: {org: OnboardingOrg}) {
             {tc&&<><span style={{color:T.borderStrong}}>·</span><span style={{color:tc}}>Tier {org.tier}</span></>}
             {org.market_rank&&<><span style={{color:T.borderStrong}}>·</span><span style={{color:T.cyan}}>#{org.market_rank} {org.market_state}</span></>}
           </div>
-          {/* Next step */}
-          {org.nextStep&&org.stage!=='complete'&&(
-            <div style={{marginTop:5,fontFamily:'JetBrains Mono,monospace',fontSize:10,color:T.yellow,letterSpacing:'0.10em',display:'flex',alignItems:'center',gap:5}}>
-              <span style={{color:T.borderStrong}}>→</span>
-              <span>{org.nextStep}</span>
-            </div>
-          )}
           {org.stage==='complete'&&(
             <div style={{marginTop:5,fontFamily:'JetBrains Mono,monospace',fontSize:10,color:T.green,letterSpacing:'0.10em'}}>✓ Onboarding complete</div>
           )}
@@ -404,7 +397,7 @@ function OnboardingCard({org}: {org: OnboardingOrg}) {
           </div>
         </div>
 
-        {/* Progress */}
+        {/* Progress column — bar + view checklist link */}
         <div style={{padding:'12px 16px',borderLeft:`1px solid ${T.border}`,height:'100%',display:'flex',flexDirection:'column',justifyContent:'center',gap:6}}>
           <div style={{display:'flex',alignItems:'baseline',justifyContent:'space-between'}}>
             <div style={{fontFamily:'Teko,sans-serif',fontSize:10,letterSpacing:'0.26em',color:T.textFaint,textTransform:'uppercase'}}>Progress</div>
@@ -412,41 +405,55 @@ function OnboardingCard({org}: {org: OnboardingOrg}) {
               {org.doneCount}/{org.totalSteps}
             </span>
           </div>
-          {/* Progress bar */}
           <div style={{height:4,background:T.surfaceElev,position:'relative',borderRadius:2}}>
             <div style={{position:'absolute',left:0,top:0,bottom:0,width:`${org.pct}%`,background:org.stage==='complete'?T.green:T.yellow,borderRadius:2,transition:'width 300ms'}}/>
           </div>
-          <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:9.5,color:T.textFaint,letterSpacing:'0.08em'}}>
-            {Math.round(org.pct)}% complete
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:9.5,color:T.textFaint,letterSpacing:'0.08em'}}>
+              {Math.round(org.pct)}% complete
+            </span>
+            {/* View checklist — scrolls to onboarding section on account detail */}
+            <a href={`/sales-staging/account/${org.id}#onboarding`}
+              style={{fontFamily:'JetBrains Mono,monospace',fontSize:9.5,color:T.cyan,letterSpacing:'0.08em',textDecoration:'none',display:'inline-flex',alignItems:'center',gap:3}}>
+              checklist ↗
+            </a>
           </div>
+          {org.nextStep&&org.stage!=='complete'&&(
+            <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:9,color:T.textFaint,letterSpacing:'0.06em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+              → {org.nextStep}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Action row */}
-      <CardActions
-        phone={phone}
-        email={email}
-        isFlagged={isFlagged}
-        orgId={org.id}
-        onBrief={openBrief}
-        onFlag={toggleFlag}
-        onTraining={sendTraining}
-      />
-      {/* Onboarding-specific quick actions */}
-      <div style={{display:'flex',gap:0,borderTop:`1px solid ${T.border}66`,padding:'0 16px 0 76px',background:T.bg}}>
-        <button
-          type="button"
-          onClick={sendAssets}
-          disabled={alreadySentAssets || assetsFetcher.state !== 'idle'}
-          style={{display:'inline-flex',alignItems:'center',gap:6,height:30,padding:'0 14px',background:alreadySentAssets?'rgba(0,232,122,0.08)':'transparent',border:'none',borderRight:`1px solid ${T.border}66`,color:alreadySentAssets?T.green:T.cyan,fontFamily:'Teko,sans-serif',fontSize:12,letterSpacing:'0.16em',cursor:alreadySentAssets?'default':'pointer',opacity:assetsFetcher.state!=='idle'?0.5:1}}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-          {alreadySentAssets ? '✓ ASSETS SENT' : 'SEND ASSETS'}
-        </button>
-        <a href={`/sales-staging/account/${org.id}#onboarding`}
-          style={{display:'inline-flex',alignItems:'center',gap:6,height:30,padding:'0 14px',color:T.textFaint,fontFamily:'Teko,sans-serif',fontSize:12,letterSpacing:'0.16em',textDecoration:'none',borderRight:`1px solid ${T.border}66`}}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 13h6M9 17h4"/></svg>
-          VIEW CHECKLIST
-        </a>
+      {/* Action row — standard buttons left, SEND ASSETS + SEND TRAINING right */}
+      <div style={{display:'flex',alignItems:'stretch',borderTop:`1px solid ${T.border}`}}>
+        <div style={{flex:1}}>
+          <CardActions
+            phone={phone}
+            email={email}
+            isFlagged={isFlagged}
+            orgId={org.id}
+            onBrief={openBrief}
+            onFlag={toggleFlag}
+          />
+        </div>
+        {/* Right-side onboarding actions */}
+        <div style={{display:'flex',alignItems:'center',gap:0,borderLeft:`1px solid ${T.border}`,flexShrink:0}}>
+          <button
+            type="button" onClick={sendAssets}
+            disabled={alreadySentAssets || assetsFetcher.state !== 'idle'}
+            style={{height:'100%',padding:'0 14px',background:alreadySentAssets?'rgba(0,232,122,0.06)':'transparent',border:'none',borderRight:`1px solid ${T.border}`,color:alreadySentAssets?T.green:T.cyan,fontFamily:'Teko,sans-serif',fontSize:12,letterSpacing:'0.16em',cursor:alreadySentAssets?'default':'pointer',opacity:assetsFetcher.state!=='idle'?0.5:1,display:'inline-flex',alignItems:'center',gap:5,whiteSpace:'nowrap'}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+            {alreadySentAssets ? '✓ ASSETS SENT' : 'SEND ASSETS'}
+          </button>
+          <button
+            type="button" onClick={sendTraining}
+            style={{height:'100%',padding:'0 14px',background:'transparent',border:'none',color:T.textSubtle,fontFamily:'Teko,sans-serif',fontSize:12,letterSpacing:'0.16em',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:5,whiteSpace:'nowrap'}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            SEND TRAINING
+          </button>
+        </div>
       </div>
     </div>
   );
