@@ -804,27 +804,13 @@ function OrgOrdersPanel({orgId, orgName, marketState}: {orgId:string; orgName:st
 }
 
 // ─── Onboarding Panel ─────────────────────────────────────────────────────────
-// Canonical 12-step onboarding sequence. popup_booked is NJ-only.
-export const ONBOARDING_STEPS: {key:string; label:string; njOnly?:boolean}[] = [
-  {key:'contacts_added',          label:'Contacts added to CRM'},
-  {key:'digital_assets_sent',     label:'Digital assets sent'},
-  {key:'social_story_graphic',    label:'Social story graphic created'},
-  {key:'samples_sent',            label:'Samples sent with order'},
-  {key:'promo_scheduled',         label:'Launch promo scheduled'},
-  {key:'merchandised',            label:'Merchandised'},
-  {key:'budtenders_trained',      label:'Budtenders trained'},
-  {key:'popup_booked',            label:'Pop-up booked', njOnly:true},
-  {key:'store_locator_confirmed', label:'Store locator confirmed'},
-  {key:'menu_accurate',           label:'Menu accuracy confirmed'},
-  {key:'social_story_posted',     label:'Social story posted'},
-  {key:'feedback_obtained',       label:'Initial feedback obtained'},
-];
+import {ONBOARDING_STEPS, stepsForMarket} from '~/lib/onboarding-steps';
 
 function OnboardingPanel({orgId, steps, refresh, marketState}: {orgId:string; steps:any[]; refresh:()=>void; marketState?:string}) {
   const fetcher = useFetcher();
   const stepsMap = new Map(steps.map((s:any) => [s.step_key, s]));
-  const isNJ = marketState === 'NJ';
-  const allKeys = ONBOARDING_STEPS.filter(s => !s.njOnly || isNJ).map(s => s.key);
+  const relevantSteps = stepsForMarket(marketState||null);
+  const allKeys = relevantSteps.map(s => s.key);
   const doneCount = allKeys.filter(k => stepsMap.get(k)?.status === 'complete').length;
   const pct = allKeys.length > 0 ? (doneCount / allKeys.length) * 100 : 0;
 
@@ -844,7 +830,7 @@ function OnboardingPanel({orgId, steps, refresh, marketState}: {orgId:string; st
           <div style={{position:'absolute', left:0, top:0, bottom:0, width:`${pct}%`, background:T.green, transition:'width 300ms'}} />
         </div>
       </div>
-      {ONBOARDING_STEPS.filter(s => !s.njOnly || isNJ).map((stepDef) => {
+      {relevantSteps.map((stepDef) => {
         const step = stepsMap.get(stepDef.key);
         const done = step?.status === 'complete';
         return (

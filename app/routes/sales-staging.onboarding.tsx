@@ -14,7 +14,7 @@ import {useState, useEffect} from 'react';
 import {isStagingAuthed} from '~/lib/staging-auth';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
 import {CardActions} from '~/components/SalesFloorCardActions';
-import {ONBOARDING_STEPS} from '~/routes/sales-staging.account.$id';
+import {ONBOARDING_STEPS, stepsForMarket} from '~/lib/onboarding-steps';
 
 export const handle = {hideHeader: true, hideFooter: true};
 export const meta: MetaFunction = () => [
@@ -114,8 +114,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   if (!Array.isArray(raw)) return json({authenticated:true, orgs:[]});
 
   const orgs: OnboardingOrg[] = raw.map(org => {
-    const isNJ = org.market_state === 'NJ';
-    const relevantSteps = ONBOARDING_STEPS.filter(s => !s.njOnly || isNJ);
+    const relevantSteps = stepsForMarket(org.market_state);
     const totalSteps = relevantSteps.length;
     const stepsMap = new Map((org.onboarding_steps||[]).map((s:any)=>[s.step_key, s]));
     const doneCount = relevantSteps.filter(s => stepsMap.get(s.key)?.status === 'complete').length;
