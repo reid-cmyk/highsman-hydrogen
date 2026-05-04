@@ -16,8 +16,9 @@
 
 import type {LoaderFunctionArgs, ActionFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
-import {useLoaderData, useFetcher} from '@remix-run/react';
-import {useState, useEffect} from 'react';
+import {useLoaderData, useFetcher, useRevalidator} from '@remix-run/react';
+import {useState, useEffect, useCallback} from 'react';
+import {CardActions} from '~/components/SalesFloorCardActions';
 import {isStagingAuthed} from '~/lib/staging-auth';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
 
@@ -112,6 +113,22 @@ export async function action({request, context}: ActionFunctionArgs) {
       body: JSON.stringify({reorder_suppressed: true, updated_at: new Date().toISOString()}),
     });
     return json({ok: true, suppressed: true});
+  }
+
+  if (intent === 'churn') {
+    await fetch(`${env.SUPABASE_URL}/rest/v1/organizations?id=eq.${org_id}`, {
+      method: 'PATCH', headers: h,
+      body: JSON.stringify({
+        lifecycle_stage: 'churned',
+        reorder_status: null,
+        reorder_flag_aging_at: null,
+        reorder_flag_past_cadence_at: null,
+        reorder_flag_low_inv_at: null,
+        reorder_flag_out_of_stock_at: null,
+        updated_at: new Date().toISOString(),
+      }),
+    });
+    return json({ok: true, churned: true});
   }
 
   return json({ok: false, error: 'unknown intent'}, {status: 400});
@@ -423,7 +440,7 @@ export default function ReordersPage() {
           </div>
         )}
         {filtered.map(item => (
-          <ReorderCard key={item.id} item={item} onSuppress={id => setSuppressed(prev => new Set([...prev, id]))} />
+          <ReorderCard key={item.id} item={item} onRemove={id => setSuppressed(prev => new Set([...prev, id]))} />
         ))}
       </div>
 
@@ -437,19 +454,19 @@ export default function ReordersPage() {
 }
 
 // ─── Reorder Card ─────────────────────────────────────────────────────────────
-function ReorderCard({item, onSuppress}: {item: FeedItem; onSuppress: (id: string) => void}) {
-  const fetcher = useFetcher();
+function ReorderCard({item, onRemove}: {item: FeedItem; onRemove: (id: string) => void}) {
+  const fetcher    = useFetcher();
   const [logoFailed, setLogoFailed] = useState(false);
-  const [hovered, setHovered]       = useState(false);
+  const [hovered,    setHovered]    = useState(false);
 
   const flagMeta  = FLAG_META[item.active_flag] || FLAG_META.healthy;
   const flagColor = flagMeta.color;
   const tc        = item.tier ? (TIER_COLOR[item.tier] || T.textFaint) : null;
 
   const daysColor = item.days_since === null ? T.cyan
-                  : item.days_since <= 30  ? T.green
-                  : item.days_since <= 60  ? T.statusWarn
-                  : T.redSystems;
+    : item.days_since <= 30 ? T.green
+    : item.days_since <= 60 ? T.statusWarn
+    : T.redSystems;
 
   const domain = item.website ? (() => {
     try { return new URL(item.website.startsWith('http') ? item.website : `https://${item.website}`).hostname.replace(/^www\./, ''); }
@@ -461,21 +478,21 @@ function ReorderCard({item, onSuppress}: {item: FeedItem; onSuppress: (id: strin
   const email = item.primary_contact_email;
 
   const lastFlagTime = item.last_flagged_at
-    ? new Date(item.last_flagged_at).toLocaleDateString('en-US', {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'})
+    ? new Date(item.last_flagged_at).toLocaleDateString('en-US', {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'})
     : null;
 
-  const handleSuppress = () => {
-    onSuppress(item.id);
+  const submitIntent = useCallback((intent: string) => {
+    onRemove(item.id);
     const fd = new FormData();
-    fd.set('intent', 'suppress');
+    fd.set('intent', intent);
     fd.set('org_id', item.id);
     fetcher.submit(fd, {method: 'post'});
-  };
+  }, [item.id, onRemove, fetcher]);
 
   return (
     <div
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-      style={{background: hovered ? T.surfaceElev : T.surface, borderTop: `1px solid ${T.border}`, transition: 'background 120ms'}}>
+      style={{background: hovered ? T.surfaceElev : T.surface, borderTop:`1px solid ${T.border}`, transition:'background 120ms'}}>
 
       {/* Main grid */}
       <div style={{display:'grid', gridTemplateColumns:'4px 56px 1fr 130px 160px', alignItems:'center', gap:0, minHeight:72}}>
@@ -494,36 +511,25 @@ function ReorderCard({item, onSuppress}: {item: FeedItem; onSuppress: (id: strin
 
         {/* Identity */}
         <div style={{padding:'12px 20px 12px 14px', minWidth:0}}>
+          {/* Name + flag badge only — no tier/rank pills */}
           <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
             <a href={`/sales-staging/account/${item.id}`}
               style={{fontFamily:'Teko,sans-serif',fontSize:22,letterSpacing:'0.06em',fontWeight:500,color:T.text,textTransform:'uppercase',lineHeight:1,textDecoration:'none'}}>
               {item.name}
             </a>
-            {/* Flag badge */}
             <span style={{display:'inline-flex',alignItems:'center',gap:5,padding:'2px 8px',border:`1px solid ${flagColor}`,color:flagColor,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.16em',textTransform:'uppercase',background:`${flagColor}15`}}>
               <span style={{width:5,height:5,borderRadius:'50%',background:flagColor,flexShrink:0}} />
               {flagMeta.label}
             </span>
-            {/* Tier */}
-            {tc && <span style={{padding:'2px 6px',border:`1px solid ${tc}`,color:tc,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.16em',background:`${tc}12`}}>TIER {item.tier}</span>}
-            {/* Market rank */}
-            {item.market_rank && (
-              <span style={{padding:'2px 6px',border:`1px solid ${T.cyan}33`,color:T.cyan,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.14em'}}>
-                #{item.market_rank} {item.market_state}
-              </span>
-            )}
           </div>
-          {/* Location + flagged time */}
-          <div style={{display:'flex',alignItems:'center',gap:10,marginTop:5,fontFamily:'JetBrains Mono,monospace',fontSize:10.5,color:T.textMuted,letterSpacing:'0.04em'}}>
+          {/* Meta row: state · city · tier (text) · rank (text) · flagged time — no pill clutter */}
+          <div style={{display:'flex',alignItems:'center',gap:8,marginTop:5,fontFamily:'JetBrains Mono,monospace',fontSize:10.5,color:T.textMuted,letterSpacing:'0.04em',flexWrap:'wrap'}}>
             <span>{item.market_state}{item.city ? ` · ${item.city}` : ''}</span>
-            {lastFlagTime && (
-              <>
-                <span style={{color:T.borderStrong}}>|</span>
-                <span style={{color:T.textFaint}}>flagged {lastFlagTime}</span>
-              </>
-            )}
+            {tc && <><span style={{color:T.borderStrong}}>·</span><span style={{color:tc}}>Tier {item.tier}</span></>}
+            {item.market_rank && <><span style={{color:T.borderStrong}}>·</span><span style={{color:T.cyan}}>#{item.market_rank} {item.market_state}</span></>}
+            {lastFlagTime && <><span style={{color:T.borderStrong}}>|</span><span style={{color:T.textFaint}}>flagged {lastFlagTime}</span></>}
           </div>
-          {/* Contact */}
+          {/* Contact line */}
           {(item.primary_contact_name || phone || email) && (
             <div style={{display:'flex',alignItems:'center',gap:10,marginTop:3,fontFamily:'JetBrains Mono,monospace',fontSize:10.5,color:T.textFaint}}>
               {item.primary_contact_name && <span style={{color:T.textSubtle}}>{item.primary_contact_name}</span>}
@@ -533,7 +539,7 @@ function ReorderCard({item, onSuppress}: {item: FeedItem; onSuppress: (id: strin
           )}
         </div>
 
-        {/* Days since */}
+        {/* Days since last order */}
         <div style={{padding:'12px 16px',borderLeft:`1px solid ${T.border}`,height:'100%',display:'flex',flexDirection:'column',justifyContent:'center'}}>
           <div style={{fontFamily:'Teko,sans-serif',fontSize:10,letterSpacing:'0.26em',color:T.textFaint,textTransform:'uppercase',marginBottom:2}}>Last order</div>
           <div style={{display:'flex',alignItems:'baseline',gap:4}}>
@@ -567,39 +573,15 @@ function ReorderCard({item, onSuppress}: {item: FeedItem; onSuppress: (id: strin
         </div>
       </div>
 
-      {/* Action row — matches Account List style */}
-      <div style={{display:'flex',gap:0,borderTop:`1px solid ${T.border}88`,padding:'0 16px 0 76px',alignItems:'center'}}>
-        {phone && (
-          <a href={`tel:${phone}`} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',color:T.textFaint,fontFamily:'JetBrains Mono,monospace',fontSize:10.5,letterSpacing:'0.10em',textDecoration:'none',borderRight:`1px solid ${T.border}88`}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>
-            CALL
-          </a>
-        )}
-        {phone && (
-          <a href={`sms:${phone}`} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',color:T.textFaint,fontFamily:'JetBrains Mono,monospace',fontSize:10.5,letterSpacing:'0.10em',textDecoration:'none',borderRight:`1px solid ${T.border}88`}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M3 5h18v12h-8l-5 4v-4H3z"/></svg>
-            TEXT
-          </a>
-        )}
-        {email && (
-          <a href={`mailto:${email}`} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',color:T.textFaint,fontFamily:'JetBrains Mono,monospace',fontSize:10.5,letterSpacing:'0.10em',textDecoration:'none',borderRight:`1px solid ${T.border}88`}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M3 6h18v12H3zM3 6l9 7 9-7"/></svg>
-            EMAIL
-          </a>
-        )}
-        <a href={`/sales-staging/account/${item.id}`} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',color:T.textFaint,fontFamily:'JetBrains Mono,monospace',fontSize:10.5,letterSpacing:'0.10em',textDecoration:'none',borderRight:`1px solid ${T.border}88`}}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><rect x="3" y="1" width="10" height="14" rx="1"/><path d="M6 5h4M6 8h4M6 11h2"/></svg>
-          VIEW ACCOUNT
-        </a>
-        {/* Suppress — removes from feed until next order */}
-        <button
-          onClick={handleSuppress}
-          disabled={fetcher.state !== 'idle'}
-          style={{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',color:T.textFaint,fontFamily:'JetBrains Mono,monospace',fontSize:10.5,letterSpacing:'0.10em',background:'none',border:'none',cursor:'pointer',marginLeft:'auto',opacity:fetcher.state !== 'idle' ? 0.5 : 1}}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><path d="M4.93 4.93l14.14 14.14"/></svg>
-          SUPPRESS
-        </button>
-      </div>
+      {/* Shared CardActions — same as Accounts page + Suppress + Churn */}
+      <CardActions
+        phone={phone}
+        email={email}
+        isFlagged={false}
+        orgId={item.id}
+        onSuppress={() => submitIntent('suppress')}
+        onChurn={() => submitIntent('churn')}
+      />
     </div>
   );
 }

@@ -11,6 +11,7 @@ import {useMemo, useState, useEffect, useRef, useCallback} from 'react';
 import {isStagingAuthed, buildStagingLoginCookie, buildStagingLogoutCookie, checkStagingPassword} from '~/lib/staging-auth';
 import type {OrgRow} from '~/lib/supabase-orgs';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
+import {CardActions, CardBtn, PhoneI, TextI, MailI, FlagI, BookI, StarI, SendI, BoxI} from '~/components/SalesFloorCardActions';
 
 export const handle = {hideHeader: true, hideFooter: true};
 export const meta: MetaFunction = () => [
@@ -55,16 +56,7 @@ function daysSince(d: string|null): number|null {
 // ─── Online menu options (from Zoho picklist) ─────────────────────────────────
 const ONLINE_MENU_OPTIONS = ['AIQ','Blaze','Cova','Dispense','Dutchie','Jane','Leafly','Mosaic','Nabis','Self Administrator','Sweed','Treez','Weedmaps'];
 
-// ─── Icons ────────────────────────────────────────────────────────────────────
-const Ico = ({d,size=14}:{d:string;size?:number}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" style={{display:'block',flexShrink:0}}><path d={d}/></svg>;
-const PhoneI  = ({s=14}:{s?:number}) => <Ico size={s} d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2z"/>;
-const TextI   = ({s=14}:{s?:number}) => <Ico size={s} d="M3 5h18v12h-8l-5 4v-4H3z"/>;
-const MailI   = ({s=14}:{s?:number}) => <Ico size={s} d="M3 6h18v12H3zM3 6l9 7 9-7"/>;
-const FlagI   = ({s=14}:{s?:number}) => <Ico size={s} d="M5 3v18M5 4h12l-2 4 2 4H5"/>;
-const BookI   = ({s=14}:{s?:number}) => <Ico size={s} d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5V4a1 1 0 0 1 1-1h15v18H6.5A2.5 2.5 0 0 1 4 19.5z"/>;
-const StarI   = ({s=14}:{s?:number}) => <Ico size={s} d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>;
-const SendI   = ({s=14}:{s?:number}) => <Ico size={s} d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>;
-const BoxI    = ({s=14}:{s?:number}) => <Ico size={s} d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>;
+// Icons imported from SalesFloorCardActions
 
 // ─── Action ───────────────────────────────────────────────────────────────────
 export async function action({request, context}: ActionFunctionArgs) {
@@ -709,6 +701,18 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
   const [logoFailed,setLogoFailed]=useState(false);
   const zohoIdNumeric=(org.zoho_account_id||'').replace('zcrm_','');
 
+  // Compute reorder flag live (same fallback logic as account detail)
+  const computedFlag: string|null = (() => {
+    const rs = org.reorder_status;
+    if (rs==='low_inv'||rs==='out_of_stock') return rs;
+    if (days!==null) {
+      const cadence: number|null = (org as any).reorder_cadence_days ?? null;
+      if (cadence!==null && days>=cadence) return 'past_cadence';
+      if (cadence===null && days>=45) return 'aging';
+    }
+    return rs&&rs!=='healthy' ? rs : null;
+  })();
+
   const flag=()=>{const fd=new FormData();fd.set('intent','flag_pete');fd.set('org_id',org.id);fetcher.submit(fd,{method:'post'});};
   const prospect=()=>{const fd=new FormData();fd.set('intent','prospect');fd.set('org_id',org.id);fetcher.submit(fd,{method:'post'});};
 
@@ -761,23 +765,23 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
           <div style={{padding:'12px 20px 12px 14px',minWidth:0}}>
             <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
               <a href={`/sales-staging/account/${org.id}`} style={{fontFamily:'Teko,sans-serif',fontSize:22,letterSpacing:'0.06em',fontWeight:500,color:T.text,textTransform:'uppercase',lineHeight:1,textDecoration:'none'}}>{org.name}</a>
-              {org.tier&&(()=>{const tc=tierColor(org.tier);return <span style={{padding:'2px 6px',border:`1px solid ${tc}`,color:tc,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.16em',textTransform:'uppercase',background:`${tc}12`}}>TIER {org.tier}</span>;})()}
-              {org.market_rank&&<span style={{padding:'2px 6px',border:`1px solid ${T.cyan}`,color:T.cyan,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.14em'}}>#{org.market_rank} {org.market_state}</span>}
-              {isFlagged&&<span style={{display:'inline-flex',alignItems:'center',gap:4,padding:'2px 6px',border:`1px solid ${T.magenta}`,color:T.magenta,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.14em',textTransform:'uppercase'}}><FlagI s={9}/> PETE</span>}
-              {isProspecting&&<span style={{padding:'2px 6px',border:`1px solid ${T.cyan}`,color:T.cyan,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.14em'}}>→ PROSPECTING</span>}
-              {(()=>{
-                const rs=org.reorder_status;
-                if (!rs||rs==='healthy') return null;
+              {/* Reorder flag — computed live so it shows even before DB is stamped */}
+              {computedFlag&&(()=>{
                 const FC:Record<string,string>={out_of_stock:T.redSystems,low_inv:'#FF8A00',past_cadence:T.yellow,aging:T.statusWarn};
                 const FL:Record<string,string>={out_of_stock:'OUT OF STOCK',low_inv:'LOW INV',past_cadence:'PAST CADENCE',aging:'AGING'};
-                const fc=FC[rs]||T.textFaint; const fl=FL[rs]||rs.toUpperCase();
+                const fc=FC[computedFlag]||T.textFaint; const fl=FL[computedFlag]||computedFlag.toUpperCase();
                 return <span style={{display:'inline-flex',alignItems:'center',gap:4,padding:'2px 7px',border:`1px solid ${fc}`,color:fc,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.14em',textTransform:'uppercase',background:`${fc}15`}}><span style={{width:4,height:4,borderRadius:'50%',background:fc,flexShrink:0}}/>{fl}</span>;
               })()}
+              {isFlagged&&<span style={{display:'inline-flex',alignItems:'center',gap:4,padding:'2px 6px',border:`1px solid ${T.magenta}`,color:T.magenta,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.14em',textTransform:'uppercase'}}><FlagI s={9}/> PETE</span>}
+              {isProspecting&&<span style={{padding:'2px 6px',border:`1px solid ${T.cyan}`,color:T.cyan,fontFamily:'JetBrains Mono,monospace',fontSize:9.5,letterSpacing:'0.14em'}}>→ PROSPECTING</span>}
             </div>
-            <div style={{display:'flex',alignItems:'center',gap:12,marginTop:6,fontFamily:'JetBrains Mono,monospace',fontSize:11,letterSpacing:'0.04em'}}>
+            {/* Meta row: State · City · Tier · Rank · Status — all inline text, no pill clutter */}
+            <div style={{display:'flex',alignItems:'center',gap:8,marginTop:5,fontFamily:'JetBrains Mono,monospace',fontSize:10.5,letterSpacing:'0.04em',flexWrap:'wrap'}}>
               <span style={{color:T.textMuted}}>{org.market_state}{org.city?` · ${org.city}`:''}</span>
-              <span style={{color:T.textFaint}}>|</span>
-              <span style={{color:status.color,letterSpacing:'0.16em'}}>● {status.label}</span>
+              {org.tier&&<><span style={{color:T.borderStrong}}>·</span><span style={{color:tierColor(org.tier),letterSpacing:'0.12em'}}>Tier {org.tier}</span></>}
+              {org.market_rank&&<><span style={{color:T.borderStrong}}>·</span><span style={{color:T.cyan,letterSpacing:'0.10em'}}>#{org.market_rank} {org.market_state}</span></>}
+              <span style={{color:T.borderStrong}}>·</span>
+              <span style={{color:status.color,letterSpacing:'0.14em'}}>● {status.label}</span>
             </div>
           </div>
 
@@ -819,82 +823,4 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
   );
 }
 
-// ─── Card actions — single row primary + ··· more menu ───────────────────────
-function CardActions({phone,email,isFlagged,isUntargeted,zohoId,orgId,onBrief,onProspect,onFlag,onTraining,onSendMenu,onNewProduct}: any) {
-  const [moreOpen, setMoreOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState({top:0, left:0});
-  const moreRef = useRef<HTMLDivElement>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(()=>{
-    if (!moreOpen) return;
-    // Calculate position from button so menu uses fixed positioning (won't be clipped)
-    if (btnRef.current) {
-      const r = btnRef.current.getBoundingClientRect();
-      setMenuPos({top: r.top - 4, left: r.right});
-    }
-    const h=(e:MouseEvent)=>{ if (moreRef.current&&!moreRef.current.contains(e.target as Node)&&btnRef.current&&!btnRef.current.contains(e.target as Node)) setMoreOpen(false); };
-    document.addEventListener('mousedown',h);
-    return ()=>document.removeEventListener('mousedown',h);
-  },[moreOpen]);
-
-  return (
-    <div style={{padding:'6px 16px 8px 70px',display:'flex',alignItems:'center',gap:6,borderTop:`1px solid ${T.border}`,flexWrap:'nowrap',overflowX:'auto'}}>
-      {/* PROSPECT chip for untargeted — inline with identity, not a button */}
-      {isUntargeted && (
-        <button type="button" onClick={e=>{e.stopPropagation();onProspect();}}
-          style={{height:28,padding:'0 10px',background:'rgba(0,212,255,0.08)',border:`1px solid ${T.cyan}`,color:T.cyan,fontFamily:'Teko,sans-serif',fontSize:12,letterSpacing:'0.18em',textTransform:'uppercase',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:5}}>
-          <BoxI s={11}/> PROSPECT
-        </button>
-      )}
-      {/* Primary 4 */}
-      <CardBtn href={phone?`tel:${phone}`:undefined} color={phone?T.yellow:T.borderStrong} label="CALL" icon={<PhoneI s={11}/>} disabled={!phone}/>
-      <CardBtn href={phone?`sms:${phone}`:undefined} color={phone?T.textMuted:T.borderStrong} label="TEXT" icon={<TextI s={11}/>} disabled={!phone}/>
-      <CardBtn href={email?`mailto:${email}`:undefined} color={email?T.textMuted:T.borderStrong} label="EMAIL" icon={<MailI s={11}/>} disabled={!email}/>
-      <CardBtn onClick={onBrief} color={T.cyan} label="BRIEF" icon={<BookI s={11}/>}/>
-      {/* Flag Pete — red outline always, filled when flagged */}
-      <button type="button" onClick={e=>{e.stopPropagation();onFlag();}} title="Flag for Pete"
-        style={{height:30,padding:'0 9px',background:isFlagged?`rgba(255,51,85,0.15)`:'transparent',border:`1px solid ${T.redSystems}`,color:T.redSystems,display:'inline-flex',alignItems:'center',gap:5,cursor:'pointer',flexShrink:0,fontFamily:'Teko,sans-serif',fontSize:12,letterSpacing:'0.14em',textTransform:'uppercase'}}>
-        <FlagI s={11}/> FLAG PETE
-      </button>
-      {/* ··· More — uses fixed position to escape card overflow/z-index */}
-      <div style={{position:'relative',display:'inline-block'}}>
-        <button ref={btnRef} type="button" onClick={e=>{e.stopPropagation();setMoreOpen(o=>!o);}}
-          style={{height:30,padding:'0 10px',background:moreOpen?T.surfaceElev:'transparent',border:`1px solid ${T.borderStrong}`,color:T.textFaint,fontFamily:'Teko,sans-serif',fontSize:14,letterSpacing:'0.10em',cursor:'pointer'}}>
-          ···
-        </button>
-        {moreOpen&&(
-          <div ref={moreRef} style={{position:'fixed',top:menuPos.top,left:menuPos.left,transform:'translate(-100%,-100%)',background:T.surfaceElev,border:`1px solid ${T.borderStrong}`,zIndex:9999,minWidth:170,boxShadow:'0 -8px 32px rgba(0,0,0,0.7)'}} onClick={e=>e.stopPropagation()}>
-            {[
-              {label:'TRAINING',    icon:<StarI s={11}/>, onClick:()=>{onTraining();setMoreOpen(false);}},
-              {label:'SEND MENU',   icon:<SendI s={11}/>, onClick:()=>{onSendMenu();setMoreOpen(false);}},
-              {label:'NEW PRODUCT', icon:<BoxI s={11}/>,  onClick:()=>{onNewProduct();setMoreOpen(false);}},
-            ].map(item=>(
-              <button key={item.label} type="button" onClick={item.onClick}
-                style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'11px 16px',background:'transparent',border:'none',borderBottom:`1px solid ${T.border}`,color:T.textMuted,fontFamily:'Teko,sans-serif',fontSize:13,letterSpacing:'0.18em',textTransform:'uppercase',cursor:'pointer',textAlign:'left'}}
-                onMouseEnter={e=>(e.currentTarget.style.background=T.bg)}
-                onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
-                {item.icon}{item.label}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Card action button — fixed width, never full-width ──────────────────────
-function CardBtn({href,onClick,color,label,icon,disabled,filled}:{href?:string;onClick?:()=>void;color:string;label:string;icon:React.ReactNode;disabled?:boolean;filled?:boolean}) {
-  const style:React.CSSProperties={
-    height:30, padding:'0 10px', flexShrink:0,
-    background: filled?`${color}18`:'transparent',
-    border:`1px solid ${disabled?T.borderStrong:filled?color:color+'88'}`,
-    color: disabled?T.borderStrong:color,
-    fontFamily:'Teko,sans-serif', fontSize:12, letterSpacing:'0.16em', textTransform:'uppercase' as const,
-    textDecoration:'none', display:'inline-flex', alignItems:'center', gap:6,
-    cursor: disabled?'not-allowed':'pointer', opacity: disabled?0.4:1,
-  };
-  if (href&&!disabled) return <a href={href} onClick={e=>e.stopPropagation()} style={style}>{icon}{label}</a>;
-  return <button type="button" onClick={e=>{e.stopPropagation();if(!disabled)onClick?.();}} style={style}>{icon}{label}</button>;
-}
+// CardActions and CardBtn are imported from ~/components/SalesFloorCardActions

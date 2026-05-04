@@ -158,6 +158,21 @@ export default function AccountDetail() {
   const tc = tierColor(org.tier);
   const lcColor = LC_COLORS[org.lifecycle_stage] || T.textFaint;
   const isFlagged = (org.tags||[]).includes('pete-followup');
+
+  // Compute reorder flag — use stored value, fall back to live compute so badge
+  // shows correctly even before the fire-and-forget DB patch from Reorders page commits.
+  const computedFlag: string | null = (() => {
+    const rs = org.reorder_status;
+    // Lit-based flags (low_inv, out_of_stock) only come from DB — can't compute client-side
+    if (rs === 'low_inv' || rs === 'out_of_stock') return rs;
+    // Time/cadence flags: compute live from available data as authoritative source
+    if (days !== null) {
+      const cadence: number | null = org.reorder_cadence_days ?? null;
+      if (cadence !== null && days >= cadence) return 'past_cadence';
+      if (cadence === null && days >= 45) return 'aging';
+    }
+    return rs && rs !== 'healthy' ? rs : null;
+  })();
   const nameInitials = (org.name||'').split(/\s+/).slice(0,2).map((w:string)=>w[0]?.toUpperCase()||'').join('');
   const domain = org.website ? (() => { try { return new URL(org.website.startsWith('http')?org.website:`https://${org.website}`).hostname.replace(/^www\./,''); } catch { return null; } })() : null;
 
@@ -190,12 +205,10 @@ export default function AccountDetail() {
                     {org.lifecycle_stage}
                   </span>
                   {org.tier && <span style={{padding:'5px 10px', border:`1px solid ${tc}`, color:tc, fontFamily:'JetBrains Mono,monospace', fontSize:11, letterSpacing:'0.18em', textTransform:'uppercase'}}>Tier {org.tier}</span>}
-                  {(()=>{
-                    const rs=org.reorder_status;
-                    if (!rs||rs==='healthy') return null;
+                  {computedFlag&&(()=>{
                     const FC:Record<string,string>={out_of_stock:T.redSystems,low_inv:'#FF8A00',past_cadence:T.yellow,aging:T.statusWarn};
                     const FL:Record<string,string>={out_of_stock:'OUT OF STOCK',low_inv:'LOW INVENTORY',past_cadence:'PAST CADENCE',aging:'AGING'};
-                    const fc=FC[rs]||T.statusWarn; const fl=FL[rs]||rs.toUpperCase();
+                    const fc=FC[computedFlag]||T.statusWarn; const fl=FL[computedFlag]||computedFlag.toUpperCase();
                     return <span style={{display:'inline-flex',alignItems:'center',gap:7,padding:'5px 10px',border:`1px solid ${fc}`,color:fc,fontFamily:'JetBrains Mono,monospace',fontSize:11,letterSpacing:'0.18em',textTransform:'uppercase',background:`${fc}12`}}><span style={{width:6,height:6,borderRadius:'50%',background:fc,flexShrink:0}}/>{fl}</span>;
                   })()}
                 </div>
