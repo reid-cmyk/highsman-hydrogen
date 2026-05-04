@@ -31,6 +31,8 @@ export type OrgRow = {
   reorder_flag_low_inv_at: string | null;
   reorder_flag_out_of_stock_at: string | null;
   reorder_suppressed: boolean;
+  lead_stage: string | null;
+  lead_stage_updated_at: string | null;
   market_rank: number | null;
   market_total: number | null;
   market_revenue_90d: number | null;

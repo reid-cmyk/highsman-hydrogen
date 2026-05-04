@@ -64,7 +64,7 @@ const NAV_ITEMS: {
   { label: 'Dashboard',      href: '/sales-staging' },
   { label: 'Onboarding',     href: '/sales-staging/onboarding',                countKey: 'first_order_pending' },
   { label: 'Reorders Due',   href: '/sales-staging/reorders',                  countKey: 'reorder_due', dot: true },
-  { label: 'Leads',          href: '/sales-staging?stage=prospect',            countKey: 'prospect' },
+  { label: 'Leads',          href: '/sales-staging/leads',                     countKey: 'prospect' },
   { label: 'Sales Orders',   href: '/sales-staging/orders' },
   { label: 'Accounts',       href: '/sales-staging' },
   { label: 'Funnel',         href: '/sales' },

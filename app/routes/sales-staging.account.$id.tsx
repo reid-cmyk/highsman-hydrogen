@@ -697,7 +697,15 @@ function FieldsPanel({org, computedFlag}: {org: any; computedFlag: string | null
 
       <GroupLabel>Status</GroupLabel>
       <TwoCol>
-        <SelectField label="Lifecycle" field="lifecycle_stage" value={org.lifecycle_stage} orgId={org.id} options={['active','untargeted','churned','dormant','prospect','contacted','qualified','sample_sent','first_order_pending','reorder_due']} />
+        <SelectField label="Lifecycle" field="lifecycle_stage" value={org.lifecycle_stage} orgId={org.id}
+          options={['untargeted','prospect','active','disqualified','churned']}
+          labels={{untargeted:'Untargeted',prospect:'Prospect',active:'Active',disqualified:'Disqualified',churned:'Churned'}} />
+        {/* Lead Stage — only shown when lifecycle is Prospect */}
+        {org.lifecycle_stage==='prospect'&&(
+          <SelectField label="Lead Stage" field="lead_stage" value={org.lead_stage||'new'} orgId={org.id}
+            options={['new','working','warm','hot']}
+            labels={{new:'New Lead',working:'Working',warm:'Warm',hot:'Hot'}} />
+        )}
         <SelectField label="Tier" field="tier" value={org.tier||''} orgId={org.id} options={['','A','B','C']} />
         <SelectField label="Reorder Status" field="reorder_status" value={computedFlag||''} orgId={org.id}
           options={['','healthy','aging','past_cadence','low_inv','out_of_stock']}

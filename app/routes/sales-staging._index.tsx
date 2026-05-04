@@ -136,7 +136,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   try { const r=await fetch(`${base}/rest/v1/organizations?${params}`,{headers}); if (r.ok) orgs=await r.json(); } catch {}
 
   // Per-stage counts using Prefer: count=exact (avoids 1000-row limit)
-  const stageList=['active','untargeted','churned','prospect','contacted','qualified','sample_sent','first_order_pending','reorder_due','dormant'];
+  const stageList=['active','untargeted','churned','prospect','disqualified'];
   const sbCountH={...headers,'Prefer':'count=exact','Range':'0-0'};
   let stageCounts:Record<string,number>={};
   try {
@@ -237,8 +237,8 @@ function LoginScreen({error}:{error?:string|null}) {
 
 // ─── Stage labels ─────────────────────────────────────────────────────────────
 const STATES=['ALL','NJ','MA','NY','RI','MO'];
-const ALL_STAGES=['active','untargeted','prospect','contacted','qualified','sample_sent','first_order_pending','reorder_due','churned','all'];
-const STAGE_LABELS:Record<string,string>={active:'Active',untargeted:'Untargeted',prospect:'Prospect',contacted:'Contacted',qualified:'Qualified',sample_sent:'Sample Sent',first_order_pending:'First Order',reorder_due:'Reorder Due',churned:'Churned',all:'All'};
+const ALL_STAGES=['active','untargeted','prospect','churned','disqualified','all'];
+const STAGE_LABELS:Record<string,string>={active:'Active',untargeted:'Untargeted',prospect:'Prospect',churned:'Churned',disqualified:'Disqualified',all:'All'};
 
 // ─── CSV export ───────────────────────────────────────────────────────────────
 function downloadCSV(orgs:OrgRow[],stateFilter:string) {
