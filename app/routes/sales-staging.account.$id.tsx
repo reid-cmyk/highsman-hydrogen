@@ -246,7 +246,7 @@ export default function AccountDetail() {
           {/* Body grid */}
           <div style={{padding:'24px 32px 40px', display:'grid', gridTemplateColumns:'minmax(0,1.6fr) minmax(0,1fr)', gap:24}}>
             {/* Left: Fields panel */}
-            <FieldsPanel org={org} />
+            <FieldsPanel org={org} computedFlag={computedFlag} />
 
             {/* Right: Onboarding + Contacts + Notes */}
             <div style={{display:'flex', flexDirection:'column', gap:24}}>
@@ -627,7 +627,7 @@ function MarketIntelBar({intel, stateRank}: {intel: any; stateRank: any}) {
 }
 
 // ─── Fields Panel ─────────────────────────────────────────────────────────────
-function FieldsPanel({org}: {org: any}) {
+function FieldsPanel({org, computedFlag}: {org: any; computedFlag: string | null}) {
   return (
     <div style={{background:T.surface, border:`1px solid ${T.border}`}}>
       <SectionHead title="Account Fields" source="click to edit" />
@@ -636,7 +636,7 @@ function FieldsPanel({org}: {org: any}) {
       <TwoCol>
         <SelectField label="Lifecycle" field="lifecycle_stage" value={org.lifecycle_stage} orgId={org.id} options={['active','untargeted','churned','dormant','prospect','contacted','qualified','sample_sent','first_order_pending','reorder_due']} />
         <SelectField label="Tier" field="tier" value={org.tier||''} orgId={org.id} options={['','A','B','C']} />
-        <SelectField label="Reorder Status" field="reorder_status" value={org.reorder_status||''} orgId={org.id}
+        <SelectField label="Reorder Status" field="reorder_status" value={computedFlag||''} orgId={org.id}
           options={['','healthy','aging','past_cadence','low_inv','out_of_stock']}
           labels={{'':'—', healthy:'Healthy', aging:'Aging', past_cadence:'Past Cadence', low_inv:'Low Inventory', out_of_stock:'Out of Stock'}} />
         <EditableField label="Last order date" field="last_order_date" value={org.last_order_date} orgId={org.id} mono hint="YYYY-MM-DD" />
