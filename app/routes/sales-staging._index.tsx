@@ -163,7 +163,37 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     for (const row of rows){const s=row.market_state||'OTHER';counts[s]=(counts[s]||0)+1;}
   } catch {}
 
-  return json({authenticated:true,orgs,counts,stageCounts,stateFilter,stageFilter,sortBy});
+  // State-filtered stage counts + Tier A — used for the stat bar, reactive to state filter
+  const stateQ = stateFilter!=='ALL' ? `&market_state=eq.${stateFilter}` : '';
+  let filteredStageCounts:Record<string,number>={};
+  let tierAActive=0, tierATotal=0;
+  try {
+    const statStages=['active','churned','prospect','untargeted'];
+    const statResults = await Promise.all([
+      ...statStages.map(s =>
+        fetch(`${base}/rest/v1/organizations?lifecycle_stage=eq.${s}${stateQ}&select=id`,{method:'GET',headers:sbCountH})
+          .then(r=>[s, parseInt(r.headers.get('Content-Range')?.split('/')[1]||'0',10)||0] as [string,number])
+          .catch(()=>[s,0] as [string,number])
+      ),
+      // all orgs in state (any stage)
+      fetch(`${base}/rest/v1/organizations?select=id${stateQ}`,{method:'GET',headers:sbCountH})
+        .then(r=>['all', parseInt(r.headers.get('Content-Range')?.split('/')[1]||'0',10)||0] as [string,number])
+        .catch(()=>['all',0] as [string,number]),
+      // Tier A active in state
+      fetch(`${base}/rest/v1/organizations?tier=eq.A&lifecycle_stage=eq.active${stateQ}&select=id`,{method:'GET',headers:sbCountH})
+        .then(r=>['_tierAActive', parseInt(r.headers.get('Content-Range')?.split('/')[1]||'0',10)||0] as [string,number])
+        .catch(()=>['_tierAActive',0] as [string,number]),
+      // Tier A total in state
+      fetch(`${base}/rest/v1/organizations?tier=eq.A${stateQ}&select=id`,{method:'GET',headers:sbCountH})
+        .then(r=>['_tierATotal', parseInt(r.headers.get('Content-Range')?.split('/')[1]||'0',10)||0] as [string,number])
+        .catch(()=>['_tierATotal',0] as [string,number]),
+    ]);
+    filteredStageCounts = Object.fromEntries(statResults.map(([k,v])=>[k,isNaN(v as number)?0:v]));
+    tierAActive = (filteredStageCounts['_tierAActive'] as number)||0;
+    tierATotal  = (filteredStageCounts['_tierATotal']  as number)||0;
+  } catch {}
+
+  return json({authenticated:true,orgs,counts,stageCounts,filteredStageCounts,stateFilter,stageFilter,sortBy,tierAActive,tierATotal});
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -501,6 +531,10 @@ function Dashboard({data}:{data:any}) {
   const orgs:OrgRow[]=data.orgs||[];
   const counts:Record<string,number>=data.counts||{};
   const stageCounts:Record<string,number>=data.stageCounts||{};
+  const tierAActive:number=data.tierAActive||0;
+  const tierATotal:number=data.tierATotal||0;
+  const tierAPct:number=tierATotal>0?Math.round((tierAActive/tierATotal)*100):0;
+  const fsc:Record<string,number>=data.filteredStageCounts||{};
 
   useEffect(()=>{
     const h=(e:KeyboardEvent)=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();searchRef.current?.focus();}};
@@ -515,11 +549,12 @@ function Dashboard({data}:{data:any}) {
     return orgs.filter(o=>o.name.toLowerCase().includes(q)||(o.city||'').toLowerCase().includes(q));
   },[orgs,search]);
 
-  const activeCount=stageCounts['active']||0;
-  const reorderDue=orgs.filter(o=>o.reorder_status&&o.reorder_status!=='healthy').length;
-  const slipping=orgs.filter(o=>{const d=daysSince(o.last_order_date);return d!==null&&d>30&&d<=60;}).length;
-  const atRisk=orgs.filter(o=>{const d=daysSince(o.last_order_date);return d!==null&&d>60;}).length;
-  const flagged=orgs.filter(o=>(o.tags as any)?.includes('pete-followup')).length;
+  // Stat bar counts — state-filtered (reactive to state tab selection)
+  const statAll=(fsc['all'] as number)||0;
+  const statActive=(fsc['active'] as number)||0;
+  const statChurned=(fsc['churned'] as number)||0;
+  const statProspects=(fsc['prospect'] as number)||0;
+  const statUntargeted=(fsc['untargeted'] as number)||0;
 
   return (
     <SalesFloorLayout current="Accounts" stageCounts={stageCounts}>
@@ -534,13 +569,6 @@ function Dashboard({data}:{data:any}) {
                 </div>
               </div>
               <div style={{display:'flex',alignItems:'center',gap:8}}>
-                {/* Sort dropdown */}
-                <select value={sortBy} onChange={e=>setFilter('sort',e.target.value)}
-                  style={{height:36,padding:'0 10px',background:T.surfaceElev,border:`1px solid ${T.borderStrong}`,color:T.text,fontFamily:'Teko,sans-serif',fontSize:13,letterSpacing:'0.14em',cursor:'pointer',outline:'none'}}>
-                  <option value="name">Sort: Name</option>
-                  <option value="rank">Sort: Market Rank</option>
-                  <option value="last_order">Sort: Last Order</option>
-                </select>
                 <button onClick={()=>downloadCSV(filtered,stateFilter)} style={{height:36,padding:'0 14px',background:'transparent',border:`1px solid ${T.borderStrong}`,color:T.textSubtle,fontFamily:'Teko,sans-serif',fontSize:13,letterSpacing:'0.18em',cursor:'pointer'}}>EXPORT CSV</button>
                 <button onClick={()=>setShowNewAccount(true)} style={{height:36,padding:'0 18px',background:T.yellow,border:'none',color:'#000',fontFamily:'Teko,sans-serif',fontWeight:600,fontSize:14,letterSpacing:'0.20em',cursor:'pointer'}}>+ NEW ACCOUNT</button>
               </div>
@@ -573,16 +601,24 @@ function Dashboard({data}:{data:any}) {
             </div>
           </div>
 
-          {/* ── Stat bar ─────────────────────────────────────────────────── */}
-          <div className="hs-stats-strip" style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',background:T.border,gap:1,borderBottom:`1px solid ${T.border}`}}>
-            <AnimatedStat target={activeCount} label="Active accounts"   src="live"        accent={T.text}/>
-            <AnimatedStat target={reorderDue}  label="Reorders flagged"  src="ops/cadence" accent={T.yellow}/>
-            <AnimatedStat target={slipping}    label="Slipping (30–60d)" src="/cadence"    accent={T.statusWarn}/>
-            <AnimatedStat target={atRisk}      label="At risk (>60d)"    src="/cadence"    accent={T.redSystems}/>
-            <AnimatedStat target={flagged}     label="Pete's desk"       src="flags"       accent={T.magenta}/>
+          {/* ── Stat bar — reacts to state filter ───────────────────────── */}
+          <div className="hs-stats-strip" style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',background:T.border,gap:1,borderBottom:`1px solid ${T.border}`}}>
+            <AnimatedStat target={statAll}        label="All"        src="accounts"  accent={T.text}/>
+            <AnimatedStat target={statActive}     label="Active"     src="live"       accent={T.green}/>
+            <AnimatedStat target={statChurned}    label="Churned"    src="inactive"   accent={T.textFaint}/>
+            <AnimatedStat target={statProspects}  label="Prospects"  src="pipeline"   accent={T.cyan}/>
+            <AnimatedStat target={statUntargeted} label="Untargeted" src="cold"       accent={T.textSubtle}/>
+            {/* Tier A penetration: active Tier A / total Tier A (state-filtered) */}
+            <div style={{background:T.bg,padding:'18px 24px'}}>
+              <div style={{fontFamily:'Teko,sans-serif',fontSize:11,letterSpacing:'0.30em',color:T.textFaint,textTransform:'uppercase',marginBottom:6}}>Tier A</div>
+              <div style={{display:'flex',alignItems:'baseline',gap:8}}>
+                <span style={{fontFamily:'Teko,sans-serif',fontSize:44,fontWeight:600,color:T.yellow,lineHeight:0.9,textShadow:'0 0 30px rgba(255,213,0,0.18)'}}>{tierAPct}%</span>
+                <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:9.5,color:T.textFaint,letterSpacing:'0.14em'}}>{tierAActive}/{tierATotal}</span>
+              </div>
+            </div>
           </div>
 
-          {/* ── Stage filter — below stat bar ────────────────────────────── */}
+          {/* ── Stage filter + sort — below stat bar ─────────────────────── */}
           <div style={{borderBottom:`1px solid ${T.border}`,padding:'10px 28px',background:T.bg,display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
             {ALL_STAGES.filter(s=>s==='all'||(stageCounts[s]??0)>0).map(s=>{
               const active=stageFilter===s;
@@ -595,6 +631,15 @@ function Dashboard({data}:{data:any}) {
                 </button>
               );
             })}
+            {/* Sort dropdown — right-aligned in stage row */}
+            <div style={{marginLeft:'auto'}}>
+              <select value={sortBy} onChange={e=>setFilter('sort',e.target.value)}
+                style={{height:30,padding:'0 10px',background:T.surfaceElev,border:`1px solid ${T.borderStrong}`,color:T.text,fontFamily:'Teko,sans-serif',fontSize:13,letterSpacing:'0.14em',cursor:'pointer',outline:'none'}}>
+                <option value="rank">Sort: Market Rank</option>
+                <option value="last_order">Sort: Last Order</option>
+                <option value="name">Sort: Name</option>
+              </select>
+            </div>
           </div>
           {showNewAccount&&<NewAccountModal onClose={()=>setShowNewAccount(false)}/>}
 
