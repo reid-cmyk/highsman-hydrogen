@@ -133,7 +133,7 @@ const SECTIONS: Section[] = [
         path: '/sales-floor',
         name: 'Sales Floor (Sky)',
         description:
-          'Sky\'s command center. New Customers, Reorder Due, Accounts, Leads, SMS, brief generator, Vibes booking buttons (Onboarding, Training, New Product Onboard), Send Menu, Flag for Pete.',
+          'Sky\'s command center. Dashboard now leads with State Pulse (live MTD revenue per state), Hot Leads call queue, Orders Due snapshot, Alerts, Upcoming Onboarding Visits + Trainings, Missed Calls + Recent Calls. Plus the full tabs: New Customers, Reorder Due (capped at 90 days), Accounts, Leads, Funnel, SMS, brief generator, Vibes booking buttons (Onboarding, Training, New Product Onboard), Send Menu, Flag for Pete.',
         audience: 'Sky',
         access: 'staff',
       },
@@ -239,8 +239,16 @@ const SECTIONS: Section[] = [
         path: '/sales',
         name: 'Sales Dashboard',
         description:
-          'Company-level sales performance. Orders by state (NJ/MA/NY/RI/MO), by channel, by SKU. No individual rep names — aggregate view.',
+          'Company-level sales performance. Orders by state (NJ/MA/NY/RI/MO), by channel, by SKU. New: Risk of Loss Accounts alert (90+ days no order, sorted by YTD revenue at stake) sits above the existing Stale (60-89d) and Watch (45-59d) tiers. No individual rep names — aggregate view.',
         audience: 'Leadership · Exec',
+        access: 'staff',
+      },
+      {
+        path: '/reconcile',
+        name: 'LeafLink ↔ Zoho Reconciliation',
+        description:
+          'Side-by-side reconciliation of LeafLink orders against Zoho records. Spot orders that landed in one system but not the other before they cause a downstream mess. Password-gated, separate auth from /sales.',
+        audience: 'Ops · Finance',
         access: 'staff',
       },
       {
@@ -323,6 +331,14 @@ const SECTIONS: Section[] = [
         description:
           'The standalone quiz portal. Each course in Training Camp is graded here — passing unlocks tier badges (Rookie · Starting Lineup · Franchise Player · Hall of Flame).',
         audience: 'Budtenders',
+        access: 'public',
+      },
+      {
+        path: '/training/join/:storeToken',
+        name: 'Training Camp QR Sign-Up',
+        description:
+          'Public mobile landing reached by scanning the QR code Serena shows in-store. Token resolves to the dispensary in Zoho — budtender never sees the store ID. On success, drops them into the 5-deck library and writes attribution back to Klaviyo (list WBSrLZ).',
+        audience: 'Budtenders · Mobile QR',
         access: 'public',
       },
     ],
