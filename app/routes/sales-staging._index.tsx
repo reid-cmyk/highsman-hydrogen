@@ -555,6 +555,7 @@ function Dashboard({data}:{data:any}) {
   const statChurned=(fsc['churned'] as number)||0;
   const statProspects=(fsc['prospect'] as number)||0;
   const statUntargeted=(fsc['untargeted'] as number)||0;
+  const retentionPct=(statActive+statChurned)>0?Math.round((statActive/(statActive+statChurned))*100):0;
 
   return (
     <SalesFloorLayout current="Accounts" stageCounts={stageCounts}>
@@ -602,12 +603,20 @@ function Dashboard({data}:{data:any}) {
           </div>
 
           {/* ── Stat bar — reacts to state filter ───────────────────────── */}
-          <div className="hs-stats-strip" style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',background:T.border,gap:1,borderBottom:`1px solid ${T.border}`}}>
+          <div className="hs-stats-strip" style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',background:T.border,gap:1,borderBottom:`1px solid ${T.border}`}}>
             <AnimatedStat target={statAll}        label="All"        src="accounts"  accent={T.text}/>
             <AnimatedStat target={statActive}     label="Active"     src="live"       accent={T.green}/>
             <AnimatedStat target={statChurned}    label="Churned"    src="inactive"   accent={T.textFaint}/>
             <AnimatedStat target={statProspects}  label="Prospects"  src="pipeline"   accent={T.cyan}/>
             <AnimatedStat target={statUntargeted} label="Untargeted" src="cold"       accent={T.textSubtle}/>
+            {/* Retention rate: active / (active + churned) */}
+            <div style={{background:T.bg,padding:'18px 24px'}}>
+              <div style={{fontFamily:'Teko,sans-serif',fontSize:11,letterSpacing:'0.30em',color:T.textFaint,textTransform:'uppercase',marginBottom:6}}>Retention</div>
+              <div style={{display:'flex',alignItems:'baseline',gap:8}}>
+                <span style={{fontFamily:'Teko,sans-serif',fontSize:44,fontWeight:600,color:T.green,lineHeight:0.9}}>{retentionPct}%</span>
+                <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:9.5,color:T.textFaint,letterSpacing:'0.14em'}}>active/total</span>
+              </div>
+            </div>
             {/* Tier A penetration: active Tier A / total Tier A (state-filtered) */}
             <div style={{background:T.bg,padding:'18px 24px'}}>
               <div style={{fontFamily:'Teko,sans-serif',fontSize:11,letterSpacing:'0.30em',color:T.textFaint,textTransform:'uppercase',marginBottom:6}}>Tier A</div>
@@ -722,8 +731,7 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
   const fetcher=useFetcher();
   const [hovered,setHovered]=useState(false);
   const days=daysSince(org.last_order_date);
-  const statusKey=getStatusKey(days);
-  const status=STATUS[statusKey];
+  // statusKey / STATUS removed — reorder flag system replaces time-based status labels
   const tc=tierColor(org.tier);
   const primaryContact=org.contacts?.find(c=>c.is_primary_buyer)||org.contacts?.[0];
   const phone=org.phone||primaryContact?.phone||primaryContact?.mobile;
@@ -784,8 +792,8 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
 
         {/* Main info row */}
         <div className="hs-card-grid" style={{display:'grid',gridTemplateColumns:'4px 56px 1fr 200px 200px',alignItems:'center',gap:0,minHeight:72}}>
-          {/* Status rail */}
-          <div style={{alignSelf:'stretch',background:status.color,opacity:statusKey==='good'?0.5:0.85}}/>
+          {/* Flag rail — color reflects reorder flag; subtle green when healthy */}
+          {(()=>{const FC:Record<string,string>={out_of_stock:T.redSystems,low_inv:'#FF8A00',past_cadence:T.yellow,aging:T.statusWarn};const railColor=computedFlag?FC[computedFlag]||T.yellow:T.green;return <div style={{alignSelf:'stretch',background:railColor,opacity:computedFlag?0.85:0.2}}/>;})()}
 
           {/* Logo */}
           <div style={{padding:'12px 0 12px 16px'}}>
@@ -815,8 +823,6 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
               <span style={{color:T.textMuted}}>{org.market_state}{org.city?` · ${org.city}`:''}</span>
               {org.tier&&<><span style={{color:T.borderStrong}}>·</span><span style={{color:tierColor(org.tier),letterSpacing:'0.12em'}}>Tier {org.tier}</span></>}
               {org.market_rank&&<><span style={{color:T.borderStrong}}>·</span><span style={{color:T.cyan,letterSpacing:'0.10em'}}>#{org.market_rank} {org.market_state}</span></>}
-              <span style={{color:T.borderStrong}}>·</span>
-              <span style={{color:status.color,letterSpacing:'0.14em'}}>● {status.label}</span>
             </div>
           </div>
 
