@@ -238,7 +238,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     if (days === null) continue;
 
     const cadence: number | null = org.reorder_cadence_days ?? null;
-    const zohoId = org.zoho_account_id ? String(org.zoho_account_id) : null;
+    // Lit API returns bare numeric zohoAccountId (no "zcrm_" prefix) — strip prefix for matching
+    const zohoId = org.zoho_account_id ? String(org.zoho_account_id).replace('zcrm_', '') : null;
     const currentStatus: string = org.reorder_status || 'healthy';
 
     const timeActive    = cadence === null && days >= 45;
