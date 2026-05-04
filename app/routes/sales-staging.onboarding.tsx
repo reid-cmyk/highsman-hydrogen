@@ -9,7 +9,7 @@
 
 import type {LoaderFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
-import {useLoaderData} from '@remix-run/react';
+import {useLoaderData, useFetcher} from '@remix-run/react';
 import {useState, useEffect} from 'react';
 import {isStagingAuthed} from '~/lib/staging-auth';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
@@ -109,7 +109,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
 
   const [res, completedRes] = await Promise.all([
     fetch(
-      `${base}/rest/v1/organizations?orders_count=gte.1&lifecycle_stage=not.in.(churned,untargeted)&onboarding_completed_at=is.null&select=${encodeURIComponent(select)}&order=last_order_date.desc&limit=500`,
+      `${base}/rest/v1/organizations?orders_count=eq.1&lifecycle_stage=not.in.(churned,untargeted)&onboarding_completed_at=is.null&select=${encodeURIComponent(select)}&order=last_order_date.desc&limit=500`,
       {headers: h},
     ),
     // Separate count of all-time completed onboarding (persisted regardless of orders_count)
@@ -290,6 +290,21 @@ export default function OnboardingPage() {
 function OnboardingCard({org}: {org: OnboardingOrg}) {
   const [logoFailed, setLogoFailed] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const assetsFetcher = useFetcher();
+
+  const alreadySentAssets = org.onboarding_steps?.some(
+    (s:any) => s.step_key === 'digital_assets_sent' && s.status === 'complete'
+  );
+
+  const sendAssets = () => {
+    const fd = new FormData();
+    fd.set('intent','toggle_onboarding');
+    fd.set('org_id', org.id);
+    fd.set('step_key','digital_assets_sent');
+    fd.set('status','complete');
+    assetsFetcher.submit(fd, {method:'post', action:'/api/org-update'});
+    // TODO: trigger digital assets email template
+  };
 
   const tc = org.tier ? (TIER_COLOR[org.tier]||T.textFaint) : null;
   const days = daysSince(org.last_order_date);
@@ -303,6 +318,30 @@ function OnboardingCard({org}: {org: OnboardingOrg}) {
   const phone = org.phone || org.primary_contact_phone;
   const email = org.primary_contact_email;
   const isFlagged = (org.tags||[]).includes('pete-followup');
+  const zohoIdNumeric = (org.zoho_account_id||'').replace('zcrm_','');
+
+  const actionPost = async (apiUrl: string, body: Record<string,any>) => {
+    try { await fetch(apiUrl, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}); } catch {}
+  };
+
+  const openBrief = () => {
+    if (!phone && !email) { alert('No contact info on file.'); return; }
+    const w = window.open('', '_brief', 'width=700,height=600');
+    if (w) {
+      w.document.write('<html><body style="background:#0a0a0a;color:#fff;font-family:sans-serif;padding:24px"><h2>Loading brief…</h2></body></html>');
+      actionPost('/api/brief', {lead:{First_Name:org.primary_contact_name?.split(' ')[0]||'', _fullName:org.primary_contact_name||org.name, Company:org.name, Phone:phone||'', Email:email||'', _status:'active'}})
+        .then(()=>{ w.location.href='/sales-floor/app?brief=1'; });
+    }
+  };
+
+  const flagFetcher2 = useFetcher();
+  const toggleFlag = () => {
+    const fd = new FormData(); fd.set('intent','flag_pete'); fd.set('org_id', org.id);
+    flagFetcher2.submit(fd, {method:'post', action:'/sales-staging'});
+  };
+
+  // TODO: wire training template — marks budtenders_trained step when sent
+  const sendTraining = () => actionPost('/api/sales-floor-vibes-training', {zohoAccountId:zohoIdNumeric, customerName:org.name, trainingFocus:''});
 
   return (
     <div
@@ -389,7 +428,26 @@ function OnboardingCard({org}: {org: OnboardingOrg}) {
         email={email}
         isFlagged={isFlagged}
         orgId={org.id}
+        onBrief={openBrief}
+        onFlag={toggleFlag}
+        onTraining={sendTraining}
       />
+      {/* Onboarding-specific quick actions */}
+      <div style={{display:'flex',gap:0,borderTop:`1px solid ${T.border}66`,padding:'0 16px 0 76px',background:T.bg}}>
+        <button
+          type="button"
+          onClick={sendAssets}
+          disabled={alreadySentAssets || assetsFetcher.state !== 'idle'}
+          style={{display:'inline-flex',alignItems:'center',gap:6,height:30,padding:'0 14px',background:alreadySentAssets?'rgba(0,232,122,0.08)':'transparent',border:'none',borderRight:`1px solid ${T.border}66`,color:alreadySentAssets?T.green:T.cyan,fontFamily:'Teko,sans-serif',fontSize:12,letterSpacing:'0.16em',cursor:alreadySentAssets?'default':'pointer',opacity:assetsFetcher.state!=='idle'?0.5:1}}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+          {alreadySentAssets ? '✓ ASSETS SENT' : 'SEND ASSETS'}
+        </button>
+        <a href={`/sales-staging/account/${org.id}#onboarding`}
+          style={{display:'inline-flex',alignItems:'center',gap:6,height:30,padding:'0 14px',color:T.textFaint,fontFamily:'Teko,sans-serif',fontSize:12,letterSpacing:'0.16em',textDecoration:'none',borderRight:`1px solid ${T.border}66`}}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 13h6M9 17h4"/></svg>
+          VIEW CHECKLIST
+        </a>
+      </div>
     </div>
   );
 }
