@@ -81,7 +81,7 @@ type OnboardingOrg = {
   doneCount: number;
   totalSteps: number;
   pct: number;
-  nextStep: string|null;
+  lastCompletedStep: string|null;
   stage: 'not_started'|'in_progress'|'complete';
   primary_contact_name: string|null;
   primary_contact_phone: string|null;
@@ -125,7 +125,15 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     const stepsMap = new Map((org.onboarding_steps||[]).map((s:any)=>[s.step_key, s]));
     const doneCount = relevantSteps.filter(s => stepsMap.get(s.key)?.status === 'complete').length;
     const pct = totalSteps > 0 ? (doneCount / totalSteps) * 100 : 0;
-    const nextStep = relevantSteps.find(s => stepsMap.get(s.key)?.status !== 'complete')?.label || null;
+    // Last completed step — sort completed steps by completed_at timestamp, take most recent
+    const completedSteps = relevantSteps.filter(s => stepsMap.get(s.key)?.status === 'complete');
+    const lastCompletedStep = completedSteps.length > 0
+      ? [...completedSteps].sort((a, b) => {
+          const ta = new Date(stepsMap.get(a.key)?.completed_at || 0).getTime();
+          const tb = new Date(stepsMap.get(b.key)?.completed_at || 0).getTime();
+          return tb - ta;
+        })[0]?.label || null
+      : null;
     const stage: 'not_started'|'in_progress'|'complete' =
       doneCount === 0 ? 'not_started' : doneCount === totalSteps ? 'complete' : 'in_progress';
 
@@ -143,7 +151,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       last_order_amount: org.last_order_amount!=null?parseFloat(String(org.last_order_amount)):null,
       orders_count: org.orders_count??0,
       onboarding_steps: org.onboarding_steps||[],
-      doneCount, totalSteps, pct, nextStep, stage,
+      doneCount, totalSteps, pct, lastCompletedStep, stage,
       primary_contact_name: primary?(primary.full_name||`${primary.first_name||''} ${primary.last_name||''}`.trim()||null):null,
       primary_contact_phone: primary?(primary.phone||primary.mobile||null):null,
       primary_contact_email: primary?.email||null,
@@ -418,9 +426,9 @@ function OnboardingCard({org}: {org: OnboardingOrg}) {
               checklist ↗
             </a>
           </div>
-          {org.nextStep&&org.stage!=='complete'&&(
-            <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:9,color:T.textFaint,letterSpacing:'0.06em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-              → {org.nextStep}
+          {org.lastCompletedStep&&(
+            <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:9,color:T.green,letterSpacing:'0.06em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+              ✓ {org.lastCompletedStep}
             </div>
           )}
         </div>
