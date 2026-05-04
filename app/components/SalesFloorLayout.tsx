@@ -62,7 +62,7 @@ const NAV_ITEMS: {
 }[] = [
   { label: 'Dashboard',      href: '/sales-staging' },
   { label: 'New Customers',  href: '/sales-staging?stage=first_order_pending', countKey: 'first_order_pending' },
-  { label: 'Reorders Due',   href: '/sales-staging?stage=reorder_due',         countKey: 'reorder_due', dot: true },
+  { label: 'Reorders Due',   href: '/sales-staging/reorders',                  countKey: 'reorder_due', dot: true },
   { label: 'Leads',          href: '/sales-staging?stage=prospect',            countKey: 'prospect' },
   { label: 'Sales Orders',   href: '/sales-staging/orders' },
   { label: 'Accounts',       href: '/sales-staging' },

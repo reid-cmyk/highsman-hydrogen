@@ -26,7 +26,7 @@ const ALLOWED_FIELDS = new Set([
   'reorder_status','last_order_date','license_number','ein',
   'billing_street','billing_city','billing_state','billing_zip',
   'street_address','city','zip','market_state',
-  'legal_name','preferred_contact_channel','reorder_cadence_days',
+  'legal_name','preferred_contact_channel','reorder_cadence_days','reorder_suppressed',
   'pop_up_email','pop_up_link','last_pop_up_date',
   'staff_training_email','staff_training_link','last_staff_training_date','allow_split_promos',
 ]);

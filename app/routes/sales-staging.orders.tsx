@@ -60,19 +60,19 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   // When search is active, override all other filters and search full DB by customer name
   const searchQ = search ? `&leaflink_customer_name=ilike.*${encodeURIComponent(search)}*` : '';
   const ordersUrl = search
-    ? `${base}/rest/v1/leaflink_orders?select=*,organizations(name)${searchQ}&is_sample_order=eq.false&order=order_date.desc.nullslast&limit=500`
-    : `${base}/rest/v1/leaflink_orders?select=*,organizations(name)${stateQ}${statusQ}${periodQ}&is_sample_order=eq.false&order=order_date.desc.nullslast&limit=500`;
+    ? `${base}/rest/v1/sales_orders?select=*,organizations(name)${searchQ}&is_sample_order=eq.false&order=order_date.desc.nullslast&limit=500`
+    : `${base}/rest/v1/sales_orders?select=*,organizations(name)${stateQ}${statusQ}${periodQ}&is_sample_order=eq.false&order=order_date.desc.nullslast&limit=500`;
 
   const [ordersRes, periodStatsRes, ytdStatsRes, pendingRes, completeRes] = await Promise.all([
     fetch(ordersUrl, {headers: h}),
     // Stats for the selected period + state
-    fetch(`${base}/rest/v1/leaflink_orders?select=total_amount,order_date${stateQ}${periodQ}&is_sample_order=eq.false&status=not.in.(Cancelled,Rejected)`, {headers: h}),
+    fetch(`${base}/rest/v1/sales_orders?select=total_amount,order_date${stateQ}${periodQ}&is_sample_order=eq.false&status=not.in.(Cancelled,Rejected)`, {headers: h}),
     // YTD always — never filtered by period, only by state
-    fetch(`${base}/rest/v1/leaflink_orders?select=total_amount${stateQ}&is_sample_order=eq.false&status=not.in.(Cancelled,Rejected)&order_date=gte.${ytdStart}`, {headers: h}),
+    fetch(`${base}/rest/v1/sales_orders?select=total_amount${stateQ}&is_sample_order=eq.false&status=not.in.(Cancelled,Rejected)&order_date=gte.${ytdStart}`, {headers: h}),
     // Pending (not period-filtered)
-    fetch(`${base}/rest/v1/leaflink_orders?select=id${stateQ}&is_sample_order=eq.false&status=in.(Submitted,Accepted,Fulfilled,Shipped)`, {headers: {...h, Prefer: 'count=exact'}}),
+    fetch(`${base}/rest/v1/sales_orders?select=id${stateQ}&is_sample_order=eq.false&status=in.(Submitted,Accepted,Fulfilled,Shipped)`, {headers: {...h, Prefer: 'count=exact'}}),
     // Complete (not period-filtered)
-    fetch(`${base}/rest/v1/leaflink_orders?select=id${stateQ}&is_sample_order=eq.false&status=eq.Complete`, {headers: {...h, Prefer: 'count=exact'}}),
+    fetch(`${base}/rest/v1/sales_orders?select=id${stateQ}&is_sample_order=eq.false&status=eq.Complete`, {headers: {...h, Prefer: 'count=exact'}}),
   ]);
 
   const [orders, periodRows, ytdRows] = await Promise.all([ordersRes.json(), periodStatsRes.json(), ytdStatsRes.json()]);

@@ -57,23 +57,14 @@ export async function loader({request, context, params}: LoaderFunctionArgs) {
     fetch(`${base}/rest/v1/organizations?id=eq.${id}&select=*,contacts(*)`, {headers: h}),
     fetch(`${base}/rest/v1/org_notes?organization_id=eq.${id}&order=created_at.desc&limit=100`, {headers: h}),
     fetch(`${base}/rest/v1/onboarding_steps?organization_id=eq.${id}&order=step_key.asc`, {headers: h}),
-    fetch(`${base}/rest/v1/leaflink_orders?organization_id=eq.${id}&is_sample_order=eq.false&status=not.in.(Cancelled,Rejected)&select=total_amount,order_date&order=order_date.asc`, {headers: h}),
+    fetch(`${base}/rest/v1/sales_orders?organization_id=eq.${id}&is_sample_order=eq.false&status=not.in.(Cancelled,Rejected)&select=total_amount,order_date&order=order_date.asc`, {headers: h}),
   ]);
   const [orgRows, notes, steps, orderData] = await Promise.all([orgRes.json(), notesRes.json(), stepsRes.json(), ordersRes.json()]);
   const org = orgRows?.[0] || null;
   const orderRows = Array.isArray(orderData) ? orderData : [];
   const totalOrderRevenue = orderRows.reduce((s:number,o:any)=>s+(parseFloat(String(o.total_amount||0).replace(/[$,]/g,''))||0),0);
-
-  // Compute reorder cadence from actual order dates (avg days between orders)
-  let computedCadence: number | null = null;
-  const datedOrders = orderRows.filter((o:any) => o.order_date).map((o:any) => new Date(o.order_date).getTime()).sort((a:number,b:number)=>a-b);
-  if (datedOrders.length >= 2) {
-    const gaps: number[] = [];
-    for (let i = 1; i < datedOrders.length; i++) {
-      gaps.push((datedOrders[i] - datedOrders[i-1]) / 86400000);
-    }
-    computedCadence = Math.round(gaps.reduce((s,g)=>s+g,0) / gaps.length);
-  }
+  // Use stored reorder_cadence_days from org (kept fresh by recalcOrgAfterOrder on every order change)
+  const computedCadence: number | null = org?.reorder_cadence_days ?? null;
   return json({authenticated: true, org, contacts: org?.contacts || [], notes: Array.isArray(notes)?notes:[], steps: Array.isArray(steps)?steps:[], totalOrderRevenue, computedCadence});
 }
 
@@ -167,6 +158,21 @@ export default function AccountDetail() {
   const tc = tierColor(org.tier);
   const lcColor = LC_COLORS[org.lifecycle_stage] || T.textFaint;
   const isFlagged = (org.tags||[]).includes('pete-followup');
+
+  // Compute reorder flag — use stored value, fall back to live compute so badge
+  // shows correctly even before the fire-and-forget DB patch from Reorders page commits.
+  const computedFlag: string | null = (() => {
+    const rs = org.reorder_status;
+    // Lit-based flags (low_inv, out_of_stock) only come from DB — can't compute client-side
+    if (rs === 'low_inv' || rs === 'out_of_stock') return rs;
+    // Time/cadence flags: compute live from available data as authoritative source
+    if (days !== null) {
+      const cadence: number | null = org.reorder_cadence_days ?? null;
+      if (cadence !== null && days >= cadence) return 'past_cadence';
+      if (cadence === null && days >= 45) return 'aging';
+    }
+    return rs && rs !== 'healthy' ? rs : null;
+  })();
   const nameInitials = (org.name||'').split(/\s+/).slice(0,2).map((w:string)=>w[0]?.toUpperCase()||'').join('');
   const domain = org.website ? (() => { try { return new URL(org.website.startsWith('http')?org.website:`https://${org.website}`).hostname.replace(/^www\./,''); } catch { return null; } })() : null;
 
@@ -199,7 +205,12 @@ export default function AccountDetail() {
                     {org.lifecycle_stage}
                   </span>
                   {org.tier && <span style={{padding:'5px 10px', border:`1px solid ${tc}`, color:tc, fontFamily:'JetBrains Mono,monospace', fontSize:11, letterSpacing:'0.18em', textTransform:'uppercase'}}>Tier {org.tier}</span>}
-                  {org.reorder_status && org.reorder_status !== 'ok' && <span style={{padding:'5px 10px', background:'#000', border:`1px solid ${T.borderStrong}`, color:T.statusWarn, fontFamily:'JetBrains Mono,monospace', fontSize:11, letterSpacing:'0.16em', textTransform:'uppercase'}}>Reorder {org.reorder_status}</span>}
+                  {computedFlag&&(()=>{
+                    const FC:Record<string,string>={out_of_stock:T.redSystems,low_inv:'#FF8A00',past_cadence:T.yellow,aging:T.statusWarn};
+                    const FL:Record<string,string>={out_of_stock:'OUT OF STOCK',low_inv:'LOW INVENTORY',past_cadence:'PAST CADENCE',aging:'AGING'};
+                    const fc=FC[computedFlag]||T.statusWarn; const fl=FL[computedFlag]||computedFlag.toUpperCase();
+                    return <span style={{display:'inline-flex',alignItems:'center',gap:7,padding:'5px 10px',border:`1px solid ${fc}`,color:fc,fontFamily:'JetBrains Mono,monospace',fontSize:11,letterSpacing:'0.18em',textTransform:'uppercase',background:`${fc}12`}}><span style={{width:6,height:6,borderRadius:'50%',background:fc,flexShrink:0}}/>{fl}</span>;
+                  })()}
                 </div>
                 <div style={{marginTop:10, fontSize:12, color:T.textSubtle, letterSpacing:'0.04em', display:'flex', gap:18, flexWrap:'wrap', fontFamily:'JetBrains Mono,monospace'}}>
                   {org.street_address && <span>{org.street_address}{org.city?`, ${org.city}`:''} {org.market_state||''} {org.zip||''}</span>}
@@ -455,7 +466,7 @@ function EditableField({label, field, value, orgId, mono, link, locked, hint}: {
 }
 
 // ─── SelectField ──────────────────────────────────────────────────────────────
-function SelectField({label, field, value, orgId, options}: {label:string; field:string; value:string; orgId:string; options:string[]}) {
+function SelectField({label, field, value, orgId, options, labels}: {label:string; field:string; value:string; orgId:string; options:string[]; labels?: Record<string,string>}) {
   const fetcher = useFetcher();
   const save = (v: string) => {
     if (v===value) return;
@@ -467,7 +478,7 @@ function SelectField({label, field, value, orgId, options}: {label:string; field
       <div style={{fontFamily:'Teko,sans-serif', fontSize:10, letterSpacing:'0.30em', color:T.textFaint, textTransform:'uppercase', marginBottom:5}}>{label}</div>
       <select value={value||''} onChange={e=>save(e.target.value)}
         style={{width:'100%', background:T.surfaceElev, border:`1px solid ${T.borderStrong}`, color:T.text, fontSize:13, fontFamily:'inherit', padding:'4px 6px', outline:'none', cursor:'pointer'}}>
-        {options.map(o => <option key={o} value={o}>{o||'—'}</option>)}
+        {options.map(o => <option key={o} value={o}>{(labels&&labels[o]) || o || '—'}</option>)}
       </select>
     </div>
   );
@@ -625,7 +636,9 @@ function FieldsPanel({org}: {org: any}) {
       <TwoCol>
         <SelectField label="Lifecycle" field="lifecycle_stage" value={org.lifecycle_stage} orgId={org.id} options={['active','untargeted','churned','dormant','prospect','contacted','qualified','sample_sent','first_order_pending','reorder_due']} />
         <SelectField label="Tier" field="tier" value={org.tier||''} orgId={org.id} options={['','A','B','C']} />
-        <SelectField label="Reorder status" field="reorder_status" value={org.reorder_status||'ok'} orgId={org.id} options={['ok','due','overdue']} />
+        <SelectField label="Reorder Status" field="reorder_status" value={org.reorder_status||''} orgId={org.id}
+          options={['','healthy','aging','past_cadence','low_inv','out_of_stock']}
+          labels={{'':'—', healthy:'Healthy', aging:'Aging', past_cadence:'Past Cadence', low_inv:'Low Inventory', out_of_stock:'Out of Stock'}} />
         <EditableField label="Last order date" field="last_order_date" value={org.last_order_date} orgId={org.id} mono hint="YYYY-MM-DD" />
       </TwoCol>
 
