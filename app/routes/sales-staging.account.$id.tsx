@@ -733,38 +733,47 @@ function FieldsPanel({org, computedFlag, googleMapsKey}: {org: any; computedFlag
         <EditableField label="ZIP" field="zip" value={org.zip} orgId={org.id} mono />
       </TwoCol>
 
-      {/* Map — shows when lat/lng are geocoded, otherwise a Google Maps link */}
+      {/* Map — interactive Google Maps embed, renders inside the app */}
       {(()=>{
-        const hasCoords = org.lat && org.lng;
-        const addressQuery = [org.street_address, org.city, org.market_state, org.zip].filter(Boolean).join(', ');
-        if (!addressQuery && !hasCoords) return null;
-        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressQuery||`${org.lat},${org.lng}`)}`;
+        // Build location query: prefer address fields, fall back to city+state
+        const parts = [org.street_address, org.city, org.market_state, org.zip].filter(Boolean);
+        const addressQuery = parts.join(', ');
+        // For the embed: use lat/lng if available (most accurate), else address, else skip
+        const embedQuery = org.lat && org.lng ? `${org.lat},${org.lng}` : addressQuery;
+        if (!embedQuery || !googleMapsKey) {
+          // No key or no location data — show a plain text address with no map
+          if (!addressQuery) return null;
+          return (
+            <div style={{padding:'12px 16px',borderBottom:`1px solid ${T.border}`}}>
+              <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:10,color:T.textFaint,letterSpacing:'0.10em'}}>
+                {addressQuery} · <span style={{color:T.textFaint}}>map unavailable</span>
+              </div>
+            </div>
+          );
+        }
+        // "Open in Google Maps" uses address for better business listing UX
+        const mapsOpenUrl = addressQuery
+          ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressQuery)}`
+          : `https://www.google.com/maps?q=${org.lat},${org.lng}`;
+        // Embed src: place search by address or lat/lng — interactive, renders inside app
+        const embedSrc = addressQuery
+          ? `https://www.google.com/maps/embed/v1/place?key=${googleMapsKey}&q=${encodeURIComponent(addressQuery)}&zoom=15`
+          : `https://www.google.com/maps/embed/v1/view?key=${googleMapsKey}&center=${org.lat},${org.lng}&zoom=15&maptype=roadmap`;
         return (
-          <div style={{borderBottom:`1px solid ${T.border}`}}>
-            {hasCoords && googleMapsKey ? (
-              <div style={{position:'relative'}}>
-                <img
-                  src={`https://maps.googleapis.com/maps/api/staticmap?center=${org.lat},${org.lng}&zoom=14&size=600x180&markers=color:red%7C${org.lat},${org.lng}&style=feature:all%7Celement:labels%7Cvisibility:on&key=${googleMapsKey}`}
-                  alt="Account location"
-                  style={{width:'100%',height:160,objectFit:'cover',display:'block',opacity:0.85}}
-                />
-                <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
-                  style={{position:'absolute',bottom:8,right:8,fontFamily:'JetBrains Mono,monospace',fontSize:10,letterSpacing:'0.12em',color:T.yellow,background:'rgba(10,10,10,0.85)',padding:'4px 8px',textDecoration:'none',border:`1px solid ${T.yellow}44`}}>
-                  VIEW ON GOOGLE MAPS ↗
-                </a>
-              </div>
-            ) : (
-              <div style={{padding:'12px 16px'}}>
-                <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
-                  style={{fontFamily:'JetBrains Mono,monospace',fontSize:11,color:T.cyan,letterSpacing:'0.12em',textDecoration:'none',display:'inline-flex',alignItems:'center',gap:6}}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-                  View on Google Maps ↗
-                </a>
-                <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:9.5,color:T.textFaint,marginTop:4,letterSpacing:'0.08em'}}>
-                  {addressQuery || 'No address on file'} {!hasCoords&&'· geocoding pending'}
-                </div>
-              </div>
-            )}
+          <div style={{borderBottom:`1px solid ${T.border}`,position:'relative'}}>
+            <iframe
+              src={embedSrc}
+              width="100%" height="220"
+              style={{border:0,display:'block',filter:'grayscale(20%) brightness(0.9)'}}
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+              title={`Map: ${org.name}`}
+            />
+            {/* Open in Google Maps — uses address so it finds the actual business listing */}
+            <a href={mapsOpenUrl} target="_blank" rel="noopener noreferrer"
+              style={{position:'absolute',bottom:10,right:10,fontFamily:'JetBrains Mono,monospace',fontSize:10,letterSpacing:'0.12em',color:'#000',background:T.yellow,padding:'5px 10px',textDecoration:'none',fontWeight:600}}>
+              OPEN IN GOOGLE MAPS ↗
+            </a>
           </div>
         );
       })()}
