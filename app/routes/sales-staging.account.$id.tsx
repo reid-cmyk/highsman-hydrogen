@@ -177,14 +177,16 @@ function AccountStatBar({days, daysColor, lastOrderDate, ordersCount, stateRank,
 
 export default function AccountDetail() {
   const {authenticated, sfUser, org, contacts, notes, steps, totalOrderRevenue, computedCadence, googleMapsKey, fromParam} = useLoaderData<typeof loader>() as any;
-  const FROM_MAP: Record<string,{label:string;href:string}> = {
-    accounts:   {label:'← Accounts',     href:'/sales-staging/accounts'},
-    dashboard:  {label:'← Dashboard',    href:'/sales-staging/dashboard'},
-    reorders:   {label:'← Reorders Due', href:'/sales-staging/reorders'},
-    onboarding: {label:'← Onboarding',   href:'/sales-staging/onboarding'},
-    leads:      {label:'← Leads',        href:'/sales-staging/leads'},
+  // Back nav is convention-based: ?from=<slug> → /sales-staging/<slug>
+  // Label overrides for slugs that don't title-case cleanly
+  const LABEL_OVERRIDES: Record<string,string> = {
+    reorders: 'Reorders Due',
+    orders: 'Sales Orders',
   };
-  const backNav = FROM_MAP[fromParam] || FROM_MAP.accounts;
+  const slug = fromParam || 'accounts';
+  const backLabel = '← ' + (LABEL_OVERRIDES[slug] || slug.charAt(0).toUpperCase() + slug.slice(1));
+  const backHref = `/sales-staging/${slug}`;
+  const backNav = {label: backLabel, href: backHref};
   const [, rerender] = useState(0);
   const refresh = () => rerender(n => n + 1);
   const [stateRank, setStateRank] = useState<{rank:number|null; total:number|null; revenue:number|null; litRetailerId:number|null; hsBrandRank:number|null; hsBrandTotal:number|null; hsSharePct:number|null; updatedAt:string|null; loading:boolean}>({rank:null, total:null, revenue:null, litRetailerId:null, hsBrandRank:null, hsBrandTotal:null, hsSharePct:null, updatedAt:null, loading:true});
