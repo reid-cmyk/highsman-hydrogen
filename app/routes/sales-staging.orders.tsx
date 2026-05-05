@@ -73,10 +73,10 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     fetch(`${base}/rest/v1/sales_orders?select=total_amount,order_date${stateQ}${periodQ}&is_sample_order=eq.false&status=not.in.(Cancelled,Rejected)`, {headers: h}),
     // YTD always — never filtered by period, only by state
     fetch(`${base}/rest/v1/sales_orders?select=total_amount${stateQ}&is_sample_order=eq.false&status=not.in.(Cancelled,Rejected)&order_date=gte.${ytdStart}`, {headers: h}),
-    // Pending (not period-filtered)
-    fetch(`${base}/rest/v1/sales_orders?select=id${stateQ}&is_sample_order=eq.false&status=in.(Submitted,Accepted,Fulfilled,Shipped)`, {headers: {...h, Prefer: 'count=exact'}}),
-    // Complete (not period-filtered)
-    fetch(`${base}/rest/v1/sales_orders?select=id${stateQ}&is_sample_order=eq.false&status=eq.Complete`, {headers: {...h, Prefer: 'count=exact'}}),
+    // Pending — filtered by state + period
+    fetch(`${base}/rest/v1/sales_orders?select=id${stateQ}${periodQ}&is_sample_order=eq.false&status=in.(Submitted,Accepted,Fulfilled,Shipped)`, {headers: {...h, Prefer: 'count=exact'}}),
+    // Complete — filtered by state + period
+    fetch(`${base}/rest/v1/sales_orders?select=id${stateQ}${periodQ}&is_sample_order=eq.false&status=eq.Complete`, {headers: {...h, Prefer: 'count=exact'}}),
   ]);
 
   const [orders, periodRows, ytdRows] = await Promise.all([ordersRes.json(), periodStatsRes.json(), ytdStatsRes.json()]);
