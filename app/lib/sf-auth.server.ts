@@ -140,10 +140,6 @@ export async function getSFUser(
     } catch { return null; }
   }
 
-  // Fast path: read from cached cookie (avoids Supabase round-trip)
-  const cached = getSFUserFromCache(cookieHeader);
-  if (cached) return cached;
-
   const token = getSFToken(cookieHeader);
   if (!token) return null;
 

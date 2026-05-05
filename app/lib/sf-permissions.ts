@@ -7,7 +7,7 @@
 
 export const SF_MODULES = [
   'dashboard', 'onboarding', 'reorders', 'leads',
-  'orders', 'accounts', 'funnel', 'email', 'text',
+  'orders', 'accounts', 'email', 'text',
   'issues', 'vibes', 'admin',
 ] as const;
 

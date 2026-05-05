@@ -69,7 +69,6 @@ const NAV_ITEMS: {
   { label: 'Leads',          href: '/sales-staging/leads',                     countKey: 'prospect' },
   { label: 'Sales Orders',   href: '/sales-staging/orders' },
   { label: 'Accounts',       href: '/sales-staging' },
-  { label: 'Funnel',         href: '/sales' },
   { label: 'Email',          href: '/sales-floor/app' },
   { label: 'Text',           href: '/sales-floor/app' },
   { label: 'Issues',         href: '/sales-floor/app' },
@@ -110,7 +109,7 @@ export function SalesFloorLayout({
   const navW = collapsed ? 52 : 200;
 
   return (
-    <div style={{ height: '100vh', background: T.bg, color: T.text, fontFamily: 'Inter,sans-serif', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: 'Inter,sans-serif', display: 'flex', flexDirection: 'column' }}>
       <style>{`
         @keyframes pulse-ring {
           0%   { box-shadow: 0 0 0 0 rgba(0,232,122,.7) }
@@ -139,11 +138,12 @@ export function SalesFloorLayout({
         }
       `}</style>
 
-      {/* ── Top bar ─────────────────────────────────────────────────────── */}
+      {/* ── Top bar — sticky so it stays visible as content scrolls ─────── */}
       <div style={{
         height: 56, background: T.bg, borderBottom: `1px solid ${T.border}`,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '0 24px', flexShrink: 0, zIndex: 100,
+        position: 'sticky', top: 0,
       }}>
         {/* Left: logo + wordmark */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -164,9 +164,9 @@ export function SalesFloorLayout({
       </div>
 
       {/* ── Body ────────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', flex: 1, alignItems: 'flex-start' }}>
 
-        {/* ── Side nav ──────────────────────────────────────────────────── */}
+        {/* ── Side nav — sticky so it doesn't scroll with page content ──── */}
         <div
           className="sf-sidenav"
           style={{
@@ -174,6 +174,9 @@ export function SalesFloorLayout({
             borderRight: `1px solid ${T.border}`,
             display: 'flex', flexDirection: 'column',
             transition: 'width 0.18s ease', overflow: 'hidden',
+            position: 'sticky', top: 56,
+            height: 'calc(100vh - 56px)',
+            alignSelf: 'flex-start',
           }}
         >
           {/* Collapse toggle */}
@@ -213,7 +216,7 @@ export function SalesFloorLayout({
               'Dashboard': 'dashboard', 'Onboarding': 'onboarding',
               'Reorders Due': 'reorders', 'Leads': 'leads',
               'Sales Orders': 'orders', 'Accounts': 'accounts',
-              'Funnel': 'funnel', 'Email': 'email', 'Text': 'text',
+              'Email': 'email', 'Text': 'text',
               'Issues': 'issues', 'Vibes': 'vibes', 'Admin': 'admin',
             };
             return mods.includes(MAP[item.label] || item.label.toLowerCase());
@@ -315,7 +318,7 @@ export function SalesFloorLayout({
         </div>
 
         {/* ── Page content ──────────────────────────────────────────────── */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           {children}
         </div>
 

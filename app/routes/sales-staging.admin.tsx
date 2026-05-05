@@ -66,7 +66,7 @@ export async function action({request, context}: ActionFunctionArgs) {
 const MODULE_LABELS: Record<string, string> = {
   dashboard: 'Dashboard', onboarding: 'Onboarding', reorders: 'Reorders Due',
   leads: 'Leads', orders: 'Sales Orders', accounts: 'Accounts',
-  funnel: 'Funnel', email: 'Email', text: 'Text', issues: 'Issues',
+  email: 'Email', text: 'Text', issues: 'Issues',
   vibes: 'Vibes', admin: 'Admin',
 };
 
