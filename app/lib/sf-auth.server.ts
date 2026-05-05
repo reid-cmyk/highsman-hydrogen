@@ -48,11 +48,9 @@ export function buildSFSessionCookie(token: string): string {
 
 /** Cache user permissions in a separate cookie to avoid a Supabase round-trip on every request. */
 export function buildSFUserCookie(user: SFUser): string {
-  const payload = Buffer.from(JSON.stringify({
-    id: user.id,
-    email: user.email,
-    permissions: user.permissions,
-  })).toString('base64');
+  // btoa requires ASCII — encodeURIComponent first handles any unicode in display names
+  const json = JSON.stringify({id: user.id, email: user.email, permissions: user.permissions});
+  const payload = btoa(encodeURIComponent(json));
   const maxAge = 365 * 24 * 3600;
   return `${SF_USER_COOKIE}=${payload}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
 }
@@ -70,7 +68,7 @@ export function getSFUserFromCache(cookieHeader: string | null): SFUser | null {
   const match = cookieHeader.match(/sf_user=([^;]+)/);
   if (!match) return null;
   try {
-    return JSON.parse(Buffer.from(match[1], 'base64').toString('utf8')) as SFUser;
+    return JSON.parse(decodeURIComponent(atob(match[1]))) as SFUser;
   } catch { return null; }
 }
 
