@@ -975,7 +975,8 @@ function OnboardingPanel({orgId, steps, refresh, marketState}: {orgId:string; st
 // ─── Contact Card ─────────────────────────────────────────────────────────────
 function ContactCard({contact: c, orgId, refresh, borderTop}: {contact:any; orgId:string; refresh:()=>void; borderTop:boolean}) {
   const [mode, setMode] = useState<'view'|'edit'|'confirm-delete'>('view');
-  const [form, setForm] = useState({first_name:c.first_name||'', last_name:c.last_name||'', email:c.email||'', phone:c.phone||c.mobile||'', job_role:c.job_role||'', is_primary:c.is_primary_buyer||false});
+  const ROLES = ['purchasing','marketing','management','budtender','billing','owner'] as const;
+  const [form, setForm] = useState({first_name:c.first_name||'', last_name:c.last_name||'', email:c.email||'', phone:c.phone||c.mobile||'', job_title:c.job_title||'', roles:(c.roles||[]) as string[], is_primary:c.is_primary_buyer||false});
   const [saving, setSaving] = useState(false);
   const editFetcher = useFetcher();
   const delFetcher = useFetcher();
@@ -1000,7 +1001,10 @@ function ContactCard({contact: c, orgId, refresh, borderTop}: {contact:any; orgI
     fd.set('intent','update_contact'); fd.set('org_id',orgId); fd.set('contact_id',c.id);
     fd.set('first_name',form.first_name.trim()); fd.set('last_name',form.last_name.trim());
     fd.set('email',form.email.trim()); fd.set('phone',form.phone.trim());
-    fd.set('job_role',form.job_role.trim()); fd.set('is_primary',String(form.is_primary));
+    fd.set('job_title',form.job_title.trim());
+    form.roles.forEach(r => fd.append('roles', r));
+    if (form.roles.length === 0) fd.append('roles', ''); // send empty signal
+    fd.set('is_primary',String(form.is_primary));
     editFetcher.submit(fd, {method:'post', action:'/api/org-update'});
   };
 
@@ -1013,7 +1017,7 @@ function ContactCard({contact: c, orgId, refresh, borderTop}: {contact:any; orgI
         <form onSubmit={saveEdit} style={{padding:'14px 16px', background:T.surfaceElev, display:'flex', flexDirection:'column', gap:10}}>
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:2}}>
             <span style={{fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.20em', color:T.yellow}}>EDIT CONTACT</span>
-            <button type="button" onClick={()=>{setMode('view');setForm({first_name:c.first_name||'',last_name:c.last_name||'',email:c.email||'',phone:c.phone||c.mobile||'',job_role:c.job_role||'',is_primary:c.is_primary_buyer||false});}}
+            <button type="button" onClick={()=>{setMode('view');setForm({first_name:c.first_name||'',last_name:c.last_name||'',email:c.email||'',phone:c.phone||c.mobile||'',job_title:c.job_title||'',roles:c.roles||[],is_primary:c.is_primary_buyer||false});}}
               style={{background:'none', border:'none', color:T.textFaint, cursor:'pointer', fontFamily:'JetBrains Mono,monospace', fontSize:10, letterSpacing:'0.10em'}}>CANCEL</button>
           </div>
           <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
@@ -1024,7 +1028,21 @@ function ContactCard({contact: c, orgId, refresh, borderTop}: {contact:any; orgI
             <div><div style={labelStyle}>Email</div><input type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} style={fieldStyle} /></div>
             <div><div style={labelStyle}>Phone</div><input type="tel" value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))} style={fieldStyle} /></div>
           </div>
-          <div><div style={labelStyle}>Job role</div><input value={form.job_role} onChange={e=>setForm(f=>({...f,job_role:e.target.value}))} placeholder="e.g. Buyer, GM" style={fieldStyle} /></div>
+          <div><div style={labelStyle}>Title <span style={{color:T.textFaint, fontSize:9, letterSpacing:'0.10em'}}>(optional)</span></div><input value={form.job_title} onChange={e=>setForm(f=>({...f,job_title:e.target.value}))} placeholder="e.g. Director of Purchasing" style={fieldStyle} /></div>
+          <div>
+            <div style={{...labelStyle, marginBottom:6}}>Roles <span style={{color:T.redSystems, fontSize:9}}>*</span></div>
+            <div style={{display:'flex', flexWrap:'wrap', gap:6}}>
+              {ROLES.map(r => {
+                const on = form.roles.includes(r);
+                return (
+                  <button key={r} type="button" onClick={()=>setForm(f=>({...f,roles:on?f.roles.filter(x=>x!==r):[...f.roles,r]}))}
+                    style={{padding:'4px 10px', background:on?`rgba(255,213,0,0.12)`:'transparent', border:`1px solid ${on?T.yellow:T.borderStrong}`, color:on?T.yellow:T.textSubtle, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.14em', textTransform:'uppercase', cursor:'pointer'}}>
+                    {r}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <label style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer'}}>
             <input type="checkbox" checked={form.is_primary} onChange={e=>setForm(f=>({...f,is_primary:e.target.checked}))} style={{accentColor:T.yellow, width:14, height:14}} />
             <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textMuted, letterSpacing:'0.12em'}}>PRIMARY BUYER</span>
@@ -1066,7 +1084,14 @@ function ContactCard({contact: c, orgId, refresh, borderTop}: {contact:any; orgI
               </div>
             )}
           </div>
-          {c.job_role && <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textSubtle, marginTop:2, letterSpacing:'0.06em'}}>{c.job_role.toUpperCase()}</div>}
+          {c.job_title && <div style={{fontFamily:'Inter,sans-serif', fontSize:11, color:T.textSubtle, marginTop:2}}>{c.job_title}</div>}
+          {(c.roles||[]).length > 0 && (
+            <div style={{display:'flex', flexWrap:'wrap', gap:4, marginTop:4}}>
+              {(c.roles as string[]).map((r:string) => (
+                <span key={r} style={{padding:'1px 6px', border:`1px solid ${T.borderStrong}`, color:T.textFaint, fontFamily:'Teko,sans-serif', fontSize:11, letterSpacing:'0.14em', textTransform:'uppercase'}}>{r}</span>
+              ))}
+            </div>
+          )}
           <div style={{marginTop:6, display:'flex', flexDirection:'column', gap:2}}>
             {c.email && <a href={`mailto:${c.email}`} style={{fontFamily:'JetBrains Mono,monospace', color:T.cyan, fontSize:12, textDecoration:'none', letterSpacing:'0.02em'}}>{c.email}</a>}
             {(c.phone||c.mobile) && <a href={`tel:${c.phone||c.mobile}`} style={{fontFamily:'JetBrains Mono,monospace', color:T.textMuted, fontSize:12, textDecoration:'none', letterSpacing:'0.02em'}}>{c.phone||c.mobile}</a>}
@@ -1085,14 +1110,15 @@ function ContactCard({contact: c, orgId, refresh, borderTop}: {contact:any; orgI
 // ─── Contacts Panel ───────────────────────────────────────────────────────────
 function ContactsPanel({orgId, contacts, refresh}: {orgId:string; contacts: any[]; refresh:()=>void}) {
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({first_name:'', last_name:'', email:'', phone:'', job_role:'', is_primary:false});
+  const ROLES = ['purchasing','marketing','management','budtender','billing','owner'] as const;
+  const [form, setForm] = useState({first_name:'', last_name:'', email:'', phone:'', job_title:'', roles:[] as string[], is_primary:false});
   const [saving, setSaving] = useState(false);
   const fetcher = useFetcher();
 
   // Watch for successful create
   useEffect(() => {
     const d = fetcher.data as any;
-    if (d?.ok) { setAdding(false); setForm({first_name:'', last_name:'', email:'', phone:'', job_role:'', is_primary:false}); setSaving(false); refresh(); }
+    if (d?.ok) { setAdding(false); setForm({first_name:'', last_name:'', email:'', phone:'', job_title:'', roles:[], is_primary:false}); setSaving(false); refresh(); }
     else if (d && !d.ok) { setSaving(false); }
   }, [fetcher.data]);
 
@@ -1106,7 +1132,8 @@ function ContactsPanel({orgId, contacts, refresh}: {orgId:string; contacts: any[
     fd.set('last_name', form.last_name.trim());
     fd.set('email', form.email.trim());
     fd.set('phone', form.phone.trim());
-    fd.set('job_role', form.job_role.trim());
+    fd.set('job_title', form.job_title.trim());
+    form.roles.forEach(r => fd.append('roles', r));
     fd.set('is_primary', String(form.is_primary));
     fetcher.submit(fd, {method:'post', action:'/api/contact-create'});
   };
@@ -1147,8 +1174,22 @@ function ContactsPanel({orgId, contacts, refresh}: {orgId:string; contacts: any[
             </div>
           </div>
           <div>
-            <div style={labelStyle}>Job role</div>
-            <input value={form.job_role} onChange={e=>setForm(f=>({...f,job_role:e.target.value}))} placeholder="e.g. Buyer, GM, Budtender" style={fieldStyle} />
+            <div style={labelStyle}>Title <span style={{color:T.textFaint, fontSize:9, letterSpacing:'0.10em'}}>(optional)</span></div>
+            <input value={form.job_title} onChange={e=>setForm(f=>({...f,job_title:e.target.value}))} placeholder="e.g. Director of Purchasing" style={fieldStyle} />
+          </div>
+          <div>
+            <div style={{...labelStyle, marginBottom:6}}>Roles <span style={{color:T.redSystems, fontSize:9}}>*</span></div>
+            <div style={{display:'flex', flexWrap:'wrap', gap:6}}>
+              {ROLES.map(r => {
+                const on = form.roles.includes(r);
+                return (
+                  <button key={r} type="button" onClick={()=>setForm(f=>({...f,roles:on?f.roles.filter(x=>x!==r):[...f.roles,r]}))}
+                    style={{padding:'4px 10px', background:on?`rgba(255,213,0,0.12)`:'transparent', border:`1px solid ${on?T.yellow:T.borderStrong}`, color:on?T.yellow:T.textSubtle, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.14em', textTransform:'uppercase', cursor:'pointer'}}>
+                    {r}
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <label style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer'}}>
             <input type="checkbox" checked={form.is_primary} onChange={e=>setForm(f=>({...f,is_primary:e.target.checked}))} style={{accentColor:T.yellow, width:14, height:14}} />
@@ -1159,7 +1200,7 @@ function ContactsPanel({orgId, contacts, refresh}: {orgId:string; contacts: any[
               style={{height:32, padding:'0 16px', background:T.yellow, border:'none', color:'#000', fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.18em', cursor:saving?'not-allowed':'pointer', opacity:saving?0.6:1}}>
               {saving ? 'SAVING…' : 'SAVE CONTACT'}
             </button>
-            <button type="button" onClick={()=>{setAdding(false);setForm({first_name:'', last_name:'', email:'', phone:'', job_role:'', is_primary:false});}}
+            <button type="button" onClick={()=>{setAdding(false);setForm({first_name:'', last_name:'', email:'', phone:'', job_title:'', roles:[], is_primary:false});}}
               style={{height:32, padding:'0 12px', background:'transparent', border:`1px solid ${T.borderStrong}`, color:T.textFaint, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.14em', cursor:'pointer'}}>
               CANCEL
             </button>
