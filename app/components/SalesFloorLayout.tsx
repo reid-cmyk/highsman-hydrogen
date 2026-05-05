@@ -109,7 +109,7 @@ export function SalesFloorLayout({
   const navW = collapsed ? 52 : 200;
 
   return (
-    <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: 'Inter,sans-serif', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ fontFamily: 'Inter,sans-serif', color: T.text, background: T.bg }}>
       <style>{`
         @keyframes pulse-ring {
           0%   { box-shadow: 0 0 0 0 rgba(0,232,122,.7) }
@@ -133,17 +133,16 @@ export function SalesFloorLayout({
           .hs-card-actions{grid-column:2/-1!important;padding:8px 12px 12px!important;border-left:none!important}
         }
         @media (max-width: 768px) {
-          .sf-sidenav        { display: none !important; }
-          .sf-topbar-extras  { display: none !important; }
+          .sf-sidenav { display: none !important; }
         }
       `}</style>
 
-      {/* ── Top bar — sticky so it stays visible as content scrolls ─────── */}
+      {/* ── Top bar — position:fixed so it never moves ──────────────────── */}
       <div style={{
+        position: 'fixed', top: 0, left: 0, right: 0,
         height: 56, background: T.bg, borderBottom: `1px solid ${T.border}`,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 24px', flexShrink: 0, zIndex: 100,
-        position: 'sticky', top: 0,
+        padding: '0 24px', zIndex: 200,
       }}>
         {/* Left: logo + wordmark */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -163,20 +162,16 @@ export function SalesFloorLayout({
         </div>
       </div>
 
-      {/* ── Body ────────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', flex: 1, alignItems: 'flex-start' }}>
-
-        {/* ── Side nav — sticky so it doesn't scroll with page content ──── */}
+      {/* ── Side nav — position:fixed so it never moves ────────────────── */}
         <div
           className="sf-sidenav"
           style={{
-            width: navW, flexShrink: 0, background: T.bg,
-            borderRight: `1px solid ${T.border}`,
+            position: 'fixed', top: 56, left: 0,
+            width: navW, height: 'calc(100vh - 56px)',
+            background: T.bg, borderRight: `1px solid ${T.border}`,
             display: 'flex', flexDirection: 'column',
             transition: 'width 0.18s ease', overflow: 'hidden',
-            position: 'sticky', top: 56,
-            height: 'calc(100vh - 56px)',
-            alignSelf: 'flex-start',
+            zIndex: 100,
           }}
         >
           {/* Collapse toggle */}
@@ -317,11 +312,16 @@ export function SalesFloorLayout({
           </div>
         </div>
 
-        {/* ── Page content ──────────────────────────────────────────────── */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          {children}
-        </div>
-
+      {/* ── Page content — offset for fixed header + nav ──────────────── */}
+      <div style={{
+        marginTop: 56,
+        marginLeft: navW,
+        minHeight: 'calc(100vh - 56px)',
+        transition: 'margin-left 0.18s ease',
+        display: 'flex', flexDirection: 'column',
+        background: T.bg,
+      }}>
+        {children}
       </div>
     </div>
   );
