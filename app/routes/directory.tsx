@@ -313,7 +313,7 @@ const SECTIONS: Section[] = [
         path: '/budtenders',
         name: 'Budtender Championship',
         description:
-          'The May 7 – June 7 2026 NJ Launch competition. Top budtenders win prizes for selling Highsman on the floor.',
+          'The May 14 – June 13 2026 NJ Launch competition. Top budtenders win prizes for selling Highsman on the floor.',
         audience: 'NJ Budtenders',
         access: 'public',
       },

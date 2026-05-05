@@ -9,7 +9,7 @@ export const meta: MetaFunction = () => {
     {
       name: 'description',
       content:
-        'The Highsman Budtender Championship. Sell Ground Game and Triple Threat in NJ from May 7 to June 7 and win the Champions Box, Varsity Jacket, and game day tickets.',
+        'The Highsman Budtender Championship. Sell Ground Game and Triple Threat in NJ from May 14 to June 13 and win the Champions Box, Varsity Jacket, and game day tickets.',
     },
   ];
 };
@@ -36,7 +36,7 @@ const PRIZE_ITEMS_SECOND = [
 const HOW_STEPS = [
   {
     num: '01',
-    title: 'May 7 \u2013 June 7',
+    title: 'May 14 \u2013 June 13',
     body: 'Move any Highsman product at your NJ store. Every unit counts toward your ranking.',
     icon: (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -48,7 +48,7 @@ const HOW_STEPS = [
   {
     num: '02',
     title: 'Top Performers Win',
-    body: 'Store managers report top sellers at close of June 7. No tracking app. No forms. Just results.',
+    body: 'Store managers report top sellers at close of June 13. No tracking app. No forms. Just results.',
     icon: (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
@@ -282,7 +282,7 @@ export default function Budtenders() {
         {/* Top row: logo + NJ Launch pill */}
         <div className="relative z-20 px-6 md:px-16 pt-6 md:pt-7 flex items-center justify-between flex-wrap gap-3">
           <img src={`${CDN}Highsman_Logo_White.png?v=1775594430`} alt="Highsman" className="h-7 md:h-9" />
-          <div className="font-label text-[9px] md:text-[10px] tracking-[0.3em] md:tracking-[0.4em] uppercase px-3 md:px-4 py-1.5 md:py-2" style={{background: '#F5E100', color: '#000'}}>NJ Launch &middot; May 7 &ndash; June 7, 2026</div>
+          <div className="font-label text-[9px] md:text-[10px] tracking-[0.3em] md:tracking-[0.4em] uppercase px-3 md:px-4 py-1.5 md:py-2" style={{background: '#F5E100', color: '#000'}}>NJ Launch &middot; May 14 &ndash; June 13, 2026</div>
         </div>
         {/* "34" jersey-number watermark */}
         <div className="absolute right-0 bottom-0 pointer-events-none select-none leading-none z-[5]" aria-hidden="true" style={{fontFamily: 'Teko, sans-serif', fontSize: 'clamp(280px, 45vw, 580px)', lineHeight: 0.85, color: 'rgba(245,225,0,0.10)', letterSpacing: '-0.04em', textShadow: '0 0 60px rgba(0,0,0,0.6)'}}>34</div>
@@ -305,7 +305,7 @@ export default function Budtenders() {
           </a>
           <p className="font-body text-lg md:text-xl leading-relaxed mb-10 max-w-2xl" style={{color: 'rgba(255,255,255,0.7)'}}>
             <strong style={{color: '#fff'}}>Ground Game and Triple Threat are live in NJ.</strong>{' '}
-            Sell the most May 7 &ndash; June 7. Walk away with the Champions Box, the Varsity Jacket, and seats at the game.
+            Sell the most May 14 &ndash; June 13. Walk away with the Champions Box, the Varsity Jacket, and seats at the game.
           </p>
           <div className="flex flex-wrap gap-4">
             <a href="#prizes" className="font-headline text-base uppercase tracking-[0.18em] px-10 py-5 transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black" style={{background: '#F5E100', color: '#000'}}>See the Prizes</a>
@@ -351,7 +351,7 @@ export default function Budtenders() {
               <p className="font-label text-[10px] tracking-[0.4em] uppercase mb-4" style={{color: 'rgba(255,255,255,0.6)'}}>Top 3 Performers Win</p>
               <h2 className="font-headline uppercase tracking-tight" style={{fontSize: 'clamp(60px,10vw,108px)', lineHeight: 0.86, color: '#fff'}}>The Prizes</h2>
             </div>
-            <span className="font-label text-[10px] tracking-[0.3em] uppercase" style={{color: 'rgba(255,255,255,0.65)'}}>May 7 &ndash; June 7 &middot; NJ</span>
+            <span className="font-label text-[10px] tracking-[0.3em] uppercase" style={{color: 'rgba(255,255,255,0.65)'}}>May 14 &ndash; June 13 &middot; NJ</span>
           </div>
         </div>
         {/* 3-Column Prize Cards */}
