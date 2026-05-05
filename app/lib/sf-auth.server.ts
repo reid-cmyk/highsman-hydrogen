@@ -78,11 +78,40 @@ export async function signInWithPassword(
   }
 }
 
-/** Validate token + load user with permissions from user_metadata. */
+/** Validate token + load user with permissions from user_metadata.
+ *  Pass userId to look up by ID directly (admin operations), or cookieHeader for session auth. */
 export async function getSFUser(
   cookieHeader: string | null,
   env: { SUPABASE_URL: string; SUPABASE_SERVICE_KEY: string },
+  userId?: string,
 ): Promise<SFUser | null> {
+  // Direct lookup by user ID (admin use — bypasses token)
+  if (userId) {
+    try {
+      const res = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
+        headers: {
+          apikey: env.SUPABASE_SERVICE_KEY,
+          Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        },
+      });
+      if (!res.ok) return null;
+      const user: any = await res.json();
+      if (!user?.id) return null;
+      const meta = user.user_metadata || {};
+      return {
+        id: user.id, email: user.email,
+        permissions: {
+          display_name: meta.display_name || user.email,
+          role:     meta.role     || 'rep',
+          modules:  Array.isArray(meta.modules)  ? meta.modules  : [],
+          features: Array.isArray(meta.features) ? meta.features : [],
+          markets:  Array.isArray(meta.markets)  ? meta.markets  : [],
+          avatar_url: meta.avatar_url,
+        },
+      };
+    } catch { return null; }
+  }
+
   const token = getSFToken(cookieHeader);
   if (!token) return null;
 
@@ -143,13 +172,19 @@ export async function listSFUsers(
   }
 }
 
-/** Update a user's permissions (admin only). */
+/** Update a user's permissions (admin only). Merges with existing metadata. */
 export async function updateSFUserPermissions(
   userId: string,
   permissions: Partial<SFPermissions>,
   env: { SUPABASE_URL: string; SUPABASE_SERVICE_KEY: string },
 ): Promise<boolean> {
   try {
+    // Read existing metadata first so we don't wipe keys we're not touching
+    const existing = await getSFUser(null, env, userId);
+    const merged = { ...(existing?.permissions || {}), ...permissions };
+    // Remove undefined values so they don't overwrite good data
+    Object.keys(merged).forEach(k => { if ((merged as any)[k] === undefined) delete (merged as any)[k]; });
+
     const res = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
       method: 'PUT',
       headers: {
@@ -157,7 +192,7 @@ export async function updateSFUserPermissions(
         Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ user_metadata: permissions }),
+      body: JSON.stringify({ user_metadata: merged }),
     });
     return res.ok;
   } catch {

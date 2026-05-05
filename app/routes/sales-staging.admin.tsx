@@ -49,9 +49,9 @@ export async function action({request, context}: ActionFunctionArgs) {
   const modules = fd.getAll('modules').map(String);
   const features = fd.getAll('features').map(String);
   const markets = fd.getAll('markets').map(String);
-  const avatar_url = String(fd.get('avatar_url') || '') || undefined;
+  const avatar_url = String(fd.get('avatar_url') || '').trim(); // always include (empty string clears it)
 
-  const ok = await updateSFUserPermissions(userId, {display_name, role, modules, features, markets, avatar_url}, env);
+  const ok = await updateSFUserPermissions(userId, {display_name, role, modules, features, markets, avatar_url: avatar_url || undefined}, env);
   return json({ok});
 }
 
@@ -125,7 +125,7 @@ function UserCard({user}: {user: any}) {
 
         {/* Modules */}
         <div>
-          <div style={{fontFamily: 'Teko,sans-serif', fontSize: 11, letterSpacing: '0.28em', color: T.textFaint, textTransform: 'uppercase', marginBottom: 10}}>Modules</div>
+          <div style={{fontFamily: 'Teko,sans-serif', fontSize: 13, letterSpacing: '0.22em', color: T.textMuted, textTransform: 'uppercase', marginBottom: 10}}>Modules</div>
           <label style={{display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, cursor: 'pointer'}}>
             <input type="checkbox" name="modules" value="*" defaultChecked={isAllModules}
               onChange={e => { const form = e.target.form!; const boxes = form.querySelectorAll('input[name="modules"]:not([value="*"])') as NodeListOf<HTMLInputElement>; boxes.forEach(b => { b.disabled = e.target.checked; }); }} />
@@ -143,7 +143,7 @@ function UserCard({user}: {user: any}) {
 
         {/* Features + Role */}
         <div>
-          <div style={{fontFamily: 'Teko,sans-serif', fontSize: 11, letterSpacing: '0.28em', color: T.textFaint, textTransform: 'uppercase', marginBottom: 10}}>Features</div>
+          <div style={{fontFamily: 'Teko,sans-serif', fontSize: 13, letterSpacing: '0.22em', color: T.textMuted, textTransform: 'uppercase', marginBottom: 10}}>Features</div>
           <label style={{display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, cursor: 'pointer'}}>
             <input type="checkbox" name="features" value="*" defaultChecked={isAllFeatures} />
             <span style={{fontFamily: 'JetBrains Mono,monospace', fontSize: 13, color: T.yellow}}>All features</span>
@@ -157,7 +157,7 @@ function UserCard({user}: {user: any}) {
           ))}
 
           <div style={{marginTop: 20}}>
-            <div style={{fontFamily: 'Teko,sans-serif', fontSize: 11, letterSpacing: '0.28em', color: T.textFaint, textTransform: 'uppercase', marginBottom: 10}}>Role</div>
+            <div style={{fontFamily: 'Teko,sans-serif', fontSize: 13, letterSpacing: '0.22em', color: T.textMuted, textTransform: 'uppercase', marginBottom: 10}}>Role</div>
             <label style={{display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, cursor: 'pointer'}}>
               <input type="radio" name="role" value="admin" defaultChecked={p.role === 'admin'} />
               <span style={{fontFamily: 'Inter,sans-serif', fontSize: 13, color: T.textSubtle}}>Admin</span>
@@ -171,7 +171,7 @@ function UserCard({user}: {user: any}) {
 
         {/* Markets + Identity + Save */}
         <div>
-          <div style={{fontFamily: 'Teko,sans-serif', fontSize: 11, letterSpacing: '0.28em', color: T.textFaint, textTransform: 'uppercase', marginBottom: 10}}>Markets</div>
+          <div style={{fontFamily: 'Teko,sans-serif', fontSize: 13, letterSpacing: '0.22em', color: T.textMuted, textTransform: 'uppercase', marginBottom: 10}}>Markets</div>
           <label style={{display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, cursor: 'pointer'}}>
             <input type="checkbox" name="markets" value="*" defaultChecked={isAllMarkets} />
             <span style={{fontFamily: 'JetBrains Mono,monospace', fontSize: 13, color: T.yellow}}>All markets</span>
