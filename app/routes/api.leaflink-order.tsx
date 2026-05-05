@@ -790,6 +790,41 @@ export async function loader({request, context}: ActionFunctionArgs) {
     return json({query: q, normalizedTarget: target, pagesScanned: pages, matches, digitSamples: samples});
   }
 
+  // Diagnostic: search Canfections NJ customers by name fragment.
+  // Usage: GET /api/leaflink-order?debug=customer&q=Uforia
+  if (url.searchParams.get('debug') === 'customer') {
+    const q = (url.searchParams.get('q') || '').trim().toLowerCase();
+    if (!q) return json({error: 'pass ?q=name'}, {status: 400});
+    let nextUrl: string | null = `${LEAFLINK_API_BASE}/customers/?seller=${LEAFLINK_COMPANY_ID}&page_size=200`;
+    let pages = 0;
+    const matches: any[] = [];
+    while (nextUrl && pages < 25) {
+      const res = await fetch(nextUrl, {headers: {Authorization: `Token ${apiKey}`}});
+      if (!res.ok) break;
+      const data = await res.json();
+      if (!data.results?.length) break;
+      for (const c of data.results) {
+        const name = (c.name || '').toLowerCase();
+        const nick = (c.nickname || '').toLowerCase();
+        if (name.includes(q) || nick.includes(q)) {
+          matches.push({
+            id: c.id,
+            name: c.name,
+            nickname: c.nickname,
+            license_number: c.license_number,
+            licenses: c.licenses,
+            business_license: c.business_license,
+            email: c.email,
+            display_address: c.display_address || c.address,
+          });
+        }
+      }
+      nextUrl = data.next || null;
+      pages++;
+    }
+    return json({query: q, pagesScanned: pages, matches});
+  }
+
   // Fix products: set unit_multiplier and sell_in_unit_of_measure for TT and GG
   if (url.searchParams.get('debug') === 'fix-products') {
     // Triple Threat: case of 12, Ground Game: case of 6
