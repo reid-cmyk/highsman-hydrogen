@@ -63,7 +63,7 @@ const NAV_ITEMS: {
   countKey?: string;
   dot?: boolean;
 }[] = [
-  { label: 'Dashboard',      href: '/sales-staging' },
+  { label: 'Dashboard',      href: '/sales-staging/dashboard' },
   { label: 'Onboarding',     href: '/sales-staging/onboarding',                countKey: 'first_order_pending' },
   { label: 'Reorders Due',   href: '/sales-staging/reorders',                  countKey: 'reorder_due', dot: true },
   { label: 'Leads',          href: '/sales-staging/leads',                     countKey: 'prospect' },
