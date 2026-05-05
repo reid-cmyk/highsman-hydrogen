@@ -18,11 +18,16 @@ const T = {
   yellow: '#FFD500', redSystems: '#FF3355', surface: '#111111',
 };
 
-export async function loader({request}: LoaderFunctionArgs) {
+export async function loader({request, context}: LoaderFunctionArgs) {
+  const env = (context as any).env;
   const cookie = request.headers.get('Cookie') || '';
-  // Already authed (either method) → go to accounts
-  if (isStagingAuthed(cookie) || getSFToken(cookie)) {
-    return redirect('/sales-staging/dashboard');
+  // Legacy password gate — still valid, redirect immediately
+  if (isStagingAuthed(cookie)) return redirect('/sales-staging');
+  // New token — validate it with Supabase before redirecting to prevent loops on stale tokens
+  if (getSFToken(cookie)) {
+    const sfUser = await getSFUser(cookie, env);
+    if (sfUser) return redirect('/sales-staging');
+    // Token present but invalid — fall through to login page (clears the loop)
   }
   return json({});
 }
