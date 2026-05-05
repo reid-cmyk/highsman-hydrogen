@@ -7,7 +7,8 @@ import type {LoaderFunctionArgs, ActionFunctionArgs, MetaFunction} from '@shopif
 import {json, redirect} from '@shopify/remix-oxygen';
 import {useLoaderData, useFetcher} from '@remix-run/react';
 import {isStagingAuthed} from '~/lib/staging-auth';
-import {getSFToken, getSFUser, listSFUsers, updateSFUserPermissions, SF_MODULES, SF_FEATURES, isAdmin} from '~/lib/sf-auth.server';
+import {getSFUser, listSFUsers, updateSFUserPermissions, isAdmin} from '~/lib/sf-auth.server';
+import {SF_MODULES, SF_FEATURES} from '~/lib/sf-permissions';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
 
 export const handle = {hideHeader: true, hideFooter: true};

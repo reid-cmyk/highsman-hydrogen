@@ -28,21 +28,8 @@ export type SFUser = {
 };
 
 // ─── Module keys ─────────────────────────────────────────────────────────────
-// Keep in sync with SalesFloorLayout nav items
-
-export const SF_MODULES = [
-  'dashboard', 'onboarding', 'reorders', 'leads',
-  'orders', 'accounts', 'funnel', 'email', 'text',
-  'issues', 'vibes', 'admin',
-] as const;
-
-export const SF_FEATURES = [
-  'accounts.export_csv',
-  'accounts.delete',
-  'accounts.create',
-  'orders.create',
-  'accounts.flag_pete',
-] as const;
+// Defined in ~/lib/sf-permissions.ts (not .server) so client JSX can use them
+export {SF_MODULES, SF_FEATURES} from '~/lib/sf-permissions';
 
 // ─── Cookie helpers ───────────────────────────────────────────────────────────
 
