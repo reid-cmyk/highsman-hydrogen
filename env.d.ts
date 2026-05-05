@@ -12,8 +12,10 @@ declare global {
 
   /**
    * Declare expected Env parameter in fetch handler.
+   * Index signature allows dynamic env var access (e.g. env as Record<string,string>).
    */
   interface Env {
+    [key: string]: any;
     SESSION_SECRET: string;
     PUBLIC_STOREFRONT_API_TOKEN: string;
     PRIVATE_STOREFRONT_API_TOKEN: string;
@@ -22,6 +24,14 @@ declare global {
     KLAVIYO_PRIVATE_KEY: string;
     STAFF_DASHBOARD_PASSWORD: string;
     SALES_DASHBOARD_PASSWORD: string;
+  }
+
+  /**
+   * Cloudflare Workers execution context — available in fetch handler.
+   */
+  interface ExecutionContext {
+    waitUntil(promise: Promise<unknown>): void;
+    passThroughOnException(): void;
   }
 }
 

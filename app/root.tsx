@@ -25,6 +25,7 @@ const NOINDEX_PREFIXES = [
   '/ops',
   '/sales',
   '/sales-floor',
+  '/sales-staging',
   '/staff-dashboard',
   '/shift-report',
   '/grading-rubric',

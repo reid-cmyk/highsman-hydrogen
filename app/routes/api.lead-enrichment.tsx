@@ -228,8 +228,8 @@ async function gmailSignatureScan(
   // Brief pipe. Fetch up to 8 recent messages from any sender on this
   // domain; pull bodies and run the signature extractor.
   try {
-    const {getGmailAccessToken} = await import('~/lib/gmail-sa');
-    const token = await getGmailAccessToken(env);
+    const {getGmailAccessTokenForUser} = await import('~/lib/gmail-sa');
+    const token = await getGmailAccessTokenForUser('sky@highsman.com', env);
     if (!token) return [];
 
     const q = `from:@${domain} newer_than:180d`;

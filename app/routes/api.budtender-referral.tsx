@@ -34,7 +34,7 @@ export async function action({request, context}: ActionFunctionArgs) {
     return json({error: 'Method not allowed'}, {status: 405});
   }
 
-  const KLAVIYO_API_KEY = context.env.KLAVIYO_PRIVATE_API_KEY;
+  const KLAVIYO_API_KEY = context.env.KLAVIYO_PRIVATE_KEY;
   if (!KLAVIYO_API_KEY) {
     return json({error: 'Server configuration error'}, {status: 500});
   }

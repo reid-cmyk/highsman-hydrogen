@@ -579,15 +579,6 @@ function Dashboard({data}:{data:any}) {
                 </div>
               </div>
               <div style={{display:'flex',alignItems:'center',gap:8}}>
-                {/* LIST / MAP toggle */}
-                <div style={{display:'flex',border:`1px solid ${T.borderStrong}`,height:36}}>
-                  {(['list','map'] as const).map(mode=>(
-                    <button key={mode} onClick={()=>setViewMode(mode)}
-                      style={{width:52,border:'none',borderRight:mode==='list'?`1px solid ${T.borderStrong}`:'none',background:viewMode===mode?`rgba(255,213,0,0.10)`:'transparent',color:viewMode===mode?T.yellow:T.textSubtle,fontFamily:'Teko,sans-serif',fontSize:13,letterSpacing:'0.18em',cursor:'pointer',textTransform:'uppercase'}}>
-                      {mode}
-                    </button>
-                  ))}
-                </div>
                 <button onClick={()=>downloadCSV(filtered,stateFilter)} style={{height:36,padding:'0 14px',background:'transparent',border:`1px solid ${T.borderStrong}`,color:T.textSubtle,fontFamily:'Teko,sans-serif',fontSize:13,letterSpacing:'0.18em',cursor:'pointer'}}>EXPORT CSV</button>
                 <button onClick={()=>setShowNewAccount(true)} style={{height:36,padding:'0 18px',background:T.yellow,border:'none',color:'#000',fontFamily:'Teko,sans-serif',fontWeight:600,fontSize:14,letterSpacing:'0.20em',cursor:'pointer'}}>+ NEW ACCOUNT</button>
               </div>
@@ -658,8 +649,23 @@ function Dashboard({data}:{data:any}) {
                 </button>
               );
             })}
-            {/* Sort dropdown — right-aligned in stage row */}
-            <div style={{marginLeft:'auto'}}>
+            {/* List/Map toggle + Sort — right-aligned */}
+            <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:8}}>
+              {/* LIST / MAP view toggle with icons */}
+              <div style={{display:'flex',border:`1px solid ${T.borderStrong}`,height:30,overflow:'hidden'}}>
+                <button onClick={()=>setViewMode('list')} title="List view"
+                  style={{width:38,display:'flex',alignItems:'center',justifyContent:'center',gap:5,border:'none',borderRight:`1px solid ${T.borderStrong}`,background:viewMode==='list'?`rgba(255,213,0,0.10)`:'transparent',color:viewMode==='list'?T.yellow:T.textSubtle,cursor:'pointer',padding:0}}>
+                  {/* List icon */}
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="5" y1="4" x2="14" y2="4"/><line x1="5" y1="8" x2="14" y2="8"/><line x1="5" y1="12" x2="14" y2="12"/><circle cx="2" cy="4" r="0.8" fill="currentColor" stroke="none"/><circle cx="2" cy="8" r="0.8" fill="currentColor" stroke="none"/><circle cx="2" cy="12" r="0.8" fill="currentColor" stroke="none"/></svg>
+                  <span style={{fontFamily:'Teko,sans-serif',fontSize:12,letterSpacing:'0.14em'}}>LIST</span>
+                </button>
+                <button onClick={()=>setViewMode('map')} title="Map view"
+                  style={{width:38,display:'flex',alignItems:'center',justifyContent:'center',gap:5,border:'none',background:viewMode==='map'?`rgba(255,213,0,0.10)`:'transparent',color:viewMode==='map'?T.yellow:T.textSubtle,cursor:'pointer',padding:0}}>
+                  {/* Map pin icon */}
+                  <svg width="11" height="13" viewBox="0 0 12 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 1C3.79 1 2 2.79 2 5c0 3.25 4 9 4 9s4-5.75 4-9c0-2.21-1.79-4-4-4z"/><circle cx="6" cy="5" r="1.2"/></svg>
+                  <span style={{fontFamily:'Teko,sans-serif',fontSize:12,letterSpacing:'0.14em'}}>MAP</span>
+                </button>
+              </div>
               <select value={sortBy} onChange={e=>setFilter('sort',e.target.value)}
                 style={{height:30,padding:'0 10px',background:T.surfaceElev,border:`1px solid ${T.borderStrong}`,color:T.text,fontFamily:'Teko,sans-serif',fontSize:13,letterSpacing:'0.14em',cursor:'pointer',outline:'none'}}>
                 <option value="rank">Sort: Market Rank</option>
@@ -787,6 +793,7 @@ function MapView({orgs,googleMapsKey,stateFilter}:{orgs:OrgRow[];googleMapsKey:s
   const infoWinRef=useRef<any>(null);
   const [mapReady,setMapReady]=useState(false);
   const [loading,setLoading]=useState(true);
+  const [mapError,setMapError]=useState<string|null>(null);
   const initStateRef=useRef(stateFilter);
 
   const geocodedOrgs=useMemo(()=>orgs.filter(o=>(o as any).lat!=null&&(o as any).lng!=null),[orgs]);
@@ -844,6 +851,12 @@ function MapView({orgs,googleMapsKey,stateFilter}:{orgs:OrgRow[];googleMapsKey:s
   // Init map once
   useEffect(()=>{
     if (!containerRef.current||!googleMapsKey) return;
+    // Catch Maps JS API auth errors (key not authorized for Maps JavaScript API)
+    (window as any).gm_authFailure=()=>{
+      setLoading(false);
+      setMapError('Maps JavaScript API is not enabled for this key. In GCP Console → Credentials → your API key → API restrictions, add "Maps JavaScript API".');
+    };
+
     const doInit=()=>{
       const c=STATE_MAP_CENTER[initStateRef.current]||STATE_MAP_CENTER['ALL'];
       const map=new (window as any).google.maps.Map(containerRef.current,{
@@ -883,7 +896,13 @@ function MapView({orgs,googleMapsKey,stateFilter}:{orgs:OrgRow[];googleMapsKey:s
 
   return (
     <div style={{flex:1,position:'relative',minHeight:0,display:'flex',flexDirection:'column'}}>
-      {loading&&(
+      {mapError&&(
+        <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:T.bg,zIndex:3,padding:32}}>
+          <div style={{fontFamily:'Teko,sans-serif',fontSize:20,letterSpacing:'0.20em',color:T.redSystems,textTransform:'uppercase',marginBottom:12}}>MAP UNAVAILABLE</div>
+          <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:11,color:T.textSubtle,letterSpacing:'0.08em',maxWidth:520,textAlign:'center',lineHeight:1.7}}>{mapError}</div>
+        </div>
+      )}
+      {!mapError&&loading&&(
         <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:T.bg,zIndex:2}}>
           <div style={{fontFamily:'Teko,sans-serif',fontSize:22,letterSpacing:'0.24em',color:T.textFaint,textTransform:'uppercase'}}>LOADING MAP…</div>
         </div>

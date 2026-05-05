@@ -2466,7 +2466,7 @@ export default function BudtenderEducation() {
               const steps: {label: string; active: boolean; completed: boolean; num: number}[] = [];
               let stepNum = 1;
               if (hasVideos) {
-                steps.push({label: 'WATCH VIDEO' + (currentCourse.videoUrls && currentCourse.videoUrls.length > 1 ? 'S' : ''), active: videoGateActive, completed: !videoGateActive, num: stepNum});
+                steps.push({label: 'WATCH VIDEO' + (currentCourse.videoUrls && currentCourse.videoUrls.length > 1 ? 'S' : ''), active: !!videoGateActive, completed: !videoGateActive, num: stepNum});
                 stepNum++;
               }
               steps.push({label: 'KEY TAKEAWAYS', active: !videoGateActive, completed: false, num: stepNum});
