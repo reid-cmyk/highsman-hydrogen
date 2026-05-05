@@ -302,7 +302,7 @@ export default function AccountDetail() {
             <div style={{display:'flex', flexDirection:'column', gap:24}}>
               <OnboardingPanel orgId={org.id} steps={steps} refresh={refresh} marketState={org.market_state} />
               <ContactsPanel orgId={org.id} contacts={contacts} refresh={refresh} />
-              <NotesPanel orgId={org.id} notes={notes} refresh={refresh} />
+              <NotesPanel orgId={org.id} notes={notes} refresh={refresh} sfUser={sfUser} />
             </div>
           </div>
     </SalesFloorLayout>
@@ -1146,7 +1146,7 @@ function parseNote(body: string): {channel:string|null; text:string} {
 }
 
 // ─── Notes Panel ──────────────────────────────────────────────────────────────
-function NotesPanel({orgId, notes, refresh}: {orgId:string; notes:any[]; refresh:()=>void}) {
+function NotesPanel({orgId, notes, refresh, sfUser}: {orgId:string; notes:any[]; refresh:()=>void; sfUser?:any}) {
   const [draft, setDraft] = useState('');
   const [composing, setComposing] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<string|null>(null);
@@ -1213,7 +1213,12 @@ function NotesPanel({orgId, notes, refresh}: {orgId:string; notes:any[]; refresh
       {/* Click-to-compose placeholder when not open */}
       {!composing && (
         <div style={{padding:'10px 16px', borderBottom:`1px solid ${T.border}`, background:T.surfaceElev, display:'flex', gap:10, alignItems:'center', cursor:'text'}} onClick={()=>setComposing(true)}>
-          <img src="https://agents-assets.nyc3.cdn.digitaloceanspaces.com/sky-avatar.png" alt="Sky Lima" style={{width:26,height:26,borderRadius:'50%',objectFit:'cover',flexShrink:0}} />
+          {sfUser?.permissions?.avatar_url
+            ? <img src={sfUser.permissions.avatar_url} alt={sfUser.permissions.display_name} style={{width:26,height:26,borderRadius:'50%',objectFit:'cover',flexShrink:0}} />
+            : <div style={{width:26,height:26,borderRadius:'50%',background:`linear-gradient(135deg,${T.yellow},#FFB800)`,display:'flex',alignItems:'center',justifyContent:'center',color:'#000',fontWeight:700,fontSize:11,fontFamily:'Teko,sans-serif',flexShrink:0}}>
+                {(sfUser?.permissions?.display_name||'SL').split(' ').map((w:string)=>w[0]).slice(0,2).join('').toUpperCase()}
+              </div>
+          }
           <div style={{flex:1, fontSize:12, color:T.textFaint, fontStyle:'italic'}}>Add a note…</div>
           <div style={{display:'flex', gap:5}}>
             {CHANNELS.map(ch => (

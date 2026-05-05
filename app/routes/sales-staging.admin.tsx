@@ -7,7 +7,7 @@ import type {LoaderFunctionArgs, ActionFunctionArgs, MetaFunction} from '@shopif
 import {json, redirect} from '@shopify/remix-oxygen';
 import {useLoaderData, useFetcher} from '@remix-run/react';
 import {isStagingAuthed} from '~/lib/staging-auth';
-import {getSFUser, listSFUsers, updateSFUserPermissions, isAdmin} from '~/lib/sf-auth.server';
+import {getSFUser, listSFUsers, updateSFUserPermissions, isAdmin, buildSFUserCookie} from '~/lib/sf-auth.server';
 import {SF_MODULES, SF_FEATURES} from '~/lib/sf-permissions';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
 
@@ -46,13 +46,22 @@ export async function action({request, context}: ActionFunctionArgs) {
 
   const display_name = String(fd.get('display_name') || '');
   const role = String(fd.get('role') || 'rep') as 'admin' | 'rep';
-  const modules = fd.getAll('modules').map(String);
-  const features = fd.getAll('features').map(String);
-  const markets = fd.getAll('markets').map(String);
-  const avatar_url = String(fd.get('avatar_url') || '').trim(); // always include (empty string clears it)
+  // If '*' is checked, just store ['*'] — not '*' + all individual values
+  const collapse = (vals: string[]) => vals.includes('*') ? ['*'] : vals;
+  const modules  = collapse(fd.getAll('modules').map(String));
+  const features = collapse(fd.getAll('features').map(String));
+  const markets  = collapse(fd.getAll('markets').map(String));
+  const avatar_url = String(fd.get('avatar_url') || '').trim();
 
   const ok = await updateSFUserPermissions(userId, {display_name, role, modules, features, markets, avatar_url: avatar_url || undefined}, env);
-  return json({ok});
+
+  // Refresh sf_user cache cookie if the admin is editing their own profile
+  const headers = new Headers({'Content-Type': 'application/json'});
+  if (ok && sfUser.id === userId) {
+    const updated = await getSFUser(null, env, userId);
+    if (updated) headers.append('Set-Cookie', buildSFUserCookie(updated));
+  }
+  return new Response(JSON.stringify({ok}), {status: 200, headers});
 }
 
 const MODULE_LABELS: Record<string, string> = {
