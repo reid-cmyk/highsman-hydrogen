@@ -147,10 +147,11 @@ export async function action({request, context}: ActionFunctionArgs) {
     const contact_id = String(fd.get('contact_id') || '');
     if (!contact_id) return json({ok: false, error: 'contact_id required'}, {status: 400});
     const patch: any = {updated_at: new Date().toISOString()};
-    for (const f of ['first_name','last_name','email','phone','job_role']) {
+    for (const f of ['first_name','last_name','email','phone','job_title']) {
       const v = fd.get(f);
       if (v !== null) patch[f] = String(v).trim() || null;
     }
+    if (fd.has('roles')) patch.roles = fd.getAll('roles').map(String).filter(Boolean);
     const isPrimary = fd.get('is_primary');
     if (isPrimary !== null) patch.is_primary_buyer = isPrimary === 'true';
     const res = await fetch(`${env.SUPABASE_URL}/rest/v1/contacts?id=eq.${contact_id}`, {

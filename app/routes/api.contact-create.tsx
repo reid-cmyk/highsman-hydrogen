@@ -20,7 +20,8 @@ export async function action({request, context}: ActionFunctionArgs) {
   const last_name = String(fd.get('last_name') || '').trim();
   const email = String(fd.get('email') || '').trim();
   const phone = String(fd.get('phone') || '').trim();
-  const job_role = String(fd.get('job_role') || '').trim();
+  const job_title = String(fd.get('job_title') || '').trim();
+  const roles = fd.getAll('roles').map(String).filter(Boolean);
   const is_primary = fd.get('is_primary') === 'true';
 
   if (!org_id || !first_name) return json({ok: false, error: 'org_id and first_name required'}, {status: 400});
@@ -38,10 +39,10 @@ export async function action({request, context}: ActionFunctionArgs) {
       first_name, last_name,
       email: email || null,
       phone: phone || null,
-      job_role: job_role || null,
+      job_title: job_title || null,
+      roles,
       is_primary_buyer: is_primary,
       do_not_contact: false,
-      responsible_for: [],
     }),
   });
 
