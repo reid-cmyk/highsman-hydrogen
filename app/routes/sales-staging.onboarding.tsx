@@ -377,7 +377,7 @@ function OnboardingCard({org}: {org: OnboardingOrg}) {
         {/* Identity */}
         <div style={{padding:'12px 20px 12px 14px',minWidth:0}}>
           <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-            <a href={`/sales-staging/account/${org.id}`}
+            <a href={`/sales-staging/account/${org.id}?from=onboarding`}
               style={{fontFamily:'Teko,sans-serif',fontSize:22,letterSpacing:'0.06em',fontWeight:500,color:T.text,textTransform:'uppercase',lineHeight:1,textDecoration:'none'}}>
               {org.name}
             </a>
