@@ -125,6 +125,11 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   if (!sfUser && !isStagingAuthed(cookie)) {
     return redirect('/sales-staging/login');
   }
+  // Redirect authenticated users visiting the root to Dashboard
+  const reqUrl = new URL(request.url);
+  if (!reqUrl.searchParams.has('state') && !reqUrl.searchParams.has('stage') && !reqUrl.searchParams.has('sort')) {
+    return redirect('/sales-staging/dashboard');
+  }
   const url=new URL(request.url);
   const stateFilter=url.searchParams.get('state')||'ALL';
   const stageFilter=url.searchParams.get('stage')||'active';
