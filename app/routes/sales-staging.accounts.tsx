@@ -133,7 +133,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const headers={apikey:env.SUPABASE_SERVICE_KEY,Authorization:`Bearer ${env.SUPABASE_SERVICE_KEY}`};
 
   // Fetch the filtered account list
-  const select=['id','name','market_state','city','phone','lifecycle_stage','tier','last_order_date','tags','online_menus','do_not_contact','risk_of_loss','reorder_status','zoho_account_id','website','market_rank','market_total','market_revenue_90d','contacts(id,email,phone,mobile,full_name,first_name,last_name,is_primary_buyer,job_role)'].join(',');
+  const select=['id','name','market_state','city','phone','lifecycle_stage','tier','last_order_date','tags','online_menus','do_not_contact','risk_of_loss','reorder_status','zoho_account_id','website','market_rank','market_total','market_revenue_90d','lat','lng','contacts(id,email,phone,mobile,full_name,first_name,last_name,is_primary_buyer,job_role)'].join(',');
   // Sort order: rank sorts by market_rank asc (best = lowest number), others client-side
   const supabaseOrder = sortBy==='rank' ? 'market_rank.asc.nullslast' : 'name.asc';
   const params=new URLSearchParams({select,order:supabaseOrder,limit:'2000'});
@@ -200,7 +200,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     tierATotal  = (filteredStageCounts['_tierATotal']  as number)||0;
   } catch {}
 
-  return json({authenticated:true,sfUser,orgs,counts,stageCounts,filteredStageCounts,stateFilter,stageFilter,sortBy,tierAActive,tierATotal});
+  const googleMapsKey = (env.GOOGLE_PLACES_NEW_API_KEY || env.GOOGLE_PLACES_API_KEY || null) as string|null;
+  return json({authenticated:true,sfUser,orgs,counts,stageCounts,filteredStageCounts,stateFilter,stageFilter,sortBy,tierAActive,tierATotal,googleMapsKey});
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -530,8 +531,10 @@ function Dashboard({data}:{data:any}) {
   const [searchParams,setSearchParams]=useSearchParams();
   const [search,setSearch]=useState('');
   const [showNewAccount,setShowNewAccount]=useState(false);
+  const [viewMode,setViewMode]=useState<'list'|'map'>('list');
   const searchRef=useRef<HTMLInputElement>(null);
   const stateFilter:string=data.stateFilter||'ALL';
+  const googleMapsKey:string=data.googleMapsKey||'';
   const stageFilter:string=data.stageFilter||'active';
   const sortBy:string=data.sortBy||'rank';
   const orgs:OrgRow[]=data.orgs||[];
@@ -576,6 +579,15 @@ function Dashboard({data}:{data:any}) {
                 </div>
               </div>
               <div style={{display:'flex',alignItems:'center',gap:8}}>
+                {/* LIST / MAP toggle */}
+                <div style={{display:'flex',border:`1px solid ${T.borderStrong}`,height:36}}>
+                  {(['list','map'] as const).map(mode=>(
+                    <button key={mode} onClick={()=>setViewMode(mode)}
+                      style={{width:52,border:'none',borderRight:mode==='list'?`1px solid ${T.borderStrong}`:'none',background:viewMode===mode?`rgba(255,213,0,0.10)`:'transparent',color:viewMode===mode?T.yellow:T.textSubtle,fontFamily:'Teko,sans-serif',fontSize:13,letterSpacing:'0.18em',cursor:'pointer',textTransform:'uppercase'}}>
+                      {mode}
+                    </button>
+                  ))}
+                </div>
                 <button onClick={()=>downloadCSV(filtered,stateFilter)} style={{height:36,padding:'0 14px',background:'transparent',border:`1px solid ${T.borderStrong}`,color:T.textSubtle,fontFamily:'Teko,sans-serif',fontSize:13,letterSpacing:'0.18em',cursor:'pointer'}}>EXPORT CSV</button>
                 <button onClick={()=>setShowNewAccount(true)} style={{height:36,padding:'0 18px',background:T.yellow,border:'none',color:'#000',fontFamily:'Teko,sans-serif',fontWeight:600,fontSize:14,letterSpacing:'0.20em',cursor:'pointer'}}>+ NEW ACCOUNT</button>
               </div>
@@ -658,16 +670,21 @@ function Dashboard({data}:{data:any}) {
           </div>
           {showNewAccount&&<NewAccountModal onClose={()=>setShowNewAccount(false)}/>}
 
-          {/* Account list */}
-          <div style={{background:T.bg,flex:1}}>
-            {filtered.length===0&&<div style={{padding:'64px 28px',textAlign:'center',fontFamily:'Teko,sans-serif',fontSize:18,letterSpacing:'0.20em',color:T.textFaint,textTransform:'uppercase'}}>No accounts match this filter</div>}
-            {filtered.map(org=><AccountCard key={org.id} org={org} stageFilter={stageFilter}/>)}
-          </div>
-
-          <div style={{padding:'18px 28px',borderTop:`1px solid ${T.border}`,display:'flex',justifyContent:'space-between'}}>
-            <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:10.5,color:T.textFaint,letterSpacing:'0.14em'}}>END OF LIST · {filtered.length} ACCOUNTS</div>
-            <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:10.5,color:T.textFaint,letterSpacing:'0.14em'}}>↑↓ navigate · ↵ open</div>
-          </div>
+          {viewMode==='map' ? (
+            <MapView orgs={filtered} googleMapsKey={googleMapsKey} stateFilter={stateFilter}/>
+          ) : (
+            <>
+              {/* Account list */}
+              <div style={{background:T.bg,flex:1}}>
+                {filtered.length===0&&<div style={{padding:'64px 28px',textAlign:'center',fontFamily:'Teko,sans-serif',fontSize:18,letterSpacing:'0.20em',color:T.textFaint,textTransform:'uppercase'}}>No accounts match this filter</div>}
+                {filtered.map(org=><AccountCard key={org.id} org={org} stageFilter={stageFilter}/>)}
+              </div>
+              <div style={{padding:'18px 28px',borderTop:`1px solid ${T.border}`,display:'flex',justifyContent:'space-between'}}>
+                <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:10.5,color:T.textFaint,letterSpacing:'0.14em'}}>END OF LIST · {filtered.length} ACCOUNTS</div>
+                <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:10.5,color:T.textFaint,letterSpacing:'0.14em'}}>↑↓ navigate · ↵ open</div>
+              </div>
+            </>
+          )}
     </SalesFloorLayout>
   );
 }
@@ -726,6 +743,167 @@ function SideNav({className,stageCounts}:{className?:string;stageCounts:Record<s
           </div>
         </a>
       ))}
+    </div>
+  );
+}
+
+// ─── Map view ─────────────────────────────────────────────────────────────────
+const STATE_MAP_CENTER: Record<string,{lat:number;lng:number;zoom:number}> = {
+  ALL: {lat:39.8, lng:-79.0, zoom:6},
+  NJ:  {lat:40.1, lng:-74.5, zoom:9},
+  MA:  {lat:42.2, lng:-71.8, zoom:9},
+  NY:  {lat:40.9, lng:-75.5, zoom:8},
+  RI:  {lat:41.7, lng:-71.5, zoom:10},
+  MO:  {lat:38.5, lng:-92.5, zoom:7},
+};
+const TIER_PIN_COLOR: Record<string,string> = {A:'#FFD500', B:'#00D4FF', C:'#FF3B7F'};
+
+function makePinSvg(fill:string, letter:string):string {
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36"><path d="M14 0C6.268 0 0 6.268 0 14c0 7.732 14 22 14 22s14-14.268 14-22C28 6.268 21.732 0 14 0z" fill="${fill}"/><circle cx="14" cy="13" r="6" fill="rgba(0,0,0,0.22)"/><text x="14" y="13" font-family="Arial" font-size="9" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="#000">${letter||'·'}</text></svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+const DARK_MAP_STYLE=[
+  {elementType:'geometry',stylers:[{color:'#1a1a1a'}]},
+  {elementType:'labels.icon',stylers:[{visibility:'off'}]},
+  {elementType:'labels.text.fill',stylers:[{color:'#757575'}]},
+  {elementType:'labels.text.stroke',stylers:[{color:'#1a1a1a'}]},
+  {featureType:'administrative',elementType:'geometry',stylers:[{color:'#3a3a3a'}]},
+  {featureType:'administrative.locality',elementType:'labels.text.fill',stylers:[{color:'#aaaaaa'}]},
+  {featureType:'poi',stylers:[{visibility:'off'}]},
+  {featureType:'road',elementType:'geometry.fill',stylers:[{color:'#2c2c2c'}]},
+  {featureType:'road',elementType:'geometry.stroke',stylers:[{color:'#212121'}]},
+  {featureType:'road',elementType:'labels.text.fill',stylers:[{color:'#757575'}]},
+  {featureType:'road.arterial',elementType:'geometry',stylers:[{color:'#373737'}]},
+  {featureType:'road.highway',elementType:'geometry',stylers:[{color:'#3c3c3c'}]},
+  {featureType:'transit',stylers:[{visibility:'off'}]},
+  {featureType:'water',elementType:'geometry',stylers:[{color:'#000000'}]},
+];
+
+function MapView({orgs,googleMapsKey,stateFilter}:{orgs:OrgRow[];googleMapsKey:string;stateFilter:string}) {
+  const containerRef=useRef<HTMLDivElement>(null);
+  const mapRef=useRef<any>(null);
+  const markersRef=useRef<any[]>([]);
+  const infoWinRef=useRef<any>(null);
+  const [mapReady,setMapReady]=useState(false);
+  const [loading,setLoading]=useState(true);
+  const initStateRef=useRef(stateFilter);
+
+  const geocodedOrgs=useMemo(()=>orgs.filter(o=>(o as any).lat!=null&&(o as any).lng!=null),[orgs]);
+
+  // Rebuild markers whenever map is ready or orgs change
+  useEffect(()=>{
+    if (!mapReady||!mapRef.current) return;
+    const map=mapRef.current;
+    const g=(window as any).google.maps;
+    markersRef.current.forEach(m=>m.setMap(null));
+    markersRef.current=[];
+    if (infoWinRef.current) infoWinRef.current.close();
+
+    const iw=new g.InfoWindow({maxWidth:300});
+    infoWinRef.current=iw;
+    const bounds=new g.LatLngBounds();
+    let hasAny=false;
+
+    geocodedOrgs.forEach(org=>{
+      const lat=(org as any).lat as number;
+      const lng=(org as any).lng as number;
+      const pc=org.contacts?.find((c:any)=>c.is_primary_buyer)||org.contacts?.[0];
+      const days=daysSince(org.last_order_date);
+      const pinFill=TIER_PIN_COLOR[org.tier||'']||'#6A6A6A';
+
+      const marker=new g.Marker({
+        position:{lat,lng},map,title:org.name,
+        icon:{url:makePinSvg(pinFill,org.tier||''),scaledSize:new g.Size(28,36),anchor:new g.Point(14,36)},
+        zIndex:org.tier==='A'?3:org.tier==='B'?2:1,
+      });
+
+      const daysColor=days===null?'#00D4FF':days<=30?'#00E676':days<=60?'#FFB300':'#FF3355';
+      const daysStr=days===null?'—':`${days}d`;
+      const contactName=pc?.full_name||[pc?.first_name,pc?.last_name].filter(Boolean).join(' ')||'—';
+      const contactPhone=org.phone||pc?.phone||pc?.mobile||'';
+      const tierBadge=TIER_PIN_COLOR[org.tier||'']||'#9C9C9C';
+      const iwHtml=`<div style="background:#141414;padding:14px 16px;min-width:220px;font-family:Arial,sans-serif;color:#F5F5F5;border:1px solid #2F2F2F"><div style="font-size:14px;font-weight:700;letter-spacing:0.04em;margin-bottom:3px;line-height:1.2">${org.name}</div><div style="font-size:10px;color:#9C9C9C;margin-bottom:10px">${[org.market_state,org.city].filter(Boolean).join(' · ')}${org.tier?` &nbsp;·&nbsp; <span style="color:${tierBadge}">Tier ${org.tier}</span>`:''}</div><div style="display:flex;gap:14px;margin-bottom:12px"><div><div style="font-size:8px;color:#6A6A6A;letter-spacing:0.16em;text-transform:uppercase;margin-bottom:2px">Last Order</div><div style="font-size:20px;font-weight:700;color:${daysColor};line-height:1">${daysStr}</div></div><div style="flex:1"><div style="font-size:8px;color:#6A6A6A;letter-spacing:0.16em;text-transform:uppercase;margin-bottom:2px">Contact</div><div style="font-size:11px;color:#C8C8C8">${contactName}</div>${contactPhone?`<div style="font-size:10px;color:#9C9C9C">${contactPhone}</div>`:''}</div></div><a href="/sales-staging/account/${org.id}" style="display:block;text-align:center;padding:7px 12px;background:#FFD500;color:#000;font-weight:700;font-size:11px;letter-spacing:0.14em;text-decoration:none;text-transform:uppercase">Open Account →</a></div>`;
+
+      marker.addListener('click',()=>{iw.setContent(iwHtml);iw.open(map,marker);});
+      markersRef.current.push(marker);
+      bounds.extend({lat,lng});
+      hasAny=true;
+    });
+
+    if (hasAny) {
+      if (geocodedOrgs.length===1) {
+        map.setCenter({lat:(geocodedOrgs[0] as any).lat,lng:(geocodedOrgs[0] as any).lng});
+        map.setZoom(13);
+      } else {
+        map.fitBounds(bounds,{top:60,bottom:60,left:60,right:60});
+      }
+    }
+  },[mapReady,geocodedOrgs]);
+
+  // Init map once
+  useEffect(()=>{
+    if (!containerRef.current||!googleMapsKey) return;
+    const doInit=()=>{
+      const c=STATE_MAP_CENTER[initStateRef.current]||STATE_MAP_CENTER['ALL'];
+      const map=new (window as any).google.maps.Map(containerRef.current,{
+        center:{lat:c.lat,lng:c.lng},zoom:c.zoom,
+        styles:DARK_MAP_STYLE,
+        mapTypeControl:false,streetViewControl:false,fullscreenControl:false,
+        zoomControlOptions:{position:(window as any).google.maps.ControlPosition.RIGHT_CENTER},
+      });
+      mapRef.current=map;
+      setLoading(false);
+      setMapReady(true);
+    };
+    if ((window as any).google?.maps) {
+      doInit();
+    } else {
+      const cb=`__initHSAccMap_${Date.now()}`;
+      (window as any)[cb]=()=>{doInit();delete (window as any)[cb];};
+      if (!document.querySelector('script[data-hs-maps]')) {
+        const s=document.createElement('script');
+        s.setAttribute('data-hs-maps','1');
+        s.src=`https://maps.googleapis.com/maps/api/js?key=${googleMapsKey}&callback=${cb}`;
+        s.async=true;
+        document.head.appendChild(s);
+      } else {
+        // script already loading — add listener
+        const existing=document.querySelector('script[data-hs-maps]');
+        if (existing) existing.addEventListener('load',doInit);
+      }
+    }
+    return ()=>{
+      markersRef.current.forEach(m=>m.setMap(null));
+      markersRef.current=[];
+      if (infoWinRef.current) infoWinRef.current.close();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+
+  return (
+    <div style={{flex:1,position:'relative',minHeight:0,display:'flex',flexDirection:'column'}}>
+      {loading&&(
+        <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:T.bg,zIndex:2}}>
+          <div style={{fontFamily:'Teko,sans-serif',fontSize:22,letterSpacing:'0.24em',color:T.textFaint,textTransform:'uppercase'}}>LOADING MAP…</div>
+        </div>
+      )}
+      <div ref={containerRef} style={{flex:1,width:'100%',minHeight:500}}/>
+      {/* Bottom-left stats */}
+      <div style={{position:'absolute',bottom:24,left:12,background:'rgba(10,10,10,0.85)',border:`1px solid ${T.borderStrong}`,padding:'5px 12px',pointerEvents:'none'}}>
+        <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:10,color:T.textSubtle,letterSpacing:'0.12em'}}>
+          {geocodedOrgs.length} MAPPED · {orgs.length-geocodedOrgs.length} NO COORDS
+        </span>
+      </div>
+      {/* Top-right legend */}
+      <div style={{position:'absolute',top:12,right:12,background:'rgba(10,10,10,0.85)',border:`1px solid ${T.borderStrong}`,padding:'10px 14px'}}>
+        {([['A','#FFD500'],['B','#00D4FF'],['C','#FF3B7F'],['—','#6A6A6A']] as [string,string][]).map(([l,c])=>(
+          <div key={l} style={{display:'flex',alignItems:'center',gap:8,marginBottom:l==='—'?0:5}}>
+            <div style={{width:10,height:10,borderRadius:'50%',background:c,flexShrink:0}}/>
+            <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:10,color:T.textSubtle,letterSpacing:'0.10em'}}>Tier {l}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -813,7 +991,7 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
           {/* Identity */}
           <div style={{padding:'12px 20px 12px 14px',minWidth:0}}>
             <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-              <a href={`/sales-staging/account/${org.id}`} style={{fontFamily:'Teko,sans-serif',fontSize:22,letterSpacing:'0.06em',fontWeight:500,color:T.text,textTransform:'uppercase',lineHeight:1,textDecoration:'none'}}>{org.name}</a>
+              <a href={`/sales-staging/account/${org.id}?from=accounts`} style={{fontFamily:'Teko,sans-serif',fontSize:22,letterSpacing:'0.06em',fontWeight:500,color:T.text,textTransform:'uppercase',lineHeight:1,textDecoration:'none'}}>{org.name}</a>
               {/* Reorder flag — computed live so it shows even before DB is stamped */}
               {computedFlag&&(()=>{
                 const FC:Record<string,string>={out_of_stock:T.redSystems,low_inv:'#FF8A00',past_cadence:T.yellow,aging:T.statusWarn};
@@ -861,7 +1039,6 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
           phone={phone} email={email}
           isFlagged={isFlagged} isUntargeted={isUntargeted} zohoId={zohoIdNumeric}
           orgId={org.id}
-          onCall={()=>{}} onText={()=>{}} onEmail={()=>{}}
           onBrief={openBrief} onProspect={prospect} onFlag={flag}
           onTraining={requestTraining} onSendMenu={sendMenu} onNewProduct={newProduct}
         />

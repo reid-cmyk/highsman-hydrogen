@@ -54,6 +54,7 @@ export async function loader({request, context, params}: LoaderFunctionArgs) {
   if (!sfUser && !isStagingAuthed(cookie)) {
     return redirect('/sales-staging/login');
   }
+  const fromParam = new URL(request.url).searchParams.get('from') || 'accounts';
   const id = params.id!;
   const h = {apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`};
   const patchH = {...h, 'Content-Type': 'application/json', Prefer: 'return=minimal'};
@@ -116,7 +117,7 @@ export async function loader({request, context, params}: LoaderFunctionArgs) {
   }
 
   const googleMapsKey = env.GOOGLE_PLACES_NEW_API_KEY || env.GOOGLE_PLACES_API_KEY || null;
-  return json({authenticated: true, sfUser, org, contacts: org?.contacts || [], notes: Array.isArray(notes)?notes:[], steps, totalOrderRevenue, computedCadence, googleMapsKey});
+  return json({authenticated: true, sfUser, org, contacts: org?.contacts || [], notes: Array.isArray(notes)?notes:[], steps, totalOrderRevenue, computedCadence, googleMapsKey, fromParam});
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -175,14 +176,24 @@ function AccountStatBar({days, daysColor, lastOrderDate, ordersCount, stateRank,
 }
 
 export default function AccountDetail() {
-  const {authenticated, sfUser, org, contacts, notes, steps, totalOrderRevenue, computedCadence, googleMapsKey} = useLoaderData<typeof loader>() as any;
+  const {authenticated, sfUser, org, contacts, notes, steps, totalOrderRevenue, computedCadence, googleMapsKey, fromParam} = useLoaderData<typeof loader>() as any;
+  // Back nav is convention-based: ?from=<slug> → /sales-staging/<slug>
+  // Label overrides for slugs that don't title-case cleanly
+  const LABEL_OVERRIDES: Record<string,string> = {
+    reorders: 'Reorders Due',
+    orders: 'Sales Orders',
+  };
+  const slug = fromParam || 'accounts';
+  const backLabel = '← ' + (LABEL_OVERRIDES[slug] || slug.charAt(0).toUpperCase() + slug.slice(1));
+  const backHref = `/sales-staging/${slug}`;
+  const backNav = {label: backLabel, href: backHref};
   const [, rerender] = useState(0);
   const refresh = () => rerender(n => n + 1);
   const [stateRank, setStateRank] = useState<{rank:number|null; total:number|null; revenue:number|null; litRetailerId:number|null; hsBrandRank:number|null; hsBrandTotal:number|null; hsSharePct:number|null; updatedAt:string|null; loading:boolean}>({rank:null, total:null, revenue:null, litRetailerId:null, hsBrandRank:null, hsBrandTotal:null, hsSharePct:null, updatedAt:null, loading:true});
   const [marketIntel, setMarketIntel] = useState<any>(null);
 
   useEffect(() => {
-    if (!org?.market_state) { setStateRank({rank:null, total:null, revenue:null, litRetailerId:null, loading:false}); return; }
+    if (!org?.market_state) { setStateRank({rank:null, total:null, revenue:null, litRetailerId:null, hsBrandRank:null, hsBrandTotal:null, hsSharePct:null, updatedAt:null, loading:false}); return; }
     fetch(`/api/state-rank?state=${encodeURIComponent(org.market_state)}&name=${encodeURIComponent(org.name||'')}&org_id=${org.id}`)
       .then(r => r.json())
       .then(d => {
@@ -233,7 +244,7 @@ export default function AccountDetail() {
           <div style={{borderBottom:`1px solid ${T.borderStrong}`, background:`linear-gradient(180deg,rgba(255,213,0,0.03) 0%,transparent 100%)`, padding:'32px 32px 28px'}}>
             {/* Breadcrumb */}
             <div style={{display:'flex', alignItems:'center', gap:14, marginBottom:16}}>
-              <Link to="/sales-staging" className="teko" style={{fontFamily:'Teko,sans-serif', fontSize:12, letterSpacing:'0.24em', color:T.textSubtle, textTransform:'uppercase', textDecoration:'none'}}>← Accounts</Link>
+              <Link to={backNav.href} className="teko" style={{fontFamily:'Teko,sans-serif', fontSize:12, letterSpacing:'0.24em', color:T.textSubtle, textTransform:'uppercase', textDecoration:'none'}}>{backNav.label}</Link>
               <span style={{color:T.textFaint}}>/</span>
               {org.market_state && <span style={{fontFamily:'Teko,sans-serif', fontSize:12, letterSpacing:'0.24em', color:T.textFaint, textTransform:'uppercase'}}>{org.market_state}{org.city?` · ${org.city}`:''}</span>}
               <div style={{flex:1}} />
@@ -1322,7 +1333,7 @@ function NotesPanel({orgId, notes, refresh, sfUser}: {orgId:string; notes:any[];
       {notes.length === 0 && <div style={{padding:'20px 16px', fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint, letterSpacing:'0.10em'}}>No notes yet</div>}
       {notes.map((n:any, i:number) => {
         const {channel, text} = parseNote(n.body);
-        const chColor = channel ? CHANNEL_COLORS[channel] : null;
+        const chColor = (channel ? CHANNEL_COLORS[channel] : null) ?? T.textSubtle;
         const initials = (n.author_name||'').split(/\s+/).slice(0,2).map((w:string)=>w[0]?.toUpperCase()||'').join('')||'?';
         const isCurrentUser = sfUser && (n.author_name||'').toLowerCase() === (sfUser.permissions?.display_name||'').toLowerCase();
         const noteAvatarUrl = isCurrentUser ? sfUser?.permissions?.avatar_url : null;

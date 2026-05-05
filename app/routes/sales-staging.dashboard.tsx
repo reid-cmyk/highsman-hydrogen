@@ -189,7 +189,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     for (const o of items) {
       const t = o.tier||'';
       const tBonus = t==='A'?30:t==='B'?20:t==='C'?10:0;
-      queue.push({id:o.id,name:o.name||'',market_state:o.market_state||null,tier:o.tier||null,reason,reasonCode,priority:(PRIORITY[reasonCode]||50)+tBonus,phone:o.phone||null,href:`/sales-staging/account/${o.id}`});
+      queue.push({id:o.id,name:o.name||'',market_state:o.market_state||null,tier:o.tier||null,reason,reasonCode,priority:(PRIORITY[reasonCode]||50)+tBonus,phone:o.phone||null,href:`/sales-staging/account/${o.id}?from=dashboard`});
     }
   };
   addQ(oosRaw,'oos','Out of Stock');
@@ -354,7 +354,7 @@ export default function DashboardPage() {
           {(activity||[]).map((a:any)=>(
             <div key={a.id} style={{borderBottom:`1px solid ${T.border}`,paddingBottom:10,marginBottom:10}}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:3}}>
-                <Link to={`/sales-staging/account/${a.orgId}`} style={{fontFamily:'Teko,sans-serif',fontSize:13,fontWeight:500,letterSpacing:'0.06em',color:T.yellow,textTransform:'uppercase',textDecoration:'none',lineHeight:1}}>
+                <Link to={`/sales-staging/account/${a.orgId}?from=dashboard`} style={{fontFamily:'Teko,sans-serif',fontSize:13,fontWeight:500,letterSpacing:'0.06em',color:T.yellow,textTransform:'uppercase',textDecoration:'none',lineHeight:1}}>
                   {a.orgName}
                 </Link>
                 <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:9.5,color:T.textFaint,letterSpacing:'0.10em',flexShrink:0,marginLeft:8}}>{relTime(a.createdAt)}</span>

@@ -610,7 +610,7 @@ function ReorderCard({item, onRemove}: {item: FeedItem; onRemove: (id: string) =
         <div style={{padding:'12px 20px 12px 14px', minWidth:0}}>
           {/* Name + flag badge only — no tier/rank pills */}
           <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-            <a href={`/sales-staging/account/${item.id}`}
+            <a href={`/sales-staging/account/${item.id}?from=reorders`}
               style={{fontFamily:'Teko,sans-serif',fontSize:22,letterSpacing:'0.06em',fontWeight:500,color:T.text,textTransform:'uppercase',lineHeight:1,textDecoration:'none'}}>
               {item.name}
             </a>

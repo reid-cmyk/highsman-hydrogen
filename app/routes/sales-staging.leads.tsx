@@ -329,7 +329,7 @@ function LeadCard({lead}: {lead: any}) {
         {/* Identity */}
         <div style={{padding:'12px 20px 12px 14px',minWidth:0}}>
           <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-            <a href={`/sales-staging/account/${lead.id}`}
+            <a href={`/sales-staging/account/${lead.id}?from=leads`}
               style={{fontFamily:'Teko,sans-serif',fontSize:22,letterSpacing:'0.06em',fontWeight:500,color:T.text,textTransform:'uppercase',lineHeight:1,textDecoration:'none'}}>
               {lead.name}
             </a>

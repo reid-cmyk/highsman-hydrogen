@@ -36,6 +36,8 @@ export type OrgRow = {
   market_rank: number | null;
   market_total: number | null;
   market_revenue_90d: number | null;
+  lat: number | null;
+  lng: number | null;
   contacts: ContactRow[];
 };
 
@@ -89,6 +91,7 @@ export async function fetchOrgs(
     'reorder_status','reorder_flag_aging_at','reorder_flag_past_cadence_at',
     'reorder_flag_low_inv_at','reorder_flag_out_of_stock_at','reorder_suppressed',
     'market_rank','market_total','market_revenue_90d',
+    'lat','lng',
     'contacts(id,first_name,last_name,full_name,email,phone,mobile,job_role,is_primary_buyer)',
   ].join(',');
 
