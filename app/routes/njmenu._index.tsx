@@ -3337,30 +3337,38 @@ export default function NJMenu() {
                     Agree to the LAUNCH Promo Terms above to enable order submission.
                   </p>
                 )}
-                <a
-                  href={selectedAccount && orderConfirmed && (!appliedPromoCode || launchTermsAgreed) ? buildOrderEmail() : undefined}
-                  onClick={(e) => {
-                    if (!selectedAccount || !orderConfirmed) {
-                      e.preventDefault();
-                      return;
-                    }
-                    if (appliedPromoCode && !launchTermsAgreed) {
-                      e.preventDefault();
-                      return;
-                    }
-                    // Fire LeafLink order in background when email is sent
-                    submitToLeafLink();
-                  }}
-                  className="block font-headline text-lg font-600 uppercase tracking-[0.15em] py-5 w-full text-center transition-opacity"
-                  style={{
-                    background: selectedAccount && orderConfirmed && (!appliedPromoCode || launchTermsAgreed) ? BRAND.gold : 'rgba(245,228,0,0.3)',
-                    color: selectedAccount && orderConfirmed && (!appliedPromoCode || launchTermsAgreed) ? '#000' : 'rgba(0,0,0,0.4)',
-                    cursor: selectedAccount && orderConfirmed && (!appliedPromoCode || launchTermsAgreed) ? 'pointer' : 'not-allowed',
-                    pointerEvents: selectedAccount && orderConfirmed && (!appliedPromoCode || launchTermsAgreed) ? 'auto' : undefined,
-                  }}
-                >
-                  Send Order{selectedAccount ? ` — ${selectedAccount.name}` : ' to Highsman'}
-                </a>
+                {(() => {
+                  const canSubmit =
+                    !!selectedAccount &&
+                    orderConfirmed &&
+                    (!appliedPromoCode || launchTermsAgreed) &&
+                    leaflinkStatus !== 'sending';
+                  return (
+                    <button
+                      type="button"
+                      disabled={!canSubmit}
+                      onClick={() => {
+                        if (!canSubmit) return;
+                        // Submit straight to the LeafLink API. Server-side
+                        // /api/leaflink-order auto-emails njsales@highsman.com
+                        // with full order details if LeafLink rejects the order
+                        // or the customer can't be matched. No more mailto: popup.
+                        submitToLeafLink();
+                      }}
+                      className="block font-headline text-lg font-600 uppercase tracking-[0.15em] py-5 w-full text-center transition-opacity"
+                      style={{
+                        background: canSubmit ? BRAND.gold : 'rgba(245,228,0,0.3)',
+                        color: canSubmit ? '#000' : 'rgba(0,0,0,0.4)',
+                        cursor: canSubmit ? 'pointer' : 'not-allowed',
+                        border: 'none',
+                      }}
+                    >
+                      {leaflinkStatus === 'sending'
+                        ? 'Sending Order...'
+                        : `Send Order${selectedAccount ? ` — ${selectedAccount.name}` : ' to Highsman'}`}
+                    </button>
+                  );
+                })()}
                 {leaflinkStatus === 'sending' && (
                   <p className="font-body text-xs text-center mt-3" style={{color: BRAND.gold}}>
                     Processing order...

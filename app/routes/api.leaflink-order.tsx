@@ -20,7 +20,7 @@ import {getZohoAccessToken} from '~/lib/zoho-auth';
 // ─────────────────────────────────────────────────────────────────────────────
 
 const LEAFLINK_API_BASE = 'https://app.leaflink.com/api/v2';
-const FAILURE_NOTIFY_EMAIL = 'njorders@highsman.com';
+const FAILURE_NOTIFY_EMAIL = 'njsales@highsman.com';
 const LEAFLINK_COMPANY_ID = 24087; // Canfections NJ, INC
 
 // SKU → LeafLink Product ID mapping
@@ -320,14 +320,20 @@ async function findCustomer(
           return {id: cust.id, name: cust.name};
         }
 
-        // Partial match scoring
-        let score = 0;
+        // Distinct-term match scoring — count how many *unique* search terms
+        // hit this customer's name or nickname. A single common word (e.g. "green")
+        // matching multiple customers must NOT be enough to pick one. We had
+        // "Eastern Green" misroute to "Green Lightning Cultivation" because the
+        // old summed-score gate accepted score=2 from a single shared word.
+        const matchedTerms = new Set<string>();
         for (const term of searchTerms) {
-          if (custNameLower.includes(term)) score += 2;
-          if (custNickLower.includes(term)) score += 1;
+          if (custNameLower.includes(term) || custNickLower.includes(term)) {
+            matchedTerms.add(term);
+          }
         }
-        if (score > 0 && (!bestMatch || score > bestMatch.score)) {
-          bestMatch = {id: cust.id, name: cust.name, score};
+        const matchCount = matchedTerms.size;
+        if (matchCount > 0 && (!bestMatch || matchCount > bestMatch.score)) {
+          bestMatch = {id: cust.id, name: cust.name, score: matchCount};
         }
       }
 
@@ -335,10 +341,20 @@ async function findCustomer(
       page++;
     }
 
-    // Only return best match if it's a reasonable match (at least 2 term hits)
-    if (bestMatch && bestMatch.score >= 2) {
-      console.log(`[api/leaflink-order] Best customer match: "${bestMatch.name}" (ID: ${bestMatch.id}, score: ${bestMatch.score}) for "${dispensaryName}"`);
+    // Only accept the fuzzy match if EVERY distinct search term matched and
+    // the dispensary name had at least 2 terms to match against. Single-word
+    // names ("Bloom") fall through to exact-match only, never fuzzy. Multi-word
+    // names ("Eastern Green") must hit every word — partial overlap is unsafe.
+    if (
+      bestMatch &&
+      searchTerms.length >= 2 &&
+      bestMatch.score === searchTerms.length
+    ) {
+      console.log(`[api/leaflink-order] Best customer match: "${bestMatch.name}" (ID: ${bestMatch.id}, terms matched: ${bestMatch.score}/${searchTerms.length}) for "${dispensaryName}"`);
       return {id: bestMatch.id, name: bestMatch.name};
+    }
+    if (bestMatch) {
+      console.warn(`[api/leaflink-order] Rejecting weak fuzzy match "${bestMatch.name}" (terms ${bestMatch.score}/${searchTerms.length}) for "${dispensaryName}" — falling back to email`);
     }
 
     console.warn(`[api/leaflink-order] No customer match found for "${dispensaryName}" among Canfections NJ buyers`);
@@ -865,14 +881,21 @@ export async function action({request, context}: ActionFunctionArgs) {
   }
 
   try {
-    // Step 1: Find the customer in LeafLink — try license first, then name
+    // Step 1: Find the customer in LeafLink.
+    // Rule: if a license number was supplied with the order, license is the ONLY
+    // way to match. Falling back to fuzzy name search after a failed license
+    // lookup misrouted Eastern Green (RE000726) to "Green Lightning Cultivation".
+    // The right behavior when license fails is to email the rep for manual entry —
+    // they can fix the LeafLink customer record (set license_number) and resubmit.
     let customer: {id: number; name: string} | null = null;
     if (dispensaryLicense) {
       console.log(`[api/leaflink-order] Trying license lookup: "${dispensaryLicense}" for "${dispensaryName}"`);
       customer = await findCustomerByLicense(dispensaryLicense, apiKey);
-    }
-    if (!customer) {
-      console.log(`[api/leaflink-order] Trying name lookup for "${dispensaryName}"`);
+      if (!customer) {
+        console.warn(`[api/leaflink-order] License "${dispensaryLicense}" not found in LeafLink for "${dispensaryName}" — skipping name fallback to avoid wrong-customer match`);
+      }
+    } else {
+      console.log(`[api/leaflink-order] No license on dispensary record — trying name lookup for "${dispensaryName}"`);
       customer = await findCustomer(dispensaryName, apiKey);
     }
     console.log(
@@ -886,7 +909,9 @@ export async function action({request, context}: ActionFunctionArgs) {
       console.warn(`[api/leaflink-order] No customer match for "${dispensaryName}" — sending email notification`);
       await sendFailureNotification(env, {
         dispensaryName,
-        reason: `Customer "${dispensaryName}" not found in LeafLink — order needs manual entry`,
+        reason: dispensaryLicense
+          ? `Customer "${dispensaryName}" (license ${dispensaryLicense}) not found in LeafLink — verify the LeafLink customer record has license_number set, then manually enter this order`
+          : `Customer "${dispensaryName}" not found in LeafLink — order needs manual entry`,
         items: eligibleItems,
         notes,
       });
