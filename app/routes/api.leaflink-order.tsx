@@ -791,38 +791,85 @@ export async function loader({request, context}: ActionFunctionArgs) {
   }
 
   // Diagnostic: search Canfections NJ customers by name fragment.
+  // Tries 3 strategies: (1) full pagination scan with seller filter,
+  // (2) LeafLink's ?search= built-in (server-side index), and
+  // (3) global search without seller filter as a sanity check.
   // Usage: GET /api/leaflink-order?debug=customer&q=Uforia
   if (url.searchParams.get('debug') === 'customer') {
     const q = (url.searchParams.get('q') || '').trim().toLowerCase();
     if (!q) return json({error: 'pass ?q=name'}, {status: 400});
+
+    // Strategy 1: paginate seller=24087 and walk every page client-side
     let nextUrl: string | null = `${LEAFLINK_API_BASE}/customers/?seller=${LEAFLINK_COMPANY_ID}&page_size=200`;
-    let pages = 0;
-    const matches: any[] = [];
-    while (nextUrl && pages < 25) {
+    let pagesScanned = 0;
+    let totalCustomersScanned = 0;
+    const sellerScanMatches: any[] = [];
+    let firstPageCount: number | null = null;
+    let firstPageTotal: number | null = null;
+    while (nextUrl && pagesScanned < 30) {
       const res = await fetch(nextUrl, {headers: {Authorization: `Token ${apiKey}`}});
       if (!res.ok) break;
       const data = await res.json();
+      if (firstPageCount === null) {
+        firstPageCount = data.results?.length || 0;
+        firstPageTotal = data.count ?? null;
+      }
       if (!data.results?.length) break;
+      totalCustomersScanned += data.results.length;
       for (const c of data.results) {
         const name = (c.name || '').toLowerCase();
         const nick = (c.nickname || '').toLowerCase();
         if (name.includes(q) || nick.includes(q)) {
-          matches.push({
-            id: c.id,
-            name: c.name,
-            nickname: c.nickname,
-            license_number: c.license_number,
-            licenses: c.licenses,
-            business_license: c.business_license,
-            email: c.email,
-            display_address: c.display_address || c.address,
+          sellerScanMatches.push({
+            id: c.id, name: c.name, nickname: c.nickname,
+            license_number: c.license_number, licenses: c.licenses,
+            email: c.email, source: 'seller-paginate',
           });
         }
       }
       nextUrl = data.next || null;
-      pages++;
+      pagesScanned++;
     }
-    return json({query: q, pagesScanned: pages, matches});
+
+    // Strategy 2: LeafLink's ?search= filter scoped to seller
+    const searchScopedUrl = `${LEAFLINK_API_BASE}/customers/?seller=${LEAFLINK_COMPANY_ID}&search=${encodeURIComponent(q)}&page_size=50`;
+    const searchScopedRes = await fetch(searchScopedUrl, {headers: {Authorization: `Token ${apiKey}`}});
+    let searchScoped: any = {ok: searchScopedRes.ok, status: searchScopedRes.status};
+    if (searchScopedRes.ok) {
+      const sd = await searchScopedRes.json();
+      searchScoped.count = sd.count;
+      searchScoped.results = (sd.results || []).map((c: any) => ({
+        id: c.id, name: c.name, nickname: c.nickname,
+        license_number: c.license_number, licenses: c.licenses, email: c.email,
+      }));
+    }
+
+    // Strategy 3: global ?search= (no seller filter) — sanity check that
+    // Uforia exists in LeafLink at all and what seller IDs they're tied to
+    const searchGlobalUrl = `${LEAFLINK_API_BASE}/customers/?search=${encodeURIComponent(q)}&page_size=20`;
+    const searchGlobalRes = await fetch(searchGlobalUrl, {headers: {Authorization: `Token ${apiKey}`}});
+    let searchGlobal: any = {ok: searchGlobalRes.ok, status: searchGlobalRes.status};
+    if (searchGlobalRes.ok) {
+      const gd = await searchGlobalRes.json();
+      searchGlobal.count = gd.count;
+      searchGlobal.results = (gd.results || []).map((c: any) => ({
+        id: c.id, name: c.name, seller: c.seller, buyer: c.buyer,
+        license_number: c.license_number,
+      }));
+    }
+
+    return json({
+      query: q,
+      sellerPaginate: {
+        pagesScanned,
+        totalCustomersScanned,
+        firstPageCount,
+        firstPageTotal,
+        matches: sellerScanMatches,
+      },
+      searchScoped,
+      searchGlobal,
+    });
   }
 
   // Fix products: set unit_multiplier and sell_in_unit_of_measure for TT and GG
