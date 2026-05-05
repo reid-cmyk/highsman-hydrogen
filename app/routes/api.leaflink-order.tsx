@@ -254,11 +254,56 @@ async function sendFailureNotification(
  *  This is the preferred method — license numbers are unique state-issued IDs
  *  that don't have the ambiguity problems of business names.
  */
+/** Strip everything but [a-z0-9] and lowercase. Handles "RE-000726",
+ *  "re 000726", "RE000726 ", etc. — all normalize to "re000726". */
+function normalizeLicense(s: any): string {
+  return String(s || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+}
+
+/** True if `candidate` contains `target` as a whole license token.
+ *
+ *  LeafLink's `license_number` field often contains the license number
+ *  followed by the license-type label, e.g.:
+ *    "RE000726  Adult Use Cannabis Retailer (Class 5) (NJ)"
+ *  We split on non-alphanumerics and look for an exact token match so
+ *  "RE000726" matches the leading token without false-positive prefix
+ *  collisions ("RE00072" won't match "RE000726"). Also accepts a fully
+ *  normalized equality for fields stored with internal hyphens/spaces.
+ */
+function licenseFieldMatches(candidate: any, target: string): boolean {
+  if (!candidate) return false;
+  const raw = String(candidate);
+  const tokens = raw.split(/[^a-zA-Z0-9]+/);
+  for (const tok of tokens) {
+    if (tok && tok.toLowerCase() === target) return true;
+  }
+  return normalizeLicense(raw) === target;
+}
+
+/** Pull all license-bearing strings off a LeafLink customer record. */
+function collectCustomerLicenseFields(c: any): string[] {
+  const out: string[] = [];
+  if (c?.license_number) out.push(String(c.license_number));
+  if (c?.business_license) out.push(String(c.business_license));
+  if (Array.isArray(c?.licenses)) {
+    for (const lic of c.licenses) {
+      if (typeof lic === 'string') out.push(lic);
+      else if (lic && typeof lic === 'object') {
+        if (lic.license_number) out.push(String(lic.license_number));
+        if (lic.number) out.push(String(lic.number));
+        if (lic.value) out.push(String(lic.value));
+      }
+    }
+  }
+  return out;
+}
+
 async function findCustomerByLicense(
   licenseNumber: string,
   apiKey: string,
 ): Promise<{id: number; name: string} | null> {
-  const target = licenseNumber.toLowerCase().trim();
+  const target = normalizeLicense(licenseNumber);
+  if (!target) return null;
   let nextUrl: string | null = `${LEAFLINK_API_BASE}/customers/?seller=${LEAFLINK_COMPANY_ID}&page_size=200`;
   let pages = 0;
 
@@ -271,9 +316,12 @@ async function findCustomerByLicense(
     if (!data.results || data.results.length === 0) break;
 
     for (const c of data.results) {
-      if ((c.license_number || '').toLowerCase().trim() === target) {
-        console.log(`[api/leaflink-order] License scan match: "${c.name}" (ID: ${c.id}) for license "${licenseNumber}"`);
-        return {id: c.id, name: c.name};
+      const fields = collectCustomerLicenseFields(c);
+      for (const field of fields) {
+        if (licenseFieldMatches(field, target)) {
+          console.log(`[api/leaflink-order] License scan match: "${c.name}" (ID: ${c.id}) for license "${licenseNumber}" (matched field: "${field.slice(0, 80)}")`);
+          return {id: c.id, name: c.name};
+        }
       }
     }
 
@@ -281,7 +329,7 @@ async function findCustomerByLicense(
     pages++;
   }
 
-  console.warn(`[api/leaflink-order] No license match found for "${licenseNumber}" after scanning`);
+  console.warn(`[api/leaflink-order] No license match found for "${licenseNumber}" after scanning ${pages} pages`);
   return null;
 }
 
@@ -689,6 +737,58 @@ export async function loader({request, context}: ActionFunctionArgs) {
   const env = context.env as any;
   const apiKey = env.LEAFLINK_API_KEY;
   if (!apiKey) return json({error: 'No API key'});
+
+  // Diagnostic: dump customer records that match a license number — used to
+  // figure out which LeafLink field (license_number top-level, licenses[],
+  // business_license, etc.) actually carries the license value, and what
+  // surrounding text trips up exact-match comparisons.
+  // Usage: GET /api/leaflink-order?debug=license&q=RE000726
+  if (url.searchParams.get('debug') === 'license') {
+    const q = (url.searchParams.get('q') || '').trim();
+    if (!q) return json({error: 'pass ?q=RE000726'}, {status: 400});
+    const target = normalizeLicense(q);
+    let nextUrl: string | null = `${LEAFLINK_API_BASE}/customers/?seller=${LEAFLINK_COMPANY_ID}&page_size=200`;
+    let pages = 0;
+    const matches: any[] = [];
+    const samples: any[] = [];
+    while (nextUrl && pages < 20) {
+      const res = await fetch(nextUrl, {headers: {Authorization: `Token ${apiKey}`}});
+      if (!res.ok) break;
+      const data = await res.json();
+      if (!data.results?.length) break;
+      for (const c of data.results) {
+        const fields = collectCustomerLicenseFields(c);
+        const hit = fields.some((f) => licenseFieldMatches(f, target));
+        if (hit) {
+          matches.push({
+            id: c.id,
+            name: c.name,
+            license_number: c.license_number,
+            licenses: c.licenses,
+            business_license: c.business_license,
+          });
+        }
+        // Also collect a few sample records that mention the digits anywhere,
+        // even if the matcher rejected them — helps spot a stored variant.
+        const digits = q.replace(/[^0-9]/g, '');
+        if (digits.length >= 4 && samples.length < 5) {
+          const blob = JSON.stringify({a: c.license_number, b: c.licenses, c: c.business_license});
+          if (blob.includes(digits)) {
+            samples.push({
+              id: c.id,
+              name: c.name,
+              license_number: c.license_number,
+              licenses: c.licenses,
+              business_license: c.business_license,
+            });
+          }
+        }
+      }
+      nextUrl = data.next || null;
+      pages++;
+    }
+    return json({query: q, normalizedTarget: target, pagesScanned: pages, matches, digitSamples: samples});
+  }
 
   // Fix products: set unit_multiplier and sell_in_unit_of_measure for TT and GG
   if (url.searchParams.get('debug') === 'fix-products') {
