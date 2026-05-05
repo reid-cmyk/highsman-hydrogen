@@ -359,6 +359,7 @@ export default function ReordersPage() {
   const {authenticated, sfUser, feed, stats, litError} = useLoaderData<typeof loader>() as any;
   const [stateFilter, setStateFilter] = useState('ALL');
   const [flagFilter,  setFlagFilter]  = useState<string>('all');
+  const [sort, setSort] = useState<'flagged'|'orders_desc'|'orders_asc'>('flagged');
   const [search, setSearch] = useState('');
   const [suppressed, setSuppressed] = useState<Set<string>>(new Set());
 
@@ -379,7 +380,7 @@ export default function ReordersPage() {
 
   const items: FeedItem[] = (feed || []).filter((f: FeedItem) => !suppressed.has(f.id));
 
-  const filtered = items.filter(item => {
+  const filtered = [...items.filter(item => {
     if (stateFilter !== 'ALL' && item.market_state !== stateFilter) return false;
     if (flagFilter  !== 'all' && item.active_flag  !== flagFilter)  return false;
     if (search.trim()) {
@@ -387,6 +388,14 @@ export default function ReordersPage() {
       if (!item.name.toLowerCase().includes(q) && !(item.city || '').toLowerCase().includes(q)) return false;
     }
     return true;
+  })].sort((a, b) => {
+    if (sort === 'orders_desc') return (b.orders_count||0) - (a.orders_count||0);
+    if (sort === 'orders_asc')  return (a.orders_count||0) - (b.orders_count||0);
+    // default: most recently flagged (already sorted from loader)
+    if (a.last_flagged_at && b.last_flagged_at) return a.last_flagged_at > b.last_flagged_at ? -1 : 1;
+    if (a.last_flagged_at) return -1;
+    if (b.last_flagged_at) return 1;
+    return 0;
   });
 
   // State counts for tab badges
@@ -462,8 +471,8 @@ export default function ReordersPage() {
         <StatCell label="Aging (45d+)"    value={liveStats.aging}        accent={T.statusWarn} />
       </div>
 
-      {/* ── Flag filter — below stat bar ─────────────────────────────────── */}
-      <div style={{borderBottom:`1px solid ${T.border}`, padding:'10px 28px', background:T.bg, display:'flex', alignItems:'center', gap:8}}>
+      {/* ── Flag filter + sort ────────────────────────────────────────────── */}
+      <div style={{borderBottom:`1px solid ${T.border}`, padding:'10px 28px', background:T.bg, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap'}}>
         {FLAG_FILTERS.map(f => {
           const active = flagFilter === f;
           const meta   = f === 'all' ? {color: T.yellow, label: 'ALL'} : FLAG_META[f];
@@ -476,6 +485,15 @@ export default function ReordersPage() {
             </button>
           );
         })}
+        {/* Sort dropdown — right-aligned */}
+        <div style={{marginLeft:'auto'}}>
+          <select value={sort} onChange={e => setSort(e.target.value as any)}
+            style={{height:30, padding:'0 10px', background:T.surfaceElev, border:`1px solid ${T.borderStrong}`, color:T.text, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.14em', cursor:'pointer', outline:'none'}}>
+            <option value="flagged">Sort: Most Recently Flagged</option>
+            <option value="orders_desc">Sort: Total Orders (High → Low)</option>
+            <option value="orders_asc">Sort: Total Orders (Low → High)</option>
+          </select>
+        </div>
       </div>
 
       {/* ── Feed ─────────────────────────────────────────────────────────── */}
@@ -637,17 +655,18 @@ function ReorderCard({item, onRemove}: {item: FeedItem; onRemove: (id: string) =
         {/* Order stats */}
         <div style={{padding:'12px 16px',borderLeft:`1px solid ${T.border}`,height:'100%',display:'flex',flexDirection:'column',justifyContent:'center',gap:3}}>
           <div style={{fontFamily:'Teko,sans-serif',fontSize:10,letterSpacing:'0.26em',color:T.textFaint,textTransform:'uppercase',marginBottom:1}}>Order stats</div>
-          <div style={{fontFamily:'Teko,sans-serif',fontSize:22,fontWeight:600,color:T.yellow,lineHeight:0.95}}>
-            {fmt$(item.last_order_amount)}
+          <div style={{display:'flex',alignItems:'baseline',gap:12}}>
+            <div>
+              <div style={{fontFamily:'Teko,sans-serif',fontSize:22,fontWeight:600,color:T.yellow,lineHeight:0.95}}>{fmt$(item.last_order_amount)}</div>
+              <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:9.5,color:T.textSubtle,letterSpacing:'0.08em',marginTop:2}}>last order</div>
+            </div>
+            <div style={{borderLeft:`1px solid ${T.border}`,paddingLeft:10}}>
+              <div style={{fontFamily:'Teko,sans-serif',fontSize:22,fontWeight:600,color:T.text,lineHeight:0.95}}>{item.orders_count||0}</div>
+              <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:9.5,color:T.textSubtle,letterSpacing:'0.08em',marginTop:2}}>total orders</div>
+            </div>
           </div>
-          <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:9.5,color:T.textSubtle,letterSpacing:'0.08em'}}>last order</div>
-          <div style={{display:'flex',gap:8,marginTop:1}}>
-            <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:10,color:T.textFaint}}>
-              {item.orders_count} order{item.orders_count !== 1 ? 's' : ''}
-            </span>
-            <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:10,color:item.reorder_cadence_days ? T.cyan : T.textFaint}}>
-              {item.reorder_cadence_days ? `${item.reorder_cadence_days}d avg` : 'no cadence'}
-            </span>
+          <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:10,color:item.reorder_cadence_days ? T.cyan : T.textFaint,marginTop:4}}>
+            {item.reorder_cadence_days ? `${item.reorder_cadence_days}d avg cadence` : 'no cadence data'}
           </div>
         </div>
       </div>
