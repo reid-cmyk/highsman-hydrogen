@@ -40,7 +40,7 @@ export function getSFToken(cookieHeader: string | null): string | null {
 }
 
 export function buildSFSessionCookie(token: string): string {
-  const maxAge = 7 * 24 * 3600; // 7 days
+  const maxAge = 365 * 24 * 3600; // 1 year — stay logged in on the device
   return `${SF_TOKEN_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
 }
 

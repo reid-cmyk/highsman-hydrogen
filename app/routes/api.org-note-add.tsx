@@ -9,14 +9,16 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {isStagingAuthed} from '~/lib/staging-auth';
-import {getSFToken} from '~/lib/sf-auth.server';
+import {getSFToken, getSFUser} from '~/lib/sf-auth.server';
 
 export async function action({request, context}: ActionFunctionArgs) {
   const env = (context as any).env;
   const cookie = request.headers.get('Cookie') || '';
-  if (!isStagingAuthed(cookie) && !getSFToken(cookie)) {
+  const sfUser = await getSFUser(cookie, env);
+  if (!sfUser && !isStagingAuthed(cookie)) {
     return json({ok: false, error: 'unauthorized'}, {status: 401});
   }
+  const authorName = sfUser?.permissions.display_name || 'Sky Lima';
 
   const formData = await request.formData();
   const org_id = String(formData.get('org_id') || '').trim();
@@ -36,7 +38,7 @@ export async function action({request, context}: ActionFunctionArgs) {
     },
     body: JSON.stringify({
       organization_id: org_id,
-      author_name: 'Sky Lima',   // default until per-user logins exist
+      author_name: authorName,
       body,
       pinned: false,
     }),

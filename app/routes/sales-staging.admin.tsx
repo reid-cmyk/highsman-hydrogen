@@ -49,8 +49,9 @@ export async function action({request, context}: ActionFunctionArgs) {
   const modules = fd.getAll('modules').map(String);
   const features = fd.getAll('features').map(String);
   const markets = fd.getAll('markets').map(String);
+  const avatar_url = String(fd.get('avatar_url') || '') || undefined;
 
-  const ok = await updateSFUserPermissions(userId, {display_name, role, modules, features, markets}, env);
+  const ok = await updateSFUserPermissions(userId, {display_name, role, modules, features, markets, avatar_url}, env);
   return json({ok});
 }
 
@@ -119,77 +120,81 @@ function UserCard({user}: {user: any}) {
         </div>
       </div>
 
-      <fetcher.Form method="post" style={{display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20}}>
+      <fetcher.Form method="post" style={{display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 24}}>
         <input type="hidden" name="user_id" value={user.id} />
 
         {/* Modules */}
         <div>
-          <div style={{fontFamily: 'Teko,sans-serif', fontSize: 10, letterSpacing: '0.28em', color: T.textFaint, textTransform: 'uppercase', marginBottom: 8}}>Modules</div>
-          <label style={{display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, cursor: 'pointer'}}>
+          <div style={{fontFamily: 'Teko,sans-serif', fontSize: 11, letterSpacing: '0.28em', color: T.textFaint, textTransform: 'uppercase', marginBottom: 10}}>Modules</div>
+          <label style={{display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, cursor: 'pointer'}}>
             <input type="checkbox" name="modules" value="*" defaultChecked={isAllModules}
               onChange={e => { const form = e.target.form!; const boxes = form.querySelectorAll('input[name="modules"]:not([value="*"])') as NodeListOf<HTMLInputElement>; boxes.forEach(b => { b.disabled = e.target.checked; }); }} />
-            <span style={{fontFamily: 'JetBrains Mono,monospace', fontSize: 10.5, color: T.yellow, letterSpacing: '0.08em'}}>All modules</span>
+            <span style={{fontFamily: 'JetBrains Mono,monospace', fontSize: 13, color: T.yellow}}>All modules</span>
           </label>
           {SF_MODULES.filter(m => m !== 'dashboard').map(m => (
-            <label key={m} style={{display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, cursor: 'pointer'}}>
+            <label key={m} style={{display: 'flex', alignItems: 'center', gap: 10, marginBottom: 7, cursor: 'pointer'}}>
               <input type="checkbox" name="modules" value={m}
                 defaultChecked={isAllModules || p.modules.includes(m)}
                 disabled={isAllModules} />
-              <span style={{fontFamily: 'JetBrains Mono,monospace', fontSize: 10, color: T.textSubtle, letterSpacing: '0.06em'}}>{MODULE_LABELS[m] || m}</span>
+              <span style={{fontFamily: 'Inter,sans-serif', fontSize: 13, color: T.textSubtle}}>{MODULE_LABELS[m] || m}</span>
             </label>
           ))}
         </div>
 
-        {/* Features */}
+        {/* Features + Role */}
         <div>
-          <div style={{fontFamily: 'Teko,sans-serif', fontSize: 10, letterSpacing: '0.28em', color: T.textFaint, textTransform: 'uppercase', marginBottom: 8}}>Features</div>
-          <label style={{display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, cursor: 'pointer'}}>
+          <div style={{fontFamily: 'Teko,sans-serif', fontSize: 11, letterSpacing: '0.28em', color: T.textFaint, textTransform: 'uppercase', marginBottom: 10}}>Features</div>
+          <label style={{display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, cursor: 'pointer'}}>
             <input type="checkbox" name="features" value="*" defaultChecked={isAllFeatures} />
-            <span style={{fontFamily: 'JetBrains Mono,monospace', fontSize: 10.5, color: T.yellow, letterSpacing: '0.08em'}}>All features</span>
+            <span style={{fontFamily: 'JetBrains Mono,monospace', fontSize: 13, color: T.yellow}}>All features</span>
           </label>
           {SF_FEATURES.map(f => (
-            <label key={f} style={{display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, cursor: 'pointer'}}>
+            <label key={f} style={{display: 'flex', alignItems: 'center', gap: 10, marginBottom: 7, cursor: 'pointer'}}>
               <input type="checkbox" name="features" value={f}
                 defaultChecked={isAllFeatures || p.features.includes(f)} />
-              <span style={{fontFamily: 'JetBrains Mono,monospace', fontSize: 10, color: T.textSubtle, letterSpacing: '0.06em'}}>{FEATURE_LABELS[f] || f}</span>
+              <span style={{fontFamily: 'Inter,sans-serif', fontSize: 13, color: T.textSubtle}}>{FEATURE_LABELS[f] || f}</span>
             </label>
           ))}
 
-          <div style={{marginTop: 16}}>
-            <div style={{fontFamily: 'Teko,sans-serif', fontSize: 10, letterSpacing: '0.28em', color: T.textFaint, textTransform: 'uppercase', marginBottom: 8}}>Role</div>
-            <label style={{display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, cursor: 'pointer'}}>
+          <div style={{marginTop: 20}}>
+            <div style={{fontFamily: 'Teko,sans-serif', fontSize: 11, letterSpacing: '0.28em', color: T.textFaint, textTransform: 'uppercase', marginBottom: 10}}>Role</div>
+            <label style={{display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, cursor: 'pointer'}}>
               <input type="radio" name="role" value="admin" defaultChecked={p.role === 'admin'} />
-              <span style={{fontFamily: 'JetBrains Mono,monospace', fontSize: 10, color: T.textSubtle, letterSpacing: '0.06em'}}>Admin</span>
+              <span style={{fontFamily: 'Inter,sans-serif', fontSize: 13, color: T.textSubtle}}>Admin</span>
             </label>
-            <label style={{display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer'}}>
+            <label style={{display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer'}}>
               <input type="radio" name="role" value="rep" defaultChecked={p.role === 'rep'} />
-              <span style={{fontFamily: 'JetBrains Mono,monospace', fontSize: 10, color: T.textSubtle, letterSpacing: '0.06em'}}>Rep</span>
+              <span style={{fontFamily: 'Inter,sans-serif', fontSize: 13, color: T.textSubtle}}>Rep</span>
             </label>
           </div>
         </div>
 
-        {/* Markets + Save */}
+        {/* Markets + Identity + Save */}
         <div>
-          <div style={{fontFamily: 'Teko,sans-serif', fontSize: 10, letterSpacing: '0.28em', color: T.textFaint, textTransform: 'uppercase', marginBottom: 8}}>Markets</div>
-          <label style={{display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, cursor: 'pointer'}}>
+          <div style={{fontFamily: 'Teko,sans-serif', fontSize: 11, letterSpacing: '0.28em', color: T.textFaint, textTransform: 'uppercase', marginBottom: 10}}>Markets</div>
+          <label style={{display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, cursor: 'pointer'}}>
             <input type="checkbox" name="markets" value="*" defaultChecked={isAllMarkets} />
-            <span style={{fontFamily: 'JetBrains Mono,monospace', fontSize: 10.5, color: T.yellow, letterSpacing: '0.08em'}}>All markets</span>
+            <span style={{fontFamily: 'JetBrains Mono,monospace', fontSize: 13, color: T.yellow}}>All markets</span>
           </label>
           {ALL_MARKETS.map(m => (
-            <label key={m} style={{display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, cursor: 'pointer'}}>
+            <label key={m} style={{display: 'flex', alignItems: 'center', gap: 10, marginBottom: 7, cursor: 'pointer'}}>
               <input type="checkbox" name="markets" value={m}
                 defaultChecked={isAllMarkets || p.markets.includes(m)} />
-              <span style={{fontFamily: 'JetBrains Mono,monospace', fontSize: 10, color: T.textSubtle, letterSpacing: '0.06em'}}>{m}</span>
+              <span style={{fontFamily: 'Inter,sans-serif', fontSize: 13, color: T.textSubtle}}>{m}</span>
             </label>
           ))}
 
-          <div style={{marginTop: 16}}>
-            <div style={{fontFamily: 'Teko,sans-serif', fontSize: 10, letterSpacing: '0.28em', color: T.textFaint, textTransform: 'uppercase', marginBottom: 8}}>Display Name</div>
+          <div style={{marginTop: 20}}>
+            <div style={{fontFamily: 'Teko,sans-serif', fontSize: 11, letterSpacing: '0.28em', color: T.textFaint, textTransform: 'uppercase', marginBottom: 6}}>Display Name</div>
             <input type="text" name="display_name" defaultValue={p.display_name}
-              style={{width: '100%', padding: '6px 8px', background: T.bg, border: `1px solid ${T.borderStrong}`, color: T.text, fontSize: 13, fontFamily: 'Inter,sans-serif', outline: 'none', boxSizing: 'border-box'}} />
+              style={{width: '100%', padding: '8px 10px', background: T.bg, border: `1px solid ${T.borderStrong}`, color: T.text, fontSize: 13, fontFamily: 'Inter,sans-serif', outline: 'none', boxSizing: 'border-box', marginBottom: 12}} />
+            <div style={{fontFamily: 'Teko,sans-serif', fontSize: 11, letterSpacing: '0.28em', color: T.textFaint, textTransform: 'uppercase', marginBottom: 6}}>Avatar URL <span style={{fontFamily: 'JetBrains Mono,monospace', fontSize: 9, color: T.textFaint, letterSpacing: '0.06em', textTransform: 'none'}}>(optional)</span></div>
+            <input type="url" name="avatar_url" defaultValue={p.avatar_url || ''}
+              placeholder="https://..."
+              style={{width: '100%', padding: '8px 10px', background: T.bg, border: `1px solid ${T.borderStrong}`, color: T.text, fontSize: 13, fontFamily: 'Inter,sans-serif', outline: 'none', boxSizing: 'border-box'}} />
           </div>
 
-          <button type="submit" style={{marginTop: 16, width: '100%', padding: '9px', background: T.yellow, border: 'none', color: '#000', fontFamily: 'Teko,sans-serif', fontSize: 14, fontWeight: 600, letterSpacing: '0.20em', textTransform: 'uppercase', cursor: 'pointer'}}>
+          <button type="submit" style={{marginTop: 16, width: '100%', padding: '11px', background: T.yellow, border: 'none', color: '#000', fontFamily: 'Teko,sans-serif', fontSize: 16, fontWeight: 600, letterSpacing: '0.20em', textTransform: 'uppercase', cursor: 'pointer'}}>
             Save
           </button>
         </div>
