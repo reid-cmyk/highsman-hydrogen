@@ -115,7 +115,8 @@ export async function loader({request, context, params}: LoaderFunctionArgs) {
     }
   }
 
-  return json({authenticated: true, sfUser, org, contacts: org?.contacts || [], notes: Array.isArray(notes)?notes:[], steps, totalOrderRevenue, computedCadence});
+  const googleMapsKey = env.GOOGLE_PLACES_NEW_API_KEY || env.GOOGLE_PLACES_API_KEY || null;
+  return json({authenticated: true, sfUser, org, contacts: org?.contacts || [], notes: Array.isArray(notes)?notes:[], steps, totalOrderRevenue, computedCadence, googleMapsKey});
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -174,7 +175,7 @@ function AccountStatBar({days, daysColor, lastOrderDate, ordersCount, stateRank,
 }
 
 export default function AccountDetail() {
-  const {authenticated, sfUser, org, contacts, notes, steps, totalOrderRevenue, computedCadence} = useLoaderData<typeof loader>() as any;
+  const {authenticated, sfUser, org, contacts, notes, steps, totalOrderRevenue, computedCadence, googleMapsKey} = useLoaderData<typeof loader>() as any;
   const [, rerender] = useState(0);
   const refresh = () => rerender(n => n + 1);
   const [stateRank, setStateRank] = useState<{rank:number|null; total:number|null; revenue:number|null; litRetailerId:number|null; hsBrandRank:number|null; hsBrandTotal:number|null; hsSharePct:number|null; updatedAt:string|null; loading:boolean}>({rank:null, total:null, revenue:null, litRetailerId:null, hsBrandRank:null, hsBrandTotal:null, hsSharePct:null, updatedAt:null, loading:true});
@@ -296,7 +297,7 @@ export default function AccountDetail() {
           {/* Body grid */}
           <div style={{padding:'24px 32px 40px', display:'grid', gridTemplateColumns:'minmax(0,1.6fr) minmax(0,1fr)', gap:24}}>
             {/* Left: Fields panel */}
-            <FieldsPanel org={org} computedFlag={computedFlag} />
+            <FieldsPanel org={org} computedFlag={computedFlag} googleMapsKey={googleMapsKey} />
 
             {/* Right: Onboarding + Contacts + Notes */}
             <div style={{display:'flex', flexDirection:'column', gap:24}}>
@@ -693,7 +694,7 @@ function MarketIntelBar({intel, stateRank}: {intel: any; stateRank: any}) {
 }
 
 // ─── Fields Panel ─────────────────────────────────────────────────────────────
-function FieldsPanel({org, computedFlag}: {org: any; computedFlag: string | null}) {
+function FieldsPanel({org, computedFlag, googleMapsKey}: {org: any; computedFlag: string | null; googleMapsKey?: string | null}) {
   return (
     <div style={{background:T.surface, border:`1px solid ${T.border}`}}>
       <SectionHead title="Account Fields" source="click to edit" />
@@ -731,6 +732,42 @@ function FieldsPanel({org, computedFlag}: {org: any; computedFlag: string | null
         <SelectField label="State" field="market_state" value={org.market_state||''} orgId={org.id} options={['','AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','Multi-State']} />
         <EditableField label="ZIP" field="zip" value={org.zip} orgId={org.id} mono />
       </TwoCol>
+
+      {/* Map — shows when lat/lng are geocoded, otherwise a Google Maps link */}
+      {(()=>{
+        const hasCoords = org.lat && org.lng;
+        const addressQuery = [org.street_address, org.city, org.market_state, org.zip].filter(Boolean).join(', ');
+        if (!addressQuery && !hasCoords) return null;
+        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressQuery||`${org.lat},${org.lng}`)}`;
+        return (
+          <div style={{borderBottom:`1px solid ${T.border}`}}>
+            {hasCoords && googleMapsKey ? (
+              <div style={{position:'relative'}}>
+                <img
+                  src={`https://maps.googleapis.com/maps/api/staticmap?center=${org.lat},${org.lng}&zoom=14&size=600x180&markers=color:red%7C${org.lat},${org.lng}&style=feature:all%7Celement:labels%7Cvisibility:on&key=${googleMapsKey}`}
+                  alt="Account location"
+                  style={{width:'100%',height:160,objectFit:'cover',display:'block',opacity:0.85}}
+                />
+                <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+                  style={{position:'absolute',bottom:8,right:8,fontFamily:'JetBrains Mono,monospace',fontSize:10,letterSpacing:'0.12em',color:T.yellow,background:'rgba(10,10,10,0.85)',padding:'4px 8px',textDecoration:'none',border:`1px solid ${T.yellow}44`}}>
+                  VIEW ON GOOGLE MAPS ↗
+                </a>
+              </div>
+            ) : (
+              <div style={{padding:'12px 16px'}}>
+                <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+                  style={{fontFamily:'JetBrains Mono,monospace',fontSize:11,color:T.cyan,letterSpacing:'0.12em',textDecoration:'none',display:'inline-flex',alignItems:'center',gap:6}}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                  View on Google Maps ↗
+                </a>
+                <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:9.5,color:T.textFaint,marginTop:4,letterSpacing:'0.08em'}}>
+                  {addressQuery || 'No address on file'} {!hasCoords&&'· geocoding pending'}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <GroupLabel>Compliance</GroupLabel>
       <TwoCol>
