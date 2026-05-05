@@ -22,7 +22,7 @@ export async function loader({request}: LoaderFunctionArgs) {
   const cookie = request.headers.get('Cookie') || '';
   // Already authed (either method) → go to accounts
   if (isStagingAuthed(cookie) || getSFToken(cookie)) {
-    return redirect('/sales-staging');
+    return redirect('/sales-staging/dashboard');
   }
   return json({});
 }
