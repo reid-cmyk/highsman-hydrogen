@@ -88,8 +88,6 @@ async function runScan(
         env,
         mailbox,
         days,
-        500,            // listMax — Gmail returns up to 500 thread IDs (free, 1 API call)
-        maxThreads,     // analyzeBudget — controls how many details we actually fetch
       );
       threadsExamined += recent.length;
 
@@ -100,7 +98,7 @@ async function runScan(
 
       for (const thread of slice) {
         try {
-          const {verdict, usage, model} = await analyzeThread(env, thread, mode);
+          const {verdict, usage, model} = await analyzeThread(env, thread);
           threadsAnalyzed += 1;
           inputTokens += usage.input;
           outputTokens += usage.output;

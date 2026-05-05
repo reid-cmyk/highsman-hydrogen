@@ -126,7 +126,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const orgs: OnboardingOrg[] = raw.map(org => {
     const relevantSteps = stepsForMarket(org.market_state);
     const totalSteps = relevantSteps.length;
-    const stepsMap = new Map((org.onboarding_steps||[]).map((s:any)=>[s.step_key, s]));
+    const stepsMap = new Map<string,any>((org.onboarding_steps||[]).map((s:any)=>[s.step_key, s]));
     const doneCount = relevantSteps.filter(s => stepsMap.get(s.key)?.status === 'complete').length;
     const pct = totalSteps > 0 ? (doneCount / totalSteps) * 100 : 0;
     // Last completed step — sort completed steps by completed_at timestamp, take most recent

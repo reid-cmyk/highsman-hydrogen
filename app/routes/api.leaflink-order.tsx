@@ -308,11 +308,11 @@ async function findCustomerByLicense(
   let pages = 0;
 
   while (nextUrl && pages < 20) {
-    const res = await fetch(nextUrl, {
+    const res: Response = await fetch(nextUrl, {
       headers: {Authorization: `Token ${apiKey}`},
     });
     if (!res.ok) break;
-    const data = await res.json();
+    const data: any = await res.json();
     if (!data.results || data.results.length === 0) break;
 
     for (const c of data.results) {
@@ -752,9 +752,9 @@ export async function loader({request, context}: ActionFunctionArgs) {
     const matches: any[] = [];
     const samples: any[] = [];
     while (nextUrl && pages < 20) {
-      const res = await fetch(nextUrl, {headers: {Authorization: `Token ${apiKey}`}});
+      const res: Response = await fetch(nextUrl, {headers: {Authorization: `Token ${apiKey}`}});
       if (!res.ok) break;
-      const data = await res.json();
+      const data: any = await res.json();
       if (!data.results?.length) break;
       for (const c of data.results) {
         const fields = collectCustomerLicenseFields(c);
@@ -807,9 +807,9 @@ export async function loader({request, context}: ActionFunctionArgs) {
     let firstPageCount: number | null = null;
     let firstPageTotal: number | null = null;
     while (nextUrl && pagesScanned < 30) {
-      const res = await fetch(nextUrl, {headers: {Authorization: `Token ${apiKey}`}});
+      const res: Response = await fetch(nextUrl, {headers: {Authorization: `Token ${apiKey}`}});
       if (!res.ok) break;
-      const data = await res.json();
+      const data: any = await res.json();
       if (firstPageCount === null) {
         firstPageCount = data.results?.length || 0;
         firstPageTotal = data.count ?? null;

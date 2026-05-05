@@ -76,6 +76,7 @@ type Dispensary = {
   id: string;
   name: string;
   city: string;
+  street?: string;
   lat?: number;
   lng?: number;
   // Zoho-resolved pop-up fields.

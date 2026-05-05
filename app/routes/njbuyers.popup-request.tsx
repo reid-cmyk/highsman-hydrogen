@@ -118,9 +118,9 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         to: 'sky@highsman.com',
         cc: 'reid@highsman.com',
         subject,
-        html,
-        text,
-      } as Parameters<typeof sendEmailFromUser>[1]);
+        htmlBody: html,
+        textBody: text,
+      }, env);
 
       emailStatus = 'sent';
     }

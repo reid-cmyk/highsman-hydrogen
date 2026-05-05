@@ -871,6 +871,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
         return {
           onboarding: new Map<string, VibesBookedEntry>(),
           training: new Map<string, VibesBookedEntry>(),
+          productOnboarding: new Map<string, VibesBookedEntry>(),
         };
       }),
     ]);

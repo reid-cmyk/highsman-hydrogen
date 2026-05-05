@@ -76,37 +76,37 @@ export default function Apparel() {
             const categories = [
               {
                 name: "Headwear",
-                filter: (p) => /hat|snapback|trucker|beanie|visor|cap|pom-pom|dad hat/i.test(p.title),
+                filter: (p: any) => /hat|snapback|trucker|beanie|visor|cap|pom-pom|dad hat/i.test(p.title),
               },
               {
                 name: "T-Shirts",
-                filter: (p) => /tee|t-shirt|polo/i.test(p.title) && !/hoodie|jacket|jersey/i.test(p.title),
+                filter: (p: any) => /tee|t-shirt|polo/i.test(p.title) && !/hoodie|jacket|jersey/i.test(p.title),
               },
               {
                 name: "Hoodies & Outerwear",
-                filter: (p) => /hoodie|pullover|zip up|jacket|bomber|varsity|letterman/i.test(p.title),
+                filter: (p: any) => /hoodie|pullover|zip up|jacket|bomber|varsity|letterman/i.test(p.title),
               },
               {
                 name: "Jerseys",
-                filter: (p) => /jersey/i.test(p.title),
+                filter: (p: any) => /jersey/i.test(p.title),
               },
               {
                 name: "Bottoms",
-                filter: (p) => /shorts|joggers|pants|fleece shorts|mesh shorts/i.test(p.title),
+                filter: (p: any) => /shorts|joggers|pants|fleece shorts|mesh shorts/i.test(p.title),
               },
               {
                 name: "Accessories",
-                filter: (p) => /sock|towel|tray|pelican|case/i.test(p.title),
+                filter: (p: any) => /sock|towel|tray|pelican|case/i.test(p.title),
               },
             ];
 
-            const categorized = categories.map(cat => ({
+            const categorized = categories.map((cat: any) => ({
               ...cat,
-              products: products.filter(cat.filter),
-            })).filter(cat => cat.products.length > 0);
+              products: (products as any[]).filter(cat.filter),
+            })).filter((cat: any) => cat.products.length > 0);
 
-            const categorizedIds = new Set(categorized.flatMap(cat => cat.products.map(p => p.id)));
-            const uncategorized = products.filter(p => !categorizedIds.has(p.id));
+            const categorizedIds = new Set(categorized.flatMap((cat: any) => cat.products.map((p: any) => p.id)));
+            const uncategorized = (products as any[]).filter((p: any) => !categorizedIds.has(p.id));
 
             return (
               <>
@@ -121,7 +121,7 @@ export default function Apparel() {
                       </span>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                      {cat.products.map((product) => (
+                      {cat.products.map((product: any) => (
                         <ProductCard key={product.id} product={product} />
                       ))}
                     </div>

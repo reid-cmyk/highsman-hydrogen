@@ -626,6 +626,6 @@ function AllZohoPanel({rows, matchedIds}: {rows: ZohoView[]; matchedIds: Set<str
   );
 }
 
-function Th({children, className = ''}: {children: React.ReactNode; className?: string}) {
+function Th({children = null, className = ''}: {children?: React.ReactNode; className?: string}) {
   return <th className={`text-left px-4 py-3 text-[10px] uppercase tracking-widest text-[#666] font-bold ${className}`}>{children}</th>;
 }

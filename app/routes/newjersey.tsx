@@ -363,8 +363,8 @@ function SectionHeader({
   eyebrow: string;
   title: React.ReactNode;
   desc: string;
-  downloadLabel: string;
-  onDownload: () => void;
+  downloadLabel?: string;
+  onDownload?: () => void;
 }) {
   return (
     <div className="flex items-start justify-between gap-4 flex-wrap mb-8">

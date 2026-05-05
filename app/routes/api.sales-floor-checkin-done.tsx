@@ -56,9 +56,9 @@ export async function action({request, context}: ActionFunctionArgs) {
     const token = await getZohoToken(env);
 
     const today = new Date().toISOString().slice(0, 10);
-    const noteTitle = `${CHECKIN_NOTE_SUBJECT_PREFIX} ${today} — ${rep.name || rep.email || 'rep'}`;
+    const noteTitle = `${CHECKIN_NOTE_SUBJECT_PREFIX} ${today} — ${rep.displayName || rep.email || 'rep'}`;
     const noteContent = [
-      `12-day post-ship check-in logged by ${rep.name || rep.email || 'rep'} on ${today}.`,
+      `12-day post-ship check-in logged by ${rep.displayName || rep.email || 'rep'} on ${today}.`,
       customerName ? `Account: ${customerName}` : '',
       summary ? `Notes: ${summary}` : 'No additional notes.',
     ]
