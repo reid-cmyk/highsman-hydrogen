@@ -980,7 +980,7 @@ export async function action({request, context}: ActionFunctionArgs) {
     return json({ok: false, error: 'Invalid JSON body'}, {status: 400});
   }
 
-  const {dispensaryName, dispensaryId, dispensaryLicense, items, notes, promoCode, launchTermsAgreed, launchTermsVersion} = body;
+  const {dispensaryName, dispensaryId, dispensaryLicense, items, notes, promoCode, launchTermsAgreed, launchTermsVersion, customerId: customerIdOverride} = body;
 
   if (!dispensaryName) {
     return json({ok: false, error: 'Dispensary name is required'}, {status: 400});
@@ -1070,7 +1070,11 @@ export async function action({request, context}: ActionFunctionArgs) {
     // The right behavior when license fails is to email the rep for manual entry —
     // they can fix the LeafLink customer record (set license_number) and resubmit.
     let customer: {id: number; name: string} | null = null;
-    if (dispensaryLicense) {
+    if (customerIdOverride && Number.isInteger(customerIdOverride)) {
+      // Trusted override from internal admin/rep tooling. Skip lookup entirely.
+      console.log(`[api/leaflink-order] customerId override supplied: ${customerIdOverride} for "${dispensaryName}"`);
+      customer = {id: customerIdOverride, name: dispensaryName};
+    } else if (dispensaryLicense) {
       console.log(`[api/leaflink-order] Trying license lookup: "${dispensaryLicense}" for "${dispensaryName}"`);
       customer = await findCustomerByLicense(dispensaryLicense, apiKey);
       if (!customer) {
