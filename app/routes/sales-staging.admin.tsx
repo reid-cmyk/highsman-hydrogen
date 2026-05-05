@@ -57,11 +57,9 @@ export async function action({request, context}: ActionFunctionArgs) {
   const ok = await updateSFUserPermissions(userId, {display_name, role, modules, features, markets, avatar_url: avatar_url || undefined}, env);
 
   // Refresh sf_user cache cookie if the admin is editing their own profile
+  // Always clear the sf_user cache cookie on any save so the next load fetches fresh data
   const headers = new Headers({'Content-Type': 'application/json'});
-  if (ok && sfUser.id === userId) {
-    const updated = await getSFUser(null, env, userId);
-    if (updated) headers.append('Set-Cookie', buildSFUserCookie(updated));
-  }
+  headers.append('Set-Cookie', `sf_user=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
   return new Response(JSON.stringify({ok}), {status: 200, headers});
 }
 

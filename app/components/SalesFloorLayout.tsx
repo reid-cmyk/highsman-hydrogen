@@ -110,7 +110,7 @@ export function SalesFloorLayout({
   const navW = collapsed ? 52 : 200;
 
   return (
-    <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: 'Inter,sans-serif', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100vh', background: T.bg, color: T.text, fontFamily: 'Inter,sans-serif', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <style>{`
         @keyframes pulse-ring {
           0%   { box-shadow: 0 0 0 0 rgba(0,232,122,.7) }
@@ -157,15 +157,9 @@ export function SalesFloorLayout({
           </div>
         </div>
 
-        {/* Right: date + live */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-          <div style={{ fontFamily: 'Teko,sans-serif', fontSize: 22, fontWeight: 500, letterSpacing: '0.16em', color: T.text, textTransform: 'uppercase' }}>
-            {new Date().toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'}).toUpperCase().replace(',', ' ·')}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: T.green, boxShadow: `0 0 8px ${T.green}`, animation: 'pulse-ring 2.4s infinite' }} />
-            <span style={{ fontFamily: 'JetBrains Mono,monospace', fontSize: 10, color: T.green, letterSpacing: '0.18em' }}>LIVE</span>
-          </div>
+        {/* Right: date only */}
+        <div style={{ fontFamily: 'Teko,sans-serif', fontSize: 22, fontWeight: 500, letterSpacing: '0.16em', color: T.text, textTransform: 'uppercase' }}>
+          {new Date().toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'}).toUpperCase().replace(',', ' ·')}
         </div>
       </div>
 
@@ -287,13 +281,14 @@ export function SalesFloorLayout({
                 </div>
               )}
               {!collapsed && (
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontFamily: 'Teko,sans-serif', fontSize: 15, letterSpacing: '0.10em', color: T.text, textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontFamily: 'Teko,sans-serif', fontSize: 16, letterSpacing: '0.10em', color: T.text, textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {sfUser?.permissions.display_name || 'Sales Floor'}
                   </div>
-                  <a href="/sales" style={{ fontFamily: 'JetBrains Mono,monospace', fontSize: 9.5, color: T.textFaint, letterSpacing: '0.12em', textDecoration: 'none', display: 'block' }}>
-                    ← live /sales
-                  </a>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: T.green, boxShadow: `0 0 5px ${T.green}`, animation: 'pulse-ring 2.4s infinite', flexShrink: 0 }} />
+                    <span style={{ fontFamily: 'JetBrains Mono,monospace', fontSize: 9, color: T.green, letterSpacing: '0.16em' }}>LIVE</span>
+                  </div>
                 </div>
               )}
             </div>
