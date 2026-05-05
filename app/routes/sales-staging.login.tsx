@@ -6,7 +6,7 @@
 import type {ActionFunctionArgs, LoaderFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
 import {json, redirect} from '@shopify/remix-oxygen';
 import {useActionData, Form} from '@remix-run/react';
-import {getSFToken, signInWithPassword, buildSFSessionCookie} from '~/lib/sf-auth.server';
+import {getSFToken, getSFUser, signInWithPassword, buildSFSessionCookie, buildSFUserCookie} from '~/lib/sf-auth.server';
 import {isStagingAuthed} from '~/lib/staging-auth';
 
 export const handle = {hideHeader: true, hideFooter: true};
@@ -42,9 +42,12 @@ export async function action({request, context}: ActionFunctionArgs) {
     return json({error: result.error || 'Invalid credentials'});
   }
 
-  return redirect('/sales-staging', {
-    headers: {'Set-Cookie': buildSFSessionCookie(result.token)},
-  });
+  // Load user once at login to populate the cache cookie (no Supabase call on subsequent requests)
+  const sfUser = await getSFUser(`sf_token=${result.token}`, env);
+  const headers = new Headers();
+  headers.append('Set-Cookie', buildSFSessionCookie(result.token));
+  if (sfUser) headers.append('Set-Cookie', buildSFUserCookie(sfUser));
+  return redirect('/sales-staging', {headers});
 }
 
 export default function SFLogin() {

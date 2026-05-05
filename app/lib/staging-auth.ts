@@ -24,16 +24,13 @@ export function buildStagingLogoutCookie(): string {
   return `${STAGING_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
 }
 
-/** Clears both the legacy password cookie and the new SF session token. */
-export function buildFullLogoutHeaders(): Record<string, string> {
-  // Cloudflare Workers only supports one Set-Cookie header per response via json/redirect,
-  // so we concatenate them — browsers process comma-separated Set-Cookie directives.
-  return {
-    'Set-Cookie': [
-      `${STAGING_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
-      `sf_token=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
-    ].join(', '),
-  };
+/** Clears the legacy password cookie, SF session token, and SF user cache cookie. */
+export function buildFullLogoutHeaders(): Headers {
+  const h = new Headers();
+  h.append('Set-Cookie', `${STAGING_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
+  h.append('Set-Cookie', `sf_token=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
+  h.append('Set-Cookie', `sf_user=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
+  return h;
 }
 
 export function checkStagingPassword(

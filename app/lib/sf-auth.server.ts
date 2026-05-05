@@ -39,9 +39,39 @@ export function getSFToken(cookieHeader: string | null): string | null {
   return match ? match[1] : null;
 }
 
+export const SF_USER_COOKIE = 'sf_user';
+
 export function buildSFSessionCookie(token: string): string {
-  const maxAge = 365 * 24 * 3600; // 1 year — stay logged in on the device
+  const maxAge = 365 * 24 * 3600; // 1 year
   return `${SF_TOKEN_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
+}
+
+/** Cache user permissions in a separate cookie to avoid a Supabase round-trip on every request. */
+export function buildSFUserCookie(user: SFUser): string {
+  const payload = Buffer.from(JSON.stringify({
+    id: user.id,
+    email: user.email,
+    permissions: user.permissions,
+  })).toString('base64');
+  const maxAge = 365 * 24 * 3600;
+  return `${SF_USER_COOKIE}=${payload}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
+}
+
+export function buildSFLogoutCookies(): string[] {
+  return [
+    `${SF_TOKEN_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
+    `${SF_USER_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
+  ];
+}
+
+/** Read user from the cached cookie (fast path — no Supabase call). */
+export function getSFUserFromCache(cookieHeader: string | null): SFUser | null {
+  if (!cookieHeader) return null;
+  const match = cookieHeader.match(/sf_user=([^;]+)/);
+  if (!match) return null;
+  try {
+    return JSON.parse(Buffer.from(match[1], 'base64').toString('utf8')) as SFUser;
+  } catch { return null; }
 }
 
 export function buildSFLogoutCookie(): string {
@@ -112,6 +142,10 @@ export async function getSFUser(
     } catch { return null; }
   }
 
+  // Fast path: read from cached cookie (avoids Supabase round-trip)
+  const cached = getSFUserFromCache(cookieHeader);
+  if (cached) return cached;
+
   const token = getSFToken(cookieHeader);
   if (!token) return null;
 
@@ -179,11 +213,13 @@ export async function updateSFUserPermissions(
   env: { SUPABASE_URL: string; SUPABASE_SERVICE_KEY: string },
 ): Promise<boolean> {
   try {
-    // Read existing metadata first so we don't wipe keys we're not touching
+    // Read existing metadata first so we don't wipe keys we're not touching.
+    // Only spread keys that are actually provided (not undefined) so existing values survive.
     const existing = await getSFUser(null, env, userId);
-    const merged = { ...(existing?.permissions || {}), ...permissions };
-    // Remove undefined values so they don't overwrite good data
-    Object.keys(merged).forEach(k => { if ((merged as any)[k] === undefined) delete (merged as any)[k]; });
+    const provided = Object.fromEntries(
+      Object.entries(permissions).filter(([, v]) => v !== undefined),
+    );
+    const merged = { ...(existing?.permissions || {}), ...provided };
 
     const res = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
       method: 'PUT',
