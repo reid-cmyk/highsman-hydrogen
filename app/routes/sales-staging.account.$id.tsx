@@ -1237,10 +1237,14 @@ function NotesPanel({orgId, notes, refresh, sfUser}: {orgId:string; notes:any[];
         const {channel, text} = parseNote(n.body);
         const chColor = channel ? CHANNEL_COLORS[channel] : null;
         const initials = (n.author_name||'').split(/\s+/).slice(0,2).map((w:string)=>w[0]?.toUpperCase()||'').join('')||'?';
-        const isSky = (n.author_name||'').toLowerCase().includes('sky');
+        const isCurrentUser = sfUser && (n.author_name||'').toLowerCase() === (sfUser.permissions?.display_name||'').toLowerCase();
+        const noteAvatarUrl = isCurrentUser ? sfUser?.permissions?.avatar_url : null;
         return (
           <div key={n.id} style={{padding:'12px 16px', display:'flex', gap:10, borderTop:`1px solid ${T.border}`}}>
-            <div style={{width:26, height:26, borderRadius:'50%', background:isSky?`linear-gradient(135deg,${T.yellow},${T.yellowWarm})`:'#1A1A1A', border:isSky?'none':`1px solid ${T.borderStrong}`, display:'flex', alignItems:'center', justifyContent:'center', color:isSky?'#000':T.textMuted, fontFamily:'Teko,sans-serif', fontSize:12, fontWeight:500, flexShrink:0, marginTop:1}}>{initials}</div>
+            {noteAvatarUrl
+              ? <img src={noteAvatarUrl} alt={n.author_name} style={{width:26, height:26, borderRadius:'50%', objectFit:'cover', flexShrink:0, marginTop:1}} />
+              : <div style={{width:26, height:26, borderRadius:'50%', background:`linear-gradient(135deg,${T.yellow},${T.yellowWarm})`, display:'flex', alignItems:'center', justifyContent:'center', color:'#000', fontFamily:'Teko,sans-serif', fontSize:12, fontWeight:600, flexShrink:0, marginTop:1}}>{initials}</div>
+            }
             <div style={{flex:1, minWidth:0}}>
               <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:5}}>
                 <div style={{display:'flex', alignItems:'center', gap:8}}>

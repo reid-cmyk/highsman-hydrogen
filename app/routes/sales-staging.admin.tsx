@@ -6,6 +6,7 @@
 import type {LoaderFunctionArgs, ActionFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
 import {json, redirect} from '@shopify/remix-oxygen';
 import {useLoaderData, useFetcher} from '@remix-run/react';
+import {useState} from 'react';
 import {isStagingAuthed} from '~/lib/staging-auth';
 import {getSFUser, listSFUsers, updateSFUserPermissions, isAdmin, buildSFUserCookie} from '~/lib/sf-auth.server';
 import {SF_MODULES, SF_FEATURES} from '~/lib/sf-permissions';
@@ -109,13 +110,19 @@ function UserCard({user}: {user: any}) {
   const isAllMarkets = p.markets.includes('*');
   const isAllFeatures = p.features.includes('*');
   const saving = fetcher.state !== 'idle';
+  // Controlled state so the field persists after fetcher saves without a page reload
+  const [avatarUrl, setAvatarUrl] = useState(p.avatar_url || '');
 
   return (
     <div style={{background: T.surface, border: `1px solid ${T.borderStrong}`, padding: '20px 24px'}}>
       <div style={{display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16}}>
-        <div style={{width: 36, height: 36, borderRadius: '50%', background: `linear-gradient(135deg,${T.yellow},#FFB800)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000', fontWeight: 700, fontSize: 13, fontFamily: 'Teko,sans-serif', flexShrink: 0}}>
-          {p.display_name.split(' ').map((w: string) => w[0]).slice(0,2).join('').toUpperCase()}
-        </div>
+        {p.avatar_url ? (
+          <img src={p.avatar_url} alt={p.display_name} style={{width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: `2px solid ${T.borderStrong}`}} />
+        ) : (
+          <div style={{width: 40, height: 40, borderRadius: '50%', background: `linear-gradient(135deg,${T.yellow},#FFB800)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000', fontWeight: 700, fontSize: 14, fontFamily: 'Teko,sans-serif', flexShrink: 0}}>
+            {p.display_name.split(' ').map((w: string) => w[0]).slice(0,2).join('').toUpperCase()}
+          </div>
+        )}
         <div>
           <div style={{fontFamily: 'Teko,sans-serif', fontSize: 20, letterSpacing: '0.08em', color: T.text}}>{p.display_name}</div>
           <div style={{fontFamily: 'JetBrains Mono,monospace', fontSize: 10, color: T.textFaint, letterSpacing: '0.10em'}}>{user.email}</div>
@@ -198,7 +205,7 @@ function UserCard({user}: {user: any}) {
             <input type="text" name="display_name" defaultValue={p.display_name}
               style={{width: '100%', padding: '8px 10px', background: T.bg, border: `1px solid ${T.borderStrong}`, color: T.text, fontSize: 13, fontFamily: 'Inter,sans-serif', outline: 'none', boxSizing: 'border-box', marginBottom: 12}} />
             <div style={{fontFamily: 'Teko,sans-serif', fontSize: 11, letterSpacing: '0.28em', color: T.textFaint, textTransform: 'uppercase', marginBottom: 6}}>Avatar URL <span style={{fontFamily: 'JetBrains Mono,monospace', fontSize: 9, color: T.textFaint, letterSpacing: '0.06em', textTransform: 'none'}}>(optional)</span></div>
-            <input type="url" name="avatar_url" defaultValue={p.avatar_url || ''}
+            <input type="url" name="avatar_url" value={avatarUrl} onChange={e => setAvatarUrl(e.target.value)}
               placeholder="https://..."
               style={{width: '100%', padding: '8px 10px', background: T.bg, border: `1px solid ${T.borderStrong}`, color: T.text, fontSize: 13, fontFamily: 'Inter,sans-serif', outline: 'none', boxSizing: 'border-box'}} />
           </div>
