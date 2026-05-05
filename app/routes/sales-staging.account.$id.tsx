@@ -178,10 +178,11 @@ function AccountStatBar({days, daysColor, lastOrderDate, ordersCount, stateRank,
 export default function AccountDetail() {
   const {authenticated, sfUser, org, contacts, notes, steps, totalOrderRevenue, computedCadence, googleMapsKey, fromParam} = useLoaderData<typeof loader>() as any;
   const FROM_MAP: Record<string,{label:string;href:string}> = {
-    accounts:   {label:'← Accounts',    href:'/sales-staging/accounts'},
+    accounts:   {label:'← Accounts',     href:'/sales-staging/accounts'},
+    dashboard:  {label:'← Dashboard',    href:'/sales-staging/dashboard'},
     reorders:   {label:'← Reorders Due', href:'/sales-staging/reorders'},
-    onboarding: {label:'← Onboarding',  href:'/sales-staging/onboarding'},
-    leads:      {label:'← Leads',       href:'/sales-staging/leads'},
+    onboarding: {label:'← Onboarding',   href:'/sales-staging/onboarding'},
+    leads:      {label:'← Leads',        href:'/sales-staging/leads'},
   };
   const backNav = FROM_MAP[fromParam] || FROM_MAP.accounts;
   const [, rerender] = useState(0);
