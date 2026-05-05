@@ -1039,7 +1039,6 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
           phone={phone} email={email}
           isFlagged={isFlagged} isUntargeted={isUntargeted} zohoId={zohoIdNumeric}
           orgId={org.id}
-          onCall={()=>{}} onText={()=>{}} onEmail={()=>{}}
           onBrief={openBrief} onProspect={prospect} onFlag={flag}
           onTraining={requestTraining} onSendMenu={sendMenu} onNewProduct={newProduct}
         />

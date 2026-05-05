@@ -182,7 +182,7 @@ export default function AccountDetail() {
   const [marketIntel, setMarketIntel] = useState<any>(null);
 
   useEffect(() => {
-    if (!org?.market_state) { setStateRank({rank:null, total:null, revenue:null, litRetailerId:null, loading:false}); return; }
+    if (!org?.market_state) { setStateRank({rank:null, total:null, revenue:null, litRetailerId:null, hsBrandRank:null, hsBrandTotal:null, hsSharePct:null, updatedAt:null, loading:false}); return; }
     fetch(`/api/state-rank?state=${encodeURIComponent(org.market_state)}&name=${encodeURIComponent(org.name||'')}&org_id=${org.id}`)
       .then(r => r.json())
       .then(d => {
@@ -1322,7 +1322,7 @@ function NotesPanel({orgId, notes, refresh, sfUser}: {orgId:string; notes:any[];
       {notes.length === 0 && <div style={{padding:'20px 16px', fontFamily:'JetBrains Mono,monospace', fontSize:11, color:T.textFaint, letterSpacing:'0.10em'}}>No notes yet</div>}
       {notes.map((n:any, i:number) => {
         const {channel, text} = parseNote(n.body);
-        const chColor = channel ? CHANNEL_COLORS[channel] : null;
+        const chColor = (channel ? CHANNEL_COLORS[channel] : null) ?? T.textSubtle;
         const initials = (n.author_name||'').split(/\s+/).slice(0,2).map((w:string)=>w[0]?.toUpperCase()||'').join('')||'?';
         const isCurrentUser = sfUser && (n.author_name||'').toLowerCase() === (sfUser.permissions?.display_name||'').toLowerCase();
         const noteAvatarUrl = isCurrentUser ? sfUser?.permissions?.avatar_url : null;
