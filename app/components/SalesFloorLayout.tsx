@@ -13,6 +13,7 @@
 
 import { useState, useEffect } from 'react';
 import { Form } from '@remix-run/react';
+import type { SFUser } from '~/lib/sf-auth.server';
 
 const T = {
   bg:           '#0A0A0A',
@@ -51,6 +52,7 @@ const ICONS: Record<string, React.ReactNode> = {
   Text:             <Ico><path d="M2 2h12a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H5l-4 3V3a1 1 0 0 1 1-1z"/></Ico>,
   Issues:           <Ico><path d="M8 1L1 14h14z"/><path d="M8 6v3"/><circle cx="8" cy="11.5" r="0.5" fill="currentColor"/></Ico>,
   Vibes:            <Ico><path d="M1 8c1.5-3 3-3 4.5 0s3 3 4.5 0 3-3 4.5 0"/></Ico>,
+  Admin:            <Ico><circle cx="8" cy="6" r="3"/><path d="M2 14c0-3 2.7-5 6-5s6 2 6 5"/><path d="M12 10l2 2 3-3"/></Ico>,
 };
 
 // ─── Nav items ────────────────────────────────────────────────────────────────
@@ -67,11 +69,11 @@ const NAV_ITEMS: {
   { label: 'Leads',          href: '/sales-staging/leads',                     countKey: 'prospect' },
   { label: 'Sales Orders',   href: '/sales-staging/orders' },
   { label: 'Accounts',       href: '/sales-staging' },
-  { label: 'Funnel',         href: '/sales' },
   { label: 'Email',          href: '/sales-floor/app' },
   { label: 'Text',           href: '/sales-floor/app' },
   { label: 'Issues',         href: '/sales-floor/app' },
   { label: 'Vibes',          href: '/vibes' },
+  { label: 'Admin',          href: '/sales-staging/admin' },
 ];
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
@@ -80,10 +82,12 @@ export function SalesFloorLayout({
   current,
   children,
   stageCounts = {},
+  sfUser,
 }: {
   current: string;
   children: React.ReactNode;
   stageCounts?: Record<string, number>;
+  sfUser?: SFUser | null;
 }) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -105,7 +109,7 @@ export function SalesFloorLayout({
   const navW = collapsed ? 52 : 200;
 
   return (
-    <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: 'Inter,sans-serif', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ fontFamily: 'Inter,sans-serif', color: T.text, background: T.bg }}>
       <style>{`
         @keyframes pulse-ring {
           0%   { box-shadow: 0 0 0 0 rgba(0,232,122,.7) }
@@ -129,74 +133,45 @@ export function SalesFloorLayout({
           .hs-card-actions{grid-column:2/-1!important;padding:8px 12px 12px!important;border-left:none!important}
         }
         @media (max-width: 768px) {
-          .sf-sidenav        { display: none !important; }
-          .sf-topbar-extras  { display: none !important; }
+          .sf-sidenav { display: none !important; }
         }
       `}</style>
 
-      {/* ── Top bar ─────────────────────────────────────────────────────── */}
+      {/* ── Top bar — position:fixed so it never moves ──────────────────── */}
       <div style={{
-        height: 64, background: T.bg, borderBottom: `1px solid ${T.border}`,
+        position: 'fixed', top: 0, left: 0, right: 0,
+        height: 56, background: T.bg, borderBottom: `1px solid ${T.border}`,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 28px', flexShrink: 0, zIndex: 100,
+        padding: '0 24px', zIndex: 200,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+        {/* Left: logo + wordmark */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <img
             src="https://agents-assets.nyc3.cdn.digitaloceanspaces.com/Highsman%20logo%20(2).png"
-            alt="Highsman" style={{ height: '28px' }}
+            alt="Highsman" style={{ height: '26px' }}
           />
-          <div style={{ width: 1, height: 24, background: T.borderStrong }} />
-          <div style={{ fontFamily: 'Teko,sans-serif', fontSize: 20, fontWeight: 500, letterSpacing: '0.28em', color: T.textFaint, textTransform: 'uppercase' }}>
+          <div style={{ width: 1, height: 20, background: T.borderStrong }} />
+          <div style={{ fontFamily: 'Teko,sans-serif', fontSize: 18, fontWeight: 500, letterSpacing: '0.32em', color: T.textFaint, textTransform: 'uppercase' }}>
             SALES FLOOR
           </div>
-          <span style={{ fontFamily: 'JetBrains Mono,monospace', fontSize: 9, color: T.textFaint, letterSpacing: '0.18em', border: `1px solid ${T.border}`, padding: '2px 6px' }}>
-            v2.4
-          </span>
         </div>
 
-        <div className="sf-topbar-extras" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          {/* LIVE indicator */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 7, height: 7, borderRadius: '50%', background: T.green, boxShadow: `0 0 6px ${T.green}`, animation: 'pulse-ring 2.4s infinite' }} />
-            <span style={{ fontFamily: 'JetBrains Mono,monospace', fontSize: 10, color: T.textSubtle, letterSpacing: '0.14em' }}>LIVE</span>
-          </div>
-          <div style={{ width: 1, height: 20, background: T.border }} />
-
-          {/* User avatar */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <img
-              src="https://agents-assets.nyc3.cdn.digitaloceanspaces.com/sky-avatar.png"
-              alt="Sky Lima"
-              style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }}
-            />
-            <span style={{ fontFamily: 'Teko,sans-serif', fontSize: 14, letterSpacing: '0.14em', color: T.textMuted }}>SKY LIMA</span>
-          </div>
-          <div style={{ width: 1, height: 20, background: T.border }} />
-
-          {/* Links */}
-          <a href="/sales" style={{ fontFamily: 'JetBrains Mono,monospace', fontSize: 10, color: T.textFaint, letterSpacing: '0.14em', textDecoration: 'none' }}>
-            ← Live /sales
-          </a>
-          <Form method="post" action="/sales-staging">
-            <input type="hidden" name="intent" value="logout" />
-            <button type="submit" style={{ background: 'none', border: 'none', fontFamily: 'JetBrains Mono,monospace', fontSize: 10, color: T.textFaint, letterSpacing: '0.14em', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>
-              sign out
-            </button>
-          </Form>
+        {/* Right: date only */}
+        <div style={{ fontFamily: 'Teko,sans-serif', fontSize: 22, fontWeight: 500, letterSpacing: '0.16em', color: T.text, textTransform: 'uppercase' }}>
+          {new Date().toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'}).toUpperCase().replace(',', ' ·')}
         </div>
       </div>
 
-      {/* ── Body ────────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-
-        {/* ── Side nav ──────────────────────────────────────────────────── */}
+      {/* ── Side nav — position:fixed so it never moves ────────────────── */}
         <div
           className="sf-sidenav"
           style={{
-            width: navW, flexShrink: 0, background: T.bg,
-            borderRight: `1px solid ${T.border}`,
+            position: 'fixed', top: 56, left: 0,
+            width: navW, height: 'calc(100vh - 56px)',
+            background: T.bg, borderRight: `1px solid ${T.border}`,
             display: 'flex', flexDirection: 'column',
             transition: 'width 0.18s ease', overflow: 'hidden',
+            zIndex: 100,
           }}
         >
           {/* Collapse toggle */}
@@ -226,8 +201,21 @@ export function SalesFloorLayout({
             </div>
           )}
 
-          {/* Nav items */}
-          {NAV_ITEMS.map(item => {
+          {/* Nav items — filtered by sfUser.modules when present */}
+          {NAV_ITEMS.filter(item => {
+            if (!sfUser) return true; // legacy auth: show all
+            const mods = sfUser.permissions.modules;
+            if (mods.includes('*')) return true;
+            // Map nav label → module key used in permissions
+            const MAP: Record<string,string> = {
+              'Dashboard': 'dashboard', 'Onboarding': 'onboarding',
+              'Reorders Due': 'reorders', 'Leads': 'leads',
+              'Sales Orders': 'orders', 'Accounts': 'accounts',
+              'Email': 'email', 'Text': 'text',
+              'Issues': 'issues', 'Vibes': 'vibes', 'Admin': 'admin',
+            };
+            return mods.includes(MAP[item.label] || item.label.toLowerCase());
+          }).map(item => {
             const active  = item.label === current;
             const count   = item.countKey ? (stageCounts[item.countKey] || 0) : null;
             const showDot = item.dot && count && count > 0;
@@ -271,13 +259,69 @@ export function SalesFloorLayout({
               </a>
             );
           })}
+
+          {/* ── User section — pinned to bottom of nav ── */}
+          <div style={{ marginTop: 'auto', borderTop: `1px solid ${T.border}`, flexShrink: 0 }}>
+            {/* User identity */}
+            <div style={{
+              display: 'flex', alignItems: 'center',
+              gap: collapsed ? 0 : 10,
+              padding: collapsed ? '14px 0' : '14px',
+              justifyContent: collapsed ? 'center' : 'flex-start',
+              overflow: 'hidden',
+            }}>
+              {sfUser?.permissions.avatar_url ? (
+                <img src={sfUser.permissions.avatar_url} alt={sfUser.permissions.display_name}
+                  style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+              ) : (
+                <div style={{ width: 34, height: 34, borderRadius: '50%', background: `linear-gradient(135deg,${T.yellow},#FFB800)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000', fontWeight: 700, fontSize: 13, fontFamily: 'Teko,sans-serif', flexShrink: 0 }}>
+                  {(sfUser?.permissions.display_name || 'SF').split(' ').map((w:string) => w[0]).slice(0,2).join('').toUpperCase()}
+                </div>
+              )}
+              {!collapsed && (
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontFamily: 'Teko,sans-serif', fontSize: 16, letterSpacing: '0.10em', color: T.text, textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {sfUser?.permissions.display_name || 'Sales Floor'}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: T.green, boxShadow: `0 0 5px ${T.green}`, animation: 'pulse-ring 2.4s infinite', flexShrink: 0 }} />
+                    <span style={{ fontFamily: 'JetBrains Mono,monospace', fontSize: 9, color: T.green, letterSpacing: '0.16em' }}>LIVE</span>
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* Sign out */}
+            <div style={{ borderTop: `1px solid ${T.border}` }}>
+              <a href="/sales-staging/login"
+                onClick={(e) => { e.preventDefault(); fetch('/sales-staging', {method:'POST', body: new URLSearchParams({intent:'logout'})}); window.location.href='/sales-staging/login'; }}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start',
+                  gap: 8, padding: collapsed ? '10px 0' : '9px 14px',
+                  fontFamily: 'JetBrains Mono,monospace', fontSize: 10,
+                  color: T.textFaint, letterSpacing: '0.12em', textDecoration: 'none', cursor: 'pointer',
+                }}
+                title={collapsed ? 'Sign out' : undefined}
+              >
+                {/* Exit icon */}
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+                  <path d="M10 3h4v10h-4M6 11l4-3-4-3M1 8h9"/>
+                </svg>
+                {!collapsed && 'sign out'}
+              </a>
+            </div>
+          </div>
         </div>
 
-        {/* ── Page content ──────────────────────────────────────────────── */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
-          {children}
-        </div>
-
+      {/* ── Page content — offset for fixed header + nav ──────────────── */}
+      <div style={{
+        marginTop: 56,
+        marginLeft: navW,
+        minHeight: 'calc(100vh - 56px)',
+        transition: 'margin-left 0.18s ease',
+        display: 'flex', flexDirection: 'column',
+        background: T.bg,
+      }}>
+        {children}
       </div>
     </div>
   );

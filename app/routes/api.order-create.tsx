@@ -8,6 +8,7 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {isStagingAuthed} from '~/lib/staging-auth';
+import {getSFToken} from '~/lib/sf-auth.server';
 
 // ─── Shared helper: recalculate org stats after any order change ─────────────
 // Called after create AND update. Recomputes orders_count, last_order_date,
@@ -100,7 +101,7 @@ export async function recalcOrgAfterOrder(env: any, org_id: string): Promise<voi
 // ─── Action ───────────────────────────────────────────────────────────────────
 export async function action({request, context}: ActionFunctionArgs) {
   const env = (context as any).env;
-  if (!isStagingAuthed(request.headers.get('Cookie') || ''))
+  const _sfCk = request.headers.get('Cookie')||''; if (!isStagingAuthed(_sfCk) && !getSFToken(_sfCk))
     return json({ok: false, error: 'unauthorized'}, {status: 401});
 
   const fd = await request.formData();

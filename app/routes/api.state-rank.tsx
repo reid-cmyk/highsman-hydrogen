@@ -13,6 +13,7 @@
 import type {LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {isStagingAuthed} from '~/lib/staging-auth';
+import {getSFToken} from '~/lib/sf-auth.server';
 
 // Simple in-memory cache — keyed by state, refreshes after 1 hour
 // Cloudflare Workers: each worker instance has its own memory, so this is
@@ -33,7 +34,7 @@ function fmtDate(d: Date): string {
 }
 
 export async function loader({request, context}: LoaderFunctionArgs) {
-  if (!isStagingAuthed(request.headers.get('Cookie') || '')) {
+  const _sfCk = request.headers.get('Cookie')||''; if (!isStagingAuthed(_sfCk) && !getSFToken(_sfCk)) {
     return json({rank: null, total: null, error: 'unauthorized'}, {status: 401});
   }
 

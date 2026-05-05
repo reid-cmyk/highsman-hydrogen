@@ -4,10 +4,11 @@
  */
 
 import type {LoaderFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
-import {json} from '@shopify/remix-oxygen';
+import {json, redirect} from '@shopify/remix-oxygen';
 import {useLoaderData, useFetcher, Link} from '@remix-run/react';
 import {useState} from 'react';
 import {isStagingAuthed} from '~/lib/staging-auth';
+import {getSFToken, getSFUser} from '~/lib/sf-auth.server';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
 
 export const handle = {hideHeader: true, hideFooter: true};
@@ -56,8 +57,11 @@ function isUuid(s: string) {
 
 export async function loader({request, context, params}: LoaderFunctionArgs) {
   const env = (context as any).env;
-  if (!isStagingAuthed(request.headers.get('Cookie') || ''))
-    return json({authenticated: false, order: null, org: null, lines: []});
+  const cookie = request.headers.get('Cookie') || '';
+  const sfUser = await getSFUser(cookie, env);
+  if (!sfUser && !isStagingAuthed(cookie)) {
+    return redirect('/sales-staging/login');
+  }
 
   const id = params.id!;
   const h = {apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`};
@@ -79,11 +83,11 @@ export async function loader({request, context, params}: LoaderFunctionArgs) {
     org = Array.isArray(orgRows) ? (orgRows[0] || null) : null;
   }
 
-  return json({authenticated: true, order, org, lines: Array.isArray(lines) ? lines : []});
+  return json({authenticated: true, sfUser, order, org, lines: Array.isArray(lines) ? lines : []});
 }
 
 export default function OrderDetail() {
-  const {authenticated, order, org, lines} = useLoaderData<typeof loader>() as any;
+  const {authenticated, sfUser, order, org, lines} = useLoaderData<typeof loader>() as any;
   const fetcher = useFetcher();
   const [status, setStatus] = useState(order?.status || '');
 
@@ -108,7 +112,7 @@ export default function OrderDetail() {
   };
 
   return (
-    <SalesFloorLayout current="Sales Orders">
+    <SalesFloorLayout current="Sales Orders" sfUser={sfUser}>
           {/* Breadcrumb */}
           <div style={{padding:'16px 32px 0', display:'flex', alignItems:'center', gap:10}}>
             <Link to="/sales-staging/orders" style={{fontFamily:'Teko,sans-serif', fontSize:12, letterSpacing:'0.24em', color:T.textSubtle, textDecoration:'none', textTransform:'uppercase'}}>← Orders</Link>

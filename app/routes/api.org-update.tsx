@@ -18,6 +18,7 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
 import {isStagingAuthed} from '~/lib/staging-auth';
+import {getSFToken} from '~/lib/sf-auth.server';
 
 const ALLOWED_FIELDS = new Set([
   'name','legal_name','phone','website','lifecycle_stage','tier',
@@ -35,7 +36,7 @@ const ALLOWED_FIELDS = new Set([
 export async function action({request, context}: ActionFunctionArgs) {
   const env = (context as any).env;
   const cookie = request.headers.get('Cookie') || '';
-  if (!isStagingAuthed(cookie)) {
+  if (!isStagingAuthed(cookie) && !getSFToken(cookie)) {
     return json({ok: false, error: 'unauthorized'}, {status: 401});
   }
 

@@ -5,10 +5,11 @@
  */
 
 import type {LoaderFunctionArgs, MetaFunction} from '@shopify/remix-oxygen';
-import {json} from '@shopify/remix-oxygen';
+import {json, redirect} from '@shopify/remix-oxygen';
 import {useLoaderData, useFetcher, Link, useNavigate} from '@remix-run/react';
 import {useState, useRef, useEffect} from 'react';
 import {isStagingAuthed} from '~/lib/staging-auth';
+import {getSFToken, getSFUser} from '~/lib/sf-auth.server';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
 import {ONBOARDING_STEPS, stepsForMarket} from '~/lib/onboarding-steps';
 
@@ -48,8 +49,10 @@ const DeleteIcon = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="n
 // ─── Loader ───────────────────────────────────────────────────────────────────
 export async function loader({request, context, params}: LoaderFunctionArgs) {
   const env = (context as any).env;
-  if (!isStagingAuthed(request.headers.get('Cookie') || '')) {
-    return json({authenticated: false, org: null, contacts: [], notes: [], steps: []});
+  const cookie = request.headers.get('Cookie') || '';
+  const sfUser = await getSFUser(cookie, env);
+  if (!sfUser && !isStagingAuthed(cookie)) {
+    return redirect('/sales-staging/login');
   }
   const id = params.id!;
   const h = {apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`};
@@ -112,7 +115,7 @@ export async function loader({request, context, params}: LoaderFunctionArgs) {
     }
   }
 
-  return json({authenticated: true, org, contacts: org?.contacts || [], notes: Array.isArray(notes)?notes:[], steps, totalOrderRevenue, computedCadence});
+  return json({authenticated: true, sfUser, org, contacts: org?.contacts || [], notes: Array.isArray(notes)?notes:[], steps, totalOrderRevenue, computedCadence});
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -171,7 +174,7 @@ function AccountStatBar({days, daysColor, lastOrderDate, ordersCount, stateRank,
 }
 
 export default function AccountDetail() {
-  const {authenticated, org, contacts, notes, steps, totalOrderRevenue, computedCadence} = useLoaderData<typeof loader>() as any;
+  const {authenticated, sfUser, org, contacts, notes, steps, totalOrderRevenue, computedCadence} = useLoaderData<typeof loader>() as any;
   const [, rerender] = useState(0);
   const refresh = () => rerender(n => n + 1);
   const [stateRank, setStateRank] = useState<{rank:number|null; total:number|null; revenue:number|null; litRetailerId:number|null; hsBrandRank:number|null; hsBrandTotal:number|null; hsSharePct:number|null; updatedAt:string|null; loading:boolean}>({rank:null, total:null, revenue:null, litRetailerId:null, hsBrandRank:null, hsBrandTotal:null, hsSharePct:null, updatedAt:null, loading:true});
@@ -197,7 +200,7 @@ export default function AccountDetail() {
     return () => clearTimeout(t);
   }, [org?.id]);
 
-  if (!authenticated) return <div style={{minHeight:'100vh',background:T.bg,display:'flex',alignItems:'center',justifyContent:'center'}}><Link to="/sales-staging" style={{color:T.yellow,fontFamily:'Teko,sans-serif',fontSize:18,letterSpacing:'0.18em',textDecoration:'none'}}>← BACK TO LOGIN</Link></div>;
+  if (!authenticated) return <div style={{minHeight:'100vh',background:T.bg,display:'flex',alignItems:'center',justifyContent:'center'}}><Link to="/sales-staging/login" style={{color:T.yellow,fontFamily:'Teko,sans-serif',fontSize:18,letterSpacing:'0.18em',textDecoration:'none'}}>← SIGN IN</Link></div>;
   if (!org) return <div style={{minHeight:'100vh',background:T.bg,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:16}}><div style={{fontFamily:'Teko,sans-serif',fontSize:24,letterSpacing:'0.20em',color:T.textFaint,textTransform:'uppercase'}}>Account not found</div><Link to="/sales-staging" style={{color:T.yellow,fontFamily:'JetBrains Mono,monospace',fontSize:12,textDecoration:'none'}}>← back to list</Link></div>;
 
   const days = daysSince(org.last_order_date);
@@ -224,7 +227,7 @@ export default function AccountDetail() {
   const domain = org.website ? (() => { try { return new URL(org.website.startsWith('http')?org.website:`https://${org.website}`).hostname.replace(/^www\./,''); } catch { return null; } })() : null;
 
   return (
-    <SalesFloorLayout current="Accounts">
+    <SalesFloorLayout current="Accounts" sfUser={sfUser}>
           {/* Hero */}
           <div style={{borderBottom:`1px solid ${T.borderStrong}`, background:`linear-gradient(180deg,rgba(255,213,0,0.03) 0%,transparent 100%)`, padding:'32px 32px 28px'}}>
             {/* Breadcrumb */}
@@ -299,7 +302,7 @@ export default function AccountDetail() {
             <div style={{display:'flex', flexDirection:'column', gap:24}}>
               <OnboardingPanel orgId={org.id} steps={steps} refresh={refresh} marketState={org.market_state} />
               <ContactsPanel orgId={org.id} contacts={contacts} refresh={refresh} />
-              <NotesPanel orgId={org.id} notes={notes} refresh={refresh} />
+              <NotesPanel orgId={org.id} notes={notes} refresh={refresh} sfUser={sfUser} />
             </div>
           </div>
     </SalesFloorLayout>
@@ -1143,7 +1146,7 @@ function parseNote(body: string): {channel:string|null; text:string} {
 }
 
 // ─── Notes Panel ──────────────────────────────────────────────────────────────
-function NotesPanel({orgId, notes, refresh}: {orgId:string; notes:any[]; refresh:()=>void}) {
+function NotesPanel({orgId, notes, refresh, sfUser}: {orgId:string; notes:any[]; refresh:()=>void; sfUser?:any}) {
   const [draft, setDraft] = useState('');
   const [composing, setComposing] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<string|null>(null);
@@ -1210,7 +1213,12 @@ function NotesPanel({orgId, notes, refresh}: {orgId:string; notes:any[]; refresh
       {/* Click-to-compose placeholder when not open */}
       {!composing && (
         <div style={{padding:'10px 16px', borderBottom:`1px solid ${T.border}`, background:T.surfaceElev, display:'flex', gap:10, alignItems:'center', cursor:'text'}} onClick={()=>setComposing(true)}>
-          <img src="https://agents-assets.nyc3.cdn.digitaloceanspaces.com/sky-avatar.png" alt="Sky Lima" style={{width:26,height:26,borderRadius:'50%',objectFit:'cover',flexShrink:0}} />
+          {sfUser?.permissions?.avatar_url
+            ? <img src={sfUser.permissions.avatar_url} alt={sfUser.permissions.display_name} style={{width:26,height:26,borderRadius:'50%',objectFit:'cover',flexShrink:0}} />
+            : <div style={{width:26,height:26,borderRadius:'50%',background:`linear-gradient(135deg,${T.yellow},#FFB800)`,display:'flex',alignItems:'center',justifyContent:'center',color:'#000',fontWeight:700,fontSize:11,fontFamily:'Teko,sans-serif',flexShrink:0}}>
+                {(sfUser?.permissions?.display_name||'SL').split(' ').map((w:string)=>w[0]).slice(0,2).join('').toUpperCase()}
+              </div>
+          }
           <div style={{flex:1, fontSize:12, color:T.textFaint, fontStyle:'italic'}}>Add a note…</div>
           <div style={{display:'flex', gap:5}}>
             {CHANNELS.map(ch => (
@@ -1229,10 +1237,14 @@ function NotesPanel({orgId, notes, refresh}: {orgId:string; notes:any[]; refresh
         const {channel, text} = parseNote(n.body);
         const chColor = channel ? CHANNEL_COLORS[channel] : null;
         const initials = (n.author_name||'').split(/\s+/).slice(0,2).map((w:string)=>w[0]?.toUpperCase()||'').join('')||'?';
-        const isSky = (n.author_name||'').toLowerCase().includes('sky');
+        const isCurrentUser = sfUser && (n.author_name||'').toLowerCase() === (sfUser.permissions?.display_name||'').toLowerCase();
+        const noteAvatarUrl = isCurrentUser ? sfUser?.permissions?.avatar_url : null;
         return (
           <div key={n.id} style={{padding:'12px 16px', display:'flex', gap:10, borderTop:`1px solid ${T.border}`}}>
-            <div style={{width:26, height:26, borderRadius:'50%', background:isSky?`linear-gradient(135deg,${T.yellow},${T.yellowWarm})`:'#1A1A1A', border:isSky?'none':`1px solid ${T.borderStrong}`, display:'flex', alignItems:'center', justifyContent:'center', color:isSky?'#000':T.textMuted, fontFamily:'Teko,sans-serif', fontSize:12, fontWeight:500, flexShrink:0, marginTop:1}}>{initials}</div>
+            {noteAvatarUrl
+              ? <img src={noteAvatarUrl} alt={n.author_name} style={{width:26, height:26, borderRadius:'50%', objectFit:'cover', flexShrink:0, marginTop:1}} />
+              : <div style={{width:26, height:26, borderRadius:'50%', background:`linear-gradient(135deg,${T.yellow},${T.yellowWarm})`, display:'flex', alignItems:'center', justifyContent:'center', color:'#000', fontFamily:'Teko,sans-serif', fontSize:12, fontWeight:600, flexShrink:0, marginTop:1}}>{initials}</div>
+            }
             <div style={{flex:1, minWidth:0}}>
               <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:5}}>
                 <div style={{display:'flex', alignItems:'center', gap:8}}>
