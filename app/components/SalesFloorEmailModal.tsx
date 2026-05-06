@@ -181,31 +181,38 @@ export function SalesFloorEmailModal({
   const defaultEmail = primaryContact?.email || '';
   const defaultFirst = primaryContact?.first_name || (primaryContact?.full_name?.split(' ')[0]) || '';
 
-  const [selectedContactId, setSelectedContactId] = useState<string | null>(primaryContact?.id || null);
+  // Multi-select: ordered list — first = To, rest = CC
+  const [selectedIds, setSelectedIds] = useState<string[]>(primaryContact?.id ? [primaryContact.id] : []);
   const [to,       setTo]      = useState(defaultEmail);
+  const [cc,       setCc]      = useState('');
   const [name,     setName]    = useState(defaultFirst);
   const [company,  setCompany] = useState(orgName);
-
-  // When contact selector changes, auto-fill to/name
-  const onSelectContact = (id: string) => {
-    setSelectedContactId(id);
-    const c = contacts?.find(x => x.id === id);
-    if (c) {
-      setTo(c.email || '');
-      setName(c.first_name || (c.full_name?.split(' ')[0]) || '');
-      // re-fill template if one is selected
-      if (selected) {
-        const filled = fillTemplate(selected, c.first_name || c.full_name?.split(' ')[0] || '', orgName);
-        setSubject(filled.subject);
-        setBody(filled.body);
-      }
-    }
-  };
   const [selected, setSelected] = useState<Template | null>(null);
   const [subject,  setSubject] = useState('');
   const [body,     setBody]    = useState('');
   const [status,   setStatus]  = useState<'idle'|'sending'|'sent'|'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Toggle a contact in/out of the selection; first = To, rest = CC
+  const onToggleContact = (id: string) => {
+    setSelectedIds(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      // Sync To / CC
+      const [firstId, ...restIds] = next;
+      const firstC  = contacts?.find(x => x.id === firstId);
+      setTo(firstC?.email || '');
+      setName(firstC?.first_name || (firstC?.full_name?.split(' ')[0]) || '');
+      setCc(restIds.map(rid => contacts?.find(x => x.id === rid)?.email).filter(Boolean).join(', '));
+      // Re-fill template with new primary name
+      if (selected && firstC) {
+        const nm = firstC.first_name || (firstC.full_name?.split(' ')[0]) || '';
+        const f = fillTemplate(selected, nm, orgName);
+        setSubject(f.subject);
+        setBody(f.body);
+      }
+      return next;
+    });
+  };
 
   // Watch fetcher response
   useEffect(() => {
@@ -227,7 +234,7 @@ export function SalesFloorEmailModal({
     setBody(filled.body);
   };
 
-  // Re-fill when name/company change after template selected
+  // Re-fill subject/body when name or company changes (after template is selected)
   useEffect(() => {
     if (selected) {
       const filled = fillTemplate(selected, name, company);
@@ -237,17 +244,18 @@ export function SalesFloorEmailModal({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name, company]);
 
+  const canSend = to.trim() && subject.trim() && body.trim() && status !== 'sending' && status !== 'sent';
+
   const send = () => {
     if (!to.trim() || !subject.trim() || !body.trim()) return;
     setStatus('sending');
     const fd = new FormData();
     fd.set('to', to.trim());
+    if (cc.trim()) fd.set('cc', cc.trim());
     fd.set('subject', subject.trim());
     fd.set('body', body.trim());
     fetcher.submit(fd, {method: 'post', action: '/api/sales-floor-send-email'});
   };
-
-  const canSend = to.trim() && subject.trim() && body.trim() && status !== 'sending' && status !== 'sent';
 
   return (
     <div
@@ -306,7 +314,9 @@ export function SalesFloorEmailModal({
                   <div style={{display:'flex', gap:6, flexWrap:'wrap'}}>
                     {contacts.map(c => {
                       const displayName = (c as any).full_name || `${(c as any).first_name||''} ${(c as any).last_name||''}`.trim() || 'Unknown';
-                      const active = selectedContactId === c.id;
+                      const selIdx = selectedIds.indexOf(c.id);
+                      const active = selIdx !== -1;
+                      const selLabel = selIdx === 0 ? 'TO' : selIdx > 0 ? 'CC' : null;
                       // Use new job_title + roles[] — NOT job_role (old verbose field)
                       const jobTitle: string | null = (c as any).job_title || null;
                       const roles: string[] = (c as any).roles || [];
@@ -319,7 +329,7 @@ export function SalesFloorEmailModal({
                         : null;
                       const hasEmail = !!(c as any).email;
                       return (
-                        <button key={c.id} onClick={() => onSelectContact(c.id)}
+                        <button key={c.id} onClick={() => hasEmail && onToggleContact(c.id)}
                           style={{
                             padding:'10px 14px',
                             border:`1px solid ${active ? T.yellow : T.borderStrong}`,
@@ -329,9 +339,16 @@ export function SalesFloorEmailModal({
                             minWidth: 160,
                             opacity: hasEmail ? 1 : 0.45,
                           }}>
-                          {/* Name */}
-                          <div style={{fontFamily:'Teko,sans-serif', fontSize:15, letterSpacing:'0.10em', color: active ? T.yellow : T.text, textTransform:'uppercase', lineHeight:1.2, marginBottom:3}}>
-                            {displayName}
+                          {/* Name + TO/CC badge */}
+                          <div style={{display:'flex', alignItems:'center', gap:6, marginBottom:3}}>
+                            <span style={{fontFamily:'Teko,sans-serif', fontSize:15, letterSpacing:'0.10em', color: active ? T.yellow : T.text, textTransform:'uppercase', lineHeight:1.2}}>
+                              {displayName}
+                            </span>
+                            {selLabel && (
+                              <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:8, letterSpacing:'0.16em', padding:'1px 5px', background: selIdx === 0 ? T.yellow : T.borderStrong, color: selIdx === 0 ? '#000' : T.textSubtle, flexShrink:0}}>
+                                {selLabel}
+                              </span>
+                            )}
                           </div>
                           {/* Job title */}
                           {jobTitle && (
@@ -413,6 +430,13 @@ export function SalesFloorEmailModal({
                           style={{width:'100%', padding:'8px 10px', background:T.bg, border:`1px solid ${T.borderStrong}`, color:T.text, fontFamily:'Inter,sans-serif', fontSize:12, outline:'none', boxSizing:'border-box'}}/>
                       </div>
                     </div>
+                    {cc && (
+                      <div>
+                        <label style={{fontFamily:'Teko,sans-serif', fontSize:11, letterSpacing:'0.22em', color:T.textFaint, textTransform:'uppercase', display:'block', marginBottom:4}}>CC</label>
+                        <input value={cc} onChange={e=>setCc(e.target.value)}
+                          style={{width:'100%', padding:'8px 10px', background:T.bg, border:`1px solid ${T.borderStrong}`, color:T.textMuted, fontFamily:'Inter,sans-serif', fontSize:11, outline:'none', boxSizing:'border-box'}}/>
+                      </div>
+                    )}
                     <div>
                       <label style={{fontFamily:'Teko,sans-serif', fontSize:11, letterSpacing:'0.22em', color:T.textFaint, textTransform:'uppercase', display:'block', marginBottom:4}}>Subject</label>
                       <input value={subject} onChange={e=>setSubject(e.target.value)}

@@ -12,6 +12,8 @@ import {isStagingAuthed} from '~/lib/staging-auth';
 import {getSFToken, getSFUser} from '~/lib/sf-auth.server';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
 import {ONBOARDING_STEPS, stepsForMarket} from '~/lib/onboarding-steps';
+import {SalesFloorEmailModal} from '~/components/SalesFloorEmailModal';
+import {SalesFloorBriefModal} from '~/components/SalesFloorBriefModal';
 
 export const handle = {hideHeader: true, hideFooter: true};
 export const meta: MetaFunction<typeof loader> = ({data}) => [
@@ -285,7 +287,7 @@ export default function AccountDetail() {
             </div>
 
             {/* Action strip — horizontal row of all 8 actions */}
-            <ActionStrip org={org} primaryContact={primaryContact} isFlagged={isFlagged} />
+            <ActionStrip org={org} contacts={contacts||[]} primaryContact={primaryContact} isFlagged={isFlagged} />
 
             {/* Quick stats strip — data we actually have */}
             {(() => {
@@ -336,95 +338,162 @@ function HeroLogo({name, initials, domain, tc}: {name:string; initials:string; d
 }
 
 // ─── Action Strip ─────────────────────────────────────────────────────────────
-function ActionStrip({org, primaryContact, isFlagged}: {org:any; primaryContact:any; isFlagged:boolean}) {
+function ActionStrip({org, contacts, primaryContact, isFlagged}: {org:any; contacts:any[]; primaryContact:any; isFlagged:boolean}) {
   const flagFetcher   = useFetcher();
+  const menuFetcher   = useFetcher();
   const assetsFetcher = useFetcher();
-  const sendAssets = () => {
-    // Mark digital_assets_sent step complete
-    const fd = new FormData();
-    fd.set('intent','toggle_onboarding'); fd.set('org_id', org.id);
-    fd.set('step_key','digital_assets_sent'); fd.set('status','complete');
-    assetsFetcher.submit(fd, {method:'post', action:'/api/org-update'});
-    // TODO: trigger digital assets email template
-    alert('Assets step marked complete. Email template will be wired in a future update.');
-  };
+  const [showEmail,  setShowEmail]  = useState(false);
+  const [showBrief,  setShowBrief]  = useState(false);
+  const [peteConfirm,  setPeteConfirm]  = useState(false);
+  const [menuConfirm,  setMenuConfirm]  = useState(false);
+
+  const phone = org.phone || primaryContact?.phone || primaryContact?.mobile;
+  const email = primaryContact?.email;
+  const zohoIdNumeric = (org.zoho_account_id||'').replace('zcrm_','');
+  const isNJ = org.market_state === 'NJ';
+
   const flagPete = () => {
     const fd = new FormData(); fd.set('intent','flag_pete'); fd.set('org_id', org.id);
     flagFetcher.submit(fd, {method:'post', action:'/api/org-update'});
+    if (!isFlagged) {
+      const buyerName = primaryContact?.full_name || `${primaryContact?.first_name||''} ${primaryContact?.last_name||''}`.trim() || '—';
+      const emailBody = [`Sky flagged ${org.name} for your follow-up.`,'',`Store: ${org.name}`,`Location: ${[org.city,org.market_state].filter(Boolean).join(', ')||'—'}`,`Buyer: ${buyerName}`,`Phone: ${phone||'—'}`,`Email: ${email||'—'}`,``,`View: https://highsman.com/sales-staging/account/${org.id}`].join('\n');
+      const fd2 = new FormData(); fd2.set('to','peter@highsman.com'); fd2.set('subject',`Follow-up: ${org.name}`); fd2.set('body',emailBody);
+      fetch('/api/sales-floor-send-email',{method:'POST',body:fd2}).catch(()=>{});
+    }
+    setPeteConfirm(false);
   };
-  const sendBrief = () => {
-    fetch('/api/brief',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lead:{First_Name:primaryContact?.first_name||'',Last_Name:primaryContact?.last_name||'',_fullName:primaryContact?.full_name||org.name,Company:org.name,Phone:org.phone||primaryContact?.phone||'',Email:primaryContact?.email||'',_status:'active'}})}).catch(()=>{});
-    window.open('/sales-floor/app?brief=1','_brief','width=720,height=620');
-  };
+
   const sendMenu = () => {
-    const e = primaryContact?.email;
-    if (!e) { alert('No email on file.'); return; }
-    const subj = `Highsman NJ Wholesale Menu`;
-    const body = `Hi ${primaryContact?.first_name||'there'},\n\nHere's our NJ wholesale menu:\n\nhttps://highsman.com/njmenu\n\nBest,\nSky Lima\nHighsman`;
-    window.open(`mailto:${e}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`);
+    if (!email) return;
+    const fd = new FormData();
+    fd.set('to', email);
+    fd.set('subject', 'Highsman NJ Wholesale Menu — Hit Sticks, Pre-Rolls & Ground Game');
+    fd.set('body', `Hi ${primaryContact?.first_name||'there'},\n\nHere's the link to our NJ wholesale menu — Hit Sticks, Pre-Rolls, and Ground Game:\n\nhttps://highsman.com/njmenu\n\nLet me know if you have any questions. You also earn credits toward our Highsman Apparel store when you order!\n\nBest,\nSky Lima\nHighsman`);
+    menuFetcher.submit(fd, {method:'post', action:'/api/sales-floor-send-email'});
+    setMenuConfirm(false);
+  };
+
+  const sendAssets = () => {
+    const fd = new FormData(); fd.set('intent','toggle_onboarding'); fd.set('org_id',org.id); fd.set('step_key','digital_assets_sent'); fd.set('status','complete');
+    assetsFetcher.submit(fd,{method:'post',action:'/api/org-update'});
+  };
+
+  const requestTraining = () => {
+    fetch('/api/sf-training',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orgId:org.id,customerName:org.name})}).catch(()=>{});
+  };
+
+  const newProduct = () => {
+    const productName = window.prompt(`${org.name} — which product is Serena walking through? (optional)`) ?? '';
+    if (productName === null) return;
+    fetch('/api/sf-product-onboard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orgId:org.id,customerName:org.name,productName})}).catch(()=>{});
   };
 
   const btnBase: React.CSSProperties = {height:40, padding:'0 16px', background:'transparent', border:'none', borderRight:`1px solid ${T.border}`, color:T.textMuted, fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.18em', cursor:'pointer', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:7, flexShrink:0};
 
   return (
+    <>
     <div style={{display:'flex', background:T.surfaceElev, borderTop:`1px solid ${T.border}`, borderBottom:`1px solid ${T.border}`, marginTop:20, overflow:'auto'}}>
       {/* CALL */}
-      <a href={org.phone?`tel:${org.phone}`:'#'} onClick={!org.phone?e=>e.preventDefault():undefined}
-        style={{...btnBase, borderLeft:`2px solid ${T.yellow}`, color:org.phone?T.yellow:T.textFaint, background:org.phone?'rgba(255,213,0,0.04)':'transparent', opacity:org.phone?1:0.4, textDecoration:'none'}}>
+      <a href={phone?`tel:${phone}`:'#'} onClick={!phone?e=>e.preventDefault():undefined}
+        style={{...btnBase, borderLeft:`2px solid ${T.yellow}`, color:phone?T.yellow:T.textFaint, background:phone?'rgba(255,213,0,0.04)':'transparent', opacity:phone?1:0.4, textDecoration:'none'}}>
         <PhoneIcon/> CALL
       </a>
       {/* TEXT */}
-      <a href={org.phone?`sms:${org.phone}`:'#'} onClick={!org.phone?e=>e.preventDefault():undefined}
-        style={{...btnBase, opacity:org.phone?1:0.4, textDecoration:'none', color:T.textMuted}}>
+      <a href={phone?`sms:${phone}`:'#'} onClick={!phone?e=>e.preventDefault():undefined}
+        style={{...btnBase, opacity:phone?1:0.4, textDecoration:'none', color:T.textMuted}}>
         <TextIcon/> TEXT
       </a>
-      {/* EMAIL */}
-      <a href={primaryContact?.email?`mailto:${primaryContact.email}`:'#'} onClick={!primaryContact?.email?e=>e.preventDefault():undefined}
-        style={{...btnBase, opacity:primaryContact?.email?1:0.4, textDecoration:'none', color:T.textMuted}}>
-        <MailIcon/> EMAIL {primaryContact?.first_name?primaryContact.first_name.toUpperCase():''}
-      </a>
+      {/* EMAIL — opens compose modal */}
+      <button type="button" disabled={!email} onClick={()=>email&&setShowEmail(true)}
+        style={{...btnBase, opacity:email?1:0.4}}>
+        <MailIcon/> EMAIL
+      </button>
 
       <div style={{width:1, background:T.borderStrong, margin:'8px 0', flexShrink:0}} />
 
       {/* BRIEF */}
-      <button type="button" onClick={sendBrief} style={btnBase}>
+      <button type="button" onClick={()=>setShowBrief(true)} style={btnBase}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5V4a1 1 0 0 1 1-1h15v18H6.5A2.5 2.5 0 0 1 4 19.5z"/></svg>
         BRIEF
       </button>
       {/* SEND ASSETS */}
-      <button type="button" onClick={sendAssets}
-        style={{...btnBase, color:T.cyan, opacity:1}}>
+      <button type="button" onClick={sendAssets} style={{...btnBase, color:T.cyan}}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
         SEND ASSETS
       </button>
-      {/* TRAINING */}
-      <button type="button" disabled={!org.zoho_account_id} onClick={()=>{const id=(org.zoho_account_id||'').replace('zcrm_','');if(id)fetch('/api/sales-floor-vibes-training',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({zohoAccountId:id,customerName:org.name})}).catch(()=>{});}}
-        style={{...btnBase, opacity:org.zoho_account_id?1:0.4}}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-        TRAINING
-      </button>
-      {/* SEND MENU */}
-      <button type="button" disabled={!primaryContact?.email} onClick={sendMenu}
-        style={{...btnBase, opacity:primaryContact?.email?1:0.4}}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-        SEND MENU
-      </button>
-      {/* NEW PRODUCT */}
-      <button type="button" disabled={!org.zoho_account_id} onClick={()=>{const id=(org.zoho_account_id||'').replace('zcrm_','');if(id)fetch('/api/sales-floor-vibes-product-onboard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({zohoAccountId:id,customerName:org.name})}).catch(()=>{});}}
-        style={{...btnBase, opacity:org.zoho_account_id?1:0.4}}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-        NEW PRODUCT
-      </button>
+      {/* TRAINING — NJ only */}
+      {isNJ && (
+        <button type="button" onClick={requestTraining} style={btnBase}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          TRAINING
+        </button>
+      )}
+      {/* SEND MENU — NJ only, with confirmation */}
+      {isNJ && (
+        menuConfirm ? (
+          <div style={{display:'inline-flex', alignItems:'center', gap:6, padding:'0 12px', borderRight:`1px solid ${T.border}`}}>
+            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textSubtle, letterSpacing:'0.08em'}}>Send NJ menu?</span>
+            <button type="button" onClick={sendMenu} style={{height:26, padding:'0 10px', background:T.yellow, border:'none', color:'#000', fontFamily:'Teko,sans-serif', fontSize:11, letterSpacing:'0.14em', cursor:'pointer'}}>SEND</button>
+            <button type="button" onClick={()=>setMenuConfirm(false)} style={{height:26, padding:'0 8px', background:'transparent', border:`1px solid ${T.borderStrong}`, color:T.textFaint, fontFamily:'Teko,sans-serif', fontSize:11, cursor:'pointer'}}>CANCEL</button>
+          </div>
+        ) : (
+          <button type="button" disabled={!email} onClick={()=>email&&setMenuConfirm(true)} style={{...btnBase, opacity:email?1:0.4}}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+            SEND MENU
+          </button>
+        )
+      )}
+      {/* NEW PRODUCT — NJ only */}
+      {isNJ && (
+        <button type="button" onClick={newProduct} style={btnBase}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+          NEW PRODUCT
+        </button>
+      )}
 
       <div style={{flex:1}} />
 
-      {/* FLAG PETE */}
-      <button type="button" onClick={flagPete}
-        style={{...btnBase, borderRight:'none', borderLeft:`1px solid ${T.border}`, color:isFlagged?T.redSystems:T.textSubtle, background:isFlagged?'rgba(255,51,85,0.08)':'transparent'}}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M5 3v18M5 4h12l-2 4 2 4H5"/></svg>
-        {isFlagged ? 'PETE FLAGGED' : 'FLAG PETE'}
-      </button>
+      {/* FLAG PETE — with confirmation */}
+      {peteConfirm ? (
+        <div style={{display:'inline-flex', alignItems:'center', gap:6, padding:'0 12px', borderLeft:`1px solid ${T.border}`}}>
+          <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.redSystems, letterSpacing:'0.08em'}}>{isFlagged?'Unflag Pete?':'Flag for Pete?'}</span>
+          <button type="button" onClick={flagPete} style={{height:26, padding:'0 10px', background:'rgba(255,51,85,0.15)', border:`1px solid ${T.redSystems}`, color:T.redSystems, fontFamily:'Teko,sans-serif', fontSize:11, letterSpacing:'0.14em', cursor:'pointer'}}>{isFlagged?'UNFLAG':'CONFIRM'}</button>
+          <button type="button" onClick={()=>setPeteConfirm(false)} style={{height:26, padding:'0 8px', background:'transparent', border:`1px solid ${T.borderStrong}`, color:T.textFaint, fontFamily:'Teko,sans-serif', fontSize:11, cursor:'pointer'}}>CANCEL</button>
+        </div>
+      ) : (
+        <button type="button" onClick={()=>setPeteConfirm(true)}
+          style={{...btnBase, borderRight:'none', borderLeft:`1px solid ${T.border}`, color:isFlagged?T.redSystems:T.textSubtle, background:isFlagged?'rgba(255,51,85,0.08)':'transparent'}}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M5 3v18M5 4h12l-2 4 2 4H5"/></svg>
+          {isFlagged ? '✓ PETE' : 'FLAG PETE'}
+        </button>
+      )}
     </div>
+
+    {/* Modals */}
+    {showEmail && (
+      <SalesFloorEmailModal
+        orgName={org.name}
+        contacts={contacts}
+        onClose={()=>setShowEmail(false)}
+      />
+    )}
+    {showBrief && (
+      <SalesFloorBriefModal
+        orgName={org.name}
+        contactPhone={phone||null}
+        contactEmail={email||null}
+        contactName={primaryContact?.full_name||`${primaryContact?.first_name||''} ${primaryContact?.last_name||''}`.trim()||null}
+        contactFirstName={primaryContact?.first_name||null}
+        orgWebsite={org.website||null}
+        zohoAccountId={zohoIdNumeric||null}
+        lifecycleStage={org.lifecycle_stage||null}
+        contacts={contacts}
+        onEmail={email ? ()=>{setShowBrief(false); setShowEmail(true);} : undefined}
+        onClose={()=>setShowBrief(false)}
+      />
+    )}
+    </>
   );
 }
 
