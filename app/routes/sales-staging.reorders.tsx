@@ -19,6 +19,8 @@ import {json, redirect} from '@shopify/remix-oxygen';
 import {useLoaderData, useFetcher} from '@remix-run/react';
 import {useState, useEffect, useCallback} from 'react';
 import {CardActions} from '~/components/SalesFloorCardActions';
+import {SalesFloorNoteWidget} from '~/components/SalesFloorNoteWidget';
+import type {NotePreview} from '~/components/SalesFloorNoteWidget';
 import {isStagingAuthed} from '~/lib/staging-auth';
 import {getSFToken, getSFUser} from '~/lib/sf-auth.server';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
@@ -116,6 +118,7 @@ type FeedItem = {
   primary_contact_email: string | null;
   lat: number | null;
   lng: number | null;
+  latest_note: NotePreview | null;
 };
 
 // ─── Action — suppress / unsuppress ──────────────────────────────────────────
@@ -324,6 +327,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       primary_contact_email: primary?.email || null,
       lat: org.lat ?? null,
       lng: org.lng ?? null,
+      latest_note: null, // populated after notes fetch below
     });
   }
 
@@ -356,6 +360,33 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     past_cadence: feed.filter(f => f.active_flag === 'past_cadence').length,
     aging:        feed.filter(f => f.active_flag === 'aging').length,
   };
+
+  // ── Batch fetch latest note per org in feed ──────────────────────────────────
+  if (feed.length > 0) {
+    try {
+      const ids = feed.map(f => f.id).join(',');
+      const notesRes = await fetch(
+        `${base}/rest/v1/org_notes?organization_id=in.(${ids})&select=id,organization_id,body,author_name,created_at&order=created_at.desc&limit=1000`,
+        {headers: h},
+      );
+      if (notesRes.ok) {
+        const notes: any[] = await notesRes.json().catch(() => []);
+        // First note per org = most recent (already sorted desc)
+        const latestMap = new Map<string, NotePreview>();
+        for (const n of notes) {
+          if (!latestMap.has(n.organization_id)) {
+            latestMap.set(n.organization_id, {
+              id: n.id, body: n.body,
+              author_name: n.author_name, created_at: n.created_at,
+            });
+          }
+        }
+        for (const item of feed) {
+          item.latest_note = latestMap.get(item.id) || null;
+        }
+      }
+    } catch { /* notes are best-effort — don't break the feed */ }
+  }
 
   const googleMapsKey = (env.GOOGLE_PLACES_NEW_API_KEY || env.GOOGLE_PLACES_API_KEY || null) as string|null;
   return json({authenticated: true, sfUser, feed, stats, litError, googleMapsKey});
@@ -731,6 +762,9 @@ function ReorderCard({item, onRemove}: {item: FeedItem; onRemove: (id: string) =
         onSuppress={() => submitIntent('suppress')}
         onChurn={() => submitIntent('churn')}
       />
+
+      {/* Inline note widget */}
+      <SalesFloorNoteWidget orgId={item.id} latestNote={item.latest_note} from="reorders" />
     </div>
   );
 }
