@@ -16,12 +16,29 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const env = (context as any).env;
   const url = new URL(request.url);
   const q = (url.searchParams.get('q') || '').trim();
+  const orgId = url.searchParams.get('orgId') || '';
+  const h = {apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`};
+
+  // ?orgId=<uuid> — fetch contacts for a specific org (used by email page)
+  if (orgId) {
+    try {
+      const res = await fetch(
+        `${env.SUPABASE_URL}/rest/v1/contacts?organization_id=eq.${orgId}&select=id,first_name,last_name,full_name,email,phone,mobile,is_primary_buyer,job_title,roles&order=is_primary_buyer.desc`,
+        {headers: h},
+      );
+      const contacts = await res.json().catch(() => []);
+      return json({contacts: Array.isArray(contacts) ? contacts : []});
+    } catch {
+      return json({contacts: []});
+    }
+  }
+
   if (q.length < 2) return json({results: []});
 
   try {
     const res = await fetch(
       `${env.SUPABASE_URL}/rest/v1/organizations?select=id,name,market_state,city,lifecycle_stage&name=ilike.*${encodeURIComponent(q)}*&limit=6`,
-      {headers: {apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`}},
+      {headers: h},
     );
     const rows = await res.json();
     return json({results: Array.isArray(rows) ? rows : []});
