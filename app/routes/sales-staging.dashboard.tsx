@@ -207,9 +207,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const topQueue = queue.slice(0,15);
   const focus = buildFocus(topQueue);
 
-  // Time-based greeting
-  const hour = now.getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  // Greeting computed client-side (see component) so it uses the user's local timezone, not server UTC
 
   // Activity
   const activity = notesRaw.map((n:any)=>({
@@ -218,7 +216,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     author:n.author_name||'System', createdAt:n.created_at,
   }));
 
-  return json({authenticated:true,sfUser,stats,statePulse,totalMtdRevenue,topQueue,focus,activity,greeting});
+  return json({authenticated:true,sfUser,stats,statePulse,totalMtdRevenue,topQueue,focus,activity});
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -232,7 +230,10 @@ function relTime(iso:string):string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
-  const {authenticated,sfUser,stats,statePulse,totalMtdRevenue,topQueue,focus,activity,greeting} = useLoaderData<typeof loader>() as any;
+  const {authenticated,sfUser,stats,statePulse,totalMtdRevenue,topQueue,focus,activity} = useLoaderData<typeof loader>() as any;
+  // Compute greeting from browser local time so it matches the user's timezone
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   if (!authenticated) return <div style={{minHeight:'100vh',background:T.bg,display:'flex',alignItems:'center',justifyContent:'center'}}><Link to="/sales-staging/login" style={{color:T.yellow,fontFamily:'Teko,sans-serif',fontSize:18,letterSpacing:'0.18em',textDecoration:'none'}}>← LOG IN</Link></div>;
 
   const s = stats||{};
