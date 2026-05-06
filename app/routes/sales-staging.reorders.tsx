@@ -22,6 +22,7 @@ import {CardActions} from '~/components/SalesFloorCardActions';
 import {isStagingAuthed} from '~/lib/staging-auth';
 import {getSFToken, getSFUser} from '~/lib/sf-auth.server';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
+import {SalesFloorMapView, MapViewToggle} from '~/components/SalesFloorMapView';
 
 export const handle = {hideHeader: true, hideFooter: true};
 export const meta: MetaFunction = () => [
@@ -113,6 +114,8 @@ type FeedItem = {
   primary_contact_name: string | null;
   primary_contact_phone: string | null;
   primary_contact_email: string | null;
+  lat: number | null;
+  lng: number | null;
 };
 
 // ─── Action — suppress / unsuppress ──────────────────────────────────────────
@@ -193,6 +196,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     'tags','reorder_cadence_days','reorder_status','reorder_suppressed',
     'reorder_flag_aging_at','reorder_flag_past_cadence_at',
     'reorder_flag_low_inv_at','reorder_flag_out_of_stock_at',
+    'lat','lng',
     'contacts(id,first_name,last_name,full_name,email,phone,mobile,is_primary_buyer)',
   ].join(',');
 
@@ -318,6 +322,8 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       primary_contact_name: primary ? (primary.full_name || `${primary.first_name || ''} ${primary.last_name || ''}`.trim() || null) : null,
       primary_contact_phone: primary ? (primary.phone || primary.mobile || null) : null,
       primary_contact_email: primary?.email || null,
+      lat: org.lat ?? null,
+      lng: org.lng ?? null,
     });
   }
 
@@ -351,17 +357,19 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     aging:        feed.filter(f => f.active_flag === 'aging').length,
   };
 
-  return json({authenticated: true, sfUser, feed, stats, litError});
+  const googleMapsKey = (env.GOOGLE_PLACES_NEW_API_KEY || env.GOOGLE_PLACES_API_KEY || null) as string|null;
+  return json({authenticated: true, sfUser, feed, stats, litError, googleMapsKey});
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function ReordersPage() {
-  const {authenticated, sfUser, feed, stats, litError} = useLoaderData<typeof loader>() as any;
+  const {authenticated, sfUser, feed, stats, litError, googleMapsKey} = useLoaderData<typeof loader>() as any;
   const [stateFilter, setStateFilter] = useState('ALL');
   const [flagFilter,  setFlagFilter]  = useState<string>('all');
   const [sort, setSort] = useState<'flagged'|'orders_desc'|'orders_asc'>('flagged');
   const [search, setSearch] = useState('');
   const [suppressed, setSuppressed] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<'list'|'map'>('list');
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -485,8 +493,9 @@ export default function ReordersPage() {
             </button>
           );
         })}
-        {/* Sort dropdown — right-aligned */}
-        <div style={{marginLeft:'auto'}}>
+        {/* Toggle + Sort — right-aligned */}
+        <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:8}}>
+          <MapViewToggle viewMode={viewMode} setViewMode={setViewMode}/>
           <select value={sort} onChange={e => setSort(e.target.value as any)}
             style={{height:30, padding:'0 10px', background:T.surfaceElev, border:`1px solid ${T.borderStrong}`, color:T.text, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.14em', cursor:'pointer', outline:'none'}}>
             <option value="flagged">Sort: Most Recently Flagged</option>
@@ -496,23 +505,60 @@ export default function ReordersPage() {
         </div>
       </div>
 
-      {/* ── Feed ─────────────────────────────────────────────────────────── */}
-      <div style={{background:T.bg,flex:1}}>
-        {filtered.length === 0 && (
-          <div style={{padding:'64px 28px',textAlign:'center',fontFamily:'Teko,sans-serif',fontSize:20,letterSpacing:'0.20em',color:T.textFaint,textTransform:'uppercase'}}>
-            {items.length === 0 ? 'All accounts are healthy — no reorders due' : 'No accounts match this filter'}
+      {/* ── Feed or Map ───────────────────────────────────────────────────── */}
+      {viewMode === 'map' ? (
+        <SalesFloorMapView
+          orgs={filtered}
+          googleMapsKey={googleMapsKey||''}
+          stateFilter={stateFilter}
+          getPinConfig={(org) => {
+            const FLAG_COLORS: Record<string,string> = {
+              out_of_stock: T.redSystems,
+              low_inv: '#FF8A00',
+              past_cadence: T.yellow,
+              aging: T.statusWarn,
+            };
+            const FLAG_LABELS: Record<string,string> = {
+              out_of_stock: '!', low_inv: '↓', past_cadence: 'C', aging: 'A',
+            };
+            return {
+              color: FLAG_COLORS[org.active_flag] || '#6A6A6A',
+              label: FLAG_LABELS[org.active_flag] || '',
+            };
+          }}
+          getInfoHtml={(org) => {
+            const fm = FLAG_META[org.active_flag] || {color:'#9C9C9C', label: org.active_flag};
+            const days = org.days_since !== null ? `${org.days_since}d` : '—';
+            const daysColor = org.days_since===null?'#00D4FF':org.days_since<=30?'#00E676':org.days_since<=60?'#FFB300':'#FF3355';
+            const phone = org.phone||org.primary_contact_phone||'';
+            return `<div style="background:#141414;padding:14px 16px;min-width:220px;font-family:Arial,sans-serif;color:#F5F5F5;border:1px solid #2F2F2F"><div style="font-size:14px;font-weight:700;letter-spacing:0.04em;margin-bottom:3px;line-height:1.2">${org.name}</div><div style="font-size:10px;color:#9C9C9C;margin-bottom:8px">${[org.market_state,org.city].filter(Boolean).join(' · ')}</div><div style="display:inline-block;padding:2px 7px;border:1px solid ${fm.color};color:${fm.color};font-size:9px;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:10px">${fm.label}</div><div style="display:flex;gap:14px;margin-bottom:12px"><div><div style="font-size:8px;color:#6A6A6A;letter-spacing:0.16em;text-transform:uppercase;margin-bottom:2px">Last Order</div><div style="font-size:20px;font-weight:700;color:${daysColor};line-height:1">${days}</div></div><div style="flex:1"><div style="font-size:8px;color:#6A6A6A;letter-spacing:0.16em;text-transform:uppercase;margin-bottom:2px">Contact</div><div style="font-size:11px;color:#C8C8C8">${org.primary_contact_name||'—'}</div>${phone?`<div style="font-size:10px;color:#9C9C9C">${phone}</div>`:''}</div></div><a href="/sales-staging/account/${org.id}" style="display:block;text-align:center;padding:7px 12px;background:#FFD500;color:#000;font-weight:700;font-size:11px;letter-spacing:0.14em;text-decoration:none;text-transform:uppercase">Open Account →</a></div>`;
+          }}
+          legendItems={[
+            {color: T.redSystems, label: 'Out of Stock'},
+            {color: '#FF8A00',    label: 'Low Inventory'},
+            {color: T.yellow,     label: 'Past Cadence'},
+            {color: T.statusWarn, label: 'Aging'},
+          ]}
+        />
+      ) : (
+        <>
+          <div style={{background:T.bg,flex:1}}>
+            {filtered.length === 0 && (
+              <div style={{padding:'64px 28px',textAlign:'center',fontFamily:'Teko,sans-serif',fontSize:20,letterSpacing:'0.20em',color:T.textFaint,textTransform:'uppercase'}}>
+                {items.length === 0 ? 'All accounts are healthy — no reorders due' : 'No accounts match this filter'}
+              </div>
+            )}
+            {filtered.map(item => (
+              <ReorderCard key={item.id} item={item} onRemove={id => setSuppressed(prev => new Set([...prev, id]))} />
+            ))}
           </div>
-        )}
-        {filtered.map(item => (
-          <ReorderCard key={item.id} item={item} onRemove={id => setSuppressed(prev => new Set([...prev, id]))} />
-        ))}
-      </div>
-
-      <div style={{padding:'18px 28px',borderTop:`1px solid ${T.border}`,display:'flex',justifyContent:'space-between'}}>
-        <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:10.5,color:T.textFaint,letterSpacing:'0.14em'}}>
-          END OF LIST · {filtered.length} ACCOUNT{filtered.length !== 1 ? 'S' : ''}
-        </div>
-      </div>
+          <div style={{padding:'18px 28px',borderTop:`1px solid ${T.border}`,display:'flex',justifyContent:'space-between'}}>
+            <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:10.5,color:T.textFaint,letterSpacing:'0.14em'}}>
+              END OF LIST · {filtered.length} ACCOUNT{filtered.length !== 1 ? 'S' : ''}
+            </div>
+          </div>
+        </>
+      )}
     </SalesFloorLayout>
   );
 }

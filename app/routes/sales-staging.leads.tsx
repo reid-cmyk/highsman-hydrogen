@@ -17,6 +17,7 @@ import {useState, useEffect, useCallback, useRef} from 'react';
 import {isStagingAuthed} from '~/lib/staging-auth';
 import {getSFToken, getSFUser} from '~/lib/sf-auth.server';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
+import {SalesFloorMapView, MapViewToggle} from '~/components/SalesFloorMapView';
 import {CardActions, PhoneI, MailI} from '~/components/SalesFloorCardActions';
 
 export const handle = {hideHeader: true, hideFooter: true};
@@ -84,6 +85,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const select = [
     'id','name','market_state','city','phone','website','tier','market_rank','market_total',
     'zoho_account_id','tags','last_order_date','orders_count','lead_stage','lead_stage_updated_at','updated_at',
+    'lat','lng',
     'contacts(id,first_name,last_name,full_name,email,phone,mobile,is_primary_buyer)',
   ].join(',');
 
@@ -115,18 +117,21 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       primary_contact_name: primary?(primary.full_name||`${primary.first_name||''} ${primary.last_name||''}`.trim()||null):null,
       primary_contact_phone: primary?(primary.phone||primary.mobile||null):null,
       primary_contact_email: primary?.email||null,
+      lat: org.lat??null, lng: org.lng??null,
     };
   });
 
-  return json({authenticated:true, sfUser, leads, closedCount});
+  const googleMapsKey = (env.GOOGLE_PLACES_NEW_API_KEY || env.GOOGLE_PLACES_API_KEY || null) as string|null;
+  return json({authenticated:true, sfUser, leads, closedCount, googleMapsKey});
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function LeadsPage() {
-  const {authenticated, sfUser, leads, closedCount} = useLoaderData<typeof loader>() as any;
+  const {authenticated, sfUser, leads, closedCount, googleMapsKey} = useLoaderData<typeof loader>() as any;
   const [stateFilter, setStateFilter] = useState('ALL');
   const [stageFilter, setStageFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const [viewMode, setViewMode] = useState<'list'|'map'>('list');
 
   if (!authenticated) return (
     <div style={{minHeight:'100vh',background:T.bg,display:'flex',alignItems:'center',justifyContent:'center'}}>
@@ -204,7 +209,7 @@ export default function LeadsPage() {
         <StatCell label="Closed (all-time)" value={closedCount||0} accent={T.green}/>
       </div>
 
-      {/* ── Stage filter ────────────────────────────────────────────── */}
+      {/* ── Stage filter + toggle ────────────────────────────────────── */}
       <div style={{borderBottom:`1px solid ${T.border}`,padding:'10px 28px',background:T.bg,display:'flex',alignItems:'center',gap:8}}>
         {[
           {k:'all',   label:'All',      n:stateLeads.length, color:T.yellow},
@@ -222,9 +227,42 @@ export default function LeadsPage() {
             </button>
           );
         })}
+        <div style={{marginLeft:'auto'}}><MapViewToggle viewMode={viewMode} setViewMode={setViewMode}/></div>
       </div>
 
-      {/* ── Feed ────────────────────────────────────────────────────── */}
+      {/* ── Feed or Map ──────────────────────────────────────────────── */}
+      {viewMode==='map' ? (
+        <SalesFloorMapView
+          orgs={filtered}
+          googleMapsKey={googleMapsKey||''}
+          stateFilter={stateFilter}
+          getPinConfig={(org) => {
+            const STAGE_COLORS: Record<string,string> = {
+              hot:'#FF6B00', warm:T.statusWarn, working:T.cyan, new:T.textSubtle,
+            };
+            const STAGE_LABELS: Record<string,string> = {
+              hot:'H', warm:'W', working:'K', new:'N',
+            };
+            const s = org.lead_stage||'new';
+            return {color: STAGE_COLORS[s]||'#6A6A6A', label: STAGE_LABELS[s]||'?'};
+          }}
+          getInfoHtml={(org) => {
+            const s = org.lead_stage||'new';
+            const STAGE_COLORS: Record<string,string> = {hot:'#FF6B00',warm:'#FFB300',working:'#00D4FF',new:'#9C9C9C'};
+            const STAGE_LABELS: Record<string,string> = {hot:'HOT',warm:'WARM',working:'WORKING',new:'NEW LEAD'};
+            const sc = STAGE_COLORS[s]||'#9C9C9C';
+            const sl = STAGE_LABELS[s]||s.toUpperCase();
+            const phone = org.phone||org.primary_contact_phone||'';
+            return `<div style="background:#141414;padding:14px 16px;min-width:220px;font-family:Arial,sans-serif;color:#F5F5F5;border:1px solid #2F2F2F"><div style="font-size:14px;font-weight:700;letter-spacing:0.04em;margin-bottom:3px;line-height:1.2">${org.name}</div><div style="font-size:10px;color:#9C9C9C;margin-bottom:8px">${[org.market_state,org.city].filter(Boolean).join(' · ')}</div><div style="display:inline-block;padding:2px 7px;border:1px solid ${sc};color:${sc};font-size:9px;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:10px">${sl}</div><div style="flex:1;margin-bottom:12px"><div style="font-size:8px;color:#6A6A6A;letter-spacing:0.16em;text-transform:uppercase;margin-bottom:2px">Contact</div><div style="font-size:11px;color:#C8C8C8">${org.primary_contact_name||'—'}</div>${phone?`<div style="font-size:10px;color:#9C9C9C">${phone}</div>`:''}</div><a href="/sales-staging/account/${org.id}?from=leads" style="display:block;text-align:center;padding:7px 12px;background:#FFD500;color:#000;font-weight:700;font-size:11px;letter-spacing:0.14em;text-decoration:none;text-transform:uppercase">Open Lead →</a></div>`;
+          }}
+          legendItems={[
+            {color:'#FF6B00',     label:'Hot'},
+            {color:T.statusWarn,  label:'Warm'},
+            {color:T.cyan,        label:'Working'},
+            {color:T.textSubtle,  label:'New Lead'},
+          ]}
+        />
+      ) : (
       <div style={{background:T.bg,flex:1}}>
         {filtered.length===0&&(
           <div style={{padding:'64px 28px',textAlign:'center',fontFamily:'Teko,sans-serif',fontSize:18,letterSpacing:'0.20em',color:T.textFaint,textTransform:'uppercase'}}>
@@ -233,12 +271,15 @@ export default function LeadsPage() {
         )}
         {filtered.map((lead:any)=><LeadCard key={lead.id} lead={lead}/>)}
       </div>
+      )}
 
+      {viewMode==='list' && (
       <div style={{padding:'18px 28px',borderTop:`1px solid ${T.border}`,display:'flex',justifyContent:'space-between'}}>
         <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:10.5,color:T.textFaint,letterSpacing:'0.14em'}}>
           END OF LIST · {filtered.length} LEAD{filtered.length!==1?'S':''}
         </div>
       </div>
+      )}
     </SalesFloorLayout>
   );
 }
