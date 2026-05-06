@@ -1,6 +1,8 @@
 import type {LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
-import {getRepFromRequest, type SalesRep} from '../lib/sales-floor-reps';
+import {getRepFromRequest, findRepById, type SalesRep} from '../lib/sales-floor-reps';
+import {isStagingAuthed} from '~/lib/staging-auth';
+import {getSFToken} from '~/lib/sf-auth.server';
 import {
   listConversations,
   listMessagesWith,
@@ -79,7 +81,11 @@ function shapeThread(c: QuoConversation): ShapedThread {
 
 export async function loader({request, context}: LoaderFunctionArgs) {
   const env = (context as any).env || {};
-  const rep = getRepFromRequest(request);
+  const cookie = request.headers.get('Cookie') || '';
+  let rep = getRepFromRequest(request);
+  if (!rep && (isStagingAuthed(cookie) || getSFToken(cookie))) {
+    rep = findRepById('sky');
+  }
 
   // Stable response envelope — dashboard expects same shape on auth/config
   // failures so the panel renders an empty state instead of throwing.

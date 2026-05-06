@@ -70,7 +70,7 @@ const NAV_ITEMS: {
   { label: 'Sales Orders',   href: '/sales-staging/orders' },
   { label: 'Accounts',       href: '/sales-staging/accounts?stage=active' },
   { label: 'Email',          href: '/sales-staging/email' },
-  { label: 'Text',           href: '/sales-floor/app' },
+  { label: 'Text',           href: '/sales-staging/text' },
   { label: 'Issues',         href: '/sales-floor/app' },
   { label: 'Vibes',          href: '/vibes' },
   { label: 'Admin',          href: '/sales-staging/admin' },

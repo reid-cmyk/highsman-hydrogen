@@ -1,9 +1,9 @@
 import type {ActionFunctionArgs, LoaderFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
-import {getRepFromRequest, type SalesRep} from '../lib/sales-floor-reps';
+import {getRepFromRequest, findRepById, type SalesRep} from '../lib/sales-floor-reps';
+import {isStagingAuthed} from '~/lib/staging-auth';
+import {getSFToken} from '~/lib/sf-auth.server';
 import {sendSms, formatPhoneE164} from '../lib/quo';
-import {createZohoNote, smsNoteTitle, smsNoteBody} from '../lib/zoho-notes';
-import {getZohoAccessToken as getZohoToken} from '../lib/zoho-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sales Floor — Send SMS (per-rep Quo number)
@@ -31,31 +31,6 @@ import {getZohoAccessToken as getZohoToken} from '../lib/zoho-auth';
 // keeps a single cache across every Zoho CRM route in the worker, which is
 // what prevents the "too many token requests continuously" rate-limit that
 // used to trip when each route owned its own cache.
-
-async function findContactByPhone(token: string, e164: string): Promise<{
-  id: string; accountId: string | null; name: string;
-} | null> {
-  if (!e164) return null;
-  const last10 = e164.replace(/[^\d]/g, '').slice(-10);
-  if (last10.length !== 10) return null;
-  const url = new URL('https://www.zohoapis.com/crm/v7/Contacts/search');
-  url.searchParams.set('phone', last10);
-  url.searchParams.set('fields', ['Full_Name', 'Account_Name'].join(','));
-  url.searchParams.set('per_page', '5');
-  const res = await fetch(url.toString(), {
-    headers: {Authorization: `Zoho-oauthtoken ${token}`},
-  });
-  if (res.status === 204) return null;
-  if (!res.ok) return null;
-  const data = await res.json();
-  const c = (data.data || [])[0];
-  if (!c) return null;
-  return {
-    id: c.id,
-    accountId: c.Account_Name && typeof c.Account_Name === 'object' ? c.Account_Name.id || null : null,
-    name: c.Full_Name || 'Unknown Contact',
-  };
-}
 
 // Resolve rep's Quo config from env (with Sky as the only seat right now).
 function resolveRepQuo(rep: SalesRep, env: any): {
@@ -86,7 +61,11 @@ export async function action({request, context}: ActionFunctionArgs) {
     return json({ok: false, error: 'POST only'}, {status: 405});
   }
 
-  const rep = getRepFromRequest(request);
+  const cookie = request.headers.get('Cookie') || '';
+  let rep = getRepFromRequest(request);
+  if (!rep && (isStagingAuthed(cookie) || getSFToken(cookie))) {
+    rep = findRepById('sky');
+  }
   if (!rep) {
     return json({ok: false, error: 'not authenticated'}, {status: 401});
   }
@@ -133,37 +112,6 @@ export async function action({request, context}: ActionFunctionArgs) {
     return json({ok: false, error: err.message}, {status: 502});
   }
 
-  // Best-effort Zoho Note. We do NOT block on failure — the message is
-  // already sent, and the webhook handler for `message.delivered` will
-  // attempt the same write, so the Note will land via that path even if
-  // this one errors.
-  let zohoNoteId: string | null = null;
-  try {
-    if (env.ZOHO_CLIENT_ID && env.ZOHO_CLIENT_SECRET && env.ZOHO_REFRESH_TOKEN) {
-      const token = await getZohoToken(env);
-      const contact = await findContactByPhone(token, toE164);
-      let parent: {id: string; module: 'Accounts' | 'Contacts'} | null = null;
-      if (contact?.accountId) parent = {id: contact.accountId, module: 'Accounts'};
-      else if (contact?.id) parent = {id: contact.id, module: 'Contacts'};
-
-      if (parent) {
-        const title = `${smsNoteTitle('out', toE164, content)} [quo:${quoMsg.id}]`;
-        const noteBody = smsNoteBody({
-          direction: 'out',
-          fromE164: quoCfg.fromE164,
-          toE164,
-          text: content,
-          timestamp: quoMsg.createdAt || new Date().toISOString(),
-          repName: rep.displayName,
-          quoMessageId: quoMsg.id,
-        });
-        zohoNoteId = await createZohoNote({token, parent, title, content: noteBody});
-      }
-    }
-  } catch (err: any) {
-    console.warn('[send-sms] Zoho Note write failed (non-blocking)', err.message);
-  }
-
   return json(
     {
       ok: true,
@@ -172,7 +120,6 @@ export async function action({request, context}: ActionFunctionArgs) {
       to: toE164,
       status: quoMsg.status,
       createdAt: quoMsg.createdAt,
-      zohoNoteId,
     },
     {status: 200},
   );
