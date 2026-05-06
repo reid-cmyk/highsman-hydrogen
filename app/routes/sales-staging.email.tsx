@@ -99,12 +99,22 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     } catch { /* ignore */ }
   }
 
-  return json({sfUser, preloadedOrg});
+  // Load templates from Supabase (falls back to hardcoded TEMPLATES in the component)
+  const dbTemplates: any[] = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/email_templates?order=sort_order.asc,created_at.asc`,
+    {headers: {apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`}},
+  ).then(r => r.ok ? r.json() : []).catch(() => []);
+
+  return json({sfUser, preloadedOrg, dbTemplates});
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function EmailPage() {
-  const {sfUser, preloadedOrg} = useLoaderData<typeof loader>() as any;
+  const {sfUser, preloadedOrg, dbTemplates} = useLoaderData<typeof loader>() as any;
+  // Use DB templates if available, otherwise fall back to hardcoded
+  const activeTemplates: typeof TEMPLATES = (Array.isArray(dbTemplates) && dbTemplates.length > 0)
+    ? dbTemplates
+    : TEMPLATES;
 
   // ── Step: 'search' | 'compose' ───────────────────────────────────────────────
   const [step,          setStep]          = useState<'search'|'compose'>(preloadedOrg ? 'compose' : 'search');
@@ -417,7 +427,7 @@ export default function EmailPage() {
                   Choose a Template
                 </div>
                 <div style={{display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8}}>
-                  {TEMPLATES.map(tpl => (
+                  {activeTemplates.map((tpl: any) => (
                     <button key={tpl.key} type="button" onClick={() => pickTemplate(tpl)}
                       style={{background:T.surface, border:`1px solid ${T.borderStrong}`, padding:'14px 12px', textAlign:'left', cursor:'pointer'}}
                       onMouseEnter={e => (e.currentTarget.style.borderColor = `${T.yellow}66`)}
