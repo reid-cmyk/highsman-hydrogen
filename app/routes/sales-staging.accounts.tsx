@@ -143,7 +143,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const headers={apikey:env.SUPABASE_SERVICE_KEY,Authorization:`Bearer ${env.SUPABASE_SERVICE_KEY}`};
 
   // Fetch the filtered account list
-  const select=['id','name','market_state','city','phone','lifecycle_stage','tier','last_order_date','tags','online_menus','do_not_contact','risk_of_loss','reorder_status','zoho_account_id','website','market_rank','market_total','market_revenue_90d','lat','lng','contacts(id,email,phone,mobile,full_name,first_name,last_name,is_primary_buyer,job_role)'].join(',');
+  const select=['id','name','market_state','city','phone','lifecycle_stage','tier','last_order_date','tags','online_menus','do_not_contact','risk_of_loss','reorder_status','zoho_account_id','website','market_rank','market_total','market_revenue_90d','lat','lng','contacts(id,email,phone,mobile,full_name,first_name,last_name,is_primary_buyer,job_title,roles)'].join(',');
   // Sort order: rank sorts by market_rank asc (best = lowest number), others client-side
   const supabaseOrder = sortBy==='rank' ? 'market_rank.asc.nullslast' : 'name.asc';
   const params=new URLSearchParams({select,order:supabaseOrder,limit:'2000'});
@@ -991,6 +991,8 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
             orgWebsite={org.website || null}
             zohoAccountId={zohoIdNumeric || null}
             lifecycleStage={org.lifecycle_stage || null}
+            contacts={(org.contacts || []) as any[]}
+            onEmail={email ? () => { setShowBrief(false); setShowEmail(true); } : undefined}
             onClose={() => setShowBrief(false)}
           />
         )}

@@ -307,33 +307,48 @@ export function SalesFloorEmailModal({
                     {contacts.map(c => {
                       const displayName = (c as any).full_name || `${(c as any).first_name||''} ${(c as any).last_name||''}`.trim() || 'Unknown';
                       const active = selectedContactId === c.id;
-                      // Show job_title (new) OR roles array OR job_role (legacy)
-                      const jobTitle = (c as any).job_title;
+                      // Use new job_title + roles[] — NOT job_role (old verbose field)
+                      const jobTitle: string | null = (c as any).job_title || null;
                       const roles: string[] = (c as any).roles || [];
-                      const legacyRole = (c as any).job_role;
-                      const roleDisplay = jobTitle || (roles.length ? roles.join(', ') : null) || legacyRole || null;
+                      const ROLE_LABELS: Record<string,string> = {
+                        purchasing:'Purchasing', marketing:'Marketing', management:'Management',
+                        budtender:'Budtender', billing:'Billing', owner:'Owner',
+                      };
+                      const roleLabel = roles.length
+                        ? roles.map(r => ROLE_LABELS[r] || r).join(' · ')
+                        : null;
+                      const hasEmail = !!(c as any).email;
                       return (
                         <button key={c.id} onClick={() => onSelectContact(c.id)}
                           style={{
-                            padding:'8px 12px',
+                            padding:'10px 14px',
                             border:`1px solid ${active ? T.yellow : T.borderStrong}`,
-                            background: active ? `${T.yellow}12` : 'transparent',
-                            color: active ? T.yellow : T.textSubtle,
-                            cursor: 'pointer',
+                            background: active ? `${T.yellow}10` : T.bg,
+                            cursor: hasEmail ? 'pointer' : 'default',
                             textAlign: 'left',
-                            minWidth: 140,
+                            minWidth: 160,
+                            opacity: hasEmail ? 1 : 0.45,
                           }}>
-                          <div style={{fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.10em', textTransform:'uppercase', lineHeight:1.2}}>{displayName}</div>
-                          {roleDisplay && (
-                            <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:8.5, color:active?`${T.yellow}99`:T.textFaint, letterSpacing:'0.08em', marginTop:3, textTransform:'uppercase'}}>
-                              {roleDisplay}
+                          {/* Name */}
+                          <div style={{fontFamily:'Teko,sans-serif', fontSize:15, letterSpacing:'0.10em', color: active ? T.yellow : T.text, textTransform:'uppercase', lineHeight:1.2, marginBottom:3}}>
+                            {displayName}
+                          </div>
+                          {/* Job title */}
+                          {jobTitle && (
+                            <div style={{fontFamily:'Inter,sans-serif', fontSize:11, color: active ? `${T.yellow}cc` : T.textMuted, marginBottom:2}}>
+                              {jobTitle}
                             </div>
                           )}
-                          {(c as any).email && (
-                            <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9, color:active?`${T.yellow}88`:T.textFaint, letterSpacing:'0.04em', marginTop:2}}>
-                              {(c as any).email}
+                          {/* Roles */}
+                          {roleLabel && (
+                            <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9, color: active ? `${T.yellow}99` : T.textSubtle, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:3}}>
+                              {roleLabel}
                             </div>
                           )}
+                          {/* Email */}
+                          <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, color: active ? `${T.yellow}88` : (hasEmail ? T.textFaint : T.borderStrong), letterSpacing:'0.04em'}}>
+                            {(c as any).email || 'no email'}
+                          </div>
                         </button>
                       );
                     })}

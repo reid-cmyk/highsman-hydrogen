@@ -71,6 +71,18 @@ function ChBadge({ch}: {ch:string}) {
 
 // ─── Main modal ───────────────────────────────────────────────────────────────
 
+type BriefContact = {
+  id?: string;
+  full_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  mobile?: string | null;
+  is_primary_buyer?: boolean;
+  [key: string]: any;
+};
+
 export function SalesFloorBriefModal({
   orgName,
   contactPhone,
@@ -80,6 +92,8 @@ export function SalesFloorBriefModal({
   orgWebsite,
   zohoAccountId,
   lifecycleStage,
+  contacts,
+  onEmail,
   onClose,
 }: {
   orgName: string;
@@ -90,6 +104,8 @@ export function SalesFloorBriefModal({
   orgWebsite?: string | null;
   zohoAccountId?: string | null;
   lifecycleStage?: string | null;
+  contacts?: BriefContact[];
+  onEmail?: () => void;
   onClose: () => void;
 }) {
   const [brief,    setBrief]    = useState<BriefData | null>(null);
@@ -109,21 +125,50 @@ export function SalesFloorBriefModal({
       ? contactName.replace(contactFirstName, '').trim()
       : (contactName?.split(' ').slice(1).join(' ') || '');
 
+    // Collect all contact emails for domain expansion — the brief will search
+    // Sky's Gmail for any email to/from any of these addresses
+    const allEmails = contacts
+      ? contacts.map(c => c.email).filter(Boolean) as string[]
+      : contactEmail ? [contactEmail] : [];
+
+    // Best phone: purchasing contact first, then any with a phone, then org phone
+    const purchasingContact = contacts?.find(c => (c.roles||[]).includes('purchasing'));
+    const bestPhone = purchasingContact?.phone || purchasingContact?.mobile
+      || contacts?.find(c => c.is_primary_buyer)?.phone
+      || contacts?.find(c => c.phone || c.mobile)?.phone
+      || contactPhone || '';
+
+    // Primary email: purchasing contact's email, then primary buyer's, then first
+    const primaryEmail = purchasingContact?.email
+      || contacts?.find(c => c.is_primary_buyer)?.email
+      || allEmails[0] || contactEmail || '';
+
+    // Primary contact name for context
+    const primaryContact = purchasingContact
+      || contacts?.find(c => c.is_primary_buyer)
+      || contacts?.[0];
+    const resolvedFirstName = primaryContact?.first_name || firstName;
+    const resolvedLastName  = primaryContact?.last_name || lastName;
+    const resolvedFullName  = primaryContact?.full_name
+      || `${resolvedFirstName} ${resolvedLastName}`.trim()
+      || contactName || orgName;
+
     fetch('/api/brief', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         lead: {
-          First_Name: firstName,
-          Last_Name:  lastName,
-          _fullName:  contactName || orgName,
-          Company:    orgName,
-          Phone:      contactPhone  || '',
-          Email:      contactEmail  || '',
-          _status:    lifecycleStage || 'active',
-          Website:    orgWebsite    || '',
-          _zohoModule: 'Accounts',
-          _zohoId:    zohoAccountId || '',
+          First_Name:     resolvedFirstName,
+          Last_Name:      resolvedLastName,
+          _fullName:      resolvedFullName,
+          Company:        orgName,
+          Phone:          bestPhone,
+          Email:          primaryEmail,
+          _contactEmails: allEmails, // all contact emails for domain search
+          _status:        lifecycleStage || 'active',
+          Website:        orgWebsite    || '',
+          _zohoModule:    'Accounts',
+          _zohoId:        zohoAccountId || '',
         },
       }),
     })
@@ -283,6 +328,36 @@ export function SalesFloorBriefModal({
             </div>
           )}
         </div>
+
+        {/* Action buttons — always visible at bottom */}
+        {(contactPhone || contactEmail || onEmail) && (
+          <div style={{borderTop:`1px solid ${T.border}`, padding:'14px 24px', flexShrink:0, display:'flex', alignItems:'center', gap:8, background:T.surface}}>
+            <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9, color:T.textFaint, letterSpacing:'0.10em', marginRight:4, textTransform:'uppercase'}}>
+              Quick action:
+            </div>
+            {contactPhone && (
+              <a href={`tel:${contactPhone}`}
+                style={{height:30, padding:'0 12px', background:'transparent', border:`1px solid ${T.yellow}88`, color:T.yellow, fontFamily:'Teko,sans-serif', fontSize:12, letterSpacing:'0.16em', textDecoration:'none', display:'inline-flex', alignItems:'center', gap:5, cursor:'pointer'}}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>
+                CALL
+              </a>
+            )}
+            {contactPhone && (
+              <a href={`sms:${contactPhone}`}
+                style={{height:30, padding:'0 12px', background:'transparent', border:`1px solid ${T.textSubtle}66`, color:T.textSubtle, fontFamily:'Teko,sans-serif', fontSize:12, letterSpacing:'0.16em', textDecoration:'none', display:'inline-flex', alignItems:'center', gap:5, cursor:'pointer'}}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M3 5h18v12h-8l-5 4v-4H3z"/></svg>
+                TEXT
+              </a>
+            )}
+            {onEmail && contactEmail && (
+              <button type="button" onClick={() => { onClose(); setTimeout(onEmail, 50); }}
+                style={{height:30, padding:'0 12px', background:'transparent', border:`1px solid ${T.textSubtle}66`, color:T.textSubtle, fontFamily:'Teko,sans-serif', fontSize:12, letterSpacing:'0.16em', cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5}}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square"><path d="M3 6h18v12H3zM3 6l9 7 9-7"/></svg>
+                EMAIL
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
