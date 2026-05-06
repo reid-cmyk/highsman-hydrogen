@@ -1,7 +1,9 @@
 import type {ActionFunctionArgs} from '@shopify/remix-oxygen';
 import {json} from '@shopify/remix-oxygen';
-import {getRepFromRequest} from '../lib/sales-floor-reps';
+import {getRepFromRequest, findRepById} from '../lib/sales-floor-reps';
 import {isGmailSAConfigured, sendEmailFromUser} from '../lib/gmail-sa';
+import {isStagingAuthed} from '~/lib/staging-auth';
+import {getSFToken} from '~/lib/sf-auth.server';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sales Floor — Send Email (Service Account, Domain-Wide Delegation)
@@ -63,7 +65,12 @@ export async function action({request, context}: ActionFunctionArgs) {
     return json({ok: false, error: 'Method not allowed'}, {status: 405});
   }
 
-  const rep = getRepFromRequest(request);
+  // Try old sales-floor cookie first; fall back to staging auth (sf_token / staging password)
+  const cookie = request.headers.get('Cookie') || '';
+  let rep = getRepFromRequest(request);
+  if (!rep && (isStagingAuthed(cookie) || getSFToken(cookie))) {
+    rep = findRepById('sky'); // staging defaults to Sky's mailbox
+  }
   if (!rep) {
     return json(
       {ok: false, error: 'Not logged in as a sales rep. Reload /sales-floor to sign in.'},

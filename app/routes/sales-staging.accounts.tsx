@@ -975,9 +975,7 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
         {showEmail && (
           <SalesFloorEmailModal
             orgName={org.name}
-            contactEmail={email}
-            contactName={primaryContact?.full_name || `${primaryContact?.first_name||''} ${primaryContact?.last_name||''}`.trim() || null}
-            contactFirstName={primaryContact?.first_name || null}
+            contacts={(org.contacts || []) as any[]}
             onClose={() => setShowEmail(false)}
           />
         )}

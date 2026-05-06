@@ -155,25 +155,52 @@ const TEMPLATE_ICONS: Record<string, React.ReactNode> = {
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
+type ContactOption = {
+  id: string;
+  full_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  job_role?: string | null;
+};
+
 export function SalesFloorEmailModal({
   orgName,
-  contactEmail,
-  contactName,
-  contactFirstName,
+  contacts,
   onClose,
 }: {
   orgName: string;
-  contactEmail?: string | null;
-  contactName?: string | null;
-  contactFirstName?: string | null;
+  contacts?: ContactOption[];
   onClose: () => void;
 }) {
   const fetcher = useFetcher();
 
-  const defaultName = contactFirstName || (contactName?.split(' ')[0]) || '';
-  const [to,       setTo]      = useState(contactEmail || '');
-  const [name,     setName]    = useState(defaultName);
+  // Derive primary contact for default pre-fill
+  const primaryContact = contacts?.find(c => (c as any).is_primary_buyer) || contacts?.[0];
+  const defaultEmail = primaryContact?.email || '';
+  const defaultFirst = primaryContact?.first_name || (primaryContact?.full_name?.split(' ')[0]) || '';
+
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(primaryContact?.id || null);
+  const [to,       setTo]      = useState(defaultEmail);
+  const [name,     setName]    = useState(defaultFirst);
   const [company,  setCompany] = useState(orgName);
+
+  // When contact selector changes, auto-fill to/name
+  const onSelectContact = (id: string) => {
+    setSelectedContactId(id);
+    const c = contacts?.find(x => x.id === id);
+    if (c) {
+      setTo(c.email || '');
+      setName(c.first_name || (c.full_name?.split(' ')[0]) || '');
+      // re-fill template if one is selected
+      if (selected) {
+        const filled = fillTemplate(selected, c.first_name || c.full_name?.split(' ')[0] || '', orgName);
+        setSubject(filled.subject);
+        setBody(filled.body);
+      }
+    }
+  };
   const [selected, setSelected] = useState<Template | null>(null);
   const [subject,  setSubject] = useState('');
   const [body,     setBody]    = useState('');
@@ -270,6 +297,36 @@ export function SalesFloorEmailModal({
 
           {status !== 'sent' && (
             <>
+              {/* Contact picker — only shown when multiple contacts exist */}
+              {contacts && contacts.length > 1 && (
+                <div style={{marginBottom:16, paddingBottom:16, borderBottom:`1px solid ${T.border}`}}>
+                  <div style={{fontFamily:'Teko,sans-serif', fontSize:11, letterSpacing:'0.26em', color:T.textFaint, textTransform:'uppercase', marginBottom:8}}>
+                    Send to
+                  </div>
+                  <div style={{display:'flex', gap:6, flexWrap:'wrap'}}>
+                    {contacts.map(c => {
+                      const displayName = c.full_name || `${c.first_name||''} ${c.last_name||''}`.trim() || 'Unknown';
+                      const active = selectedContactId === c.id;
+                      return (
+                        <button key={c.id} onClick={() => onSelectContact(c.id)}
+                          style={{
+                            padding:'5px 10px',
+                            border:`1px solid ${active ? T.yellow : T.borderStrong}`,
+                            background: active ? `${T.yellow}12` : 'transparent',
+                            color: active ? T.yellow : T.textSubtle,
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                          }}>
+                          <div style={{fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.10em', textTransform:'uppercase'}}>{displayName}</div>
+                          {c.email && <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9, color:active?T.yellow:T.textFaint, letterSpacing:'0.06em'}}>{c.email}</div>}
+                          {c.job_role && <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:8.5, color:T.textFaint, letterSpacing:'0.06em'}}>{c.job_role.toUpperCase()}</div>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Template gallery */}
               {!selected && (
                 <div>
