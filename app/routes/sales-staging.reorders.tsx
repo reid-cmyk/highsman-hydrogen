@@ -131,7 +131,8 @@ type FeedItem = {
 // ─── Action — suppress / unsuppress ──────────────────────────────────────────
 export async function action({request, context}: ActionFunctionArgs) {
   const env = (context as any).env;
-  if (!isStagingAuthed(request.headers.get('Cookie') || ''))
+  const _ck = request.headers.get('Cookie') || '';
+  if (!isStagingAuthed(_ck) && !getSFToken(_ck))
     return json({ok: false, error: 'unauthorized'}, {status: 401});
 
   const fd = await request.formData();
