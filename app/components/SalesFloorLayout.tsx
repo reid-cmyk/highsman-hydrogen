@@ -71,7 +71,7 @@ const NAV_ITEMS: {
   { label: 'Accounts',       href: '/sales-staging/accounts?stage=active' },
   { label: 'Email',          href: '/sales-staging/email' },
   { label: 'Text',           href: '/sales-staging/text' },
-  { label: 'Issues',         href: '/sales-floor/app' },
+  { label: 'Issues',         href: '/sales-staging/issues' },
   { label: 'Vibes',          href: '/sales-staging/vibes' },
   { label: 'Admin',          href: '/sales-staging/admin' },
 ];
