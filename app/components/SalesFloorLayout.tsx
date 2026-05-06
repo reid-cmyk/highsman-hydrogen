@@ -69,7 +69,7 @@ const NAV_ITEMS: {
   { label: 'Leads',          href: '/sales-staging/leads',                     countKey: 'prospect' },
   { label: 'Sales Orders',   href: '/sales-staging/orders' },
   { label: 'Accounts',       href: '/sales-staging/accounts?stage=active' },
-  { label: 'Email',          href: '/sales-floor/app' },
+  { label: 'Email',          href: '/sales-staging/email' },
   { label: 'Text',           href: '/sales-floor/app' },
   { label: 'Issues',         href: '/sales-floor/app' },
   { label: 'Vibes',          href: '/vibes' },
