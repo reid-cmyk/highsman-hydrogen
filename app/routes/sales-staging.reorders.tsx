@@ -749,6 +749,9 @@ function ReorderCard({item, onRemove}: {item: FeedItem; onRemove: (id: string) =
       </div>
 
       {/* Shared CardActions — exact same buttons as Accounts + Suppress + Churn */}
+      {/* Inline note widget — above action buttons */}
+      <SalesFloorNoteWidget orgId={item.id} latestNote={item.latest_note} from="reorders" />
+
       <CardActions
         phone={phone}
         email={email}
@@ -762,9 +765,6 @@ function ReorderCard({item, onRemove}: {item: FeedItem; onRemove: (id: string) =
         onSuppress={() => submitIntent('suppress')}
         onChurn={() => submitIntent('churn')}
       />
-
-      {/* Inline note widget */}
-      <SalesFloorNoteWidget orgId={item.id} latestNote={item.latest_note} from="reorders" />
     </div>
   );
 }
