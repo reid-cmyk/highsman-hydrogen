@@ -72,7 +72,7 @@ const NAV_ITEMS: {
   { label: 'Email',          href: '/sales-staging/email' },
   { label: 'Text',           href: '/sales-staging/text' },
   { label: 'Issues',         href: '/sales-floor/app' },
-  { label: 'Vibes',          href: '/vibes' },
+  { label: 'Vibes',          href: '/sales-staging/vibes' },
   { label: 'Admin',          href: '/sales-staging/admin' },
 ];
 
