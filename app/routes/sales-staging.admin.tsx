@@ -166,6 +166,24 @@ export async function action({request, context}: ActionFunctionArgs) {
     return json({ok: res.ok, intent, template: Array.isArray(saved) ? saved[0] : saved});
   }
 
+  // ── Seed default templates ────────────────────────────────────────────────
+  if (intent === 'seed_templates') {
+    const defaults = [
+      {key:'intro',    label:'Intro',     sub:'First touch',      sort_order:0, subject:'Quick intro from Sky — {company}', body:`Hi {name},\n\nI wanted to reach out because I think we might be a great fit for {company}.\n\nWe're Highsman — Ricky Williams' cannabis brand. Our Triple Infused Pre-Rolls, Hit Sticks, and Ground Game have been moving fast across NJ, and I'd love to get them on your shelf.\n\nWould you be open to a quick call this week?\n\nSky Lima\nHighsman`},
+      {key:'followup', label:'Follow-Up', sub:'Keep it moving',   sort_order:1, subject:'Following up — {company}', body:`Hi {name},\n\nJust following up on our conversation. Wanted to make it easy to reconnect.\n\nHappy to answer any questions or get an order started — just say the word.\n\nTalk soon,\nSky Lima\nHighsman`},
+      {key:'proposal', label:'Proposal',  sub:'Send the offer',   sort_order:2, subject:'Your wholesale proposal — {company}', body:`Hi {name},\n\nAs discussed, here's the wholesale pricing for {company}:\n\n• Hit Sticks (0.5g disposable) — [price]\n• Triple Infused Pre-Rolls (1.2g) — [price]\n• Ground Game (7g shake) — [price]\n\nI can have this fulfilled quickly. Let me know and I'll get it going.\n\nBest,\nSky Lima\nHighsman`},
+      {key:'checkin',  label:'Check-In',  sub:'Active account',   sort_order:3, subject:'Checking in — {company}', body:`Hi {name},\n\nJust checking in on how Highsman is moving at {company}. Running low on anything? Need display materials refreshed?\n\nAlways here if you need anything.\n\nSky Lima\nHighsman`},
+      {key:'reorder',  label:'Reorder',   sub:'Time to restock',  sort_order:4, subject:'Time to reorder? — {company}', body:`Hi {name},\n\nBased on your last order, wanted to check if {company} is running low and ready for a reorder.\n\nI can turn this around quickly — just let me know quantities and I'll get it moving.\n\nSky Lima\nHighsman`},
+      {key:'thankyou', label:'Thank You', sub:'Won deal',          sort_order:5, subject:'Thank you — {company}', body:`Hi {name},\n\nThank you for the order — we're excited to work with {company}.\n\nI'll be your go-to person for anything you need. Don't hesitate to reach out anytime.\n\nGrateful for the partnership,\nSky Lima\nHighsman`},
+    ];
+    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/email_templates`, {
+      method:'POST',
+      headers:{...h, Prefer:'resolution=merge-duplicates,return=minimal'},
+      body: JSON.stringify(defaults),
+    });
+    return json({ok: res.ok, intent});
+  }
+
   // ── Delete email template ──────────────────────────────────────────────────
   if (intent === 'delete_template') {
     const id = String(fd.get('id') || '');
@@ -433,24 +451,34 @@ function UserCard({user, onDeleted}: {user: any; onDeleted: ()=>void}) {
 function TemplatesTab({templates, onRevalidate}: {templates: any[]; onRevalidate: ()=>void}) {
   const [showAdd, setShowAdd]     = useState(false);
   const [editingId, setEditingId] = useState<string|null>(null);
+  const seedFetcher = useFetcher();
+  const seeding = seedFetcher.state !== 'idle';
+
+  useEffect(() => {
+    if ((seedFetcher.data as any)?.ok && (seedFetcher.data as any)?.intent === 'seed_templates') onRevalidate();
+  }, [seedFetcher.data, onRevalidate]);
 
   return (
     <div>
       <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20}}>
-        <div>
-          <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:10.5, color:T.textFaint, letterSpacing:'0.12em'}}>
-            {templates.length} templates
-          </div>
-          {templates.length === 0 && (
-            <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.statusWarn, letterSpacing:'0.08em', marginTop:4}}>
-              ⚠ email_templates table not found — run the SQL in the route file comment to enable persistence.
-            </div>
-          )}
+        <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:10.5, color:T.textFaint, letterSpacing:'0.12em'}}>
+          {templates.length === 0 ? 'No templates yet' : `${templates.length} templates`}
         </div>
-        <button type="button" onClick={() => setShowAdd(true)}
-          style={{height:34, padding:'0 16px', background:T.yellow, border:'none', color:'#000', fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.18em', cursor:'pointer'}}>
-          + ADD TEMPLATE
-        </button>
+        <div style={{display:'flex', gap:8}}>
+          {templates.length === 0 && (
+            <seedFetcher.Form method="post">
+              <input type="hidden" name="intent" value="seed_templates"/>
+              <button type="submit" disabled={seeding}
+                style={{height:34, padding:'0 16px', background:'transparent', border:`1px solid ${T.yellow}`, color:T.yellow, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.18em', cursor:'pointer'}}>
+                {seeding ? 'SEEDING…' : '↓ SEED DEFAULTS'}
+              </button>
+            </seedFetcher.Form>
+          )}
+          <button type="button" onClick={() => setShowAdd(true)}
+            style={{height:34, padding:'0 16px', background:T.yellow, border:'none', color:'#000', fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.18em', cursor:'pointer'}}>
+            + ADD TEMPLATE
+          </button>
+        </div>
       </div>
 
       {showAdd && (
