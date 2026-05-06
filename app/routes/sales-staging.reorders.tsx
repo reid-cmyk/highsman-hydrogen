@@ -19,12 +19,21 @@ import {json, redirect} from '@shopify/remix-oxygen';
 import {useLoaderData, useFetcher} from '@remix-run/react';
 import {useState, useEffect, useCallback} from 'react';
 import {CardActions} from '~/components/SalesFloorCardActions';
+import {SalesFloorNoteWidget} from '~/components/SalesFloorNoteWidget';
+import {fetchLatestNotes} from '~/lib/org-notes.server';
+import type {NotePreview} from '~/lib/org-notes.server';
 import {isStagingAuthed} from '~/lib/staging-auth';
 import {getSFToken, getSFUser} from '~/lib/sf-auth.server';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
 import {SalesFloorMapView, MapViewToggle} from '~/components/SalesFloorMapView';
 
 export const handle = {hideHeader: true, hideFooter: true};
+
+// Don't revalidate the feed when a note is added — prevents re-sorting the list
+export function shouldRevalidate({actionUrl, defaultShouldRevalidate}: any): boolean {
+  if (actionUrl?.pathname === '/api/org-note-add') return false;
+  return defaultShouldRevalidate;
+}
 export const meta: MetaFunction = () => [
   {title: 'Reorders Due | Sales Floor'},
   {name: 'robots', content: 'noindex, nofollow'},
@@ -116,6 +125,7 @@ type FeedItem = {
   primary_contact_email: string | null;
   lat: number | null;
   lng: number | null;
+  latest_note: NotePreview | null;
 };
 
 // ─── Action — suppress / unsuppress ──────────────────────────────────────────
@@ -324,6 +334,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       primary_contact_email: primary?.email || null,
       lat: org.lat ?? null,
       lng: org.lng ?? null,
+      latest_note: null, // populated after notes fetch below
     });
   }
 
@@ -356,6 +367,12 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     past_cadence: feed.filter(f => f.active_flag === 'past_cadence').length,
     aging:        feed.filter(f => f.active_flag === 'aging').length,
   };
+
+  // ── Batch fetch latest note per org (shared utility) ─────────────────────────
+  if (feed.length > 0) {
+    const latestMap = await fetchLatestNotes(feed.map(f => f.id), env);
+    for (const item of feed) item.latest_note = latestMap.get(item.id) || null;
+  }
 
   const googleMapsKey = (env.GOOGLE_PLACES_NEW_API_KEY || env.GOOGLE_PLACES_API_KEY || null) as string|null;
   return json({authenticated: true, sfUser, feed, stats, litError, googleMapsKey});
@@ -718,6 +735,9 @@ function ReorderCard({item, onRemove}: {item: FeedItem; onRemove: (id: string) =
       </div>
 
       {/* Shared CardActions — exact same buttons as Accounts + Suppress + Churn */}
+      {/* Inline note widget — above action buttons */}
+      <SalesFloorNoteWidget orgId={item.id} latestNote={item.latest_note} from="reorders" />
+
       <CardActions
         phone={phone}
         email={email}

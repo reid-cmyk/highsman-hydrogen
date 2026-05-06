@@ -14,9 +14,16 @@ import type {SFUser} from '~/lib/sf-auth.server';
 import type {OrgRow} from '~/lib/supabase-orgs';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
 import {SalesFloorMapView, MapViewToggle} from '~/components/SalesFloorMapView';
+import {SalesFloorNoteWidget} from '~/components/SalesFloorNoteWidget';
+import {fetchLatestNotes} from '~/lib/org-notes.server';
 import {CardActions, CardBtn, PhoneI, TextI, MailI, FlagI, BookI, StarI, SendI, BoxI} from '~/components/SalesFloorCardActions';
 
 export const handle = {hideHeader: true, hideFooter: true};
+
+export function shouldRevalidate({actionUrl, defaultShouldRevalidate}: any): boolean {
+  if (actionUrl?.pathname === '/api/org-note-add') return false;
+  return defaultShouldRevalidate;
+}
 export const meta: MetaFunction = () => [
   {title: 'HIGHSMAN | Sales Floor'},
   {name: 'robots', content: 'noindex, nofollow, noarchive'},
@@ -200,6 +207,12 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     tierAActive = (filteredStageCounts['_tierAActive'] as number)||0;
     tierATotal  = (filteredStageCounts['_tierATotal']  as number)||0;
   } catch {}
+
+  // Batch fetch latest note per org (shared utility)
+  if (orgs.length > 0) {
+    const latestMap = await fetchLatestNotes(orgs.map((o: any) => o.id), env);
+    for (const org of orgs) (org as any).latest_note = latestMap.get((org as any).id) || null;
+  }
 
   const googleMapsKey = (env.GOOGLE_PLACES_NEW_API_KEY || env.GOOGLE_PLACES_API_KEY || null) as string|null;
   return json({authenticated:true,sfUser,orgs,counts,stageCounts,filteredStageCounts,stateFilter,stageFilter,sortBy,tierAActive,tierATotal,googleMapsKey});
@@ -894,6 +907,9 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
                 :<div style={{fontFamily:'JetBrains Mono,monospace',fontSize:11,color:T.textFaint}}>—</div>}
           </div>
         </div>
+
+        {/* Inline note widget — above action buttons */}
+        <SalesFloorNoteWidget orgId={org.id} latestNote={(org as any).latest_note ?? null} from="accounts" />
 
         {/* Action row — primary actions + ··· more menu */}
         <CardActions

@@ -1271,7 +1271,7 @@ function NotesPanel({orgId, notes, refresh, sfUser}: {orgId:string; notes:any[];
   const CHANNELS = ['CALL','TEXT','EMAIL','VISIT'];
 
   return (
-    <div style={{background:T.surface, border:`1px solid ${T.border}`}}>
+    <div id="notes" style={{background:T.surface, border:`1px solid ${T.border}`}}>
       <SectionHead title="Notes" count={`(${notes.length})`} source={
         <button type="button" onClick={()=>setComposing(true)}
           style={{background:'none', border:'none', color:composing?T.textFaint:T.yellow, fontFamily:'JetBrains Mono,monospace', fontSize:10, letterSpacing:'0.14em', cursor:'pointer', padding:0}}>

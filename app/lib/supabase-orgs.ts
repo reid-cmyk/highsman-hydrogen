@@ -38,6 +38,8 @@ export type OrgRow = {
   market_revenue_90d: number | null;
   lat: number | null;
   lng: number | null;
+  // Populated by loaders that call fetchLatestNotes — not stored in Supabase
+  latest_note?: {id: string; body: string; author_name: string | null; created_at: string} | null;
   contacts: ContactRow[];
 };
 
