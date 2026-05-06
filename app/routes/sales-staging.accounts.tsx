@@ -15,6 +15,8 @@ import type {OrgRow} from '~/lib/supabase-orgs';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
 import {SalesFloorMapView, MapViewToggle} from '~/components/SalesFloorMapView';
 import {SalesFloorNoteWidget} from '~/components/SalesFloorNoteWidget';
+import {SalesFloorEmailModal} from '~/components/SalesFloorEmailModal';
+import {SalesFloorBriefModal} from '~/components/SalesFloorBriefModal';
 import {fetchLatestNotes} from '~/lib/org-notes.server';
 import {CardActions, CardBtn, PhoneI, TextI, MailI, FlagI, BookI, StarI, SendI, BoxI} from '~/components/SalesFloorCardActions';
 
@@ -141,7 +143,7 @@ export async function loader({request, context}: LoaderFunctionArgs) {
   const headers={apikey:env.SUPABASE_SERVICE_KEY,Authorization:`Bearer ${env.SUPABASE_SERVICE_KEY}`};
 
   // Fetch the filtered account list
-  const select=['id','name','market_state','city','phone','lifecycle_stage','tier','last_order_date','tags','online_menus','do_not_contact','risk_of_loss','reorder_status','zoho_account_id','website','market_rank','market_total','market_revenue_90d','lat','lng','contacts(id,email,phone,mobile,full_name,first_name,last_name,is_primary_buyer,job_role)'].join(',');
+  const select=['id','name','market_state','city','phone','lifecycle_stage','tier','last_order_date','tags','online_menus','do_not_contact','risk_of_loss','reorder_status','zoho_account_id','website','market_rank','market_total','market_revenue_90d','lat','lng','contacts(id,email,phone,mobile,full_name,first_name,last_name,is_primary_buyer,job_title,roles)'].join(',');
   // Sort order: rank sorts by market_rank asc (best = lowest number), others client-side
   const supabaseOrder = sortBy==='rank' ? 'market_rank.asc.nullslast' : 'name.asc';
   const params=new URLSearchParams({select,order:supabaseOrder,limit:'2000'});
@@ -787,9 +789,11 @@ const NJ_MENU_URL='https://highsman.com/njmenu';
 
 function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
   const fetcher=useFetcher();
+  const menuFetcher=useFetcher();
   const [hovered,setHovered]=useState(false);
+  const [showEmail,setShowEmail]=useState(false);
+  const [showBrief,setShowBrief]=useState(false);
   const days=daysSince(org.last_order_date);
-  // statusKey / STATUS removed — reorder flag system replaces time-based status labels
   const tc=tierColor(org.tier);
   const primaryContact=org.contacts?.find(c=>c.is_primary_buyer)||org.contacts?.[0];
   const phone=org.phone||primaryContact?.phone||primaryContact?.mobile;
@@ -802,7 +806,7 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
   const [logoFailed,setLogoFailed]=useState(false);
   const zohoIdNumeric=(org.zoho_account_id||'').replace('zcrm_','');
 
-  // Compute reorder flag live (same fallback logic as account detail)
+  // Compute reorder flag live
   const computedFlag: string|null = (() => {
     const rs = org.reorder_status;
     if (rs==='low_inv'||rs==='out_of_stock') return rs;
@@ -814,31 +818,73 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
     return rs&&rs!=='healthy' ? rs : null;
   })();
 
-  const flag=()=>{const fd=new FormData();fd.set('intent','flag_pete');fd.set('org_id',org.id);fetcher.submit(fd,{method:'post'});};
+  // FLAG PETE — toggle tag, and send handoff email to Peter when flagging
+  const flag = useCallback(() => {
+    const fd = new FormData();
+    fd.set('intent', 'flag_pete');
+    fd.set('org_id', org.id);
+    fetcher.submit(fd, {method: 'post'});
+    // When flagging (not unflagging), fire handoff email to Peter
+    if (!isFlagged) {
+      const buyerName = primaryContact?.full_name || `${primaryContact?.first_name||''} ${primaryContact?.last_name||''}`.trim() || '—';
+      const buyerPhone = phone || '—';
+      const buyerEmail = email || '—';
+      const lastOrder = org.last_order_date ? new Date(org.last_order_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
+      const emailBody = [
+        `Sky just flagged ${org.name} for your follow-up from the Sales Floor.`,
+        '',
+        `Store:        ${org.name}`,
+        `Location:     ${[org.city, org.market_state].filter(Boolean).join(', ') || '—'}`,
+        `Buyer:        ${buyerName}`,
+        `Phone:        ${buyerPhone}`,
+        `Email:        ${buyerEmail}`,
+        `Last order:   ${lastOrder}`,
+        '',
+        `View account: https://highsman.com/sales-staging/account/${org.id}`,
+      ].join('\n');
+      const emailFd = new FormData();
+      emailFd.set('to', 'peter@highsman.com');
+      emailFd.set('subject', `Follow-up: ${org.name}`);
+      emailFd.set('body', emailBody);
+      // fire-and-forget
+      fetch('/api/sales-floor-send-email', {method:'POST', body: emailFd}).catch(()=>{});
+    }
+  }, [org, isFlagged, primaryContact, phone, email, fetcher]);
+
   const prospect=()=>{const fd=new FormData();fd.set('intent','prospect');fd.set('org_id',org.id);fetcher.submit(fd,{method:'post'});};
 
-  // Actions that call existing sales-floor API routes
-  const actionPost=useCallback(async(apiUrl:string,body:Record<string,string>)=>{
-    try{await fetch(apiUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});}catch{}
-  },[]);
+  // BRIEF — opens inline modal
+  const openBrief = () => setShowBrief(true);
 
-  const openBrief=()=>{
-    if (!phone&&!email){alert('No contact info available for brief.');return;}
-    const briefWindow=window.open('','_brief','width=700,height=600');
-    if (briefWindow){
-      briefWindow.document.write('<html><body style="background:#0a0a0a;color:#fff;font-family:sans-serif;padding:24px"><h2>Loading brief…</h2></body></html>');
-      actionPost('/api/brief',{lead:{First_Name:primaryContact?.first_name||'',Last_Name:primaryContact?.last_name||'',_fullName:primaryContact?.full_name||org.name,Company:org.name,Phone:phone||'',Email:email||'',_status:'active'} as any}).then(()=>{briefWindow.location.href='/sales-floor/app?brief=1';});
-    }
-  };
+  // TRAINING — new Supabase-based endpoint, emails Serena, no Zoho
+  const requestTraining = useCallback(() => {
+    fetch('/api/sf-training', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({orgId: org.id, customerName: org.name, trainingFocus: ''}),
+    }).catch(()=>{});
+  }, [org.id, org.name]);
 
-  const requestTraining=()=>actionPost('/api/sales-floor-vibes-training',{zohoAccountId:zohoIdNumeric,customerName:org.name,trainingFocus:''});
-  const newProduct=()=>actionPost('/api/sales-floor-vibes-product-onboard',{zohoAccountId:zohoIdNumeric,customerName:org.name});
-  const sendMenu=()=>{
-    if (!email){alert('No email address on file.');return;}
-    const subject=`Highsman NJ Wholesale Menu — Hit Sticks, Pre-Rolls & Ground Game`;
-    const body=`Hi ${primaryContact?.first_name||'there'},\n\nHere's the link to our NJ wholesale menu — Hit Sticks, Pre-Rolls, and Ground Game:\n\n${NJ_MENU_URL}\n\nLet me know if you have any questions. You also earn credits toward our Highsman Apparel store when you order!\n\nBest,\nSky Lima\nHighsman`;
-    window.open(`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
-  };
+  // NEW PRODUCT — new Supabase-based endpoint, emails Serena, no Zoho
+  const newProduct = useCallback(() => {
+    const productName = window.prompt(`${org.name} — which product is Serena walking through? (optional)`) ?? '';
+    if (productName === null) return; // cancelled
+    fetch('/api/sf-product-onboard', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({orgId: org.id, customerName: org.name, productName}),
+    }).catch(()=>{});
+  }, [org.id, org.name]);
+
+  // SEND MENU — API send (confirmation is in CardActions ··· menu)
+  const sendMenu = useCallback(() => {
+    if (!email) return;
+    const fd = new FormData();
+    fd.set('to', email);
+    fd.set('subject', 'Highsman NJ Wholesale Menu — Hit Sticks, Pre-Rolls & Ground Game');
+    fd.set('body', `Hi ${primaryContact?.first_name||'there'},\n\nHere's the link to our NJ wholesale menu — Hit Sticks, Pre-Rolls, and Ground Game:\n\n${NJ_MENU_URL}\n\nLet me know if you have any questions. You also earn credits toward our Highsman Apparel store when you order!\n\nBest,\nSky Lima\nHighsman`);
+    menuFetcher.submit(fd, {method: 'post', action: '/api/sales-floor-send-email'});
+  }, [email, primaryContact, menuFetcher]);
 
   const daysColor=days===null?T.cyan:days<=14?T.green:days<=30?T.statusWarn:T.redSystems;
 
@@ -911,14 +957,45 @@ function AccountCard({org,stageFilter}:{org:OrgRow;stageFilter:string}) {
         {/* Inline note widget — above action buttons */}
         <SalesFloorNoteWidget orgId={org.id} latestNote={(org as any).latest_note ?? null} from="accounts" />
 
-        {/* Action row — primary actions + ··· more menu */}
+        {/* Action row */}
         <CardActions
           phone={phone} email={email}
           isFlagged={isFlagged} isUntargeted={isUntargeted} zohoId={zohoIdNumeric}
           orgId={org.id}
-          onBrief={openBrief} onProspect={prospect} onFlag={flag}
-          onTraining={requestTraining} onSendMenu={sendMenu} onNewProduct={newProduct}
+          onBrief={openBrief}
+          onEmail={email ? () => setShowEmail(true) : undefined}
+          onProspect={prospect}
+          onFlag={flag}
+          onTraining={org.market_state==='NJ' ? requestTraining : undefined}
+          onSendMenu={email && org.market_state==='NJ' ? sendMenu : undefined}
+          onNewProduct={org.market_state==='NJ' ? newProduct : undefined}
         />
+
+        {/* Email compose modal */}
+        {showEmail && (
+          <SalesFloorEmailModal
+            orgName={org.name}
+            contacts={(org.contacts || []) as any[]}
+            onClose={() => setShowEmail(false)}
+          />
+        )}
+
+        {/* Brief modal */}
+        {showBrief && (
+          <SalesFloorBriefModal
+            orgName={org.name}
+            contactPhone={phone || null}
+            contactEmail={email || null}
+            contactName={primaryContact?.full_name || `${primaryContact?.first_name||''} ${primaryContact?.last_name||''}`.trim() || null}
+            contactFirstName={primaryContact?.first_name || null}
+            orgWebsite={org.website || null}
+            zohoAccountId={zohoIdNumeric || null}
+            lifecycleStage={org.lifecycle_stage || null}
+            contacts={(org.contacts || []) as any[]}
+            onEmail={email ? () => { setShowBrief(false); setShowEmail(true); } : undefined}
+            onClose={() => setShowBrief(false)}
+          />
+        )}
       </div>
     </div>
   );

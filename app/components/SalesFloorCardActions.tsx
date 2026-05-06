@@ -65,7 +65,7 @@ export function CardBtn({href, onClick, color, label, icon, disabled, filled}: {
 // ─── CardActions ──────────────────────────────────────────────────────────────
 export function CardActions({
   phone, email, isFlagged, isUntargeted, zohoId, orgId,
-  onBrief, onProspect, onFlag, onTraining, onSendMenu, onNewProduct,
+  onBrief, onEmail, onProspect, onFlag, onTraining, onSendMenu, onNewProduct,
   onSuppress, onChurn,
 }: {
   phone?: string | null;
@@ -75,6 +75,7 @@ export function CardActions({
   zohoId?: string;
   orgId: string;
   onBrief?: () => void;
+  onEmail?: () => void;
   onProspect?: () => void;
   onFlag?: () => void;
   onTraining?: () => void;
@@ -87,6 +88,8 @@ export function CardActions({
   const [menuPos, setMenuPos]             = useState({top: 0, left: 0});
   const [suppressConfirm, setSuppressConfirm] = useState(false);
   const [churnConfirm, setChurnConfirm]   = useState(false);
+  const [peteConfirm,   setPeteConfirm]   = useState(false);
+  const [menuConfirm,   setMenuConfirm]   = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
   const btnRef  = useRef<HTMLButtonElement>(null);
 
@@ -120,15 +123,35 @@ export function CardActions({
       {/* Primary actions */}
       <CardBtn href={phone ? `tel:${phone}` : undefined}   color={phone ? T.yellow    : T.borderStrong} label="CALL"  icon={<PhoneI/>} disabled={!phone}/>
       <CardBtn href={phone ? `sms:${phone}` : undefined}   color={phone ? T.textMuted : T.borderStrong} label="TEXT"  icon={<TextI/>}  disabled={!phone}/>
-      <CardBtn href={email ? `mailto:${email}` : undefined} color={email ? T.textMuted : T.borderStrong} label="EMAIL" icon={<MailI/>}  disabled={!email}/>
+      {/* EMAIL: if onEmail callback provided use it; otherwise fall back to mailto */}
+      {onEmail
+        ? <CardBtn onClick={onEmail} color={email ? T.textMuted : T.borderStrong} label="EMAIL" icon={<MailI/>} disabled={!email}/>
+        : <CardBtn href={email ? `mailto:${email}` : undefined} color={email ? T.textMuted : T.borderStrong} label="EMAIL" icon={<MailI/>} disabled={!email}/>
+      }
       {onBrief && <CardBtn onClick={onBrief} color={T.cyan} label="BRIEF" icon={<BookI/>}/>}
 
-      {/* Flag Pete */}
+      {/* Flag Pete — with inline confirmation */}
       {onFlag && (
-        <button type="button" onClick={e => { e.stopPropagation(); onFlag(); }} title="Flag for Pete"
-          style={{height:30, padding:'0 9px', background:isFlagged ? 'rgba(255,51,85,0.15)' : 'transparent', border:`1px solid ${T.redSystems}`, color:T.redSystems, display:'inline-flex', alignItems:'center', gap:5, cursor:'pointer', flexShrink:0, fontFamily:'Teko,sans-serif', fontSize:12, letterSpacing:'0.14em', textTransform:'uppercase'}}>
-          <FlagI/> FLAG PETE
-        </button>
+        peteConfirm ? (
+          <div style={{display:'inline-flex', alignItems:'center', gap:6}}>
+            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.redSystems, letterSpacing:'0.10em', whiteSpace:'nowrap'}}>
+              {isFlagged ? 'Unflag Pete?' : 'Flag for Pete?'}
+            </span>
+            <button type="button" onClick={e => { e.stopPropagation(); onFlag(); setPeteConfirm(false); }}
+              style={{height:28, padding:'0 9px', background:'rgba(255,51,85,0.15)', border:`1px solid ${T.redSystems}`, color:T.redSystems, fontFamily:'Teko,sans-serif', fontSize:12, letterSpacing:'0.14em', cursor:'pointer'}}>
+              {isFlagged ? 'UNFLAG' : 'CONFIRM'}
+            </button>
+            <button type="button" onClick={e => { e.stopPropagation(); setPeteConfirm(false); }}
+              style={{height:28, padding:'0 9px', background:'transparent', border:`1px solid ${T.borderStrong}`, color:T.textFaint, fontFamily:'Teko,sans-serif', fontSize:12, letterSpacing:'0.14em', cursor:'pointer'}}>
+              CANCEL
+            </button>
+          </div>
+        ) : (
+          <button type="button" onClick={e => { e.stopPropagation(); setPeteConfirm(true); }} title={isFlagged ? 'Flagged for Pete — click to unflag' : 'Flag for Pete'}
+            style={{height:30, padding:'0 9px', background:isFlagged ? 'rgba(255,51,85,0.15)' : 'transparent', border:`1px solid ${T.redSystems}`, color:T.redSystems, display:'inline-flex', alignItems:'center', gap:5, cursor:'pointer', flexShrink:0, fontFamily:'Teko,sans-serif', fontSize:12, letterSpacing:'0.14em', textTransform:'uppercase'}}>
+            <FlagI/> {isFlagged ? '✓ PETE' : 'FLAG PETE'}
+          </button>
+        )
       )}
 
       {/* ··· More menu */}
@@ -141,18 +164,51 @@ export function CardActions({
           {moreOpen && (
             <div ref={moreRef} style={{position:'fixed', top:menuPos.top, left:menuPos.left, transform:'translate(-100%,-100%)', background:T.surfaceElev, border:`1px solid ${T.borderStrong}`, zIndex:9999, minWidth:170, boxShadow:'0 -8px 32px rgba(0,0,0,0.7)'}}
               onClick={e => e.stopPropagation()}>
-              {[
-                onTraining  && {label:'TRAINING',    icon:<StarI/>, onClick:() => { onTraining();  setMoreOpen(false); }},
-                onSendMenu  && {label:'SEND MENU',   icon:<SendI/>, onClick:() => { onSendMenu();  setMoreOpen(false); }},
-                onNewProduct && {label:'NEW PRODUCT', icon:<BoxI/>,  onClick:() => { onNewProduct(); setMoreOpen(false); }},
-              ].filter(Boolean).map((item: any) => (
-                <button key={item.label} type="button" onClick={item.onClick}
+              {/* Training */}
+              {onTraining && (
+                <button type="button" onClick={() => { onTraining(); setMoreOpen(false); }}
                   style={{display:'flex', alignItems:'center', gap:8, width:'100%', padding:'11px 16px', background:'transparent', border:'none', borderBottom:`1px solid ${T.border}`, color:T.textMuted, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.18em', textTransform:'uppercase', cursor:'pointer', textAlign:'left'}}
                   onMouseEnter={e => (e.currentTarget.style.background = T.bg)}
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                  {item.icon}{item.label}
+                  <StarI/> TRAINING
                 </button>
-              ))}
+              )}
+              {/* Send Menu — with confirmation */}
+              {onSendMenu && (
+                menuConfirm ? (
+                  <div style={{padding:'10px 16px', borderBottom:`1px solid ${T.border}`, background:T.bg}}>
+                    <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, color:T.textSubtle, letterSpacing:'0.08em', marginBottom:8}}>
+                      Send NJ menu to buyer?
+                    </div>
+                    <div style={{display:'flex', gap:6}}>
+                      <button type="button" onClick={() => { onSendMenu(); setMenuConfirm(false); setMoreOpen(false); }}
+                        style={{flex:1, height:26, background:T.yellow, border:'none', color:'#000', fontFamily:'Teko,sans-serif', fontSize:11, letterSpacing:'0.16em', cursor:'pointer'}}>
+                        SEND
+                      </button>
+                      <button type="button" onClick={() => setMenuConfirm(false)}
+                        style={{flex:1, height:26, background:'transparent', border:`1px solid ${T.borderStrong}`, color:T.textFaint, fontFamily:'Teko,sans-serif', fontSize:11, letterSpacing:'0.14em', cursor:'pointer'}}>
+                        CANCEL
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => setMenuConfirm(true)}
+                    style={{display:'flex', alignItems:'center', gap:8, width:'100%', padding:'11px 16px', background:'transparent', border:'none', borderBottom:`1px solid ${T.border}`, color:T.textMuted, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.18em', textTransform:'uppercase', cursor:'pointer', textAlign:'left'}}
+                    onMouseEnter={e => (e.currentTarget.style.background = T.bg)}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                    <SendI/> SEND MENU
+                  </button>
+                )
+              )}
+              {/* New Product */}
+              {onNewProduct && (
+                <button type="button" onClick={() => { onNewProduct(); setMoreOpen(false); }}
+                  style={{display:'flex', alignItems:'center', gap:8, width:'100%', padding:'11px 16px', background:'transparent', border:'none', borderBottom:`1px solid ${T.border}`, color:T.textMuted, fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.18em', textTransform:'uppercase', cursor:'pointer', textAlign:'left'}}
+                  onMouseEnter={e => (e.currentTarget.style.background = T.bg)}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                  <BoxI/> NEW PRODUCT
+                </button>
+              )}
             </div>
           )}
         </div>
