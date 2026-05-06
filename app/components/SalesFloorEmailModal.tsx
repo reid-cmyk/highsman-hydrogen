@@ -305,21 +305,35 @@ export function SalesFloorEmailModal({
                   </div>
                   <div style={{display:'flex', gap:6, flexWrap:'wrap'}}>
                     {contacts.map(c => {
-                      const displayName = c.full_name || `${c.first_name||''} ${c.last_name||''}`.trim() || 'Unknown';
+                      const displayName = (c as any).full_name || `${(c as any).first_name||''} ${(c as any).last_name||''}`.trim() || 'Unknown';
                       const active = selectedContactId === c.id;
+                      // Show job_title (new) OR roles array OR job_role (legacy)
+                      const jobTitle = (c as any).job_title;
+                      const roles: string[] = (c as any).roles || [];
+                      const legacyRole = (c as any).job_role;
+                      const roleDisplay = jobTitle || (roles.length ? roles.join(', ') : null) || legacyRole || null;
                       return (
                         <button key={c.id} onClick={() => onSelectContact(c.id)}
                           style={{
-                            padding:'5px 10px',
+                            padding:'8px 12px',
                             border:`1px solid ${active ? T.yellow : T.borderStrong}`,
                             background: active ? `${T.yellow}12` : 'transparent',
                             color: active ? T.yellow : T.textSubtle,
                             cursor: 'pointer',
                             textAlign: 'left',
+                            minWidth: 140,
                           }}>
-                          <div style={{fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.10em', textTransform:'uppercase'}}>{displayName}</div>
-                          {c.email && <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9, color:active?T.yellow:T.textFaint, letterSpacing:'0.06em'}}>{c.email}</div>}
-                          {c.job_role && <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:8.5, color:T.textFaint, letterSpacing:'0.06em'}}>{c.job_role.toUpperCase()}</div>}
+                          <div style={{fontFamily:'Teko,sans-serif', fontSize:14, letterSpacing:'0.10em', textTransform:'uppercase', lineHeight:1.2}}>{displayName}</div>
+                          {roleDisplay && (
+                            <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:8.5, color:active?`${T.yellow}99`:T.textFaint, letterSpacing:'0.08em', marginTop:3, textTransform:'uppercase'}}>
+                              {roleDisplay}
+                            </div>
+                          )}
+                          {(c as any).email && (
+                            <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9, color:active?`${T.yellow}88`:T.textFaint, letterSpacing:'0.04em', marginTop:2}}>
+                              {(c as any).email}
+                            </div>
+                          )}
                         </button>
                       );
                     })}
@@ -400,7 +414,9 @@ export function SalesFloorEmailModal({
                     {/* Error */}
                     {status === 'error' && (
                       <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:10.5, color:T.redSystems, letterSpacing:'0.08em', padding:'8px 10px', border:`1px solid ${T.redSystems}44`, background:`${T.redSystems}08`}}>
-                        ⚠ {errorMsg}
+                        ⚠ {errorMsg.includes('not configured') || errorMsg.includes('GOOGLE_SA')
+                          ? 'Gmail not available on preview URLs — use the production staging site to send real emails.'
+                          : errorMsg}
                       </div>
                     )}
 

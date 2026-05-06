@@ -1,86 +1,75 @@
-import { useEffect, useState } from 'react';
-import { useFetcher } from '@remix-run/react';
+/**
+ * app/components/SalesFloorBriefModal.tsx
+ *
+ * AI pre-call brief modal for Sales Floor staging.
+ * Uses direct fetch (not useFetcher) to avoid Remix infinite-loop issues
+ * with object reference instability in deps arrays.
+ *
+ * Sections: Last Contact · Sky's Play · Talking Points · Objections · Opener · History
+ */
+
+import {useState, useEffect, useRef} from 'react';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface BriefData {
   mode: string;
-  lastContact?: {
-    channel: string;
-    when: string;
-    summary: string;
-  };
+  lastContact?: {channel: string; when: string; summary: string};
   skysPlay?: string;
   talkingPoints?: string[];
-  likelyObjections?: Array<{
-    objection: string;
-    response: string;
-  }>;
+  likelyObjections?: {objection: string; response: string}[];
   suggestedOpener?: string;
-  history?: Array<{
-    channel: string;
-    when: string;
-    direction: string;
-    summary: string;
-  }>;
+  history?: {channel: string; when: string; direction: string; summary: string}[];
 }
 
-interface SalesFloorBriefModalProps {
-  orgName: string;
-  contactPhone?: string | null;
-  contactEmail?: string | null;
-  contactName?: string | null;
-  contactFirstName?: string | null;
-  orgWebsite?: string | null;
-  zohoAccountId?: string | null;
-  lifecycleStage?: string | null;
-  onClose: () => void;
-}
+// ─── Design tokens ────────────────────────────────────────────────────────────
 
-const DESIGN_TOKENS = {
-  bg: '#0A0A0A',
-  surface: '#141414',
-  surfaceElev: '#1A1A1A',
-  border: '#1F1F1F',
+const T = {
+  bg:           '#0A0A0A',
+  surface:      '#141414',
+  surfaceElev:  '#1A1A1A',
+  border:       '#1F1F1F',
   borderStrong: '#2F2F2F',
-  text: '#F5F5F5',
-  textMuted: '#C8C8C8',
-  textSubtle: '#9C9C9C',
-  textFaint: '#6A6A6A',
-  yellow: '#FFD500',
-  cyan: '#00D4FF',
-  green: '#00E676',
-  magenta: '#FF3B7F',
-  redSystems: '#FF3355',
-  statusWarn: '#FFB300',
+  text:         '#F5F5F5',
+  textMuted:    '#C8C8C8',
+  textSubtle:   '#9C9C9C',
+  textFaint:    '#6A6A6A',
+  yellow:       '#FFD500',
+  cyan:         '#00D4FF',
+  green:        '#00E676',
+  magenta:      '#FF3B7F',
+  redSystems:   '#FF3355',
 };
 
-function getChannelColor(channel: string): string {
-  const ch = channel?.toUpperCase() || '';
-  if (ch === 'CALL') return DESIGN_TOKENS.green;
-  if (ch === 'SMS' || ch === 'sms') return DESIGN_TOKENS.cyan;
-  if (ch === 'EMAIL' || ch === 'email') return DESIGN_TOKENS.yellow;
-  return DESIGN_TOKENS.textMuted;
+const CH_COLOR: Record<string,string> = {
+  call: T.green, CALL: T.green,
+  sms: T.cyan,   SMS: T.cyan,
+  email: T.yellow, EMAIL: T.yellow,
+};
+
+// ─── Small components ─────────────────────────────────────────────────────────
+
+function Section({title, color, children}: {title:string; color?:string; children:React.ReactNode}) {
+  return (
+    <div>
+      <div style={{fontFamily:'Teko,sans-serif', fontSize:11, letterSpacing:'0.28em', color:color||T.textFaint, textTransform:'uppercase', marginBottom:10}}>
+        {title}
+      </div>
+      {children}
+    </div>
+  );
 }
 
-function ChannelBadge({ channel }: { channel: string }) {
-  const color = getChannelColor(channel);
+function ChBadge({ch}: {ch:string}) {
+  const c = CH_COLOR[ch] || T.textSubtle;
   return (
-    <span
-      style={{
-        display: 'inline-block',
-        padding: '4px 8px',
-        borderRadius: '3px',
-        backgroundColor: `${color}20`,
-        color,
-        fontSize: '11px',
-        fontWeight: '600',
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px',
-      }}
-    >
-      {channel}
+    <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', padding:'2px 6px', border:`1px solid ${c}`, color:c, flexShrink:0}}>
+      {ch.toUpperCase()}
     </span>
   );
 }
+
+// ─── Main modal ───────────────────────────────────────────────────────────────
 
 export function SalesFloorBriefModal({
   orgName,
@@ -92,486 +81,207 @@ export function SalesFloorBriefModal({
   zohoAccountId,
   lifecycleStage,
   onClose,
-}: SalesFloorBriefModalProps) {
-  const fetcher = useFetcher<{ ok: boolean; brief?: BriefData; mode?: string; sources?: any }>();
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasError, setHasError] = useState(false);
+}: {
+  orgName: string;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
+  contactName?: string | null;
+  contactFirstName?: string | null;
+  orgWebsite?: string | null;
+  zohoAccountId?: string | null;
+  lifecycleStage?: string | null;
+  onClose: () => void;
+}) {
+  const [brief,    setBrief]    = useState<BriefData | null>(null);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const didFetch = useRef(false);
 
-  useEffect(() => {
-    // Parse name into first and last
-    let firstName = contactFirstName;
-    let lastName = '';
+  const fetchBrief = () => {
+    didFetch.current = true;
+    setLoading(true);
+    setError(null);
+    setBrief(null);
 
-    if (!firstName && contactName) {
-      const parts = contactName.split(' ');
-      firstName = parts[0];
-      lastName = parts.slice(1).join(' ');
-    }
+    const firstName = contactFirstName || (contactName?.split(' ')[0]) || '';
+    const lastName  = contactFirstName && contactName
+      ? contactName.replace(contactFirstName, '').trim()
+      : (contactName?.split(' ').slice(1).join(' ') || '');
 
-    const briefPayload = {
-      lead: {
-        First_Name: firstName || '',
-        Last_Name: lastName || '',
-        _fullName: contactName || orgName,
-        Company: orgName,
-        Phone: contactPhone || '',
-        Email: contactEmail || '',
-        _status: lifecycleStage || 'active',
-        Website: orgWebsite || '',
-        _zohoModule: 'Accounts',
-        _zohoId: zohoAccountId || '',
-      },
-    };
-
-    setIsLoading(true);
-    setHasError(false);
-    fetcher.submit(briefPayload, {
+    fetch('/api/brief', {
       method: 'POST',
-      action: '/api/brief',
-      encType: 'application/json',
-    });
-  }, [orgName, contactPhone, contactEmail, contactName, contactFirstName, orgWebsite, zohoAccountId, lifecycleStage, fetcher]);
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        lead: {
+          First_Name: firstName,
+          Last_Name:  lastName,
+          _fullName:  contactName || orgName,
+          Company:    orgName,
+          Phone:      contactPhone  || '',
+          Email:      contactEmail  || '',
+          _status:    lifecycleStage || 'active',
+          Website:    orgWebsite    || '',
+          _zohoModule: 'Accounts',
+          _zohoId:    zohoAccountId || '',
+        },
+      }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok && data.brief) {
+          setBrief(data.brief);
+        } else {
+          setError(data.error || 'Brief generation failed');
+        }
+      })
+      .catch(() => setError('Network error — check connection'))
+      .finally(() => setLoading(false));
+  };
 
+  // Fetch once on mount
   useEffect(() => {
-    if (fetcher.state === 'idle' && fetcher.data) {
-      setIsLoading(false);
-      if (!fetcher.data.ok) {
-        setHasError(true);
-      }
-    }
-  }, [fetcher.state, fetcher.data]);
+    if (!didFetch.current) fetchBrief();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const briefData = fetcher.data?.brief as BriefData | undefined;
+  const modeColor = brief?.mode === 'warm' ? T.green : T.textFaint;
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.88)',
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '20px',
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          backgroundColor: DESIGN_TOKENS.surface,
-          border: `1px solid ${DESIGN_TOKENS.borderStrong}`,
-          borderRadius: '8px',
-          width: '100%',
-          maxWidth: '640px',
-          maxHeight: '85vh',
-          overflowY: 'auto',
-          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '24px 24px 20px 24px',
-            borderBottom: `1px solid ${DESIGN_TOKENS.border}`,
-            position: 'sticky',
-            top: 0,
-            backgroundColor: DESIGN_TOKENS.surface,
-            zIndex: 10,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <h2
-              style={{
-                margin: 0,
-                fontSize: '24px',
-                fontFamily: '"Teko", sans-serif',
-                fontWeight: 700,
-                color: DESIGN_TOKENS.text,
-                letterSpacing: '1px',
-              }}
-            >
+    <div onClick={onClose} style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.88)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999, padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:T.surface, border:`1px solid ${T.borderStrong}`, width:'100%', maxWidth:640, maxHeight:'88vh', display:'flex', flexDirection:'column', overflow:'hidden'}}>
+
+        {/* Sticky header */}
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'18px 24px', borderBottom:`1px solid ${T.border}`, flexShrink:0, background:T.surface}}>
+          <div style={{display:'flex', alignItems:'center', gap:12}}>
+            <div style={{fontFamily:'Teko,sans-serif', fontSize:22, letterSpacing:'0.14em', color:T.text, textTransform:'uppercase'}}>
               BRIEF — {orgName}
-            </h2>
-            {briefData && (
-              <span
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: '3px',
-                  fontSize: '10px',
-                  fontWeight: '600',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                  backgroundColor:
-                    briefData.mode === 'COLD'
-                      ? `${DESIGN_TOKENS.textMuted}30`
-                      : `${DESIGN_TOKENS.green}30`,
-                  color:
-                    briefData.mode === 'COLD'
-                      ? DESIGN_TOKENS.textMuted
-                      : DESIGN_TOKENS.green,
-                }}
-              >
-                {briefData.mode}
+            </div>
+            {/* Mode badge only shown when brief is loaded */}
+            {brief && (
+              <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, letterSpacing:'0.14em', padding:'2px 8px', border:`1px solid ${modeColor}44`, color:modeColor, background:`${modeColor}10`}}>
+                {(brief.mode || 'cold').toUpperCase()}
               </span>
             )}
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: DESIGN_TOKENS.textMuted,
-              fontSize: '24px',
-              cursor: 'pointer',
-              padding: '0',
-              width: '32px',
-              height: '32px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            ✕
-          </button>
+          <button onClick={onClose} style={{background:'none', border:'none', color:T.textFaint, cursor:'pointer', fontSize:20, padding:'4px 8px', lineHeight:1}}>×</button>
         </div>
 
-        {/* Content */}
-        <div style={{ padding: '24px' }}>
-          {isLoading ? (
-            <div
-              style={{
-                textAlign: 'center',
-                padding: '40px 20px',
-                color: DESIGN_TOKENS.textSubtle,
-              }}
-            >
-              <div
-                style={{
-                  display: 'inline-block',
-                  width: '24px',
-                  height: '24px',
-                  border: `2px solid ${DESIGN_TOKENS.border}`,
-                  borderTop: `2px solid ${DESIGN_TOKENS.yellow}`,
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite',
-                  marginBottom: '12px',
-                }}
-              />
-              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-              <p>Building brief…</p>
+        {/* Scrollable content */}
+        <div style={{overflowY:'auto', flex:1, padding:'24px'}}>
+
+          {/* Loading */}
+          {loading && (
+            <div style={{textAlign:'center', padding:'48px 20px'}}>
+              <style>{`@keyframes hs-spin{to{transform:rotate(360deg)}}`}</style>
+              <div style={{display:'inline-block', width:28, height:28, border:`2px solid ${T.borderStrong}`, borderTopColor:T.yellow, borderRadius:'50%', animation:'hs-spin 1s linear infinite', marginBottom:16}}/>
+              <div style={{fontFamily:'Teko,sans-serif', fontSize:18, letterSpacing:'0.20em', color:T.textSubtle, textTransform:'uppercase'}}>Building brief…</div>
+              <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textFaint, letterSpacing:'0.08em', marginTop:8}}>Pulling call · text · email history + AI analysis</div>
             </div>
-          ) : hasError ? (
-            <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-              <p style={{ color: DESIGN_TOKENS.redSystems, marginBottom: '16px' }}>
-                Brief unavailable
-              </p>
-              <button
-                onClick={() => {
-                  setHasError(false);
-                  setIsLoading(true);
-                  fetcher.submit(
-                    {
-                      lead: {
-                        Company: orgName,
-                        _fullName: contactName || orgName,
-                      },
-                    },
-                    { method: 'POST', action: '/api/brief', encType: 'application/json' }
-                  );
-                }}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: DESIGN_TOKENS.yellow,
-                  color: DESIGN_TOKENS.bg,
-                  border: 'none',
-                  borderRadius: '4px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                }}
-              >
-                Try again
+          )}
+
+          {/* Error */}
+          {!loading && error && (
+            <div style={{textAlign:'center', padding:'40px 20px'}}>
+              <div style={{fontFamily:'Teko,sans-serif', fontSize:18, letterSpacing:'0.16em', color:T.redSystems, textTransform:'uppercase', marginBottom:8}}>Brief Unavailable</div>
+              <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:10.5, color:T.textSubtle, letterSpacing:'0.06em', marginBottom:20}}>{error}</div>
+              <button onClick={fetchBrief}
+                style={{height:32, padding:'0 18px', background:T.yellow, border:'none', color:'#000', fontFamily:'Teko,sans-serif', fontSize:13, letterSpacing:'0.18em', cursor:'pointer'}}>
+                TRY AGAIN
               </button>
             </div>
-          ) : briefData ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          )}
+
+          {/* Brief content */}
+          {!loading && brief && (
+            <div style={{display:'flex', flexDirection:'column', gap:24}}>
+
               {/* Last Contact */}
-              {briefData.lastContact && (
-                <div>
-                  <h3
-                    style={{
-                      margin: '0 0 12px 0',
-                      fontSize: '11px',
-                      fontWeight: '700',
-                      textTransform: 'uppercase',
-                      letterSpacing: '1px',
-                      color: DESIGN_TOKENS.textMuted,
-                    }}
-                  >
-                    Last Contact
-                  </h3>
-                  <div
-                    style={{
-                      backgroundColor: DESIGN_TOKENS.surfaceElev,
-                      border: `1px solid ${DESIGN_TOKENS.border}`,
-                      borderRadius: '4px',
-                      padding: '12px',
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: '12px',
-                    }}
-                  >
-                    <ChannelBadge channel={briefData.lastContact.channel} />
-                    <div style={{ flex: 1 }}>
-                      <div
-                        style={{
-                          fontSize: '12px',
-                          color: DESIGN_TOKENS.textFaint,
-                          marginBottom: '4px',
-                        }}
-                      >
-                        {briefData.lastContact.when}
-                      </div>
-                      <div style={{ fontSize: '13px', color: DESIGN_TOKENS.text }}>
-                        {briefData.lastContact.summary}
-                      </div>
+              {brief.lastContact && (
+                <Section title="Last Contact">
+                  <div style={{background:T.surfaceElev, border:`1px solid ${T.border}`, padding:14, display:'flex', alignItems:'flex-start', gap:12}}>
+                    <ChBadge ch={brief.lastContact.channel}/>
+                    <div style={{flex:1}}>
+                      <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:10, color:T.textFaint, letterSpacing:'0.08em', marginBottom:5}}>{brief.lastContact.when}</div>
+                      <div style={{fontFamily:'Inter,sans-serif', fontSize:13, color:T.text, lineHeight:1.55}}>{brief.lastContact.summary}</div>
                     </div>
                   </div>
-                </div>
+                </Section>
               )}
 
               {/* Sky's Play */}
-              {briefData.skysPlay && (
-                <div>
-                  <h3
-                    style={{
-                      margin: '0 0 12px 0',
-                      fontSize: '11px',
-                      fontWeight: '700',
-                      textTransform: 'uppercase',
-                      letterSpacing: '1px',
-                      color: DESIGN_TOKENS.yellow,
-                    }}
-                  >
-                    Sky's Play
-                  </h3>
-                  <div
-                    style={{
-                      backgroundColor: `${DESIGN_TOKENS.yellow}10`,
-                      border: `1px solid ${DESIGN_TOKENS.yellow}40`,
-                      borderRadius: '4px',
-                      padding: '12px',
-                      fontSize: '13px',
-                      color: DESIGN_TOKENS.text,
-                      lineHeight: '1.5',
-                    }}
-                  >
-                    {briefData.skysPlay}
+              {brief.skysPlay && (
+                <Section title="Sky's Play" color={T.yellow}>
+                  <div style={{background:`${T.yellow}0c`, border:`1px solid ${T.yellow}33`, padding:'14px 16px', fontFamily:'Inter,sans-serif', fontSize:13, color:T.text, lineHeight:1.6}}>
+                    {brief.skysPlay}
                   </div>
-                </div>
+                </Section>
               )}
 
               {/* Talking Points */}
-              {briefData.talkingPoints && briefData.talkingPoints.length > 0 && (
-                <div>
-                  <h3
-                    style={{
-                      margin: '0 0 12px 0',
-                      fontSize: '11px',
-                      fontWeight: '700',
-                      textTransform: 'uppercase',
-                      letterSpacing: '1px',
-                      color: DESIGN_TOKENS.textMuted,
-                    }}
-                  >
-                    Talking Points
-                  </h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {briefData.talkingPoints.map((point, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          backgroundColor: DESIGN_TOKENS.surfaceElev,
-                          border: `1px solid ${DESIGN_TOKENS.border}`,
-                          borderRadius: '4px',
-                          padding: '12px',
-                          display: 'flex',
-                          gap: '12px',
-                          alignItems: 'flex-start',
-                        }}
-                      >
-                        <span
-                          style={{
-                            minWidth: '20px',
-                            fontSize: '12px',
-                            fontWeight: '700',
-                            color: DESIGN_TOKENS.yellow,
-                          }}
-                        >
-                          {idx + 1}.
-                        </span>
-                        <span style={{ fontSize: '13px', color: DESIGN_TOKENS.text }}>
-                          {point}
-                        </span>
+              {brief.talkingPoints && brief.talkingPoints.length > 0 && (
+                <Section title="Talking Points">
+                  <div style={{display:'flex', flexDirection:'column', gap:6}}>
+                    {brief.talkingPoints.map((pt, i) => (
+                      <div key={i} style={{display:'flex', gap:10, padding:'10px 14px', background:T.surfaceElev, border:`1px solid ${T.border}`}}>
+                        <span style={{fontFamily:'Teko,sans-serif', fontSize:14, color:T.yellow, flexShrink:0, lineHeight:1.4}}>{i+1}.</span>
+                        <span style={{fontFamily:'Inter,sans-serif', fontSize:13, color:T.text, lineHeight:1.5}}>{pt}</span>
                       </div>
                     ))}
                   </div>
-                </div>
+                </Section>
               )}
 
               {/* Likely Objections */}
-              {briefData.likelyObjections && briefData.likelyObjections.length > 0 && (
-                <div>
-                  <h3
-                    style={{
-                      margin: '0 0 12px 0',
-                      fontSize: '11px',
-                      fontWeight: '700',
-                      textTransform: 'uppercase',
-                      letterSpacing: '1px',
-                      color: DESIGN_TOKENS.textMuted,
-                    }}
-                  >
-                    Likely Objections
-                  </h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {briefData.likelyObjections.map((item, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          backgroundColor: DESIGN_TOKENS.surfaceElev,
-                          border: `1px solid ${DESIGN_TOKENS.border}`,
-                          borderRadius: '4px',
-                          padding: '12px',
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: '13px',
-                            fontWeight: '600',
-                            color: DESIGN_TOKENS.text,
-                            marginBottom: '8px',
-                          }}
-                        >
-                          {item.objection}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: '12px',
-                            color: DESIGN_TOKENS.textFaint,
-                            lineHeight: '1.4',
-                          }}
-                        >
-                          {item.response}
-                        </div>
+              {brief.likelyObjections && brief.likelyObjections.length > 0 && (
+                <Section title="Likely Objections">
+                  <div style={{display:'flex', flexDirection:'column', gap:8}}>
+                    {brief.likelyObjections.map((obj, i) => (
+                      <div key={i} style={{padding:'12px 14px', background:T.surfaceElev, border:`1px solid ${T.border}`}}>
+                        <div style={{fontFamily:'Inter,sans-serif', fontSize:13, color:T.text, marginBottom:6}}>"{obj.objection}"</div>
+                        <div style={{fontFamily:'Inter,sans-serif', fontSize:12, color:T.cyan, lineHeight:1.5}}>→ {obj.response}</div>
                       </div>
                     ))}
                   </div>
-                </div>
+                </Section>
               )}
 
               {/* Suggested Opener */}
-              {briefData.suggestedOpener && (
-                <div>
-                  <h3
-                    style={{
-                      margin: '0 0 12px 0',
-                      fontSize: '11px',
-                      fontWeight: '700',
-                      textTransform: 'uppercase',
-                      letterSpacing: '1px',
-                      color: DESIGN_TOKENS.cyan,
-                    }}
-                  >
-                    Suggested Opener
-                  </h3>
-                  <div
-                    style={{
-                      backgroundColor: `${DESIGN_TOKENS.cyan}10`,
-                      border: `1px solid ${DESIGN_TOKENS.cyan}40`,
-                      borderRadius: '4px',
-                      padding: '12px',
-                      fontSize: '13px',
-                      color: DESIGN_TOKENS.text,
-                      lineHeight: '1.5',
-                      fontStyle: 'italic',
-                    }}
-                  >
-                    "{briefData.suggestedOpener}"
+              {brief.suggestedOpener && (
+                <Section title="Suggested Opener" color={T.cyan}>
+                  <div style={{background:`${T.cyan}0c`, border:`1px solid ${T.cyan}44`, padding:'16px', fontFamily:'Inter,sans-serif', fontSize:14, color:T.text, lineHeight:1.6, fontStyle:'italic'}}>
+                    "{brief.suggestedOpener}"
                   </div>
-                </div>
+                </Section>
               )}
 
-              {/* History (Collapsible) */}
-              {briefData.history && briefData.history.length > 0 && (
-                <div>
-                  <button
-                    onClick={() => setShowHistory(!showHistory)}
-                    style={{
-                      width: '100%',
-                      padding: '12px',
-                      backgroundColor: DESIGN_TOKENS.surfaceElev,
-                      border: `1px solid ${DESIGN_TOKENS.border}`,
-                      borderRadius: '4px',
-                      color: DESIGN_TOKENS.text,
-                      fontSize: '12px',
-                      fontWeight: '600',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    History ({briefData.history.length})
-                    <span
-                      style={{
-                        transform: showHistory ? 'rotate(180deg)' : 'rotate(0deg)',
-                        transition: 'transform 0.2s',
-                        display: 'inline-block',
-                      }}
-                    >
-                      ▼
-                    </span>
+              {/* History — collapsible */}
+              {brief.history && brief.history.length > 0 && (
+                <Section title={`History (${brief.history.length})`}>
+                  <button onClick={() => setShowHistory(h => !h)}
+                    style={{height:28, padding:'0 12px', background:'transparent', border:`1px solid ${T.borderStrong}`, color:T.textSubtle, fontFamily:'Teko,sans-serif', fontSize:11, letterSpacing:'0.14em', cursor:'pointer', marginBottom:showHistory?10:0}}>
+                    {showHistory ? 'HIDE HISTORY' : 'SHOW HISTORY'}
                   </button>
                   {showHistory && (
-                    <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {briefData.history.slice(0, 6).map((event, idx) => (
-                        <div
-                          key={idx}
-                          style={{
-                            backgroundColor: DESIGN_TOKENS.surfaceElev,
-                            border: `1px solid ${DESIGN_TOKENS.border}`,
-                            borderRadius: '4px',
-                            padding: '12px',
-                            fontSize: '12px',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                            <ChannelBadge channel={event.channel} />
-                            <span style={{ color: DESIGN_TOKENS.textFaint }}>
-                              {event.direction} • {event.when}
-                            </span>
+                    <div style={{display:'flex', flexDirection:'column', gap:6}}>
+                      {brief.history.map((h, i) => (
+                        <div key={i} style={{display:'flex', gap:10, padding:'10px 14px', background:T.surfaceElev, border:`1px solid ${T.border}`}}>
+                          <ChBadge ch={h.channel}/>
+                          <div style={{flex:1}}>
+                            <div style={{fontFamily:'JetBrains Mono,monospace', fontSize:9.5, color:T.textFaint, letterSpacing:'0.06em', marginBottom:4}}>
+                              {h.direction?.toUpperCase()} · {h.when}
+                            </div>
+                            <div style={{fontFamily:'Inter,sans-serif', fontSize:12, color:T.textMuted, lineHeight:1.5}}>{h.summary}</div>
                           </div>
-                          <div style={{ color: DESIGN_TOKENS.text }}>{event.summary}</div>
                         </div>
                       ))}
                     </div>
                   )}
-                </div>
+                </Section>
               )}
+
             </div>
-          ) : null}
+          )}
         </div>
       </div>
     </div>
