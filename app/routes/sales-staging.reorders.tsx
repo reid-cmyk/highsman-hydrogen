@@ -20,13 +20,20 @@ import {useLoaderData, useFetcher} from '@remix-run/react';
 import {useState, useEffect, useCallback} from 'react';
 import {CardActions} from '~/components/SalesFloorCardActions';
 import {SalesFloorNoteWidget} from '~/components/SalesFloorNoteWidget';
-import type {NotePreview} from '~/components/SalesFloorNoteWidget';
+import {fetchLatestNotes} from '~/lib/org-notes.server';
+import type {NotePreview} from '~/lib/org-notes.server';
 import {isStagingAuthed} from '~/lib/staging-auth';
 import {getSFToken, getSFUser} from '~/lib/sf-auth.server';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
 import {SalesFloorMapView, MapViewToggle} from '~/components/SalesFloorMapView';
 
 export const handle = {hideHeader: true, hideFooter: true};
+
+// Don't revalidate the feed when a note is added — prevents re-sorting the list
+export function shouldRevalidate({actionUrl, defaultShouldRevalidate}: any): boolean {
+  if (actionUrl?.pathname === '/api/org-note-add') return false;
+  return defaultShouldRevalidate;
+}
 export const meta: MetaFunction = () => [
   {title: 'Reorders Due | Sales Floor'},
   {name: 'robots', content: 'noindex, nofollow'},
@@ -361,31 +368,10 @@ export async function loader({request, context}: LoaderFunctionArgs) {
     aging:        feed.filter(f => f.active_flag === 'aging').length,
   };
 
-  // ── Batch fetch latest note per org in feed ──────────────────────────────────
+  // ── Batch fetch latest note per org (shared utility) ─────────────────────────
   if (feed.length > 0) {
-    try {
-      const ids = feed.map(f => f.id).join(',');
-      const notesRes = await fetch(
-        `${base}/rest/v1/org_notes?organization_id=in.(${ids})&select=id,organization_id,body,author_name,created_at&order=created_at.desc&limit=1000`,
-        {headers: h},
-      );
-      if (notesRes.ok) {
-        const notes: any[] = await notesRes.json().catch(() => []);
-        // First note per org = most recent (already sorted desc)
-        const latestMap = new Map<string, NotePreview>();
-        for (const n of notes) {
-          if (!latestMap.has(n.organization_id)) {
-            latestMap.set(n.organization_id, {
-              id: n.id, body: n.body,
-              author_name: n.author_name, created_at: n.created_at,
-            });
-          }
-        }
-        for (const item of feed) {
-          item.latest_note = latestMap.get(item.id) || null;
-        }
-      }
-    } catch { /* notes are best-effort — don't break the feed */ }
+    const latestMap = await fetchLatestNotes(feed.map(f => f.id), env);
+    for (const item of feed) item.latest_note = latestMap.get(item.id) || null;
   }
 
   const googleMapsKey = (env.GOOGLE_PLACES_NEW_API_KEY || env.GOOGLE_PLACES_API_KEY || null) as string|null;

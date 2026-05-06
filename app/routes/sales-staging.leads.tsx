@@ -18,9 +18,16 @@ import {isStagingAuthed} from '~/lib/staging-auth';
 import {getSFToken, getSFUser} from '~/lib/sf-auth.server';
 import {SalesFloorLayout} from '~/components/SalesFloorLayout';
 import {SalesFloorMapView, MapViewToggle} from '~/components/SalesFloorMapView';
+import {SalesFloorNoteWidget} from '~/components/SalesFloorNoteWidget';
+import {fetchLatestNotes} from '~/lib/org-notes.server';
 import {CardActions, PhoneI, MailI} from '~/components/SalesFloorCardActions';
 
 export const handle = {hideHeader: true, hideFooter: true};
+
+export function shouldRevalidate({actionUrl, defaultShouldRevalidate}: any): boolean {
+  if (actionUrl?.pathname === '/api/org-note-add') return false;
+  return defaultShouldRevalidate;
+}
 export const meta: MetaFunction = () => [
   {title: 'Leads | Sales Floor'},
   {name: 'robots', content: 'noindex'},
@@ -118,8 +125,15 @@ export async function loader({request, context}: LoaderFunctionArgs) {
       primary_contact_phone: primary?(primary.phone||primary.mobile||null):null,
       primary_contact_email: primary?.email||null,
       lat: org.lat??null, lng: org.lng??null,
+      latest_note: null as {id:string; body:string; author_name:string|null; created_at:string}|null,
     };
   });
+
+  // Batch fetch latest note per lead (shared utility)
+  if (leads.length > 0) {
+    const latestMap = await fetchLatestNotes(leads.map((l: any) => l.id), env);
+    for (const lead of leads) lead.latest_note = latestMap.get(lead.id) || null;
+  }
 
   const googleMapsKey = (env.GOOGLE_PLACES_NEW_API_KEY || env.GOOGLE_PLACES_API_KEY || null) as string|null;
   return json({authenticated:true, sfUser, leads, closedCount, googleMapsKey});
@@ -436,6 +450,9 @@ function LeadCard({lead}: {lead: any}) {
           )}
         </div>
       </div>
+
+      {/* Inline note widget — above action buttons */}
+      <SalesFloorNoteWidget orgId={lead.id} latestNote={lead.latest_note ?? null} from="leads" />
 
       {/* Action row */}
       <CardActions
